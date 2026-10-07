@@ -588,6 +588,9 @@ pub fn run_snapshots_full(
 }
 
 fn snapshots_from(mut model: Model, lines: &[Line]) -> Vec<Snapshot> {
+    if model.assembly {
+        model.prefetch(lines);
+    }
     let mut snapshots = Vec::new();
     for line in lines {
         let before = model.clone();
@@ -623,6 +626,9 @@ pub fn run_in(dir: Option<PathBuf>, lines: &[Line]) -> Run {
 }
 
 fn run_model(mut model: Model, lines: &[Line]) -> Run {
+    if model.assembly {
+        model.prefetch(lines);
+    }
     let mut steps = Vec::new();
     let mut took = Vec::new();
     for line in lines {

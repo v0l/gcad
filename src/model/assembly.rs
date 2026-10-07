@@ -629,8 +629,51 @@ impl Model {
         }
     }
 
+    fn part_key(&self, line: &Line) -> Result<(String, std::path::PathBuf, Vec<(String, f64)>)> {
+        let [_, file] = line.positional.as_slice() else {
+            bail!("write `part name file.lcad [body=b] [variable=value ...]`");
+        };
+        let path = self.relative(file);
+        let vars = line
+            .named
+            .iter()
+            .filter(|(key, _)| key != "body")
+            .map(|(key, text)| Ok((key.clone(), crate::parse::eval(text, &self.scope)?)))
+            .collect::<Result<Vec<_>>>()?;
+        Ok((format!("{}|{vars:?}", path.display()), path, vars))
+    }
+
+    pub(crate) fn prefetch(&self, lines: &[Line]) {
+        let mut probe = self.clone();
+        let mut wanted: Vec<(String, std::path::PathBuf, Vec<(String, f64)>)> = Vec::new();
+        for line in lines {
+            match line.op.as_str() {
+                "let" => {
+                    let _ = probe.apply(line);
+                }
+                "part" => {
+                    if let Ok(found) = probe.part_key(line)
+                        && !wanted.iter().any(|w| w.0 == found.0)
+                    {
+                        wanted.push(found);
+                    }
+                }
+                _ => {}
+            }
+        }
+        let depth = self.depth + 1;
+        std::thread::scope(|scope| {
+            for (key, path, vars) in wanted {
+                let cache = self.cache.clone();
+                scope.spawn(move || {
+                    let _ = cache.part(key, || super::load_model(&path, &vars, depth, &cache));
+                });
+            }
+        });
+    }
+
     fn op_part(&mut self, line: &Line) -> Result<String> {
-        let [name, file] = line.positional.as_slice() else {
+        let [name, _] = line.positional.as_slice() else {
             bail!("write `part name file.lcad [body=b] [variable=value ...]`");
         };
         if name.contains('.') {
@@ -639,17 +682,12 @@ impl Model {
         if self.depth >= 16 {
             bail!("parts are nested more than 16 deep");
         }
-        let path = self.relative(file);
-        let mut only = None;
-        let mut vars = Vec::new();
-        for (key, text) in &line.named {
-            if key == "body" {
-                only = Some(text.clone());
-            } else {
-                vars.push((key.clone(), crate::parse::eval(text, &self.scope)?));
-            }
-        }
-        let key = format!("{}|{vars:?}", path.display());
+        let (key, path, vars) = self.part_key(line)?;
+        let only = line
+            .named
+            .iter()
+            .find(|(key, _)| key == "body")
+            .map(|(_, text)| text.clone());
         let depth = self.depth + 1;
         let cache = self.cache.clone();
         let loaded = self
