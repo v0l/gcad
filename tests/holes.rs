@@ -30,7 +30,6 @@ fn blind() {
 }
 
 #[test]
-#[ignore = "missing: hole cbore"]
 fn counterbore() {
     let model = build(&format!("{BLOCK}hole 3.2 0,0 cbore=6,3"));
     assert_volume(
@@ -41,7 +40,6 @@ fn counterbore() {
 }
 
 #[test]
-#[ignore = "missing: hole csink"]
 fn countersink() {
     let cone = PI * 1.6 / 3.0 * (3.2 * 3.2 + 3.2 * 1.6 + 1.6 * 1.6) - PI * 1.6 * 1.6 * 1.6;
     let model = build(&format!("{BLOCK}hole 3.2 0,0 csink=6.4,90"));
@@ -49,7 +47,6 @@ fn countersink() {
 }
 
 #[test]
-#[ignore = "missing: hole thread"]
 fn threaded() {
     let model = build(&format!("{BLOCK}tapped: hole 3.3 0,0 thread=M4"));
     assert_volume(&model, 12000.0 - PI * 1.65 * 1.65 * 10.0, 0.0002);

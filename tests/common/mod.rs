@@ -30,9 +30,11 @@ pub fn failure(source: &str) -> String {
 }
 
 pub fn volume(model: &Model) -> f64 {
-    let solid = model.solid.as_ref().expect("a solid");
-    let tolerance = geometry::bounds(solid).diameter() * 2.0e-5;
-    geometry::volume_at(solid, tolerance)
+    model
+        .solids()
+        .iter()
+        .map(|solid| geometry::volume_at(solid, geometry::bounds(solid).diameter() * 2.0e-5))
+        .sum()
 }
 
 pub fn assert_volume(model: &Model, expected: f64, relative: f64) {

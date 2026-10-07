@@ -22,7 +22,6 @@ fn subtract() {
 }
 
 #[test]
-#[ignore = "missing: extrude mode=intersect"]
 fn intersect() {
     assert_volume(
         &build("rect 20 20\nextrude 10\nrect 20 20 at=10,10\nextrude 10 mode=intersect"),
@@ -32,7 +31,6 @@ fn intersect() {
 }
 
 #[test]
-#[ignore = "missing: mirror"]
 fn mirror() {
     let model = build("rect 20 10 at=10,0\nextrude 5\nmirror YZ");
     assert_bounds(&model, [-20.0, -5.0, 0.0], [20.0, 5.0, 5.0]);
@@ -40,7 +38,6 @@ fn mirror() {
 }
 
 #[test]
-#[ignore = "missing: repeat"]
 fn linear_pattern() {
     let model = build(
         "rect 40 30\nbase: extrude 3\nplane base.end\nh: hole 3 -15,0\nrepeat h count=4 step=10,0",
@@ -49,7 +46,6 @@ fn linear_pattern() {
 }
 
 #[test]
-#[ignore = "missing: repeat"]
 fn circular_pattern() {
     let model = build(
         "circle 40\nbase: extrude 5\nplane base.end\nh: hole 4 15,0\nrepeat h count=6 angle=360",
@@ -58,7 +54,6 @@ fn circular_pattern() {
 }
 
 #[test]
-#[ignore = "missing: move"]
 fn translate() {
     assert_bounds(
         &build("rect 10 10\nextrude 5\nmove 10,0,0"),
@@ -68,7 +63,6 @@ fn translate() {
 }
 
 #[test]
-#[ignore = "missing: rotate"]
 fn rotate() {
     assert_bounds(
         &build("rect 20 10\nextrude 5\nrotate 90 axis=z"),
@@ -78,13 +72,11 @@ fn rotate() {
 }
 
 #[test]
-#[ignore = "missing: scale"]
 fn scale() {
     assert_volume(&build("rect 10 10\nextrude 5\nscale 2"), 4000.0, 1.0e-6);
 }
 
 #[test]
-#[ignore = "missing: split"]
 fn split() {
     assert_volume(
         &build("rect 10 10\nextrude 10\nsplit XY offset=5 keep=below"),
@@ -94,7 +86,6 @@ fn split() {
 }
 
 #[test]
-#[ignore = "missing: body"]
 fn separate_bodies() {
     let model = build("rect 10 10\nextrude 10\nbody second\nrect 10 10 at=50,0\nextrude 10");
     assert_volume(&model, 2000.0, 1.0e-6);

@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser, Subcommand};
-use linecad::model::{Run, run};
+use linecad::model::{Run, run_in};
 use linecad::{export, parse, render, select};
 
 #[derive(Parser)]
@@ -43,7 +43,10 @@ fn load(file: &str, until: Option<usize>) -> Result<Run> {
         .into_iter()
         .filter(|line| until.is_none_or(|last| line.number <= last))
         .collect();
-    Ok(run(&lines))
+    let dir = std::path::Path::new(file)
+        .parent()
+        .map(std::path::Path::to_path_buf);
+    Ok(run_in(dir, &lines))
 }
 
 fn finished(run: &Run) -> Result<&monstertruck::modeling::Solid> {
@@ -117,8 +120,16 @@ fn main() -> Result<()> {
             selector,
             line,
         } => query(&file, &selector, line),
-        Command::Export { file, output } => export::export(finished(&load(&file, None)?)?, &output),
-        Command::Render { file, output } => render::render(finished(&load(&file, None)?)?, &output),
+        Command::Export { file, output } => {
+            let run = load(&file, None)?;
+            finished(&run)?;
+            export::export(&run.model.solids(), &output)
+        }
+        Command::Render { file, output } => {
+            let run = load(&file, None)?;
+            finished(&run)?;
+            render::render(&run.model.solids(), &output)
+        }
         Command::View { file, select, line } => {
             linecad::view::run(file.into(), select, line).map_err(|error| anyhow!("{error}"))
         }

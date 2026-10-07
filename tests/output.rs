@@ -13,7 +13,7 @@ fn scratch(name: &str) -> String {
 fn step() {
     let model = build(&part("plate"));
     let path = scratch("plate.step");
-    export::export(model.solid.as_ref().expect("a solid"), &path).expect("exports");
+    export::export(&model.solids(), &path).expect("exports");
     let text = std::fs::read_to_string(&path).expect("written");
     assert!(text.starts_with("ISO-10303-21;"));
     assert!(text.contains("MANIFOLD_SOLID_BREP") && text.contains("CLOSED_SHELL"));
@@ -40,7 +40,7 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
     for name in ["plate", "bracket", "pipe", "ring"] {
         let model = build(&part(name));
         let path = scratch(&format!("{name}.step"));
-        export::export(model.solid.as_ref().expect("a solid"), &path).expect("exports");
+        export::export(&model.solids(), &path).expect("exports");
         let output = std::process::Command::new(&python)
             .args(["-c", script, &path])
             .output()
@@ -66,7 +66,7 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
 fn stl() {
     let model = build("rect 10 10\nextrude 5");
     let path = scratch("box.stl");
-    export::export(model.solid.as_ref().expect("a solid"), &path).expect("exports");
+    export::export(&model.solids(), &path).expect("exports");
     let bytes = std::fs::read(&path).expect("written");
     let triangles = u32::from_le_bytes(bytes[80..84].try_into().expect("header")) as usize;
     assert_eq!(bytes.len(), 84 + triangles * 50);
@@ -91,7 +91,7 @@ fn stl() {
 fn png() {
     let model = build(&part("plate"));
     let path = scratch("plate.png");
-    render::render(model.solid.as_ref().expect("a solid"), &path).expect("renders");
+    render::render(&model.solids(), &path).expect("renders");
     let image = image::open(&path).expect("a png").to_rgb8();
     assert_eq!(image.dimensions(), (1200, 1200));
     let background = *image.get_pixel(5, 5);
@@ -100,10 +100,9 @@ fn png() {
 }
 
 #[test]
-#[ignore = "missing: import"]
 fn step_import() {
     let model = build(&part("plate"));
     let path = scratch("import.step");
-    export::export(model.solid.as_ref().expect("a solid"), &path).expect("exports");
+    export::export(&model.solids(), &path).expect("exports");
     assert_volume(&build(&format!("import {path}")), volume(&model), 0.0005);
 }

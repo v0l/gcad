@@ -31,37 +31,74 @@ chamfer 0.3 mounts.side&base.end
 
 ## State
 
-The file runs against five pieces of state, the way G-code runs against a machine:
+The file runs against these pieces of state, the way G-code runs against a machine:
 
 | state | set by | used by |
 |---|---|---|
 | variables | `let` | every expression |
-| workplane | `plane` (XY until set) | sketch operations, `extrude`, `cut`, `revolve`, `hole` |
-| sketch | `rect`, `circle`, `poly` | `extrude`, `cut`, `revolve`, `sweep`, which empty it |
-| path | `path` | `sweep` |
-| solid | every operation that makes or removes material | `fillet`, `chamfer`, selectors |
+| workplane | `plane` (XY until set) | sketch operations, `extrude`, `cut`, `revolve`, `hole`, `helix`, `repeat` |
+| sketch | `rect`, `circle`, `poly`, `ngon`, `slot`, `ellipse`, `spline`, `text`, `pen` ... `close` | `extrude`, `cut`, `revolve`, `sweep`, `section`, which empty it |
+| sections | `section` | `loft` |
+| path | `path`, `helix` | `sweep` |
+| solid | every operation that makes or removes material | `fillet`, `chamfer`, `shell`, `draft`, `push`, selectors |
+| bodies | `body` | export and render, which take every body |
 
 ## Operations
+
+Sketch:
 
 | operation | parameters | does |
 |---|---|---|
 | `let` | `name=expr ...` | sets variables, in order, so later pairs can use earlier ones |
-| `plane` | `on` `offset=` | sets the workplane to `XY`, `XZ`, `YZ` or a flat face selector, moved `offset` along its normal |
+| `plane` | `on` `offset=` `rx=` `ry=` `rz=` | sets the workplane to `XY`, `XZ`, `YZ` or a flat face selector, moved `offset` along its normal, then turned about its own x, y and normal axes by degrees |
 | `rect` | `w h` `at=x,y` `r=` | adds a rectangle centred on `at`, corners rounded by `r` |
 | `circle` | `d` `at=x,y` | adds a circle |
+| `ellipse` | `dx dy` `at=x,y` | adds an ellipse of those diameters |
 | `poly` | `x,y x,y x,y ...` | adds a closed polygon |
-| `extrude` | `d` `draft=` | adds the sketch as material along the plane normal (negative `d` goes the other way), tapered inward by `draft` degrees |
+| `ngon` | `d n` `at=x,y` `angle=` | adds a regular polygon of `n` sides with corners on a circle of diameter `d` |
+| `slot` | `l w` `at=x,y` `angle=` | adds a slot `l` long overall and `w` wide, turned by `angle` degrees |
+| `spline` | `x,y x,y ... closed` | adds a smooth closed curve through the points |
+| `text` | `"words"` `size=` `at=x,y` | adds the outlines of the words, `size` tall, starting at `at` |
+| `pen` | `x,y` | starts a path of lines and arcs at a point |
+| `line` | `x,y` | draws a straight segment to the point |
+| `arc` | `x,y` `via=x,y` | draws an arc to the point through `via` |
+| `close` | | closes the path back to its start and adds it to the sketch |
+
+Features:
+
+| operation | parameters | does |
+|---|---|---|
+| `extrude` | `d` or `upto=faces`, `both`, `draft=`, `mode=add\|cut\|intersect` | adds the sketch along the plane normal (negative `d` goes the other way); `both` centres it on the plane; `upto` stops at a flat face; `draft` tapers it inward by degrees; `mode=intersect` keeps only what the solid and the extrusion share |
 | `cut` | `d` or `thru`, `draft=` | removes the sketch from the solid, going into it against the plane normal |
 | `revolve` | `angle` `axis=x\|y` | spins the sketch about the workplane's x or y axis through its origin and adds it |
 | `path` | `x,y,z x,y,z ...` `r=` | sets the sweep path in world coordinates; corners are bent with radius `r` |
+| `helix` | `r= pitch= turns=` `at=x,y` | sets a helical sweep path about the workplane normal |
 | `sweep` | | carries the sketch from the path start along the path and adds it |
-| `hole` | `d x,y ...` `depth=` | drills holes at each point on the workplane, through unless `depth` is given |
-| `fillet` | `size edges` | rounds the selected edges with radius `size` |
-| `chamfer` | `size edges` | bevels the selected edges by `size` |
+| `section` | | stores the sketch as one cross-section for `loft` |
+| `loft` | | joins the stored sections with ruled faces and adds the result; every section needs the same number of edges |
+| `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it |
+| `shell` | `t` `open=label.end` | hollows an extrusion to walls `t` thick, leaving the named cap open |
+| `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face |
+| `push` | `faces d` | moves flat faces `d` along their normal, out (positive) or in (negative) |
+| `fillet` | `size edges` `to=` | rounds the edges with radius `size`, or from `size` to `to` along them |
+| `chamfer` | `size edges` `d2=` | bevels the edges by `size`; with `d2`, the edges must be written `a&b` and `size` is cut along `a`, `d2` along `b` |
+
+Bodies:
+
+| operation | parameters | does |
+|---|---|---|
+| `mirror` | `on` `offset=` | adds the mirror image of the solid across a named plane or flat face |
+| `repeat` | `label` `count=` and `step=x,y` or `angle=` | repeats what a labelled line added or removed, in a row along the workplane or around its normal |
+| `move` | `x,y,z` | moves the solid |
+| `rotate` | `angle` `axis=x\|y\|z` `about=x,y,z` | turns the solid |
+| `scale` | `factor` `about=x,y,z` | scales the solid |
+| `split` | `on` `offset=` `keep=below\|above` | cuts the solid with a plane and keeps one side |
+| `body` | `name` | sets the current solid aside and starts a new one |
+| `import` | `file.step` | adds the solids in a STEP file, relative to the `.lcad` file |
 
 Profiles drawn inside another profile in the same sketch become holes in it.
 A sketch for `sweep` is drawn around the workplane origin; `sweep` moves it to the first
-path point and turns it to face along the first segment.
+path point (or the start of the helix) and turns it to face along the path.
 
 ## Workplanes
 
@@ -91,10 +128,14 @@ Groups each operation records:
 |---|---|
 | `extrude` | `start`, `end`, `side` |
 | `cut` | `end` (pocket floor), `side` |
-| `hole` | `bottom` (blind holes), `side` |
+| `hole` | `bottom` (blind holes), `side`, `cbore`, `cbore_floor`, `csink` |
 | `revolve` | `caps`, `side` |
-| `sweep` | `start`, `end`, `side` |
-| `fillet`, `chamfer` | `faces` |
+| `sweep`, `loft` | `start`, `end`, `side` |
+| `push` | `start`, `end`, `side` |
+| `shell` | `inside`, `floor` |
+| `split` | `cut` |
+| `fillet`, `chamfer`, `draft`, `import` | `faces` |
+| `mirror` | a copy of every group, under the mirror line's label |
 
 A face belongs to a group while it still lies on the surface the operation made, so
 groups survive later cuts and fillets that trim the face.
@@ -136,5 +177,9 @@ Y green, Z blue.
 
 - Fillets and chamfers fail where three selected edges meet at one corner, such as
   every edge of a box. Round the vertical edges in the sketch with `rect r=` instead.
+- `draft` and pushing a face inward work on flat-sided parts, where every moved corner
+  is where three flat faces meet.
+- `shell` hollows the extrusion that owns the open face, so do it before adding other
+  features to that extrusion.
 - Hole and cut edges made by booleans are fine polylines, not exact circles.
 - `draft` works on profiles without holes.

@@ -58,7 +58,6 @@ fn side_face_keeps_world_coordinates() {
 }
 
 #[test]
-#[ignore = "missing: plane rotation"]
 fn rotated() {
     assert_bounds(
         &build("plane XY rx=90\nrect 10 10\nextrude 5"),

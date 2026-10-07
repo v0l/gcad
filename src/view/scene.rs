@@ -151,23 +151,35 @@ fn tube(points: &[V3], radius: f32, out: &mut Surface) {
 
 pub fn build(
     solid: &Solid,
+    others: &[&Solid],
     highlights: &[Highlight<'_>],
     marked: &[Edge],
     marked_colour: V3,
 ) -> Scene {
     static NEXT: AtomicU64 = AtomicU64::new(1);
-    let bounds = geometry::bounds(solid);
+    let all: Vec<&Solid> = std::iter::once(solid)
+        .chain(others.iter().copied())
+        .collect();
+    let bounds: BoundingBox<Point3> = all
+        .iter()
+        .flat_map(|s| {
+            let b = geometry::bounds(s);
+            [b.min(), b.max()]
+        })
+        .collect();
     let radius = (bounds.diameter() / 2.0).max(1.0e-3) as f32;
     let mut surfaces = Vec::new();
     faces(solid, highlights, &mut surfaces);
+    others
+        .iter()
+        .for_each(|other| faces(other, &[], &mut surfaces));
     let mut edges = Surface {
         colour: EDGE,
         ..Default::default()
     };
     let mut seen = Vec::new();
-    solid
-        .boundaries()
-        .iter()
+    all.iter()
+        .flat_map(|s| s.boundaries().iter())
         .flat_map(|shell| shell.edge_iter())
         .filter(|edge| {
             let fresh = !seen.contains(&edge.id());

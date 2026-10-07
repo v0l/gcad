@@ -71,7 +71,6 @@ fn fillet_every_edge_of_a_box() {
 }
 
 #[test]
-#[ignore = "missing: fillet to="]
 fn fillet_variable_radius() {
     let model = build(&format!("{PLATE}fillet 1 base.end&>Y to=2"));
     assert_volume(&model, 3600.0 - 40.0 * SPANDREL * 7.0 / 3.0, 0.001);
@@ -96,7 +95,6 @@ fn chamfer_hole_rim() {
 }
 
 #[test]
-#[ignore = "missing: chamfer d2="]
 fn chamfer_two_distances() {
     assert_volume(
         &build(&format!("{PLATE}chamfer 1 base.end&>Y d2=2")),

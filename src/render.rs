@@ -131,16 +131,25 @@ fn edge_polylines(solid: &Solid) -> Vec<Vec<Point3>> {
         .collect()
 }
 
-pub fn render(solid: &Solid, path: &str) -> Result<()> {
-    let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+pub fn render(solids: &[&Solid], path: &str) -> Result<()> {
+    let mut mesh = monstertruck::mesh::PolygonMesh::default();
+    solids
+        .iter()
+        .for_each(|solid| mesh.merge(geometry::mesh(solid, geometry::mesh_tolerance(solid))));
     let positions = mesh.positions();
     let triangles: Vec<[usize; 3]> = mesh
         .faces()
         .triangle_iter()
         .map(|t| [t[0].pos, t[1].pos, t[2].pos])
         .collect();
-    let edges = edge_polylines(solid);
-    let bounds = geometry::bounds(solid);
+    let edges: Vec<Vec<Point3>> = solids
+        .iter()
+        .flat_map(|solid| edge_polylines(solid))
+        .collect();
+    let bounds: BoundingBox<Point3> = solids
+        .iter()
+        .flat_map(|solid| [geometry::bounds(solid).min(), geometry::bounds(solid).max()])
+        .collect();
     let center = bounds.center().to_vec();
     let mut image = RgbImage::from_pixel(CELL * 2, CELL * 2, BACKGROUND);
     for (index, view) in views().iter().enumerate() {

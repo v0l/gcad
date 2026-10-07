@@ -1,7 +1,7 @@
 use super::gl::{self, BACKGROUND, Camera};
 use super::scene::{self, Highlight, Scene};
 use crate::geometry;
-use crate::model::{Snapshot, label_of, run_snapshots};
+use crate::model::{Snapshot, label_of, run_snapshots_in};
 use crate::parse::{Line as SourceLine, parse_program};
 use crate::select;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
@@ -25,7 +25,7 @@ fn evaluate(path: &PathBuf) -> Program {
         .and_then(|s| parse_program(&s).map_err(|e| format!("{e:#}")))
     {
         Ok(lines) => Program {
-            snapshots: run_snapshots(&lines),
+            snapshots: run_snapshots_in(path.parent().map(std::path::Path::to_path_buf), &lines),
             lines,
             error: None,
         },
@@ -255,7 +255,9 @@ impl App {
                 colour: rgb(TRACE),
             },
         ];
-        let scene = scene::build(solid, &highlights, &query_edges, rgb(TRACE));
+        let others: Vec<&monstertruck::modeling::Solid> =
+            model.bodies.iter().map(|(_, s)| s).collect();
+        let scene = scene::build(solid, &others, &highlights, &query_edges, rgb(TRACE));
         let bounds = geometry::bounds(solid);
         let (min, max) = (bounds.min(), bounds.max());
         self.shown = Some(Shown {

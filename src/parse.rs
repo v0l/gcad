@@ -28,8 +28,33 @@ fn is_identifier(word: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+fn words(number: usize, text: &str) -> Result<Vec<String>> {
+    let mut words = Vec::new();
+    let mut current = String::new();
+    let mut quoted = false;
+    for c in text.chars() {
+        match c {
+            '"' => quoted = !quoted,
+            c if c.is_whitespace() && !quoted => {
+                if !current.is_empty() {
+                    words.push(std::mem::take(&mut current));
+                }
+            }
+            c => current.push(c),
+        }
+    }
+    if quoted {
+        bail!("line {number}: a quote is not closed");
+    }
+    if !current.is_empty() {
+        words.push(current);
+    }
+    Ok(words)
+}
+
 fn parse_line(number: usize, text: &str) -> Result<Line> {
-    let mut words = text.split_whitespace().peekable();
+    let words = words(number, text)?;
+    let mut words = words.iter().map(String::as_str).peekable();
     let label = match words.peek() {
         Some(word) if word.ends_with(':') => {
             let label = word.trim_end_matches(':');
@@ -272,6 +297,12 @@ mod tests {
         assert_eq!(eval("1.5e1", &scope).unwrap(), 15.0);
         assert_eq!(eval_point("w/2,-(t+1)", &scope).unwrap(), (20.0, -4.0));
         assert!(eval("q", &scope).unwrap_err().to_string().contains("let q"));
+    }
+
+    #[test]
+    fn quoted_words_keep_their_spaces() {
+        let line = parse_line(1, "text \"HELLO WORLD\" size=5").unwrap();
+        assert_eq!(line.positional, vec!["HELLO WORLD"]);
     }
 
     #[test]

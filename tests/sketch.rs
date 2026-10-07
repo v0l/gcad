@@ -61,7 +61,6 @@ fn separate_profiles() {
 }
 
 #[test]
-#[ignore = "missing: ngon"]
 fn regular_polygon() {
     assert_volume(
         &build("ngon 20 6\nextrude 5"),
@@ -71,7 +70,6 @@ fn regular_polygon() {
 }
 
 #[test]
-#[ignore = "missing: slot"]
 fn slot() {
     assert_volume(
         &build("slot 30 10\nextrude 5"),
@@ -81,7 +79,6 @@ fn slot() {
 }
 
 #[test]
-#[ignore = "missing: ellipse"]
 fn ellipse() {
     assert_volume(
         &build("ellipse 20 10\nextrude 5"),
@@ -91,14 +88,12 @@ fn ellipse() {
 }
 
 #[test]
-#[ignore = "missing: pen, line, arc, close"]
 fn lines_and_arcs() {
     let model = build("pen 0,0\nline 20,0\narc 20,20 via=30,10\nline 0,20\nclose\nextrude 5");
     assert_volume(&model, (400.0 + 50.0 * PI) * 5.0, 0.0002);
 }
 
 #[test]
-#[ignore = "missing: spline"]
 fn spline() {
     let ring: Vec<String> = (0..12)
         .map(|i| {
@@ -111,7 +106,6 @@ fn spline() {
 }
 
 #[test]
-#[ignore = "missing: text"]
 fn text() {
     let model = build("text LINECAD size=10\nextrude 1");
     assert!(volume(&model) > 10.0);

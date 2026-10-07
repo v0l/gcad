@@ -64,6 +64,153 @@ pub enum Profile {
     Polygon {
         points: Vec<(f64, f64)>,
     },
+    Slot {
+        center: (f64, f64),
+        length: f64,
+        width: f64,
+        angle: f64,
+    },
+    Ellipse {
+        center: (f64, f64),
+        rx: f64,
+        ry: f64,
+    },
+    Path {
+        start: (f64, f64),
+        segments: Vec<Segment>,
+    },
+    Spline {
+        points: Vec<(f64, f64)>,
+    },
+    Text {
+        text: String,
+        size: f64,
+        at: (f64, f64),
+    },
+}
+
+#[derive(Clone, Debug)]
+pub enum Segment {
+    Line((f64, f64)),
+    Arc { to: (f64, f64), via: (f64, f64) },
+}
+
+impl Frame {
+    pub fn local(&self, point: Point3) -> (f64, f64) {
+        let d = point - self.origin;
+        (d.dot(self.x), d.dot(self.y))
+    }
+
+    pub fn matrix(&self) -> Matrix4 {
+        Matrix4::from_cols(
+            self.x.extend(0.0),
+            self.y.extend(0.0),
+            self.normal.extend(0.0),
+            self.origin.to_homogeneous(),
+        )
+    }
+}
+
+fn slot_wire(frame: &Frame, center: (f64, f64), length: f64, width: f64, angle: f64) -> Wire {
+    let (c, s) = (angle.to_radians().cos(), angle.to_radians().sin());
+    let r = width / 2.0;
+    let half = length / 2.0 - r;
+    let at = |u: f64, v: f64| frame.at(center.0 + u * c - v * s, center.1 + u * s + v * c);
+    let v = builder::vertices([at(half, -r), at(half, r), at(-half, r), at(-half, -r)]);
+    vec![
+        builder::circle_arc(&v[0], &v[1], at(half + r, 0.0)),
+        builder::line(&v[1], &v[2]),
+        builder::circle_arc(&v[2], &v[3], at(-half - r, 0.0)),
+        builder::line(&v[3], &v[0]),
+    ]
+    .into()
+}
+
+fn ellipse_wire(frame: &Frame, center: (f64, f64), rx: f64, ry: f64) -> Wire {
+    let unit: Wire = primitive::circle(
+        Point3::new(1.0, 0.0, 0.0),
+        Point3::origin(),
+        Vector3::unit_z(),
+        4,
+    );
+    let placement = frame.matrix()
+        * Matrix4::from_translation(Vector3::new(center.0, center.1, 0.0))
+        * Matrix4::from_nonuniform_scale(rx, ry, 1.0);
+    builder::transformed(&unit, placement)
+}
+
+fn path_wire(frame: &Frame, start: (f64, f64), segments: &[Segment]) -> Wire {
+    let ends: Vec<(f64, f64)> = std::iter::once(start)
+        .chain(segments.iter().map(|segment| match segment {
+            Segment::Line(to) | Segment::Arc { to, .. } => *to,
+        }))
+        .collect();
+    let vertices = builder::vertices(ends[..segments.len()].iter().map(|&(u, v)| frame.at(u, v)));
+    let count = vertices.len();
+    segments
+        .iter()
+        .enumerate()
+        .map(|(i, segment)| {
+            let (from, to) = (&vertices[i], &vertices[(i + 1) % count]);
+            match segment {
+                Segment::Line(_) => builder::line(from, to),
+                Segment::Arc { via, .. } => builder::circle_arc(from, to, frame.at(via.0, via.1)),
+            }
+        })
+        .collect()
+}
+
+fn spline_wire(frame: &Frame, points: &[(f64, f64)]) -> std::result::Result<Wire, String> {
+    let closed: Vec<Point3> = points
+        .iter()
+        .chain(points.first())
+        .map(|&(u, v)| frame.at(u, v))
+        .collect();
+    let n = closed.len();
+    let degree = 3.min(n - 1);
+    let knots = KnotVector::uniform_knot(degree, n - degree);
+    let values: Vec<f64> = knots.iter().copied().collect();
+    let parameter_points: Vec<(f64, Point3)> = closed
+        .iter()
+        .enumerate()
+        .map(|(i, &p)| {
+            (
+                values[i + 1..=i + degree].iter().sum::<f64>() / degree as f64,
+                p,
+            )
+        })
+        .collect();
+    let mut curve = BsplineCurve::try_interpolate(knots, parameter_points)
+        .map_err(|e| format!("spline: {e}"))?;
+    let tail = curve.cut(0.5);
+    let start = builder::vertex(closed[0]);
+    let middle = builder::vertex(tail.front());
+    Ok(vec![
+        Edge::new(&start, &middle, Curve::BsplineCurve(curve)),
+        Edge::new(&middle, &start, Curve::BsplineCurve(tail)),
+    ]
+    .into())
+}
+
+fn text_wires(
+    frame: &Frame,
+    text: &str,
+    size: f64,
+    at: (f64, f64),
+) -> std::result::Result<Vec<Wire>, String> {
+    let face = ttf_parser::Face::parse(epaint_default_fonts::UBUNTU_LIGHT, 0)
+        .map_err(|e| format!("font: {e}"))?;
+    let options = text::TextOptions {
+        scale: Some(size / face.units_per_em() as f64),
+        y_flip: false,
+        ..Default::default()
+    };
+    let wires = text::text_profile(&face, text, &options).map_err(|e| format!("text: {e}"))?;
+    let placement = frame.matrix() * Matrix4::from_translation(Vector3::new(at.0, at.1, 0.0));
+    Ok(wires
+        .iter()
+        .map(|wire| builder::transformed(wire, placement))
+        .collect())
 }
 
 fn closed_polyline(points: &[Point3]) -> Wire {
@@ -116,6 +263,22 @@ fn rounded_rect(frame: &Frame, center: (f64, f64), width: f64, height: f64, radi
 }
 
 impl Profile {
+    pub fn wires(&self, frame: &Frame) -> std::result::Result<Vec<Wire>, String> {
+        Ok(match self {
+            Profile::Slot {
+                center,
+                length,
+                width,
+                angle,
+            } => vec![slot_wire(frame, *center, *length, *width, *angle)],
+            Profile::Ellipse { center, rx, ry } => vec![ellipse_wire(frame, *center, *rx, *ry)],
+            Profile::Path { start, segments } => vec![path_wire(frame, *start, segments)],
+            Profile::Spline { points } => vec![spline_wire(frame, points)?],
+            Profile::Text { text, size, at } => text_wires(frame, text, *size, *at)?,
+            other => vec![other.wire(frame)],
+        })
+    }
+
     pub fn wire(&self, frame: &Frame) -> Wire {
         match self {
             Profile::Rect {
@@ -140,6 +303,11 @@ impl Profile {
                 let points: Vec<Point3> = points.iter().map(|&(u, v)| frame.at(u, v)).collect();
                 closed_polyline(&points)
             }
+            other => other
+                .wires(frame)
+                .ok()
+                .and_then(|mut wires| (wires.len() == 1).then(|| wires.remove(0)))
+                .unwrap_or_default(),
         }
     }
 
@@ -177,6 +345,27 @@ impl Profile {
                     diameter,
                 })
             }
+            Profile::Slot {
+                center,
+                length,
+                width,
+                angle,
+            } => {
+                let (length, width) = (length - 2.0 * delta, width - 2.0 * delta);
+                if width <= 0.0 || length <= width {
+                    return Err("the draft closes the slot".to_string());
+                }
+                Ok(Profile::Slot {
+                    center: *center,
+                    length,
+                    width,
+                    angle: *angle,
+                })
+            }
+            Profile::Ellipse { .. }
+            | Profile::Path { .. }
+            | Profile::Spline { .. }
+            | Profile::Text { .. } => Err("draft works on rect, circle, poly and slot".to_string()),
             Profile::Polygon { points } => {
                 let n = points.len();
                 let area: f64 = (0..n)

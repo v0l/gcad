@@ -36,7 +36,6 @@ fn extrude_draft() {
 }
 
 #[test]
-#[ignore = "missing: extrude both"]
 fn extrude_symmetric() {
     assert_bounds(
         &build("rect 10 10\nextrude 10 both"),
@@ -46,7 +45,6 @@ fn extrude_symmetric() {
 }
 
 #[test]
-#[ignore = "missing: extrude upto"]
 fn extrude_up_to_face() {
     let model = build(
         "rect 40 30\nbase: extrude 10\nplane XY offset=20\nrect 10 10\nextrude upto=base.end",
@@ -115,7 +113,6 @@ fn sweep_straight_path() {
 }
 
 #[test]
-#[ignore = "missing: helix"]
 fn sweep_helix() {
     let length = 3.0 * ((20.0 * PI).powi(2) + 25.0).sqrt();
     assert_volume(
@@ -126,21 +123,18 @@ fn sweep_helix() {
 }
 
 #[test]
-#[ignore = "missing: section, loft"]
 fn loft() {
     let model = build("rect 20 20\nsection\nplane XY offset=10\nrect 10 10\nsection\nloft");
     assert_volume(&model, frustum(400.0, 100.0, 10.0), 0.0005);
 }
 
 #[test]
-#[ignore = "missing: shell"]
 fn shell() {
     let model = build("rect 40 30\nbase: extrude 20\nshell 2 open=base.end");
     assert_volume(&model, 24000.0 - 36.0 * 26.0 * 18.0, 1.0e-6);
 }
 
 #[test]
-#[ignore = "missing: draft"]
 fn face_draft() {
     let top = 20.0 - 2.0 * 10.0 * 5.0_f64.to_radians().tan();
     let model = build("rect 20 20\nbase: extrude 10\ndraft 5 base.side neutral=base.start");
@@ -148,7 +142,6 @@ fn face_draft() {
 }
 
 #[test]
-#[ignore = "missing: push"]
 fn push_face() {
     assert_volume(
         &build("rect 40 30\nbase: extrude 3\npush base.end 2"),
