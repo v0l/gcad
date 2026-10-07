@@ -19,7 +19,7 @@ pub enum Feature {
 }
 
 impl Feature {
-    fn moved(self, transform: Matrix4) -> Feature {
+    pub(crate) fn moved(self, transform: Matrix4) -> Feature {
         match self {
             Feature::Axis(p, d) => Feature::Axis(
                 transform.transform_point(p),
@@ -31,6 +31,27 @@ impl Feature {
             ),
         }
     }
+
+    pub(crate) fn point(self) -> Point3 {
+        match self {
+            Feature::Axis(p, _) | Feature::Plane(p, _) => p,
+        }
+    }
+
+    pub(crate) fn direction(self) -> Vector3 {
+        match self {
+            Feature::Axis(_, d) | Feature::Plane(_, d) => d,
+        }
+    }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Condition {
+    Concentric,
+    Flush(f64),
+    Parallel,
+    Angle(f64),
+    Distance(f64),
 }
 
 #[derive(Clone, Debug)]
@@ -38,7 +59,35 @@ pub struct Mate {
     pub text: String,
     pub parts: [String; 2],
     pub features: [Feature; 2],
-    pub offset: f64,
+    pub condition: Condition,
+}
+
+pub(crate) fn angle_between(a: Feature, b: Feature) -> f64 {
+    let dot = a.direction().dot(b.direction());
+    let dot = match (a, b) {
+        (Feature::Plane(..), Feature::Plane(..)) => dot,
+        _ => dot.abs(),
+    };
+    dot.clamp(-1.0, 1.0).acos().to_degrees()
+}
+
+pub(crate) fn distance_between(a: Feature, b: Feature) -> Option<f64> {
+    let tilt = 1.0e-6;
+    match (a, b) {
+        (Feature::Axis(pa, da), Feature::Axis(pb, db)) => {
+            (da.cross(db).magnitude() < tilt).then(|| {
+                let d = pb - pa;
+                (d - da * d.dot(da)).magnitude()
+            })
+        }
+        (Feature::Plane(pa, na), Feature::Plane(pb, nb)) => {
+            (na.cross(nb).magnitude() < tilt).then(|| (pa - pb).dot(nb).abs())
+        }
+        (Feature::Axis(p, d), Feature::Plane(q, n))
+        | (Feature::Plane(q, n), Feature::Axis(p, d)) => {
+            (d.dot(n).abs() < tilt).then(|| (p - q).dot(n).abs())
+        }
+    }
 }
 
 impl Mate {
@@ -48,13 +97,26 @@ impl Mate {
             self.features[1].moved(moves[1]),
         ];
         let close = 1.0e-3;
-        match (a, b) {
-            (Feature::Axis(pa, da), Feature::Axis(pb, db)) => {
-                let d = pb - pa;
-                da.cross(db).magnitude() < 1.0e-6 && (d - da * d.dot(da)).magnitude() < close
+        match (self.condition, a, b) {
+            (Condition::Concentric, Feature::Axis(..), Feature::Axis(..)) => {
+                distance_between(a, b).is_some_and(|d| d < close)
             }
-            (Feature::Plane(pa, na), Feature::Plane(pb, nb)) => {
-                na.dot(nb) < -1.0 + 1.0e-6 && ((pa - pb).dot(nb) - self.offset).abs() < close
+            (Condition::Flush(offset), Feature::Plane(pa, na), Feature::Plane(pb, nb)) => {
+                na.dot(nb) < -1.0 + 1.0e-6 && ((pa - pb).dot(nb) - offset).abs() < close
+            }
+            (Condition::Parallel, ..) => {
+                let degrees = angle_between(a, b);
+                match (a, b) {
+                    (Feature::Plane(..), Feature::Plane(..))
+                    | (Feature::Axis(..), Feature::Axis(..)) => {
+                        degrees < 1.0e-3 || degrees > 180.0 - 1.0e-3
+                    }
+                    _ => (degrees - 90.0).abs() < 1.0e-3,
+                }
+            }
+            (Condition::Angle(want), ..) => (angle_between(a, b) - want).abs() < 1.0e-3,
+            (Condition::Distance(want), ..) => {
+                distance_between(a, b).is_some_and(|d| (d - want).abs() < close)
             }
             _ => false,
         }
@@ -137,20 +199,20 @@ impl Model {
         moving: &str,
         fixed: &str,
         features: [Feature; 2],
-        offset: f64,
+        condition: Condition,
         transform: Matrix4,
     ) -> Result<String> {
         if moving == fixed {
             bail!("a mate joins two different parts");
         }
+        let mate = Mate {
+            text: text.to_string(),
+            parts: [moving.to_string(), fixed.to_string()],
+            features,
+            condition,
+        };
         match self.parent_of(moving) {
             Some(parent) if parent != fixed => {
-                let mate = Mate {
-                    text: text.to_string(),
-                    parts: [moving.to_string(), fixed.to_string()],
-                    features,
-                    offset,
-                };
                 if !mate.holds([Matrix4::identity(), Matrix4::identity()]) {
                     bail!(
                         "`{moving}` already hangs off `{parent}` and does not meet `{fixed}` this way; place it with its first mate and check the rest hold"
@@ -166,6 +228,10 @@ impl Model {
                     bail!("`{fixed}` already hangs off `{moving}`");
                 }
                 let moved = self.move_subtree(moving, transform)?;
+                self.mates.push(Mate {
+                    features: [mate.features[0].moved(transform), mate.features[1]],
+                    ..mate
+                });
                 if parent.is_none() {
                     self.joints.push(Joint {
                         name: format!("{moving} on {fixed}"),
@@ -199,6 +265,13 @@ pub const ASSEMBLY_OPERATIONS: &[&str] = &[
     "interference",
     "color",
     "measure",
+    "concentric",
+    "flush",
+    "parallel",
+    "angle",
+    "distance",
+    "tangent",
+    "aligned",
 ];
 
 pub fn subtree(joints: &[Joint], root: &str) -> Vec<String> {
@@ -315,6 +388,7 @@ impl Model {
             "measure" => self.op_measure(line),
             "concentric" => self.op_concentric(line),
             "flush" => self.op_flush(line),
+            "parallel" | "angle" | "distance" | "tangent" => self.op_orient(line),
             "aligned" => self.op_aligned(line),
             other if super::OPERATIONS.contains(&other) => bail!(
                 "`{other}` makes geometry, which belongs in a part (.lcad) file; bring the part in with `part name file.lcad`"

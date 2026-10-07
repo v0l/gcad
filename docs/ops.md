@@ -166,6 +166,10 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | geometry stays in part files | supported | `rect` in a `.lasm` fails | `assembly::geometry_stays_in_parts`, `assembly::part_errors_name_the_file` |
 | concentric mate | supported | `concentric pin:pin.side plate:hole.side near=x,y,z` | `assembly::concentric_pin_in_a_hole`, `assembly::concentric_picks_the_hole_near_a_point` |
 | flush mate | supported | `flush pin:pin.start plate:base.end offset=1` | `assembly::concentric_pin_in_a_hole` |
+| parallel mate | supported | `parallel b:rod.end a:rod.end` | `assembly::parallel_and_angle_turn_parts`, `assembly::a_parallel_mate_stops_a_joint` |
+| angle mate | supported | `angle lid:plate.end base:plate.end 30` | `assembly::parallel_and_angle_turn_parts` |
+| distance mate | supported | `distance b:rod.side a:rod.side 50` | `assembly::distance_between_axes` |
+| tangent mate | supported | `tangent rod:rod.side plate:plate.end` | `assembly::tangent_lays_a_rod_on_a_plate` |
 | mates hold parts together | supported | a screw mated to lid and box stops the hinge | `assembly::a_screw_locks_the_hinge` |
 | sub-assemblies | supported | `part kit boxed.lasm` keeps its joints and mates | `assembly::a_sub_assembly_keeps_its_mates` |
 | check holes line up | supported | `aligned lid:screws.side box:pilot.side tol=0.05` | `assembly::holes_line_up` |

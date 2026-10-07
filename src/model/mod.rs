@@ -253,7 +253,8 @@ impl Model {
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "rib" => self.op_rib(line),
-            "joint" | "pose" | "interference" | "part" | "concentric" | "flush" | "aligned" => {
+            "joint" | "pose" | "interference" | "part" | "concentric" | "flush" | "aligned"
+            | "distance" | "tangent" => {
                 bail!(
                     "`{}` belongs in an assembly (.lasm) file, which brings parts in with `part name file.lcad`",
                     line.op

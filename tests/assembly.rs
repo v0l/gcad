@@ -300,3 +300,87 @@ fn a_sub_assembly_keeps_its_mates() {
     );
     assert!(error.contains("pull apart"), "{error}");
 }
+
+const SLAB: &str = "rect 100 100\nplate: extrude 10\n";
+const ROD: &str = "circle 5\nrod: extrude 40\n";
+
+fn extent(
+    model: &Model,
+    part: &str,
+) -> monstertruck::modeling::BoundingBox<monstertruck::modeling::Point3> {
+    linecad::geometry::bounds(&model.named_body(part).expect("part"))
+}
+
+fn near(a: f64, b: f64) -> bool {
+    (a - b).abs() < 1.0e-3
+}
+
+#[test]
+fn tangent_lays_a_rod_on_a_plate() {
+    let parts = [("plate.lcad", SLAB), ("rod.lcad", ROD)];
+    let (model, text) = built(
+        "tangent_lays_a_rod_on_a_plate",
+        "part plate plate.lcad\npart rod rod.lcad\ntangent rod:rod.side plate:plate.end\n",
+        &parts,
+    );
+    let b = extent(&model, "rod");
+    assert!(
+        near(b.min().z, 10.0) && near(b.max().z, 15.0),
+        "{text} {b:?}"
+    );
+}
+
+#[test]
+fn distance_between_axes() {
+    let parts = [("rod.lcad", ROD)];
+    let (model, _) = built(
+        "distance_between_axes",
+        "part a rod.lcad\npart b rod.lcad\nmove b 30,0,0\ndistance b:rod.side a:rod.side 50\n",
+        &parts,
+    );
+    let b = extent(&model, "b");
+    assert!(near(b.min().x, 47.5) && near(b.max().x, 52.5), "{b:?}");
+}
+
+#[test]
+fn parallel_and_angle_turn_parts() {
+    let parts = [("plate.lcad", SLAB), ("rod.lcad", ROD)];
+    let (model, _) = built(
+        "parallel_turns_a_rod",
+        "part a rod.lcad\npart b rod.lcad\nmove b 30,0,0\nrotate b 30 axis=x\nparallel b:rod.end a:rod.end\n",
+        &parts,
+    );
+    let b = extent(&model, "b");
+    assert!(near(b.max().z - b.min().z, 40.0), "{b:?}");
+    let (model, text) = built(
+        "angle_tilts_a_plate",
+        "part base plate.lcad\npart lid plate.lcad\nmove lid 0,0,50\nangle lid:plate.end base:plate.end 30\n",
+        &parts,
+    );
+    let b = extent(&model, "lid");
+    let tilted = 100.0 * 0.5 + 10.0 * 3f64.sqrt() / 2.0;
+    assert!(near(b.max().z - b.min().z, tilted), "{text} {b:?}");
+}
+
+#[test]
+fn a_parallel_mate_stops_a_joint() {
+    let parts = [("rod.lcad", ROD)];
+    let assembly = "part a rod.lcad\npart b rod.lcad\npart c rod.lcad\nmove b 50,0,0\nmove c 0,30,0\naxis tilt 50,0,0 60,0,0\njoint t b a turn about=tilt\ndistance c:rod.side a:rod.side 20\nparallel c:rod.end b:rod.end\n";
+    let (model, _) = built("a_parallel_mate_stops_a_joint", assembly, &parts);
+    assert!(near(extent(&model, "c").min().y, 17.5));
+    let error = failed(
+        "a_parallel_mate_stops_a_joint_pose",
+        &format!("{assembly}pose t 20\n"),
+        &parts,
+    );
+    assert!(
+        error.contains("pull apart parallel c:rod.end b:rod.end"),
+        "{error}"
+    );
+    let error = failed(
+        "a_second_mate_that_does_not_hold",
+        "part a rod.lcad\npart b rod.lcad\nmove b 50,0,0\nrotate b 10 axis=x\npart c rod.lcad\nmove c 0,30,0\ndistance c:rod.side a:rod.side 20\nparallel c:rod.end b:rod.end\n",
+        &parts,
+    );
+    assert!(error.contains("already hangs off `a`"), "{error}");
+}

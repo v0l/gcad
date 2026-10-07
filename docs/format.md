@@ -175,10 +175,17 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 | `pose` | `joint value` | moves a joint to a new value |
 | `concentric` | `moving:faces fixed:faces` `near=x,y,z` `flip` | turns and moves the moving part so its round faces share an axis with a hole in the fixed one; `near` picks the hole nearest a point, otherwise the one nearest where the part is; it can still slide along and spin about that axis |
 | `flush` | `moving:faces fixed:faces` `offset=` | turns and moves the moving part so its flat faces lie on the fixed part's, facing each other, `offset` apart |
+| `parallel` | `moving:faces fixed:faces` | turns the moving part so its face or axis is parallel to the fixed one; an axis and a face are parallel when the axis lies along the face |
+| `angle` | `moving:faces fixed:faces degrees` | turns the moving part so its face or axis is at that angle to the fixed one; between two faces it is the angle between their outward normals, so 0 faces the same way and 180 faces each other |
+| `distance` | `moving:faces fixed:faces length` | makes two faces, two axes, or an axis and a face parallel and `length` apart, keeping the moving part on the side it is on |
+| `tangent` | `moving:faces fixed:faces` | lays a round face on a flat one, or against another round face, with its axis parallel |
 | `aligned` | `a:faces b:faces` `tol=` | checks that every hole in `a` has a parallel hole in `b` on the same axis, within `tol` (0.05 by default), and fails the line if not |
 | `color` | `part colour` | colours a part, over the colour its file gave it |
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
 | `measure` | `mass`, `overlap a b` | as in part files |
+
+`faces` in `parallel`, `angle`, `distance` and `tangent` is either flat faces on one
+plane or the round faces of one cylinder, which stands for its axis.
 
 A mate holds the parts together, the way a joint does. The first mate of a part
 places it and fixes it to the other part, so it moves when that part moves. Later

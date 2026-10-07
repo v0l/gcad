@@ -1,6 +1,6 @@
 use super::Model;
 use super::args::{Args, point3};
-use super::assembly::Feature;
+use super::assembly::{Condition, Feature, angle_between, distance_between};
 use crate::geometry;
 use crate::parse::Line;
 use crate::select;
@@ -152,6 +152,74 @@ fn fixed_part(text: &str) -> String {
         .to_string()
 }
 
+fn orient(mine: Feature, theirs: Feature, condition: Condition) -> Result<Matrix4> {
+    let (from, to) = (mine.direction(), theirs.direction());
+    let mixed = matches!(
+        (mine, theirs),
+        (Feature::Axis(..), Feature::Plane(..)) | (Feature::Plane(..), Feature::Axis(..))
+    );
+    let goal = match condition {
+        Condition::Angle(degrees) => {
+            let planes = matches!((mine, theirs), (Feature::Plane(..), Feature::Plane(..)));
+            let to = if !planes && from.dot(to) < 0.0 {
+                -to
+            } else {
+                to
+            };
+            let mut side = to.cross(from);
+            if side.magnitude() < 1.0e-9 {
+                let helper = if to.x.abs() < 0.9 {
+                    Vector3::unit_x()
+                } else {
+                    Vector3::unit_y()
+                };
+                side = to.cross(helper);
+            }
+            let side = side.normalize();
+            Matrix3::from_axis_angle(side, Rad(degrees.to_radians())) * to
+        }
+        _ if mixed => {
+            let flat = from - to * from.dot(to);
+            if flat.magnitude() < 1.0e-9 {
+                let helper = if to.x.abs() < 0.9 {
+                    Vector3::unit_x()
+                } else {
+                    Vector3::unit_y()
+                };
+                to.cross(helper).normalize()
+            } else {
+                flat.normalize()
+            }
+        }
+        _ if from.dot(to) < 0.0 => -to,
+        _ => to,
+    };
+    let turn = about(mine.point(), turn_onto(from, goal));
+    let turned = mine.moved(turn);
+    let Condition::Distance(want) = condition else {
+        return Ok(turn);
+    };
+    let (normal, current) = match (turned, theirs) {
+        (Feature::Plane(p, n), other) => (n, (p - other.point()).dot(n)),
+        (Feature::Axis(p, _), Feature::Plane(q, n)) => (n, (p - q).dot(n)),
+        (Feature::Axis(p, d), Feature::Axis(q, _)) => {
+            let offset = (p - q) - d * (p - q).dot(d);
+            if offset.magnitude() < 1.0e-9 {
+                bail!(
+                    "the two axes are the same line, so there is no side to set them apart on; move the part off first"
+                );
+            }
+            (offset.normalize(), offset.magnitude())
+        }
+    };
+    let side = if current.abs() < 1.0e-9 {
+        1.0
+    } else {
+        current.signum()
+    };
+    Ok(Matrix4::from_translation(normal * (side * want - current)) * turn)
+}
+
 fn turn_onto(from: Vector3, to: Vector3) -> Matrix3 {
     let axis = from.cross(to);
     let cos = from.dot(to).clamp(-1.0, 1.0);
@@ -250,7 +318,14 @@ impl Model {
             Feature::Axis(own.point, own.axis),
             Feature::Axis(target.point, target.axis),
         ];
-        let said = self.mate_parts(&line.text, &part, &fixed, features, 0.0, transform)?;
+        let said = self.mate_parts(
+            &line.text,
+            &part,
+            &fixed,
+            features,
+            Condition::Concentric,
+            transform,
+        )?;
         Ok(format!(
             "{said}; radius {:.3} in {:.3}",
             own.radius, target.radius
@@ -292,7 +367,103 @@ impl Model {
             Feature::Plane(mine.origin(), mine.normal()),
             Feature::Plane(theirs.origin(), theirs.normal()),
         ];
-        self.mate_parts(&line.text, &part, &fixed, features, gap, transform)
+        self.mate_parts(
+            &line.text,
+            &part,
+            &fixed,
+            features,
+            Condition::Flush(gap),
+            transform,
+        )
+    }
+
+    fn feature(&self, text: &str) -> Result<(String, Feature, Option<f64>)> {
+        let (part, solid, faces) = self.reference(text)?;
+        let all = select::faces(&solid);
+        let planes: Vec<Plane> = faces
+            .iter()
+            .filter_map(|&i| match all[i].oriented_surface() {
+                Surface::Plane(p) => Some(p),
+                _ => None,
+            })
+            .collect();
+        if planes.len() == faces.len() {
+            let first = planes[0];
+            if planes.iter().any(|p| {
+                p.normal().dot(first.normal()) < 1.0 - 1.0e-9
+                    || (p.origin() - first.origin()).dot(first.normal()).abs() > 1.0e-6
+            }) {
+                bail!("`{text}` matched flat faces that are not on one plane");
+            }
+            return Ok((part, Feature::Plane(first.origin(), first.normal()), None));
+        }
+        match cylinders(&solid, &faces).as_slice() {
+            [one] => Ok((part, Feature::Axis(one.point, one.axis), Some(one.radius))),
+            [] => bail!("`{text}` is neither one flat face nor one round face"),
+            many => bail!(
+                "`{text}` has {} round faces on different axes; pick one",
+                many.len()
+            ),
+        }
+    }
+
+    pub(crate) fn op_orient(&mut self, line: &Line) -> Result<String> {
+        let op = line.op.as_str();
+        let needs: &[&str] = match op {
+            "angle" => &["moving", "fixed", "degrees"],
+            "distance" => &["moving", "fixed", "length"],
+            _ => &["moving", "fixed"],
+        };
+        let args = Args::new(line, needs, &[], false)?;
+        let (part, mine, radius) = self.feature(args.text("moving")?)?;
+        let (_, theirs, their_radius) = self.feature(args.text("fixed")?)?;
+        let fixed = fixed_part(args.text("fixed")?);
+        let condition = match op {
+            "parallel" => Condition::Parallel,
+            "angle" => {
+                let degrees = args.number("degrees", &self.scope)?;
+                if !(0.0..=180.0).contains(&degrees) {
+                    bail!("an angle mate takes 0 to 180 degrees, not {degrees}");
+                }
+                Condition::Angle(degrees)
+            }
+            "distance" => {
+                let length = args.number("length", &self.scope)?;
+                if length < 0.0 {
+                    bail!("a distance is not negative; got {length}");
+                }
+                Condition::Distance(length)
+            }
+            _ => match (mine, theirs, radius, their_radius) {
+                (Feature::Axis(..), Feature::Plane(..), Some(r), _)
+                | (Feature::Plane(..), Feature::Axis(..), _, Some(r)) => Condition::Distance(r),
+                (Feature::Axis(..), Feature::Axis(..), Some(a), Some(b)) => {
+                    Condition::Distance(a + b)
+                }
+                _ => bail!("`tangent` puts a round face against a flat one or another round face"),
+            },
+        };
+        let transform = orient(mine, theirs, condition)?;
+        let said = self.mate_parts(
+            &line.text,
+            &part,
+            &fixed,
+            [mine, theirs],
+            condition,
+            transform,
+        )?;
+        let mates = self
+            .mates
+            .last()
+            .map(|m| m.features)
+            .unwrap_or([mine, theirs]);
+        Ok(format!(
+            "{said}; {:.3}° apart{}",
+            angle_between(mates[0], mates[1]),
+            distance_between(mates[0], mates[1])
+                .map(|d| format!(", {d:.3} away"))
+                .unwrap_or_default()
+        ))
     }
 
     pub(crate) fn op_aligned(&mut self, line: &Line) -> Result<String> {
