@@ -122,6 +122,7 @@ Features:
 | `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face; `label.side` of an extrusion that is the whole solid tapers curved sides too |
 | `push` | `faces d` | moves flat faces `d` along their normal, out (positive) or in (negative); an extrusion's `label.end` or `label.start` moves in even with curved sides |
 | `rib` | `t` | after an open `pen` path of one `line`, fills between that line and the solid with a web `t` thick, centred on the workplane |
+| `wrap` | `faces depth=` `raise` | rolls the sketch onto a round face and cuts it `depth` in, or with `raise` stands it `depth` out. Draw the sketch on a plane along the cylinder's axis: its x runs around the cylinder and its y along the axis, read from the side the plane faces |
 | `thicken` | `faces t` | grows every side of an extrusion (`label.side`) outward by `t`, or pushes flat faces out by `t` |
 | `fillet` | `size edges` `to=` | rounds the edges with radius `size`, or from `size` to `to` along them (on a closed loop, up to `to` halfway round and back) |
 | `fillet` | `full label.end` | rounds the end of an extruded rect into a half cylinder across its short side, while the extrusion is the whole solid |

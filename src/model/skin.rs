@@ -95,7 +95,7 @@ fn gcd(a: usize, b: usize) -> usize {
     if b == 0 { a } else { gcd(b, a % b) }
 }
 
-fn knots(params: &[f64], degree: usize) -> KnotVector {
+pub(crate) fn knots(params: &[f64], degree: usize) -> KnotVector {
     let n = params.len();
     let mut values = vec![0.0; degree + 1];
     values
@@ -104,7 +104,11 @@ fn knots(params: &[f64], degree: usize) -> KnotVector {
     KnotVector::from(values)
 }
 
-fn interpolate(points: &[Point3], params: &[f64], knots: &KnotVector) -> Result<Vec<Point3>> {
+pub(crate) fn interpolate(
+    points: &[Point3],
+    params: &[f64],
+    knots: &KnotVector,
+) -> Result<Vec<Point3>> {
     if points.len() == 2 && knots.len() == 4 {
         return Ok(points.to_vec());
     }
@@ -114,7 +118,7 @@ fn interpolate(points: &[Point3], params: &[f64], knots: &KnotVector) -> Result<
         .map_err(|e| anyhow!("cannot fit the loft surface: {e}"))
 }
 
-fn uniform(count: usize) -> Vec<f64> {
+pub(crate) fn uniform(count: usize) -> Vec<f64> {
     (0..count).map(|i| i as f64 / (count - 1) as f64).collect()
 }
 

@@ -78,6 +78,10 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
             "rect 60 15\nbase: extrude 2\nplane base.end\ntext CAD size=8 at=-10,-4\nextrude 1",
         ),
         (
+            "wrapped",
+            "circle 40\nbase: extrude 20\nplane XZ\ntext HELLO size=8 at=-14,6\nwrap base.side depth=0.6",
+        ),
+        (
             "sloted",
             "slot 30 10\nextrude 3\nplane XY offset=3\nellipse 10 6\nextrude 2",
         ),

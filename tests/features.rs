@@ -294,10 +294,39 @@ fn push_curved() {
 }
 
 #[test]
-#[ignore = "missing: wrap"]
 fn wrap_text() {
-    let model = build("circle 20\nbase: extrude 20\ntext HI size=8\nwrap base.side depth=0.5");
-    assert!(volume(&model) < PI * 100.0 * 20.0);
+    let model = build(
+        "circle 20\nbase: extrude 20\nplane XZ\ntext HI size=8 at=-5,6\nwrap base.side depth=0.5",
+    );
+    assert!(volume(&model) < volume(&build("circle 20\nbase: extrude 20")) - 1.0);
+}
+
+#[test]
+fn wrap_rectangle() {
+    let plain = volume(&build("circle 40\nbase: extrude 20"));
+    let cut = volume(&build(
+        "circle 40\nbase: extrude 20\nplane XZ\nrect 10 6 at=0,10\nwrap base.side depth=1",
+    ));
+    let raised = volume(&build(
+        "circle 40\nbase: extrude 20\nplane XZ\nrect 10 6 at=0,10\nwrap base.side depth=1 raise",
+    ));
+    let angle = 10.0 / 20.0;
+    let removed = 0.5 * angle * (400.0 - 361.0) * 6.0;
+    let added = 0.5 * angle * (441.0 - 400.0) * 6.0;
+    assert!(
+        ((plain - cut) - removed).abs() < removed * 0.02,
+        "{}",
+        plain - cut
+    );
+    assert!(
+        ((raised - plain) - added).abs() < added * 0.02,
+        "{}",
+        raised - plain
+    );
+    assert!(
+        failure("circle 40\nbase: extrude 20\nplane XY\nrect 4 4\nwrap base.side depth=1")
+            .contains("along the cylinder's axis")
+    );
 }
 
 #[test]

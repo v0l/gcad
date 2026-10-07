@@ -92,7 +92,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | shell of any solid | supported | `shell 1` on a revolve | `features::shell_revolved` |
 | draft curved faces | supported | `draft 5 base.side` on a cylinder | `features::draft_curved` |
 | push in with curved sides | supported | `push base.end -2` on a cylinder | `features::push_curved` |
-| wrap a sketch onto a face | missing | `wrap base.side depth=0.5` | `features::wrap_text` |
+| wrap a sketch onto a face | supported | `wrap base.side depth=0.5 [raise]` | `features::wrap_text`, `features::wrap_rectangle` |
 | thicken a face | supported | `thicken base.side 1` | `features::thicken_face` |
 | union with coplanar faces | supported | same-size box on a face | `features::stack_same_size` |
 | cut with coplanar faces | supported | notch flush with the sides | `features::notch_flush_with_sides` |

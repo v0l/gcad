@@ -15,6 +15,7 @@ mod sketch;
 mod skin;
 mod solids;
 mod weld;
+mod wrap;
 
 use crate::geometry::{self, Frame, Profile, Segment};
 use crate::parse::{Line, Scope};
@@ -138,6 +139,7 @@ impl Cache {
 
 pub const OPERATIONS: &[&str] = &[
     "let",
+    "wrap",
     "material",
     "plane",
     "rect",
@@ -326,6 +328,7 @@ impl Model {
             "material" => self.op_material(line),
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
+            "wrap" => self.op_wrap(line),
             "rib" => self.op_rib(line),
             "joint" | "pose" | "couple" | "explode" | "interference" | "part" | "concentric"
             | "flush" | "aligned" | "distance" | "tangent" => {
