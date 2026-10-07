@@ -69,6 +69,39 @@ fn regular_polygon() {
     );
 }
 
+fn involute_gear_area(teeth: f64, module: f64) -> f64 {
+    let pressure = 20.0_f64.to_radians();
+    let pitch = module * teeth / 2.0;
+    let base = pitch * pressure.cos();
+    let involute = |a: f64| a.tan() - a;
+    let half = |r: f64| {
+        PI / (2.0 * teeth) + involute(pressure) - involute((base / r.max(base)).acos())
+    };
+    let (root, tip) = (pitch - 1.25 * module, pitch + module);
+    let steps = 20000;
+    let tooth: f64 = (0..steps)
+        .map(|i| {
+            let r = root + (tip - root) * (i as f64 + 0.5) / steps as f64;
+            2.0 * half(r) * r * (tip - root) / steps as f64
+        })
+        .sum();
+    PI * root * root + teeth * tooth
+}
+
+#[test]
+fn involute_gear() {
+    assert_volume(
+        &build("gear 20 2\nextrude 6"),
+        involute_gear_area(20.0, 2.0) * 6.0,
+        2.0e-4,
+    );
+    assert_volume(
+        &build("gear 9 2\nextrude 6"),
+        involute_gear_area(9.0, 2.0) * 6.0,
+        2.0e-4,
+    );
+}
+
 #[test]
 fn slot() {
     assert_volume(

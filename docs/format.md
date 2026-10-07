@@ -39,7 +39,7 @@ The file runs against these pieces of state, the way G-code runs against a machi
 |---|---|---|
 | variables | `let` | every expression |
 | workplane | `plane` (XY until set) | sketch operations, `extrude`, `cut`, `revolve`, `hole`, `helix`, `repeat` |
-| sketch | `rect`, `circle`, `poly`, `ngon`, `slot`, `ellipse`, `spline`, `text`, `pen` ... `close` | `extrude`, `cut`, `revolve`, `sweep`, `section`, which empty it |
+| sketch | `rect`, `circle`, `poly`, `ngon`, `gear`, `slot`, `ellipse`, `spline`, `text`, `pen` ... `close` | `extrude`, `cut`, `revolve`, `sweep`, `section`, which empty it |
 | sections | `section` | `loft` |
 | path | `path`, `helix` | `sweep`, `plane path`, `repeat along=path` |
 | points | `point`, `dist`, `horizontal`, `vertical`, `angle` | any 2D point |
@@ -71,6 +71,7 @@ Sketch:
 | `ellipse` | `dx dy` `at=x,y` | adds an ellipse of those diameters |
 | `poly` | `x,y x,y x,y ...` `r=` or `c=` | adds a closed polygon, corners rounded by `r` or cut by `c` |
 | `ngon` | `d n` `at=x,y` `angle=` | adds a regular polygon of `n` sides with corners on a circle of diameter `d` |
+| `gear` | `teeth module` `at=x,y` `angle=` `pressure=` `backlash=` | adds an involute spur gear with a tooth on `angle` (0 by default, along x), teeth of `module` (pitch diameter `teeth*module`), a `pressure` angle of 20 degrees unless given, and teeth thinned by `backlash` at the pitch circle. Two gears mesh at centres `module*(teeth_a+teeth_b)/2` apart, with a tooth of one pointing at a gap of the other |
 | `slot` | `l w` `at=x,y` `angle=` | adds a slot `l` long overall and `w` wide, turned by `angle` degrees |
 | `spline` | `x,y x,y ... closed` | adds a smooth closed curve through the points |
 | `text` | `"words"` `size=` `at=x,y` | adds the outlines of the words, `size` tall, starting at `at` |

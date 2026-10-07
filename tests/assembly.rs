@@ -629,3 +629,34 @@ fn pattern_copies_a_part_and_its_mates() {
     );
     assert!(error.contains("mate it into one first"), "{error}");
 }
+
+const GEAR: &str = "let z=20\ngear z 2\ncircle 6\nteeth: extrude 6\n";
+
+fn meshed(test: &str, phase: f64) -> Vec<Result<String, String>> {
+    let assembly = [
+        "part frame frame.lcad",
+        "part a gear.lcad z=20",
+        "part b gear.lcad z=12",
+        "move b 32,0,0",
+        &format!("rotate b {phase} axis=z about=32,0,0"),
+        "axis wheel 0,0,0 0,0,1",
+        "axis pinion 32,0,0 32,0,1",
+        "joint drive a frame turn about=wheel",
+        "joint follow b frame turn about=pinion",
+        "couple follow drive ratio=-20/12",
+        "pose drive 7",
+        "interference none",
+    ]
+    .join("\n");
+    let frame = "plane XY offset=-20\nrect 80 40 at=16,0\nextrude 5\n";
+    steps(test, &assembly, &[("gear.lcad", GEAR), ("frame.lcad", frame)]).1
+}
+
+#[test]
+fn gears_in_mesh_turn_without_touching() {
+    let results = meshed("gears_in_mesh", 15.0);
+    assert!(results.iter().all(Result::is_ok), "{results:?}");
+    let failed = meshed("gears_out_of_phase", 0.0);
+    let clash = failed.iter().find_map(|r| r.as_ref().err()).expect("teeth clash");
+    assert!(clash.contains("a and b"), "{clash}");
+}

@@ -422,6 +422,46 @@ impl Model {
         self.add_profile(Profile::Polygon { points })
     }
 
+    pub(crate) fn op_gear(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(
+            line,
+            &["teeth", "module"],
+            &["at", "angle", "pressure", "backlash"],
+            false,
+        )?;
+        let teeth = args.number("teeth", &self.scope)?;
+        if teeth < 6.0 || teeth.fract() != 0.0 {
+            bail!("teeth must be a whole number of at least 6, got {teeth}");
+        }
+        let module = positive(args.number("module", &self.scope)?, "module")?;
+        let pressure = args
+            .optional_number("pressure", &self.scope)?
+            .unwrap_or(20.0);
+        if !(5.0..=35.0).contains(&pressure) {
+            bail!("pressure must be between 5 and 35 degrees, got {pressure}");
+        }
+        let backlash = args
+            .optional_number("backlash", &self.scope)?
+            .unwrap_or(0.0);
+        let shape = GearShape::new(teeth as usize, module, pressure.to_radians(), backlash)?;
+        let (cx, cy) = args.point("at", &self.scope)?;
+        let start = args
+            .optional_number("angle", &self.scope)?
+            .unwrap_or(0.0)
+            .to_radians();
+        let (first, segments) = shape.outline(start, (cx, cy));
+        let message = self.add_profile(Profile::Path {
+            start: first,
+            segments,
+        })?;
+        Ok(format!(
+            "{message}; pitch diameter {:.3}, tip {:.3}, root {:.3}",
+            shape.pitch * 2.0,
+            shape.tip * 2.0,
+            shape.root * 2.0
+        ))
+    }
+
     pub(crate) fn op_slot(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["l", "w"], &["at", "angle"], false)?;
         let length = positive(args.number("l", &self.scope)?, "l")?;
@@ -769,4 +809,113 @@ fn trimmed(start: (f64, f64), segments: &[Segment]) -> Result<((f64, f64), Vec<S
         }
     }
     bail!("the path never crosses itself, so there is nothing to trim; use `close`")
+}
+
+struct GearShape {
+    teeth: usize,
+    pitch: f64,
+    base: f64,
+    tip: f64,
+    root: f64,
+    half_at_pitch: f64,
+    pressure: f64,
+}
+
+fn involute(angle: f64) -> f64 {
+    angle.tan() - angle
+}
+
+impl GearShape {
+    fn new(teeth: usize, module: f64, pressure: f64, backlash: f64) -> Result<Self> {
+        let pitch = module * teeth as f64 / 2.0;
+        let shape = Self {
+            teeth,
+            pitch,
+            base: pitch * pressure.cos(),
+            tip: pitch + module,
+            root: pitch - 1.25 * module,
+            half_at_pitch: (std::f64::consts::PI * module / 2.0 - backlash) / (2.0 * pitch),
+            pressure,
+        };
+        if shape.half(shape.tip) <= 0.0 {
+            bail!("backlash {backlash} leaves the teeth pointed");
+        }
+        if shape.half(shape.root.max(shape.base)) >= std::f64::consts::PI / teeth as f64 {
+            bail!("the teeth meet at the root; use more teeth or less pressure");
+        }
+        Ok(shape)
+    }
+
+    fn half(&self, radius: f64) -> f64 {
+        let at = (self.base / radius.max(self.base)).acos();
+        self.half_at_pitch + involute(self.pressure) - involute(at)
+    }
+
+    fn roll(&self, radius: f64) -> f64 {
+        ((radius / self.base).powi(2) - 1.0).max(0.0).sqrt()
+    }
+
+    fn flank(&self, centre: f64, side: f64, from: f64, to: f64, at: (f64, f64)) -> Segment {
+        let lead = self.half_at_pitch + involute(self.pressure);
+        let point = |t: f64| {
+            let r = self.base * (1.0 + t * t).sqrt();
+            let a = centre + side * (lead - (t - t.atan()));
+            (at.0 + r * a.cos(), at.1 + r * a.sin())
+        };
+        let velocity = |t: f64| {
+            let r = self.base * (1.0 + t * t).sqrt();
+            let a = centre + side * (lead - (t - t.atan()));
+            let grow = self.base * t / (1.0 + t * t).sqrt();
+            let turn = -side * t * t / (1.0 + t * t) * r;
+            (
+                grow * a.cos() - turn * a.sin(),
+                grow * a.sin() + turn * a.cos(),
+            )
+        };
+        let step = (to - from) / 3.0;
+        let (p0, p1) = (point(from), point(to));
+        let (v0, v1) = (velocity(from), velocity(to));
+        Segment::Cubic {
+            to: p1,
+            c1: (p0.0 + step * v0.0, p0.1 + step * v0.1),
+            c2: (p1.0 - step * v1.0, p1.1 - step * v1.1),
+        }
+    }
+
+    fn outline(&self, start: f64, at: (f64, f64)) -> ((f64, f64), Vec<Segment>) {
+        let low = self.root.max(self.base);
+        let (start_roll, end_roll) = (self.roll(low), self.roll(self.tip));
+        let middle = (start_roll + end_roll) / 2.0;
+        let gap = std::f64::consts::PI / self.teeth as f64;
+        let polar = |r: f64, a: f64| (at.0 + r * a.cos(), at.1 + r * a.sin());
+        let foot = self.half(low);
+        let first = polar(self.root, start - foot);
+        let segments = (0..self.teeth)
+            .flat_map(|k| {
+                let c = start + 2.0 * gap * k as f64;
+                let tip = self.half(self.tip);
+                let radial =
+                    |a: f64, r: f64| (self.root < self.base).then(|| Segment::Line(polar(r, a)));
+                radial(c - foot, low)
+                    .into_iter()
+                    .chain([
+                        self.flank(c, -1.0, start_roll, middle, at),
+                        self.flank(c, -1.0, middle, end_roll, at),
+                        Segment::Arc {
+                            to: polar(self.tip, c + tip),
+                            via: polar(self.tip, c),
+                        },
+                        self.flank(c, 1.0, end_roll, middle, at),
+                        self.flank(c, 1.0, middle, start_roll, at),
+                    ])
+                    .chain(radial(c + foot, self.root))
+                    .chain(std::iter::once(Segment::Arc {
+                        to: polar(self.root, c + 2.0 * gap - foot),
+                        via: polar(self.root, c + gap),
+                    }))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        (first, segments)
+    }
 }

@@ -147,6 +147,7 @@ pub const OPERATIONS: &[&str] = &[
     "circle",
     "poly",
     "ngon",
+    "gear",
     "offset",
     "slot",
     "ellipse",
@@ -194,7 +195,8 @@ pub const OPERATIONS: &[&str] = &[
 ];
 
 const PROFILE_OPS: &[&str] = &[
-    "rect", "circle", "poly", "ngon", "offset", "slot", "ellipse", "close", "spline", "text",
+    "rect", "circle", "poly", "ngon", "gear", "offset", "slot", "ellipse", "close", "spline",
+    "text",
 ];
 
 impl Model {
@@ -284,6 +286,7 @@ impl Model {
             "circle" => self.op_circle(line),
             "poly" => self.op_poly(line),
             "ngon" => self.op_ngon(line),
+            "gear" => self.op_gear(line),
             "offset" => self.op_offset(line),
             "slot" => self.op_slot(line),
             "ellipse" => self.op_ellipse(line),
