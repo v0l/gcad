@@ -21,7 +21,9 @@ cargo run --release -- export examples/parts/plate.lcad plate.step
 cargo run --release -- view examples/parts/plate.lcad
 ```
 
-The format, operations and selectors are in [docs/format.md](docs/format.md).
+The format, operations and selectors are in [docs/format.md](docs/format.md). Which CAD
+operations exist, which are still missing and the tests behind each are in
+[docs/ops.md](docs/ops.md).
 
 The kernel is a fork with fillet and boolean fixes, checked out next to this repo at
 `../monstertruck` (branch `cad-regressions`) and wired in through `[patch.crates-io]`.

@@ -208,19 +208,6 @@ impl Profile {
             }
         }
     }
-
-    pub fn interior_point(&self) -> (f64, f64) {
-        match self {
-            Profile::Rect { center, .. } | Profile::Circle { center, .. } => *center,
-            Profile::Polygon { points } => {
-                let n = points.len() as f64;
-                let (sx, sy) = points
-                    .iter()
-                    .fold((0.0, 0.0), |(x, y), p| (x + p.0, y + p.1));
-                (sx / n, sy / n)
-            }
-        }
-    }
 }
 
 pub fn bounds(solid: &Solid) -> BoundingBox<Point3> {
@@ -237,7 +224,7 @@ pub fn mesh(solid: &Solid, tolerance: f64) -> PolygonMesh {
     solid
         .boundaries()
         .iter()
-        .for_each(|shell| mesh.merge(shell.triangulation(tolerance).to_polygon()));
+        .for_each(|shell| mesh.merge(shell.robust_triangulation(tolerance).to_polygon()));
     mesh
 }
 
@@ -246,5 +233,9 @@ pub fn mesh_tolerance(solid: &Solid) -> f64 {
 }
 
 pub fn volume(solid: &Solid) -> f64 {
-    mesh(solid, mesh_tolerance(solid)).volume()
+    volume_at(solid, mesh_tolerance(solid))
+}
+
+pub fn volume_at(solid: &Solid, tolerance: f64) -> f64 {
+    mesh(solid, tolerance).volume()
 }

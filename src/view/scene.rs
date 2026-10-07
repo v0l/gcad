@@ -60,7 +60,7 @@ fn face_colour(index: usize, highlights: &[Highlight<'_>]) -> V3 {
 }
 
 fn faces(solid: &Solid, highlights: &[Highlight<'_>], out: &mut Vec<Surface>) {
-    let meshed = solid.triangulation(geometry::mesh_tolerance(solid) * 0.5);
+    let meshed = solid.robust_triangulation(geometry::mesh_tolerance(solid) * 0.5);
     let faces = meshed
         .boundaries()
         .iter()

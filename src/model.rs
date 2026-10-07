@@ -237,8 +237,12 @@ fn contains(polygon: &[(f64, f64)], (x, y): (f64, f64)) -> bool {
 fn regions(profiles: &[Profile]) -> Vec<Vec<&Profile>> {
     let outlines: Vec<_> = profiles.iter().map(outline).collect();
     let inside_of = |i: usize| -> Option<usize> {
-        (0..profiles.len())
-            .find(|&j| j != i && contains(&outlines[j], profiles[i].interior_point()))
+        (0..profiles.len()).find(|&j| {
+            j != i
+                && outlines[i]
+                    .iter()
+                    .all(|&point| contains(&outlines[j], point))
+        })
     };
     let parents: Vec<Option<usize>> = (0..profiles.len()).map(inside_of).collect();
     (0..profiles.len())
