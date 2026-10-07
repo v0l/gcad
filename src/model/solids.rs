@@ -277,3 +277,37 @@ impl Model {
         });
     }
 }
+
+pub(crate) fn clear_flush(tool: &Solid, solid: &Solid) -> Solid {
+    let size = geometry::bounds(solid).diameter();
+    let margin = size * 5.0e-3;
+    let close = size * 1.0e-9;
+    let planes: Vec<Plane> = select::faces(solid)
+        .iter()
+        .filter_map(|face| match face.oriented_surface() {
+            Surface::Plane(plane) => Some(plane),
+            _ => None,
+        })
+        .collect();
+    let copy = builder::clone(tool);
+    let flush: Vec<Face> = select::faces(&copy)
+        .into_iter()
+        .filter(|face| match face.oriented_surface() {
+            Surface::Plane(own) => planes.iter().any(|p| {
+                p.normal().dot(own.normal()) > 1.0 - 1.0e-9
+                    && (p.origin() - own.origin()).dot(own.normal()).abs() < close
+            }),
+            _ => false,
+        })
+        .collect();
+    if flush.is_empty() {
+        return tool.clone();
+    }
+    match flush
+        .iter()
+        .try_for_each(|face| super::features::sink_face(&copy, face, margin, "the tool"))
+    {
+        Ok(()) => copy,
+        Err(_) => tool.clone(),
+    }
+}

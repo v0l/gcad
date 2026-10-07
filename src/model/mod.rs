@@ -143,22 +143,24 @@ impl Model {
     }
 
     pub(crate) fn merge(&mut self, label: &str, tool: Solid, combine: Combine) -> Result<()> {
-        let result = match (self.solid.take(), combine) {
+        let result = match (self.solid.as_ref(), combine) {
             (None, Combine::Add) => tool.clone(),
             (None, _) => bail!("there is no solid to cut or intersect"),
             (Some(existing), Combine::Add) => {
-                match monstertruck::solid::or_normalized(&existing, &tool) {
+                match monstertruck::solid::or_normalized(existing, &tool) {
                     Ok(solid) => solid,
-                    Err(error) => weld::weld_union(&existing, &tool)
+                    Err(error) => weld::weld_union(existing, &tool)
                         .ok_or_else(|| anyhow!("union failed: {error}"))?,
                 }
             }
             (Some(existing), Combine::Remove) => {
-                monstertruck::solid::difference_normalized(&existing, &tool)
+                let tool = solids::clear_flush(&tool, existing);
+                monstertruck::solid::difference_normalized(existing, &tool)
                     .map_err(|e| anyhow!("cut failed: {e}"))?
             }
             (Some(existing), Combine::Common) => {
-                monstertruck::solid::and_normalized(&existing, &tool)
+                let tool = solids::clear_flush(&tool, existing);
+                monstertruck::solid::and_normalized(existing, &tool)
                     .map_err(|e| anyhow!("intersection failed: {e}"))?
             }
         };

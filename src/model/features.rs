@@ -40,7 +40,7 @@ fn farthest_along(solid: &Solid, origin: Point3, direction: Vector3) -> f64 {
         .fold(0.0, f64::max)
 }
 
-fn sink_face(solid: &Solid, face: &Face, distance: f64, selector: &str) -> Result<()> {
+pub(crate) fn sink_face(solid: &Solid, face: &Face, distance: f64, selector: &str) -> Result<()> {
     let Surface::Plane(plane) = face.oriented_surface() else {
         bail!("`push` moves flat faces; `{selector}` includes a curved one");
     };
@@ -202,7 +202,22 @@ impl Model {
                 Combine::Remove => self.record_inverted(&label, groups),
                 _ => self.record(&label, groups),
             }
-            self.merge(&label, tool, combine)?;
+            if let Err(error) = self.merge(&label, tool, combine) {
+                if combine != Combine::Add || start_overlap == 0.0 {
+                    return Err(error);
+                }
+                let touching = loops(&base, &profiles)?;
+                let tool = prism(
+                    &base,
+                    &touching,
+                    &region,
+                    &profiles,
+                    normal * (distance.abs() + end_overlap),
+                    (0.0, (distance.abs() + end_overlap) * taper),
+                )
+                .map_err(|_| error)?;
+                self.merge(&label, tool, combine)?;
+            }
         }
         self.prisms.insert(
             label,

@@ -92,8 +92,9 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | push in with curved sides | missing | `push base.end -2` on a cylinder | `features::push_curved` |
 | wrap a sketch onto a face | missing | `wrap base.side depth=0.5` | `features::wrap_text` |
 | thicken a face | missing | `thicken base.side 1` | `features::thicken_face` |
-| union with coplanar faces | missing | same-size box on a face | `features::stack_same_size` |
-| cut with coplanar faces | missing | notch flush with the sides | `features::notch_flush_with_sides` |
+| union with coplanar faces | supported | same-size box on a face | `features::stack_same_size` |
+| cut with coplanar faces | supported | notch flush with the sides | `features::notch_flush_with_sides` |
+| union flush with some sides | missing | step on top, flush with three sides | `features::step_flush_with_sides` |
 
 
 ## Holes

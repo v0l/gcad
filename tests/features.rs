@@ -322,7 +322,6 @@ fn thicken_face() {
 }
 
 #[test]
-#[ignore = "missing: coplanar booleans"]
 fn stack_same_size() {
     assert_volume(
         &build("rect 20 20\nbase: extrude 10\nplane base.end\nrect 20 20\nextrude 5"),
@@ -332,11 +331,20 @@ fn stack_same_size() {
 }
 
 #[test]
-#[ignore = "missing: coplanar booleans"]
 fn notch_flush_with_sides() {
     assert_volume(
         &build("rect 20 20\nbase: extrude 10\nplane base.end\nrect 10 20 at=5,0\ncut 5"),
         3000.0,
+        1.0e-6,
+    );
+}
+
+#[test]
+#[ignore = "missing: coplanar booleans"]
+fn step_flush_with_sides() {
+    assert_volume(
+        &build("rect 20 20\nbase: extrude 10\nplane base.end\nrect 20 10 at=0,5\nextrude 5"),
+        5000.0,
         1.0e-6,
     );
 }
