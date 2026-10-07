@@ -206,8 +206,8 @@ fn step_colours() {
     );
 }
 
-fn screwed_plate() -> std::path::PathBuf {
-    let dir = std::path::PathBuf::from(scratch("step_assembly"));
+fn screwed_plate(name: &str) -> std::path::PathBuf {
+    let dir = std::path::PathBuf::from(scratch(name));
     std::fs::create_dir_all(&dir).expect("dir");
     std::fs::write(
         dir.join("plate.lcad"),
@@ -230,7 +230,7 @@ fn screwed_plate() -> std::path::PathBuf {
 
 #[test]
 fn step_assembly() {
-    let path = screwed_plate();
+    let path = screwed_plate("step_assembly");
     let run = linecad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit.step");
     export::export_model(&run.model, &path, &out).expect("exports");
@@ -244,7 +244,7 @@ fn step_assembly() {
 #[ignore = "needs OpenCascade: set LINECAD_OCP_PYTHON to a python with OCP and run with --ignored"]
 fn step_assembly_opens_in_opencascade() {
     let python = std::env::var("LINECAD_OCP_PYTHON").expect("LINECAD_OCP_PYTHON");
-    let path = screwed_plate();
+    let path = screwed_plate("step_assembly_occt");
     let run = linecad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit_occt.step");
     export::export_model(&run.model, &path, &out).expect("exports");
@@ -342,7 +342,7 @@ fn drawing_dimensions_and_section() {
 
 #[test]
 fn assembly_drawing_lists_parts() {
-    let path = screwed_plate();
+    let path = screwed_plate("assembly_drawing");
     let run = linecad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit.svg");
     export::export_model(&run.model, &path, &out).expect("exports");

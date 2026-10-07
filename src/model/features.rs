@@ -385,7 +385,7 @@ impl Model {
             combine == Combine::Add && !both && self.on_existing_face(frame.origin, normal);
         let backed = starts_on_face && self.backed(&frame, &profiles, -normal * pad * 0.5)?;
         let overlaps: Vec<f64> = match combine {
-            Combine::Add if backed => vec![pad, 0.0],
+            Combine::Add if backed => vec![0.0, pad],
             Combine::Add if starts_on_face => vec![0.0, pad],
             Combine::Common if self.on_existing_face(base.origin, -normal) => vec![pad],
             _ => vec![0.0],

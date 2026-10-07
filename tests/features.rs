@@ -357,7 +357,6 @@ fn notch_flush_with_sides() {
 }
 
 #[test]
-#[ignore = "missing: coplanar booleans"]
 fn step_flush_with_sides() {
     assert_volume(
         &build("rect 20 20\nbase: extrude 10\nplane base.end\nrect 20 10 at=0,5\nextrude 5"),
