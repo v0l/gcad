@@ -126,8 +126,8 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | chamfer where three edges meet | supported | `chamfer 2 all` | `blends::chamfer_every_edge_of_a_box` |
 | round corners on curved faces | missing | `fillet 1 all` on a rounded rect | `blends::fillet_every_edge_of_a_rounded_prism` |
 | round inside corners where three edges meet | missing | `fillet 1 all` on an L shape | `blends::fillet_every_edge_of_an_l_shape` |
-| variable radius along a chain | missing | `fillet 1 chain to=2` | `blends::fillet_variable_chain` |
-| full round | missing | `fillet full base.end` | `blends::full_round` |
+| variable radius along a chain | supported | `fillet 1 chain to=2` | `blends::fillet_variable_chain` |
+| full round | supported | `fillet full base.end` | `blends::full_round` |
 
 
 ## Bodies

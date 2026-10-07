@@ -22,6 +22,9 @@ fn into_face(edge: Vector3, own: Vector3, other: Vector3) -> Vector3 {
 impl Model {
     pub(crate) fn op_blend(&mut self, line: &Line, profile: FilletProfile) -> Result<String> {
         let args = Args::new(line, &["size", "edges"], &["to", "d2"], false)?;
+        if args.text("size")? == "full" && matches!(profile, FilletProfile::Round) {
+            return self.full_round(line, args.text("edges")?);
+        }
         let size = positive(args.number("size", &self.scope)?, "size")?;
         let selector = args.text("edges")?;
         let solid = self.active(&line.op)?.clone();
@@ -80,7 +83,22 @@ impl Model {
         let options = match args.optional_number("to", &self.scope)? {
             Some(end) => {
                 let end = positive(end, "to")?;
-                FilletOptions::variable(move |t| size + (end - size) * t)
+                let closed = edges.iter().all(|edge| {
+                    [edge.front(), edge.back()].iter().all(|vertex| {
+                        edges
+                            .iter()
+                            .filter(|other| other.front() == *vertex || other.back() == *vertex)
+                            .count()
+                            == 2
+                    })
+                });
+                if closed {
+                    FilletOptions::variable(move |t| {
+                        size + (end - size) * (1.0 - (2.0 * t - 1.0).abs())
+                    })
+                } else {
+                    FilletOptions::variable(move |t| size + (end - size) * t)
+                }
             }
             None => FilletOptions::constant(size),
         }
@@ -124,6 +142,102 @@ impl Model {
             edges.len(),
             self.describe_solid()?
         ))
+    }
+
+    fn full_round(&mut self, line: &Line, selector: &str) -> Result<String> {
+        let (owner, group) = selector
+            .split_once('.')
+            .filter(|(_, g)| *g == "end" || *g == "start")
+            .ok_or_else(|| {
+                anyhow!("`fillet full` rounds an extrusion's `label.end` or `label.start`")
+            })?;
+        let prism_of = self
+            .prisms
+            .get(owner)
+            .cloned()
+            .ok_or_else(|| anyhow!("`{owner}` is not an extrusion"))?;
+        let [
+            Profile::Rect {
+                center,
+                width,
+                height,
+                radius,
+            },
+        ] = prism_of.profiles.as_slice()
+        else {
+            bail!("`fillet full` rounds the end of an extruded rect");
+        };
+        if *radius > 0.0 {
+            bail!("`fillet full` rounds the end of a rect with square corners");
+        }
+        let alone = prism_of.alone.is_some()
+            && prism_of.alone.as_ref()
+                == Some(
+                    &select::faces(self.active("fillet")?)
+                        .iter()
+                        .map(Face::id)
+                        .collect(),
+                );
+        if !alone {
+            bail!(
+                "`fillet full` needs `{owner}` to be the whole solid; round it before adding other features"
+            );
+        }
+        let frame = prism_of.frame;
+        let along = frame.normal * prism_of.distance.signum();
+        let length = prism_of.distance.abs();
+        let (long, short, across, long_size) = if width >= height {
+            (frame.x, frame.y, *height, *width)
+        } else {
+            (frame.y, frame.x, *width, *height)
+        };
+        let r = across / 2.0;
+        if r >= length {
+            bail!("the extrusion is {length} long, too short for a full round of radius {r}");
+        }
+        let (base, up) = if group == "end" {
+            (frame.at(center.0, center.1), along)
+        } else {
+            (frame.at(center.0, center.1) + along * length, -along)
+        };
+        let section = Frame {
+            origin: base - long * (long_size / 2.0),
+            x: short,
+            y: up,
+            normal: long,
+        };
+        let straight = length - r;
+        let profiles = vec![Profile::Path {
+            start: (-r, 0.0),
+            segments: vec![
+                crate::geometry::Segment::Line((r, 0.0)),
+                crate::geometry::Segment::Line((r, straight)),
+                crate::geometry::Segment::Arc {
+                    to: (-r, straight),
+                    via: (0.0, length),
+                },
+                crate::geometry::Segment::Line((-r, 0.0)),
+            ],
+        }];
+        let shapes = loops(&section, &profiles)?;
+        let tool = prism(
+            &section,
+            &shapes,
+            &[0],
+            &profiles,
+            long * long_size,
+            (0.0, 0.0),
+        )?;
+        let label = label_of(line);
+        let groups = select::faces(&tool)
+            .iter()
+            .filter(|face| !matches!(face.oriented_surface(), Surface::Plane(_)))
+            .map(|face| ("faces", face.oriented_surface()))
+            .collect();
+        self.record(&label, groups);
+        self.solid = None;
+        self.merge(&label, tool, Combine::Add)?;
+        self.describe_solid()
     }
 
     fn two_distance_chamfer(

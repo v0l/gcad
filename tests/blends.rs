@@ -151,7 +151,6 @@ fn fillet_every_edge_of_an_l_shape() {
 }
 
 #[test]
-#[ignore = "missing: variable radius along a chain"]
 fn fillet_variable_chain() {
     let model = build(&format!("{PLATE}fillet 1 base.end&base.side to=2"));
     let v = volume(&model);
@@ -162,7 +161,6 @@ fn fillet_variable_chain() {
 }
 
 #[test]
-#[ignore = "missing: fillet full"]
 fn full_round() {
     assert_volume(
         &build("rect 40 4\nbase: extrude 10\nfillet full base.end"),

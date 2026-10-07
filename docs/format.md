@@ -116,7 +116,8 @@ Features:
 | `push` | `faces d` | moves flat faces `d` along their normal, out (positive) or in (negative); an extrusion's `label.end` or `label.start` moves in even with curved sides |
 | `rib` | `t` | after an open `pen` path of one `line`, fills between that line and the solid with a web `t` thick, centred on the workplane |
 | `thicken` | `faces t` | grows every side of an extrusion (`label.side`) outward by `t`, or pushes flat faces out by `t` |
-| `fillet` | `size edges` `to=` | rounds the edges with radius `size`, or from `size` to `to` along them |
+| `fillet` | `size edges` `to=` | rounds the edges with radius `size`, or from `size` to `to` along them (on a closed loop, up to `to` halfway round and back) |
+| `fillet` | `full label.end` | rounds the end of an extruded rect into a half cylinder across its short side, while the extrusion is the whole solid |
 | `chamfer` | `size edges` `d2=` | bevels the edges by `size`; with `d2`, the edges must be written `a&b` and `size` is cut along `a`, `d2` along `b` |
 
 `mode=cut` and `mode=intersect` on `revolve`, `sweep` and `loft` remove the shape or
