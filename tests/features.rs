@@ -197,12 +197,11 @@ fn extrude_to_next_face() {
 }
 
 #[test]
-#[ignore = "missing: rib"]
 fn rib() {
     let model = build(
-        "rect 40 20 at=20,0\nbase: extrude 2\nplane YZ\nrect 20 30 at=0,15\nwall: extrude 2\nplane XZ\npen 2,22\nline 22,2\nrib 2",
+        "rect 40 20 at=20,0\nbase: extrude 2\nplane YZ offset=2\nrect 16 29 at=0,15.5\nwall: extrude 2\nplane XZ\npen 4,22\nline 24,2\nrib 2",
     );
-    assert_volume(&model, 1600.0 + 1200.0 - 80.0 + 400.0, 0.0005);
+    assert_volume(&model, 1600.0 + 928.0 - 32.0 + 400.0, 0.0005);
 }
 
 #[test]

@@ -7,6 +7,7 @@ mod holes;
 mod import;
 mod measure;
 mod path;
+mod rib;
 mod round;
 mod sketch;
 mod skin;
@@ -233,6 +234,7 @@ impl Model {
             "color" => self.op_color(line),
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
+            "rib" => self.op_rib(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",

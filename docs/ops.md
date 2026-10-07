@@ -79,7 +79,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | thin extrude | supported | `extrude 10 thin=2` | `features::thin_extrude` |
 | extrude to an offset from a face | supported | `extrude upto=face offset=-2` | `features::extrude_up_to_offset_face` |
 | extrude to the next face | supported | `extrude next` | `features::extrude_to_next_face` |
-| rib | missing | open `pen` path, then `rib 2` | `features::rib` |
+| rib | supported | open `pen` path, then `rib 2` | `features::rib` |
 | smooth loft | supported | `loft smooth` | `features::smooth_loft` |
 | loft between different profiles | supported | `section`s with different edge counts | `features::loft_mixed_profiles` |
 | sweep along a smooth path | supported | `path ... smooth` | `features::sweep_smooth_path` |

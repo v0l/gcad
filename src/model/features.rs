@@ -764,6 +764,11 @@ impl Model {
             }
             return self.describe_solid();
         }
+        if distances.contains(&0.0) {
+            bail!(
+                "`{label}` touches its axis, so it can only be shelled while it is the whole solid; shell it before adding other features"
+            );
+        }
         let (inner_start, inner) = crate::offset::offset_path(start, &segments, &distances)
             .map_err(|e| anyhow!("shell: {e}"))?;
         let cavity = vec![Profile::Path {
