@@ -204,3 +204,22 @@ fn svg_import() {
     std::fs::write(&path, r#"<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="20" height="10"/></svg>"#).expect("writes");
     assert_volume(&build(&format!("svg {path}\nextrude 5")), 1000.0, 1.0e-6);
 }
+
+#[test]
+fn rectangle_from_constraints() {
+    let model = build(
+        "point a 0,0\npoint b near=30,1\npoint c near=31,20\npoint d near=1,21\nhorizontal a b\nperpendicular a b b c\nparallel a b d c\nparallel b c a d\ndist a b 30\ndist b c 20\npoly a b c d\nextrude 1",
+    );
+    assert_volume(&model, 600.0, 1.0e-6);
+}
+
+#[test]
+fn square_with_midpoint_and_online() {
+    let text = summary(
+        "point a 0,0\npoint b near=10,0\npoint c near=10,10\npoint d near=0,10\npoint m near=5,5\nhorizontal a b\nperpendicular a b b c\nperpendicular b c c d\nequal a b b c\nequal b c c d\ndist a b 10\nmidpoint m a c\npoint e near=2,3\nonline e b d\ncoincident e m",
+    );
+    assert!(
+        text.contains("m 5.000,5.000") && text.contains("0 degree(s) of freedom"),
+        "{text}"
+    );
+}

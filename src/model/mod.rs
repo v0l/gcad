@@ -230,7 +230,8 @@ impl Model {
             "if" => self.op_if(line),
             "include" => self.op_include(line),
             "point" => self.op_point(line),
-            "dist" | "horizontal" | "vertical" | "angle" => self.op_constrain(line),
+            "dist" | "horizontal" | "vertical" | "angle" | "coincident" | "parallel"
+            | "perpendicular" | "equal" | "midpoint" | "online" => self.op_constrain(line),
             "reflect" => self.op_reflect(line),
             "array" => self.op_array(line),
             "axis" => self.op_axis(line),

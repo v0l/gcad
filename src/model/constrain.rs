@@ -16,22 +16,49 @@ pub enum Constraint {
     Horizontal(usize, usize),
     Vertical(usize, usize),
     Angle(usize, usize, f64),
+    Coincident(usize, usize),
+    Parallel([usize; 4]),
+    Perpendicular([usize; 4]),
+    Equal([usize; 4]),
+    Midpoint(usize, usize, usize),
+    Online(usize, usize, usize),
 }
 
 fn residuals(points: &[(f64, f64)], constraints: &[Constraint]) -> Vec<f64> {
+    let span = |a: usize, b: usize| (points[b].0 - points[a].0, points[b].1 - points[a].1);
+    let length = |(x, y): (f64, f64)| x.hypot(y).max(1.0e-12);
     constraints
         .iter()
-        .map(|constraint| match *constraint {
-            Constraint::Distance(a, b, d) => {
-                let (pa, pb) = (points[a], points[b]);
-                (pb.0 - pa.0).hypot(pb.1 - pa.1) - d
-            }
-            Constraint::Horizontal(a, b) => points[b].1 - points[a].1,
-            Constraint::Vertical(a, b) => points[b].0 - points[a].0,
+        .flat_map(|constraint| match *constraint {
+            Constraint::Distance(a, b, d) => vec![length(span(a, b)) - d],
+            Constraint::Horizontal(a, b) => vec![points[b].1 - points[a].1],
+            Constraint::Vertical(a, b) => vec![points[b].0 - points[a].0],
             Constraint::Angle(a, b, degrees) => {
                 let (s, c) = degrees.to_radians().sin_cos();
-                let (dx, dy) = (points[b].0 - points[a].0, points[b].1 - points[a].1);
-                dy * c - dx * s
+                let (dx, dy) = span(a, b);
+                vec![dy * c - dx * s]
+            }
+            Constraint::Coincident(a, b) => {
+                let (dx, dy) = span(a, b);
+                vec![dx, dy]
+            }
+            Constraint::Parallel([a, b, c, d]) | Constraint::Perpendicular([a, b, c, d]) => {
+                let (u, v) = (span(a, b), span(c, d));
+                let scale = length(u) * length(v);
+                let value = match constraint {
+                    Constraint::Parallel(_) => u.0 * v.1 - u.1 * v.0,
+                    _ => u.0 * v.0 + u.1 * v.1,
+                };
+                vec![value / scale * length(u).max(length(v))]
+            }
+            Constraint::Equal([a, b, c, d]) => vec![length(span(a, b)) - length(span(c, d))],
+            Constraint::Midpoint(m, a, b) => vec![
+                points[m].0 - (points[a].0 + points[b].0) / 2.0,
+                points[m].1 - (points[a].1 + points[b].1) / 2.0,
+            ],
+            Constraint::Online(p, a, b) => {
+                let (u, w) = (span(a, b), span(a, p));
+                vec![(u.0 * w.1 - u.1 * w.0) / length(u)]
             }
         })
         .collect()
@@ -132,7 +159,8 @@ pub fn solve(
                     .collect()
             })
             .collect();
-        (0..constraints.len())
+        let rows = columns.first().map_or(0, Vec::len);
+        (0..rows)
             .map(|i| columns.iter().map(|c| c[i]).collect())
             .collect()
     };
@@ -258,28 +286,44 @@ impl Model {
     }
 
     pub(crate) fn op_constrain(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["a", "b"], &[], true)?;
-        let (a, b) = (
-            self.point_index(args.text("a")?)?,
-            self.point_index(args.text("b")?)?,
-        );
-        if a == b {
-            bail!("a constraint needs two different points");
+        let args = Args::new(line, &[], &[], true)?;
+        let words = args.rest.clone();
+        let count = match line.op.as_str() {
+            "dist" | "angle" | "horizontal" | "vertical" | "coincident" => 2,
+            "midpoint" | "online" => 3,
+            _ => 4,
+        };
+        if words.len() < count {
+            bail!("`{}` needs {count} points", line.op);
         }
+        let ids = words[..count]
+            .iter()
+            .map(|name| self.point_index(name))
+            .collect::<Result<Vec<_>>>()?;
+        let extra = &words[count..];
         let value = |what: &str| -> Result<f64> {
-            match args.rest.as_slice() {
+            match extra {
                 [text] => eval(text, &self.scope),
-                _ => bail!("write `{} a b <{what}>`", line.op),
+                _ => bail!("write `{} {} <{what}>`", line.op, words[..count].join(" ")),
             }
         };
+        if !matches!(line.op.as_str(), "dist" | "angle") && !extra.is_empty() {
+            bail!("`{}` takes {count} points and nothing else", line.op);
+        }
+        if ids[0] == ids[1] {
+            bail!("a constraint needs two different points");
+        }
         let constraint = match line.op.as_str() {
-            "dist" => Constraint::Distance(a, b, value("distance")?),
-            "angle" => Constraint::Angle(a, b, value("degrees")?),
-            "horizontal" | "vertical" if !args.rest.is_empty() => {
-                bail!("`{}` takes two points", line.op)
-            }
-            "horizontal" => Constraint::Horizontal(a, b),
-            _ => Constraint::Vertical(a, b),
+            "dist" => Constraint::Distance(ids[0], ids[1], value("distance")?),
+            "angle" => Constraint::Angle(ids[0], ids[1], value("degrees")?),
+            "horizontal" => Constraint::Horizontal(ids[0], ids[1]),
+            "vertical" => Constraint::Vertical(ids[0], ids[1]),
+            "coincident" => Constraint::Coincident(ids[0], ids[1]),
+            "midpoint" => Constraint::Midpoint(ids[0], ids[1], ids[2]),
+            "online" => Constraint::Online(ids[0], ids[1], ids[2]),
+            "parallel" => Constraint::Parallel([ids[0], ids[1], ids[2], ids[3]]),
+            "perpendicular" => Constraint::Perpendicular([ids[0], ids[1], ids[2], ids[3]]),
+            _ => Constraint::Equal([ids[0], ids[1], ids[2], ids[3]]),
         };
         let mut constraints = self.constraints.clone();
         constraints.push(constraint);

@@ -33,6 +33,8 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | polygon with chamfered corners | supported | `poly ... c=2` | `sketch::chamfered_polygon` |
 | offset outline | supported | `offset 2` | `sketch::offset_outline` |
 | arc by centre | supported | `arc x,y center=x,y` | `sketch::arc_by_centre` |
+| parallel, perpendicular and equal | supported | `parallel a b c d` | `sketch::rectangle_from_constraints` |
+| midpoint, point on a line, coincident | supported | `midpoint m a b`, `online p a b`, `coincident a b` | `sketch::square_with_midpoint_and_online` |
 | constraints and dimensions | supported | `point`, `dist`, `horizontal` | `sketch::constraints` |
 | trim and extend | supported | `close trim` | `sketch::trim` |
 | construction geometry | supported | `circle 20 construct` | `sketch::construction_geometry` |

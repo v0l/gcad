@@ -93,6 +93,11 @@ Sketch points and constraints:
 | `dist` | `a b d` | the points are `d` apart |
 | `horizontal`, `vertical` | `a b` | the points are level, or one above the other |
 | `angle` | `a b degrees` | the line from `a` to `b` points that way |
+| `coincident` | `a b` | the points are the same point |
+| `parallel`, `perpendicular` | `a b c d` | line `a b` is parallel or square to line `c d` |
+| `equal` | `a b c d` | line `a b` is as long as line `c d` |
+| `midpoint` | `m a b` | `m` is halfway between `a` and `b` |
+| `online` | `p a b` | `p` is on the line through `a` and `b` |
 
 After every point and constraint line the points are solved and `check` prints them
 and the degrees of freedom left. A point name works anywhere a 2D point does, and
