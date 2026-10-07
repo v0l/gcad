@@ -1,7 +1,9 @@
 use super::gl::{self, BACKGROUND, Camera, Placement, Projector};
 use super::scene::{self, Highlight, Scene, V3};
 use crate::geometry;
-use crate::model::{Joint, JointKind, Rig, Snapshot, label_of, posed, snapshots_path};
+use crate::model::{
+    Joint, JointKind, Rig, Snapshot, explode_offsets, label_of, posed, snapshots_path,
+};
 use crate::parse::Line as SourceLine;
 use crate::select;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
@@ -49,6 +51,7 @@ struct Shown {
     query: Option<Result<(usize, usize), String>>,
     joints: Vec<Joint>,
     rig: Rig,
+    exploded: std::collections::HashMap<String, monstertruck::modeling::Vector3>,
     solids: Vec<(String, Solid)>,
     assembly: bool,
 }
@@ -91,6 +94,7 @@ pub struct App {
     measuring: bool,
     picks: Vec<Pick>,
     joint_values: Vec<f64>,
+    explode: f64,
     joint_key: Vec<String>,
     hidden: Vec<bool>,
     clashes: Option<Result<Vec<String>, ()>>,
@@ -220,6 +224,7 @@ impl App {
             measuring: false,
             picks: Vec::new(),
             joint_values: Vec::new(),
+            explode: 0.0,
             joint_key: Vec::new(),
             hidden: Vec::new(),
             clashes: None,
@@ -432,6 +437,10 @@ impl App {
                     .get(&part.name)
                     .copied()
                     .unwrap_or_else(Matrix4::identity);
+                let m = match shown.exploded.get(&part.name) {
+                    Some(by) => m * Matrix4::from_translation(by * self.explode),
+                    None => m,
+                };
                 (flat(m), !self.hidden.get(i).copied().unwrap_or(false))
             })
             .collect()
@@ -679,6 +688,7 @@ impl App {
         let scene = shown.scene.clone();
         let joints = shown.joints.clone();
         let rig = shown.rig.clone();
+        let exploded = shown.exploded.clone();
         let solids = shown.solids.clone();
         let (min, max) = shown.bounds;
         let faces = shown.faces;
@@ -719,6 +729,12 @@ impl App {
                     ))
                     .size(11.0)
                     .show(ui);
+                if !exploded.is_empty() {
+                    ui.horizontal(|ui| {
+                        Line::new().legend("explode").size(11.0).show(ui);
+                        ui.add(egui::Slider::new(&mut self.explode, 0.0..=1.0).show_value(false));
+                    });
+                }
             },
         );
         ui.add_space(8.0);
@@ -1374,6 +1390,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
         query,
         joints: model.joints.clone(),
         rig: model.rig(),
+        exploded: explode_offsets(&model.joints, &model.explode),
         solids,
         assembly: model.assembly,
     })

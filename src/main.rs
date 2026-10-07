@@ -47,7 +47,13 @@ enum Command {
         csv: bool,
     },
     /// Draw iso, top, front and right views into one PNG
-    Render { file: String, output: String },
+    Render {
+        file: String,
+        output: String,
+        /// Draw an assembly with its parts moved apart as its `explode` lines say
+        #[arg(long)]
+        explode: bool,
+    },
     /// Open the file in a window that rebuilds whenever it is saved
     View {
         file: Option<String>,
@@ -167,10 +173,16 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Command::Render { file, output } => {
+        Command::Render {
+            file,
+            output,
+            explode,
+        } => {
             let run = load(&file, None, &vars)?;
             finished(&run)?;
-            render::render_coloured(&run.model.parts(), &output)
+            let parts = run.model.exploded_parts(if explode { 1.0 } else { 0.0 });
+            let parts: Vec<_> = parts.iter().map(|(s, c)| (s, *c)).collect();
+            render::render_coloured(&parts, &output)
         }
         Command::View { file, select, line } => {
             linecad::view::run(file.map(Into::into), select, line, vars)

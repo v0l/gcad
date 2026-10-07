@@ -179,6 +179,7 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
+| exploded view | supported | `explode lid 0,0,30`, `render --explode` | `assembly::exploded_views_move_parts_apart` |
 | bill of materials | supported | `linecad bom top.lasm [--csv]` | `assembly::bill_of_materials_counts_parts` |
 | sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash` |
 

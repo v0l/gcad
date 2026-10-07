@@ -21,4 +21,9 @@ if screwed concentric s4:shank.side case.lid:screws.side near=bx,-by,h
 if screwed flush s4:head.start case.lid:top.end
 if screwed concentric s4:shank.side case.main:pilot.side
 pose lid open
+explode case.lid 0,0,30
+if screwed explode s1 0,0,25
+if screwed explode s2 0,0,25
+if screwed explode s3 0,0,25
+if screwed explode s4 0,0,25
 interference none

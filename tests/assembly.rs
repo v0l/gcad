@@ -492,3 +492,24 @@ fn bill_of_materials_counts_parts() {
             .starts_with("2,rod.lcad,main,,steel,")
     );
 }
+
+#[test]
+fn exploded_views_move_parts_apart() {
+    let parts = [("box.lcad", LID_WITH_HOLES), ("screw.lcad", SCREW)];
+    let assembly = format!(
+        "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nexplode box.lid 0,0,20\nexplode screw 0,0,10\ninterference none\n"
+    );
+    let (model, _) = built("exploded_views", &assembly, &parts);
+    let top = |scale: f64, index: usize| {
+        let parts = model.exploded_parts(scale);
+        linecad::geometry::bounds(&parts[index].0).max().z
+    };
+    let names = model.body_names();
+    let (lid, screw) = (
+        names.iter().position(|n| n == "box.lid").expect("lid"),
+        names.iter().position(|n| n == "screw").expect("screw"),
+    );
+    assert!(near(top(0.0, lid), 12.0) && near(top(1.0, lid), 32.0));
+    assert!(near(top(0.0, screw), 13.5) && near(top(1.0, screw), 43.5));
+    assert!(near(top(0.5, screw), 28.5));
+}

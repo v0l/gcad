@@ -187,6 +187,19 @@ impl Rig {
     }
 }
 
+pub fn explode_offsets(
+    joints: &[Joint],
+    explode: &[(String, Vector3)],
+) -> std::collections::HashMap<String, Vector3> {
+    let mut offsets: std::collections::HashMap<String, Vector3> = Default::default();
+    for (part, by) in explode {
+        for body in subtree(joints, part) {
+            *offsets.entry(body).or_insert_with(Vector3::zero) += *by;
+        }
+    }
+    offsets
+}
+
 pub fn broken(mates: &[Mate], moves: &std::collections::HashMap<String, Matrix4>) -> Vec<String> {
     let at = |name: &str| moves.get(name).copied().unwrap_or_else(Matrix4::identity);
     mates
@@ -347,6 +360,7 @@ pub const ASSEMBLY_OPERATIONS: &[&str] = &[
     "joint",
     "couple",
     "pose",
+    "explode",
     "interference",
     "color",
     "material",
@@ -437,6 +451,11 @@ impl Model {
             .copied()
             .unwrap_or_else(Matrix4::identity);
         self.placements.insert(name.to_string(), transform * placed);
+        for (part, by) in self.explode.iter_mut() {
+            if part == name {
+                *by = transform.transform_vector(*by);
+            }
+        }
         for mate in self.mates.iter_mut() {
             for k in 0..2 {
                 if mate.parts[k] == name {
@@ -476,6 +495,7 @@ impl Model {
             "joint" => self.op_joint(line),
             "pose" => self.op_pose(line),
             "couple" => self.op_couple(line),
+            "explode" => self.op_explode(line),
             "interference" => self.op_interference(line),
             "color" => self.op_colour_part(line),
             "material" => self.op_material(line),
@@ -589,6 +609,11 @@ impl Model {
                 });
             }
         }
+        for (part, by) in &loaded.explode {
+            if picked.contains(part) {
+                self.explode.push((rename(part), *by));
+            }
+        }
         for mate in &loaded.mates {
             if mate.parts.iter().all(|p| picked.contains(p)) {
                 self.mates.push(Mate {
@@ -611,6 +636,24 @@ impl Model {
         }
         let moved = self.move_subtree(name, transform)?;
         Ok(format!("moved {}", moved.join(", ")))
+    }
+
+    fn op_explode(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["part", "by"], &[], false)?;
+        let name = args.text("part")?.to_string();
+        if !self.body_names().contains(&name) {
+            bail!("no part called `{name}`; parts are {:?}", self.body_names());
+        }
+        let by = point3(args.text("by")?, &self.scope)?.to_vec();
+        self.explode.push((name.clone(), by));
+        let moving = subtree(&self.joints, &name);
+        Ok(format!(
+            "exploded views move {} by {:.3},{:.3},{:.3}",
+            moving.join(", "),
+            by.x,
+            by.y,
+            by.z
+        ))
     }
 
     fn op_move_part(&mut self, line: &Line) -> Result<String> {

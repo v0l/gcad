@@ -27,7 +27,8 @@ use std::path::PathBuf;
 
 pub use args::label_of;
 pub use assembly::{
-    ASSEMBLY_OPERATIONS, Couple, Joint, JointKind, Mate, Rig, Source, broken, posed, subtree,
+    ASSEMBLY_OPERATIONS, Couple, Joint, JointKind, Mate, Rig, Source, broken, explode_offsets,
+    posed, subtree,
 };
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
@@ -79,6 +80,7 @@ pub struct Model {
     pub materials: HashMap<String, bodies::Material>,
     pub sources: HashMap<String, assembly::Source>,
     pub placements: HashMap<String, Matrix4>,
+    pub explode: Vec<(String, Vector3)>,
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,
     pub assembly: bool,
@@ -177,6 +179,23 @@ impl Model {
             .collect()
     }
 
+    pub fn exploded_parts(&self, scale: f64) -> Vec<(Solid, Option<[f64; 3]>)> {
+        let offsets = assembly::explode_offsets(&self.joints, &self.explode);
+        self.named_solids()
+            .into_iter()
+            .map(|(name, solid)| {
+                let colour = self.colours.get(&name).copied();
+                match offsets.get(&name) {
+                    Some(by) if scale != 0.0 => (
+                        builder::transformed(solid, Matrix4::from_translation(by * scale)),
+                        colour,
+                    ),
+                    _ => (solid.clone(), colour),
+                }
+            })
+            .collect()
+    }
+
     pub(crate) fn apply_shared(&mut self, line: &Line) -> Result<String> {
         match line.op.as_str() {
             "if" => self.op_if(line),
@@ -261,8 +280,8 @@ impl Model {
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "rib" => self.op_rib(line),
-            "joint" | "pose" | "couple" | "interference" | "part" | "concentric" | "flush"
-            | "aligned" | "distance" | "tangent" => {
+            "joint" | "pose" | "couple" | "explode" | "interference" | "part" | "concentric"
+            | "flush" | "aligned" | "distance" | "tangent" => {
                 bail!(
                     "`{}` belongs in an assembly (.lasm) file, which brings parts in with `part name file.lcad`",
                     line.op
