@@ -87,6 +87,53 @@ pub struct Model {
     pub part_groups: HashMap<String, select::Groups>,
     pub mates: Vec<assembly::Mate>,
     pub couples: Vec<assembly::Couple>,
+    pub cache: Cache,
+}
+
+#[derive(Clone, Default)]
+pub struct Cache(std::sync::Arc<std::sync::Mutex<CacheEntries>>);
+
+#[derive(Default)]
+struct CacheEntries {
+    parts: HashMap<String, std::sync::Arc<Model>>,
+    cylinders: HashMap<String, Vec<mate::Cylinder>>,
+}
+
+impl Cache {
+    pub(crate) fn part(
+        &self,
+        key: String,
+        load: impl FnOnce() -> Result<Model>,
+    ) -> Result<std::sync::Arc<Model>> {
+        if let Some(found) = self.0.lock().ok().and_then(|c| c.parts.get(&key).cloned()) {
+            return Ok(found);
+        }
+        let loaded = std::sync::Arc::new(load()?);
+        if let Ok(mut entries) = self.0.lock() {
+            entries.parts.insert(key, loaded.clone());
+        }
+        Ok(loaded)
+    }
+
+    pub(crate) fn cylinders(
+        &self,
+        key: String,
+        fit: impl FnOnce() -> Vec<mate::Cylinder>,
+    ) -> Vec<mate::Cylinder> {
+        if let Some(found) = self
+            .0
+            .lock()
+            .ok()
+            .and_then(|c| c.cylinders.get(&key).cloned())
+        {
+            return found;
+        }
+        let fitted = fit();
+        if let Ok(mut entries) = self.0.lock() {
+            entries.cylinders.insert(key, fitted.clone());
+        }
+        fitted
+    }
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -486,8 +533,11 @@ pub(crate) fn load_model(
     path: &std::path::Path,
     vars: &[(String, f64)],
     depth: usize,
+    cache: &Cache,
 ) -> Result<Model> {
-    let run = run_model(start_for(path, vars, depth), &read_lines(path)?);
+    let mut start = start_for(path, vars, depth);
+    start.cache = cache.clone();
+    let run = run_model(start, &read_lines(path)?);
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{}:{}: {error:#}", path.display(), line.number);
     }

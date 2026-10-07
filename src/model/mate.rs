@@ -258,9 +258,19 @@ impl Model {
         Ok((part.to_string(), solid, faces))
     }
 
+    fn fit_key(&self, part: &str, text: &str, faces: &[usize]) -> String {
+        let selector = text.split_once(':').map_or(text, |(_, s)| s);
+        let placed = self.placements.get(part).copied();
+        match self.sources.get(part) {
+            Some(source) => format!("{source:?}|{selector}|{placed:?}|{faces:?}"),
+            None => format!("{part}|{selector}|{placed:?}|{faces:?}"),
+        }
+    }
+
     fn holes(&self, text: &str) -> Result<(String, Vec<Cylinder>)> {
         let (part, solid, faces) = self.reference(text)?;
-        let found = cylinders(&solid, &faces);
+        let key = self.fit_key(&part, text, &faces);
+        let found = self.cache.cylinders(key, || cylinders(&solid, &faces));
         if found.is_empty() {
             bail!("`{text}` has no round faces to line up");
         }
@@ -397,7 +407,12 @@ impl Model {
             }
             return Ok((part, Feature::Plane(first.origin(), first.normal()), None));
         }
-        match cylinders(&solid, &faces).as_slice() {
+        let key = self.fit_key(&part, text, &faces);
+        match self
+            .cache
+            .cylinders(key, || cylinders(&solid, &faces))
+            .as_slice()
+        {
             [one] => Ok((part, Feature::Axis(one.point, one.axis), Some(one.radius))),
             [] => bail!("`{text}` is neither one flat face nor one round face"),
             many => bail!(

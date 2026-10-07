@@ -647,7 +647,12 @@ impl Model {
                 vars.push((key.clone(), crate::parse::eval(text, &self.scope)?));
             }
         }
-        let loaded = super::load_model(&path, &vars, self.depth + 1)?;
+        let key = format!("{}|{vars:?}", path.display());
+        let depth = self.depth + 1;
+        let cache = self.cache.clone();
+        let loaded = self
+            .cache
+            .part(key, || super::load_model(&path, &vars, depth, &cache))?;
         let names = loaded.body_names();
         let picked: Vec<String> = match &only {
             Some(body) if !names.contains(body) => {
