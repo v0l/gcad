@@ -1,0 +1,14 @@
+let size=42 length=40 shaft=20 shaftd=5 pilot=22 bolts=31 screw=3
+rect size size r=size/10
+can: extrude length
+chamfer size/20 can.end&can.side
+plane can.end
+circle pilot
+boss: extrude 2
+plane boss.end
+circle shaftd
+shaft: extrude shaft
+plane can.end
+mounts: hole screw bolts/2,bolts/2 -bolts/2,bolts/2 -bolts/2,-bolts/2 bolts/2,-bolts/2 depth=4
+color #2d2f33
+material stepper density=3.6

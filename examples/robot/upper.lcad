@@ -1,0 +1,18 @@
+let L=200 r0=38 r1=30 C=35 bolts=26
+plane XZ offset=12
+pen 0,r0
+line L,r1
+arc L,-r1 via=L+r1,0
+line 0,-r0
+arc 0,r0 via=-r0,0
+close
+beam: extrude -36
+plane XZ offset=12
+circle 20
+axle: extrude 32
+plane beam.start
+elbow: hole 21 L,0
+pilot: hole 23 L-C,0
+mounts: hole 3.4 L-C+bolts/2,bolts/2 L-C-bolts/2,bolts/2 L-C-bolts/2,-bolts/2 L-C+bolts/2,-bolts/2
+color #f39c12
+material aluminium

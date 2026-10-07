@@ -1,0 +1,7 @@
+let z=20 m=1 w=8 bore=5 a=0
+gear z m angle=a
+teeth: extrude w
+plane teeth.end
+bore: hole bore 0,0
+color #c8a03c
+material brass

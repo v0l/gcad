@@ -196,6 +196,12 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 `faces` in `parallel`, `angle`, `distance` and `tangent` is either flat faces on one
 plane or the round faces of one cylinder, which stands for its axis.
 
+`examples/robot/arm.lasm` puts these together: every motor is mated to the link that
+carries it, its pinion turns on it with a `turn` joint, and a `couple` makes the pinion
+follow the joint it drives at the gear ratio. The gripper's fingers are racks on one
+pinion, so one `slide` drives both. The arm's own variables pose it:
+`linecad check examples/robot/arm.lasm --set shoulder=30 --set jaw=6`.
+
 A part can have several joints to the same parent, and their motions add up. They
 must not depend on the order they are applied in, so they are slides in any
 direction, or turns about one axis together with slides along it. A turn and a slide

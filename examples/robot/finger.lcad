@@ -1,0 +1,19 @@
+let s=1 shift=0 g=12 m=1 pr=8.5 grip=65 rack=40
+let pitch=grip-s*pr root=pitch-s*1.25*m tip=pitch+s*m p=pi*m
+let wide=p/4+1.25*m*tan(20) narrow=p/4-m*tan(20)
+let top=p*(floor((g+6)/p-shift)+shift) start=root-2.5-s*2.5
+plane XZ offset=-24
+rect 5 rack+8 at=root-s*2.5,s*(g-rack/2+4)
+bar: extrude -8
+plane XZ offset=-24
+poly root,s*(top-wide) tip,s*(top-narrow) tip,s*(top+narrow) root,s*(top+wide)
+teeth: extrude -8
+repeat teeth count=floor((rack+4)/p) step=0,-s*p
+plane XZ offset=-32
+rect 125-start 8 at=(125+start)/2,s*(g+4)
+jaw: extrude -8
+plane XZ offset=-24
+rect 14 12 at=118,s*(g+2)
+pad: extrude -16
+color #2d2f33
+material steel

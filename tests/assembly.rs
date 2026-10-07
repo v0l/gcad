@@ -668,3 +668,27 @@ fn gears_in_mesh_turn_without_touching() {
         .expect("teeth clash");
     assert!(clash.contains("a and b"), "{clash}");
 }
+
+#[test]
+fn robot_arm_example() {
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/robot/arm.lasm");
+    let fingers = |vars: &[(String, f64)]| {
+        let run = run_path(&path, vars, None).expect("runs");
+        let failed: Vec<String> = run
+            .steps
+            .iter()
+            .filter_map(|(line, r)| r.as_ref().err().map(|e| format!("{}: {e:#}", line.number)))
+            .collect();
+        assert!(failed.is_empty(), "{failed:?}");
+        assert_eq!(run.model.body_names().len(), 25);
+        ["finger_a", "finger_b"].map(|name| {
+            linecad::geometry::bounds(&run.model.named_body(name).expect("finger")).center()
+        })
+    };
+    let [a0, b0] = fingers(&[]);
+    let [a1, b1] = fingers(&[("jaw".into(), 5.0)]);
+    let (da, db) = (a1 - a0, b1 - b0);
+    let length = |v: [f64; 3]| v.iter().map(|x| x * x).sum::<f64>().sqrt();
+    assert!((length([da.x, da.y, da.z]) - 5.0).abs() < 1.0e-6, "{da:?}");
+    assert!(length([da.x + db.x, da.y + db.y, da.z + db.z]) < 1.0e-6, "{da:?} {db:?}");
+}

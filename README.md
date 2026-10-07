@@ -20,11 +20,20 @@ cargo run --release -- render examples/parts/plate.lcad plate.png
 cargo run --release -- export examples/parts/plate.lcad plate.step
 cargo run --release -- bom examples/assemblies/enclosure.lasm
 cargo run --release -- examples/assemblies/enclosure.lasm
+cargo run --release -- examples/robot/arm.lasm
 ```
 
 Part files (`.lcad`) build one or more bodies. Assembly files (`.lasm`) bring parts in
 from part files, place them, join them with turning and sliding joints and check
 that they do not overlap.
+
+`examples/robot/arm.lasm` is a five-axis arm built this way. A stepper motor drives
+each joint through a pair of involute spur gears, and a rack and pinion opens the
+gripper. Open it in the viewer and drag the joint sliders: the motor pinions turn with
+the joints, and the explode slider lifts the covers off the motors and the turret off
+the base so the gears inside show.
+
+![The robot arm example in the viewer](docs/robot-arm.png)
 
 With no command, `linecad` opens the viewer: a live view of the file that rebuilds on
 save, with a view cube, measuring, and sliders for an assembly's joints.

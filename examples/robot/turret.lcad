@@ -1,0 +1,23 @@
+let H=190 C=50 bolts=31
+plane XY offset=76
+circle 120
+table: extrude 14
+plane XY offset=76
+circle 24
+spindle: extrude -16
+plane XY offset=60
+circle 12
+stub: extrude -8
+plane XZ offset=24
+pen -45,90
+line 45,90
+line 46,H
+arc -46,H via=0,H+46
+close
+upright: extrude 12
+plane upright.end
+axle: hole 21 0,H
+pilot: hole 23 0,H-C
+mounts: hole 3.4 bolts/2,H-C+bolts/2 -bolts/2,H-C+bolts/2 -bolts/2,H-C-bolts/2 bolts/2,H-C-bolts/2
+color #f39c12
+material aluminium

@@ -1,0 +1,119 @@
+let yaw=0 shoulder=55 elbow=-70 wrist=-70 jaw=0
+part base base.lcad
+part cover cover.lcad
+move cover 0,0,70
+part motor_y motor.lcad
+move motor_y -40,0,4
+part pinion_y gear.lcad z=16 m=1 bore=5.2
+move pinion_y -40,0,52
+part turret turret.lcad
+part gear_y gear.lcad z=64 m=1 bore=12.2 a=180+180/64
+move gear_y 0,0,52
+concentric gear_y:bore.side turret:stub.side
+flush gear_y:teeth.end turret:spindle.end
+part motor_s motor.lcad shaft=22
+rotate motor_s -90 axis=x
+move motor_s 0,-76,140
+flush motor_s:can.end turret:upright.end
+concentric motor_s:boss.side turret:pilot.side
+part cap_s cap.lcad d=76
+rotate cap_s 90 axis=x
+move cap_s 0,-36,140
+flush cap_s:can.start turret:upright.end
+part pinion_s gear.lcad z=16 m=1.25 bore=5.2 a=-90
+rotate pinion_s -90 axis=x
+move pinion_s 0,-20,140
+part upper upper.lcad
+move upper 0,0,190
+part gear_s gear.lcad z=64 m=1.25 bore=20.2 a=90+180/64
+rotate gear_s -90 axis=x
+move gear_s 0,-20,190
+concentric gear_s:bore.side upper:axle.side
+flush gear_s:teeth.end upper:beam.start
+part motor_e motor.lcad size=35 length=34 shaft=46 bolts=26
+rotate motor_e -90 axis=x
+move motor_e 165,-46,190
+flush motor_e:can.end upper:beam.start
+concentric motor_e:boss.side upper:pilot.side
+part cap_e cap.lcad d=58 depth=40
+rotate cap_e 90 axis=x
+move cap_e 165,-12,190
+flush cap_e:can.start upper:beam.start
+part pinion_e gear.lcad z=14 m=1 bore=5.2
+rotate pinion_e -90 axis=x
+move pinion_e 165,28,190
+part fore forearm.lcad
+move fore 200,0,190
+part gear_e gear.lcad z=56 m=1 bore=20.2 a=180+180/56
+rotate gear_e -90 axis=x
+move gear_e 200,28,190
+concentric gear_e:bore.side fore:axle.side
+flush gear_e:teeth.end fore:beam.start
+part motor_w motor.lcad size=28 length=32 shaft=34 bolts=23 screw=2.6
+rotate motor_w 90 axis=x
+move motor_w 357.2,92,190
+flush motor_w:can.end fore:beam.end
+concentric motor_w:boss.side fore:pilot.side
+part cap_w cap.lcad d=44 depth=38
+rotate cap_w -90 axis=x
+move cap_w 357.2,60,190
+flush cap_w:can.start fore:beam.end
+part pinion_w gear.lcad z=17 m=0.8 bore=5.2
+rotate pinion_w 90 axis=x
+move pinion_w 357.2,32,190
+part hand wrist.lcad
+move hand 380,0,190
+part gear_w gear.lcad z=40 m=0.8 bore=12.2 a=180+180/40
+rotate gear_w -90 axis=x
+move gear_w 380,24,190
+concentric gear_w:bore.side hand:axle.side
+flush gear_w:teeth.start hand:block.end
+part motor_g motor.lcad size=20 length=30 shaft=30 shaftd=4 pilot=16 bolts=16 screw=2.4
+rotate motor_g -90 axis=x
+move motor_g 445,-30,190
+flush motor_g:can.end hand:housing.start
+concentric motor_g:boss.side hand:pilot.side
+part pinion_g gear.lcad z=17 m=1 bore=4.2
+rotate pinion_g -90 axis=x
+move pinion_g 445,24,190
+part finger_a finger.lcad s=1 shift=0
+move finger_a 380,0,190
+part finger_b finger.lcad s=-1 shift=0.5
+move finger_b 380,0,190
+axis yaw 0,0,0 0,0,1
+axis yaw_motor -40,0,0 -40,0,1
+axis shoulder 0,1,190 0,0,190
+axis shoulder_motor 0,1,140 0,0,140
+axis elbow 200,1,190 200,0,190
+axis elbow_motor 165,1,190 165,0,190
+axis wrist 380,1,190 380,0,190
+axis wrist_motor 357.2,1,190 357.2,0,190
+axis grip_motor 445,1,190 445,0,190
+joint yaw turret base turn about=yaw
+joint shoulder upper turret turn about=shoulder min=-10 max=120
+joint elbow fore upper turn about=elbow min=-135 max=150
+joint wrist hand fore turn about=wrist min=-120 max=120
+joint jaw finger_a hand slide along=0,0,1 min=-4 max=8
+joint jaw_b finger_b hand slide along=0,0,-1 min=-4 max=8
+joint spin_y pinion_y motor_y turn about=yaw_motor
+joint spin_s pinion_s motor_s turn about=shoulder_motor
+joint spin_e pinion_e motor_e turn about=elbow_motor
+joint spin_w pinion_w motor_w turn about=wrist_motor
+joint spin_g pinion_g motor_g turn about=grip_motor
+couple spin_y yaw ratio=-64/16
+couple spin_s shoulder ratio=-64/16
+couple spin_e elbow ratio=-56/14
+couple spin_w wrist ratio=-40/17
+couple spin_g jaw ratio=-360/(pi*17)
+couple jaw_b jaw ratio=1
+pose yaw yaw
+pose shoulder shoulder
+pose elbow elbow
+pose wrist wrist
+pose jaw jaw
+interference none
+explode cover 0,0,30
+explode turret 0,0,70
+explode cap_s 0,-70,0
+explode cap_e 0,-60,0
+explode cap_w 0,60,0

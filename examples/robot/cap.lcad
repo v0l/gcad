@@ -1,0 +1,7 @@
+let d=70 depth=46 t=3
+circle d
+can: extrude depth
+shell t open=can.start
+fillet 5 can.end&can.side
+color #f39c12
+material abs
