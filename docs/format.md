@@ -342,9 +342,14 @@ The viewer also has:
 - measure mode (the measure button): click two points on the model to get the
   distance between them and along each axis, corners snap, and each pick names the
   face it landed on with its area;
-- a parts card listing every body in its `color`, with a switch to hide each one;
+- section: cuts the model across x, y or z at a slider position, with flip to show
+  the other half; the cut faces are orange, and measure picks ignore what is cut away;
+- ortho: switches the camera to an orthographic projection;
+- a parts card listing every body in its `color`, with a switch to hide each one, and
+  an explode slider when the assembly has `explode` lines;
 - a joints card with a slider for every `joint`, which moves the parts without
-  rebuilding, and a check for parts that overlap at the slider positions;
+  rebuilding, follows couples and closed loops, locks joints that mates hold, and
+  checks for parts that overlap at the slider positions;
 - open (or ctrl-O) to switch to another `.lcad` file.
 
 `render` lays the views out as iso (top left), top (top right), front from -Y

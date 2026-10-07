@@ -1,4 +1,4 @@
-use super::gl::{self, BACKGROUND, Camera, Placement, Projector};
+use super::gl::{self, BACKGROUND, Camera, Cut, Placement, Projector};
 use super::scene::{self, Highlight, Scene, V3};
 use crate::geometry;
 use crate::model::{
@@ -95,6 +95,7 @@ pub struct App {
     picks: Vec<Pick>,
     joint_values: Vec<f64>,
     explode: f64,
+    section: Option<(usize, f32, bool)>,
     joint_key: Vec<String>,
     hidden: Vec<bool>,
     clashes: Option<Result<Vec<String>, ()>>,
@@ -225,6 +226,7 @@ impl App {
             picks: Vec::new(),
             joint_values: Vec::new(),
             explode: 0.0,
+            section: None,
             joint_key: Vec::new(),
             hidden: Vec::new(),
             clashes: None,
@@ -472,6 +474,15 @@ impl App {
             if toggle(ui, "measure", self.measuring).clicked() {
                 self.measuring = !self.measuring;
                 self.picks.clear();
+            }
+            if toggle(ui, "section", self.section.is_some()).clicked() {
+                self.section = match self.section {
+                    Some(_) => None,
+                    None => Some((1, 0.5, false)),
+                };
+            }
+            if toggle(ui, "ortho", self.cam.ortho).clicked() {
+                self.cam.ortho = !self.cam.ortho;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.path.is_none() {
@@ -883,6 +894,9 @@ impl App {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 self.line_card(ui);
+                if self.section.is_some() {
+                    self.section_card(ui);
+                }
                 if self.measuring {
                     self.measure_card(ui);
                 }
@@ -891,6 +905,62 @@ impl App {
                     self.select_card(ui);
                 }
             });
+    }
+
+    fn cut(&self) -> Option<Cut> {
+        let (axis, at, flip) = self.section?;
+        let scene = &self.shown.as_ref()?.scene;
+        let low = scene.centre[axis] - scene.radius;
+        let place = low + 2.0 * scene.radius * at;
+        let mut normal = [0.0f32; 3];
+        normal[axis] = if flip { -1.0 } else { 1.0 };
+        Some(Cut {
+            normal,
+            offset: if flip { -place } else { place },
+        })
+    }
+
+    fn section_card(&mut self, ui: &mut Ui) {
+        let Some((mut axis, mut at, mut flip)) = self.section else {
+            return;
+        };
+        let place = self.shown.as_ref().map(|shown| {
+            let scene = &shown.scene;
+            scene.centre[axis] - scene.radius + 2.0 * scene.radius * at
+        });
+        card(
+            ui,
+            None,
+            |ui| {
+                Line::new().legend("section").show(ui);
+            },
+            |ui| {
+                ui.horizontal(|ui| {
+                    for (k, name) in ["x", "y", "z"].iter().enumerate() {
+                        if toggle(ui, name, axis == k).clicked() {
+                            axis = k;
+                        }
+                    }
+                    if toggle(ui, "flip", flip).clicked() {
+                        flip = !flip;
+                    }
+                });
+                ui.add(egui::Slider::new(&mut at, 0.0..=1.0).show_value(false));
+                if let Some(place) = place {
+                    note(
+                        ui,
+                        format!(
+                            "cut at {}={place:.2}, showing {}",
+                            ["x", "y", "z"][axis],
+                            if flip { "above" } else { "below" }
+                        ),
+                        LEGEND,
+                    );
+                }
+            },
+        );
+        ui.add_space(8.0);
+        self.section = Some((axis, at, flip));
     }
 
     fn pick(
@@ -903,6 +973,8 @@ impl App {
         let (origin, direction) = projector.ray(at);
         let visible = |body: usize| placements.get(body).is_none_or(|(_, v)| *v);
         let place = |body: usize, p: V3| placements.get(body).map_or(p, |(m, _)| apply(m, p));
+        let cut = self.cut();
+        let kept = |p: V3| cut.is_none_or(|c| c.keeps(p));
         let hit = shown
             .scene
             .surfaces
@@ -915,7 +987,15 @@ impl App {
                         place(s.body, t[1]),
                         place(s.body, t[2]),
                     ];
-                    hit_triangle(origin, direction, corners).map(|d| (d, s.face))
+                    hit_triangle(origin, direction, corners)
+                        .filter(|d| {
+                            kept([
+                                origin[0] + direction[0] * d,
+                                origin[1] + direction[1] * d,
+                                origin[2] + direction[2] * d,
+                            ])
+                        })
+                        .map(|d| (d, s.face))
                 })
             })
             .min_by(|a, b| a.0.total_cmp(&b.0))?;
@@ -930,6 +1010,7 @@ impl App {
             .iter()
             .filter(|(body, _)| visible(*body))
             .map(|(body, p)| place(*body, *p))
+            .filter(|p| kept(*p))
             .filter_map(|p| projector.project(p).map(|s| (s.distance(at), p)))
             .filter(|(d, p)| {
                 *d < 10.0 && dot(sub(*p, point), sub(*p, point)).sqrt() < shown.scene.radius * 0.2
@@ -1085,7 +1166,14 @@ impl App {
         };
         let scene = shown.scene.clone();
         let placements = Arc::new(self.placements());
-        gl::paint(ui, rect, scene.clone(), self.cam, placements.clone());
+        gl::paint(
+            ui,
+            rect,
+            scene.clone(),
+            self.cam,
+            placements.clone(),
+            self.cut(),
+        );
         let projector = Projector::new(&scene, &self.cam, rect);
         let on_cube = self.view_cube(ui, rect, &projector);
         if !on_cube {
@@ -1101,7 +1189,10 @@ impl App {
                 self.cam.zoom = (self.cam.zoom * (1.0 + scroll * 0.002)).clamp(0.1, 40.0);
             }
             if resp.double_clicked() {
-                self.cam = Camera::default();
+                self.cam = Camera {
+                    ortho: self.cam.ortho,
+                    ..Camera::default()
+                };
             } else if self.measuring
                 && resp.clicked()
                 && let Some(at) = resp.interact_pointer_pos()

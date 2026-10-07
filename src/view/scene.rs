@@ -122,7 +122,13 @@ fn faces(
         let positions = mesh.positions();
         let normals = mesh.normals();
         let mut area = 0.0;
+        let outward = face.orientation();
         for triangle in mesh.faces().triangle_iter() {
+            let triangle = if outward {
+                triangle
+            } else {
+                [triangle[0], triangle[2], triangle[1]]
+            };
             let corners = triangle.map(|v| v3(positions[v.pos]));
             let [a, b, c] = triangle.map(|v| positions[v.pos]);
             area += (b - a).cross(c - a).magnitude() / 2.0;
@@ -132,10 +138,10 @@ fn faces(
             ));
             for (vertex, corner) in triangle.iter().zip(corners) {
                 surface.positions.push(corner);
-                let n = vertex
-                    .nor
-                    .and_then(|i| normals.get(i))
-                    .map_or(flat, |n| norm([n.x as f32, n.y as f32, n.z as f32]));
+                let n = vertex.nor.and_then(|i| normals.get(i)).map_or(flat, |n| {
+                    let n = norm([n.x as f32, n.y as f32, n.z as f32]);
+                    if outward { n } else { [-n[0], -n[1], -n[2]] }
+                });
                 surface.normals.push(n);
             }
         }
