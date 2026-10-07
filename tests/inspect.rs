@@ -94,7 +94,6 @@ fn draft_analysis() {
 }
 
 #[test]
-#[ignore = "missing: variables from outside the file"]
 fn outside_variables() {
     let lines = linecad::parse::parse_program("let w=10\nrect w w\nextrude 1").expect("parses");
     let model = linecad::model::run_with(&[("w".to_string(), 20.0)], &lines).model;
@@ -102,7 +101,6 @@ fn outside_variables() {
 }
 
 #[test]
-#[ignore = "missing: include"]
 fn include_file() {
     let path = scratch("boss.lcad");
     std::fs::write(&path, "circle d\nextrude 5").expect("writes");
@@ -114,7 +112,6 @@ fn include_file() {
 }
 
 #[test]
-#[ignore = "missing: if"]
 fn conditional() {
     assert_volume(
         &build("let w=40\nrect w 10\nbase: extrude 5\nif w>30 chamfer 1 base.end&>Y"),

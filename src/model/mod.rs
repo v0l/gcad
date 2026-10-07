@@ -59,13 +59,15 @@ pub struct Model {
     pub prisms: HashMap<String, Prism>,
     pub dir: Option<PathBuf>,
     pub fixed: Scope,
+    pub depth: usize,
 }
 
 pub const OPERATIONS: &[&str] = &[
     "let", "plane", "rect", "circle", "poly", "ngon", "offset", "slot", "ellipse", "pen", "line",
     "arc", "close", "spline", "text", "section", "loft", "extrude", "cut", "revolve", "path",
     "helix", "sweep", "hole", "fillet", "chamfer", "shell", "draft", "push", "mirror", "repeat",
-    "move", "rotate", "scale", "split", "body", "combine", "place", "measure", "import",
+    "move", "rotate", "scale", "split", "body", "combine", "place", "measure", "import", "if",
+    "include",
 ];
 
 impl Model {
@@ -124,6 +126,8 @@ impl Model {
             "combine" => self.op_combine(line),
             "place" => self.op_place(line),
             "measure" => self.op_measure(line),
+            "if" => self.op_if(line),
+            "include" => self.op_include(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",
@@ -166,6 +170,73 @@ impl Model {
         Ok(())
     }
 
+    fn op_if(&mut self, line: &Line) -> Result<String> {
+        let text = line.text.trim_start();
+        let text = match &line.label {
+            Some(label) => text.trim_start_matches(&format!("{label}:")).trim_start(),
+            None => text,
+        };
+        let rest = text
+            .strip_prefix("if")
+            .ok_or_else(|| anyhow!("`if` must start the line"))?
+            .trim_start();
+        let (condition, inner) = rest
+            .split_once(char::is_whitespace)
+            .ok_or_else(|| anyhow!("write `if <condition> <operation ...>`"))?;
+        let holds = crate::parse::eval(condition, &self.scope)?;
+        if holds == 0.0 {
+            return Ok(format!("skipped, `{condition}` is false"));
+        }
+        let mut inner = crate::parse::parse_line(line.number, inner.trim())?;
+        if inner.label.is_none() {
+            inner.label = line.label.clone();
+        }
+        self.apply(&inner)
+    }
+
+    fn op_include(&mut self, line: &Line) -> Result<String> {
+        let file = line
+            .positional
+            .first()
+            .ok_or_else(|| anyhow!("`include` needs a file"))?;
+        if line.positional.len() > 1 {
+            bail!("`include` takes one file and name=value pairs");
+        }
+        if self.depth >= 16 {
+            bail!("includes are nested more than 16 deep");
+        }
+        let path = match &self.dir {
+            Some(dir) if std::path::Path::new(file).is_relative() => dir.join(file),
+            _ => PathBuf::from(file),
+        };
+        let source = std::fs::read_to_string(&path)
+            .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
+        let lines = crate::parse::parse_program(&source)?;
+        let (saved_fixed, saved_scope, saved_dir) =
+            (self.fixed.clone(), self.scope.clone(), self.dir.clone());
+        for (name, text) in &line.named {
+            let value = crate::parse::eval(text, &saved_scope)?;
+            self.fixed.insert(name.clone(), value);
+            self.scope.insert(name.clone(), value);
+        }
+        self.dir = path.parent().map(std::path::Path::to_path_buf);
+        self.depth += 1;
+        let result = lines.iter().try_for_each(|inner| {
+            self.apply(inner)
+                .map(|_| ())
+                .map_err(|e| anyhow!("{}:{}: {e:#}", path.display(), inner.number))
+        });
+        self.depth -= 1;
+        (self.fixed, self.scope, self.dir) = (saved_fixed, saved_scope, saved_dir);
+        result?;
+        Ok(format!(
+            "ran {} line(s) from {}; {}",
+            lines.len(),
+            path.display(),
+            self.describe_solid().unwrap_or_default()
+        ))
+    }
+
     pub fn describe_solid(&self) -> Result<String> {
         let solid = self.solid.as_ref().ok_or_else(|| anyhow!("no solid"))?;
         let bounds = geometry::bounds(solid);
@@ -204,7 +275,17 @@ fn start(dir: Option<PathBuf>) -> Model {
 }
 
 pub fn run_snapshots_in(dir: Option<PathBuf>, lines: &[Line]) -> Vec<Snapshot> {
+    run_snapshots_full(dir, &[], lines)
+}
+
+pub fn run_snapshots_full(
+    dir: Option<PathBuf>,
+    vars: &[(String, f64)],
+    lines: &[Line],
+) -> Vec<Snapshot> {
     let mut model = start(dir);
+    model.fixed = vars.iter().cloned().collect();
+    model.scope = model.fixed.clone();
     let mut snapshots = Vec::new();
     for line in lines {
         let before = model.clone();

@@ -52,7 +52,7 @@ fn words(number: usize, text: &str) -> Result<Vec<String>> {
     Ok(words)
 }
 
-fn parse_line(number: usize, text: &str) -> Result<Line> {
+pub fn parse_line(number: usize, text: &str) -> Result<Line> {
     let words = words(number, text)?;
     let mut words = words.iter().map(String::as_str).peekable();
     let label = match words.peek() {
@@ -102,7 +102,7 @@ pub fn eval(expression: &str, scope: &Scope) -> Result<f64> {
         position: 0,
         scope,
     };
-    let value = parser.sum()?;
+    let value = parser.comparison()?;
     if parser.position != tokens.len() {
         bail!(
             "unexpected `{}` in `{expression}`",
@@ -142,6 +142,7 @@ enum Token {
     Number(f64),
     Name(String),
     Symbol(char),
+    Compare(String),
 }
 
 impl Token {
@@ -150,6 +151,7 @@ impl Token {
             Token::Number(n) => n.to_string(),
             Token::Name(name) => name.clone(),
             Token::Symbol(c) => c.to_string(),
+            Token::Compare(op) => op.clone(),
         }
     }
 }
@@ -189,6 +191,18 @@ fn tokenize(text: &str) -> Result<Vec<Token>> {
         } else if "+-*/()".contains(c) {
             tokens.push(Token::Symbol(c));
             i += 1;
+        } else if "<>=!".contains(c) {
+            let pair = chars.get(i + 1) == Some(&'=');
+            let op: String = if pair {
+                [c, '='].iter().collect()
+            } else {
+                c.to_string()
+            };
+            if op == "=" || op == "!" {
+                bail!("`{op}` is not an operator; compare with ==, !=, <, >, <= or >=");
+            }
+            i += op.len();
+            tokens.push(Token::Compare(op));
         } else {
             bail!("unexpected `{c}` in `{text}`");
         }
@@ -205,6 +219,24 @@ struct ExprParser<'a> {
 impl ExprParser<'_> {
     fn peek(&self) -> Option<&Token> {
         self.tokens.get(self.position)
+    }
+
+    fn comparison(&mut self) -> Result<f64> {
+        let left = self.sum()?;
+        let Some(Token::Compare(op)) = self.peek().cloned() else {
+            return Ok(left);
+        };
+        self.position += 1;
+        let right = self.sum()?;
+        let holds = match op.as_str() {
+            "<" => left < right,
+            ">" => left > right,
+            "<=" => left <= right,
+            ">=" => left >= right,
+            "==" => (left - right).abs() <= 1.0e-12 * left.abs().max(right.abs()).max(1.0),
+            _ => (left - right).abs() > 1.0e-12 * left.abs().max(right.abs()).max(1.0),
+        };
+        Ok(if holds { 1.0 } else { 0.0 })
     }
 
     fn sum(&mut self) -> Result<f64> {
@@ -256,7 +288,7 @@ impl ExprParser<'_> {
                 }),
             },
             Token::Symbol('(') => {
-                let value = self.sum()?;
+                let value = self.comparison()?;
                 match self.peek() {
                     Some(Token::Symbol(')')) => {
                         self.position += 1;
@@ -303,6 +335,15 @@ mod tests {
     fn quoted_words_keep_their_spaces() {
         let line = parse_line(1, "text \"HELLO WORLD\" size=5").unwrap();
         assert_eq!(line.positional, vec!["HELLO WORLD"]);
+    }
+
+    #[test]
+    fn comparisons() {
+        let scope = Scope::from([("w".to_string(), 40.0)]);
+        assert_eq!(eval("w>30", &scope).unwrap(), 1.0);
+        assert_eq!(eval("w<=30", &scope).unwrap(), 0.0);
+        assert_eq!(eval("w/2==20", &scope).unwrap(), 1.0);
+        assert!(eval("w=40", &scope).is_err());
     }
 
     #[test]

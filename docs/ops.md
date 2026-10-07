@@ -161,7 +161,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | STL export | supported | `linecad export part.lcad part.stl` | `output::stl` |
 | PNG views | supported | `linecad render part.lcad part.png` | `output::png` |
 | STEP import | supported | `import part.step` | `output::step_import` |
-| OBJ export | missing | `linecad export part.lcad part.obj` | `output::obj` |
+| OBJ export | supported | `linecad export part.lcad part.obj` | `output::obj` |
 | 3MF export | missing | `linecad export part.lcad part.3mf` | `output::three_mf` |
 | SVG drawing | missing | `linecad export part.lcad part.svg` | `output::drawing` |
 | STL import | missing | `import part.stl` | `output::stl_import` |
@@ -180,6 +180,6 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | mass properties | supported | `measure mass` | `inspect::mass_properties` |
 | wall thickness | missing | `measure thickness` | `inspect::wall_thickness` |
 | draft analysis | missing | `measure draft pull=z` | `inspect::draft_analysis` |
-| variables from outside the file | missing | `linecad check part.lcad --set w=20` | `inspect::outside_variables` |
-| include another file | missing | `include part.lcad d=10` | `inspect::include_file` |
-| conditional lines | missing | `if w>30 chamfer 1 edges` | `inspect::conditional` |
+| variables from outside the file | supported | `linecad check part.lcad --set w=20` | `inspect::outside_variables` |
+| include another file | supported | `include part.lcad d=10` | `inspect::include_file` |
+| conditional lines | supported | `if w>30 chamfer 1 edges` | `inspect::conditional` |

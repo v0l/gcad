@@ -1,6 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
 use clap::{Parser, Subcommand};
-use linecad::model::{Run, run_in};
+use linecad::model::{Run, run_full};
 use linecad::{export, parse, render, select};
 
 #[derive(Parser)]
@@ -8,6 +8,17 @@ use linecad::{export, parse, render, select};
 struct Cli {
     #[command(subcommand)]
     command: Command,
+    /// Set a variable, overriding the file's `let`, as name=value (repeatable)
+    #[arg(long = "set", global = true, value_parser = parse_set)]
+    set: Vec<(String, f64)>,
+}
+
+fn parse_set(text: &str) -> std::result::Result<(String, f64), String> {
+    let (name, value) = text.split_once('=').ok_or("write it as name=value")?;
+    let value = value
+        .parse::<f64>()
+        .map_err(|_| format!("`{value}` is not a number"))?;
+    Ok((name.to_string(), value))
 }
 
 #[derive(Subcommand)]
@@ -21,7 +32,7 @@ enum Command {
         #[arg(long)]
         line: Option<usize>,
     },
-    /// Write the solid as .step or .stl
+    /// Write the solid as .step, .stl or .obj
     Export { file: String, output: String },
     /// Draw iso, top, front and right views into one PNG
     Render { file: String, output: String },
@@ -37,7 +48,7 @@ enum Command {
     },
 }
 
-fn load(file: &str, until: Option<usize>) -> Result<Run> {
+fn load(file: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<Run> {
     let source = std::fs::read_to_string(file).with_context(|| format!("reading {file}"))?;
     let lines: Vec<_> = parse::parse_program(&source)?
         .into_iter()
@@ -46,7 +57,7 @@ fn load(file: &str, until: Option<usize>) -> Result<Run> {
     let dir = std::path::Path::new(file)
         .parent()
         .map(std::path::Path::to_path_buf);
-    Ok(run_in(dir, &lines))
+    Ok(run_full(dir, vars, &lines))
 }
 
 fn finished(run: &Run) -> Result<&monstertruck::modeling::Solid> {
@@ -59,8 +70,8 @@ fn finished(run: &Run) -> Result<&monstertruck::modeling::Solid> {
         .ok_or_else(|| anyhow!("the file builds no solid"))
 }
 
-fn check(file: &str) -> Result<()> {
-    let run = load(file, None)?;
+fn check(file: &str, vars: &[(String, f64)]) -> Result<()> {
+    let run = load(file, None, vars)?;
     let width = run
         .steps
         .iter()
@@ -79,8 +90,8 @@ fn check(file: &str) -> Result<()> {
     }
 }
 
-fn query(file: &str, selector: &str, until: Option<usize>) -> Result<()> {
-    let run = load(file, until)?;
+fn query(file: &str, selector: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<()> {
+    let run = load(file, until, vars)?;
     let solid = finished(&run)?;
     let tolerance = run.model.tolerance();
     let faces = select::faces(solid);
@@ -113,25 +124,27 @@ fn query(file: &str, selector: &str, until: Option<usize>) -> Result<()> {
 }
 
 fn main() -> Result<()> {
-    match Cli::parse().command {
-        Command::Check { file } => check(&file),
+    let cli = Cli::parse();
+    let vars = cli.set;
+    match cli.command {
+        Command::Check { file } => check(&file, &vars),
         Command::Query {
             file,
             selector,
             line,
-        } => query(&file, &selector, line),
+        } => query(&file, &selector, line, &vars),
         Command::Export { file, output } => {
-            let run = load(&file, None)?;
+            let run = load(&file, None, &vars)?;
             finished(&run)?;
             export::export(&run.model.solids(), &output)
         }
         Command::Render { file, output } => {
-            let run = load(&file, None)?;
+            let run = load(&file, None, &vars)?;
             finished(&run)?;
             render::render(&run.model.solids(), &output)
         }
         Command::View { file, select, line } => {
-            linecad::view::run(file.into(), select, line).map_err(|error| anyhow!("{error}"))
+            linecad::view::run(file.into(), select, line, vars).map_err(|error| anyhow!("{error}"))
         }
     }
 }

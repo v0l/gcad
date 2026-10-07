@@ -145,7 +145,6 @@ fn step_import() {
 }
 
 #[test]
-#[ignore = "missing: obj export"]
 fn obj() {
     let path = scratch("box.obj");
     export::export(&build("rect 10 10\nextrude 5").solids(), &path).expect("exports");

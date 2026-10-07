@@ -1,7 +1,7 @@
 use super::gl::{self, BACKGROUND, Camera};
 use super::scene::{self, Highlight, Scene};
 use crate::geometry;
-use crate::model::{Snapshot, label_of, run_snapshots_in};
+use crate::model::{Snapshot, label_of, run_snapshots_full};
 use crate::parse::{Line as SourceLine, parse_program};
 use crate::select;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
@@ -19,13 +19,17 @@ struct Program {
     error: Option<String>,
 }
 
-fn evaluate(path: &PathBuf) -> Program {
+fn evaluate(path: &PathBuf, vars: &[(String, f64)]) -> Program {
     match std::fs::read_to_string(path)
         .map_err(|e| e.to_string())
         .and_then(|s| parse_program(&s).map_err(|e| format!("{e:#}")))
     {
         Ok(lines) => Program {
-            snapshots: run_snapshots_in(path.parent().map(std::path::Path::to_path_buf), &lines),
+            snapshots: run_snapshots_full(
+                path.parent().map(std::path::Path::to_path_buf),
+                vars,
+                &lines,
+            ),
             lines,
             error: None,
         },
@@ -60,6 +64,7 @@ enum Status {
 
 pub struct App {
     path: PathBuf,
+    vars: Vec<(String, f64)>,
     program: Arc<Program>,
     generation: u64,
     selected: usize,
@@ -93,11 +98,13 @@ impl App {
         path: PathBuf,
         query: String,
         line: Option<usize>,
+        vars: Vec<(String, f64)>,
     ) -> Self {
         egui_bench::install(&cc.egui_ctx);
         let path = std::fs::canonicalize(&path).unwrap_or(path);
         let mut app = App {
             path,
+            vars,
             program: Arc::new(Program::default()),
             generation: 0,
             selected: line.map_or(0, |n| n.saturating_sub(1)),
@@ -140,9 +147,9 @@ impl App {
 
     fn reload(&mut self, ctx: &egui::Context) {
         let (tx, rx) = channel();
-        let (path, ctx) = (self.path.clone(), ctx.clone());
+        let (path, ctx, vars) = (self.path.clone(), ctx.clone(), self.vars.clone());
         std::thread::spawn(move || {
-            let _ = tx.send(evaluate(&path));
+            let _ = tx.send(evaluate(&path, &vars));
             ctx.request_repaint();
         });
         self.loading = Some((rx, Instant::now()));
@@ -607,7 +614,12 @@ impl eframe::App for App {
     }
 }
 
-pub fn run(path: PathBuf, query: String, line: Option<usize>) -> eframe::Result<()> {
+pub fn run(
+    path: PathBuf,
+    query: String,
+    line: Option<usize>,
+    vars: Vec<(String, f64)>,
+) -> eframe::Result<()> {
     let title = format!("linecad - {}", path.display());
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
@@ -620,6 +632,6 @@ pub fn run(path: PathBuf, query: String, line: Option<usize>) -> eframe::Result<
     eframe::run_native(
         &title,
         options,
-        Box::new(move |cc| Ok(Box::new(App::new(cc, path, query, line)))),
+        Box::new(move |cc| Ok(Box::new(App::new(cc, path, query, line, vars)))),
     )
 }

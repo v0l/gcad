@@ -34,7 +34,17 @@ pub fn export(solids: &[&Solid], path: &str) -> Result<()> {
             });
             write(&mesh, &mut std::fs::File::create(path)?, StlType::Binary)?;
         }
-        other => bail!("cannot export `.{other}`, use .step or .stl"),
+        "obj" => {
+            let mut mesh = monstertruck::mesh::PolygonMesh::default();
+            solids.iter().for_each(|solid| {
+                mesh.merge(geometry::mesh(
+                    solid,
+                    (geometry::bounds(solid).diameter() * 2.0e-4).max(0.01),
+                ))
+            });
+            monstertruck::mesh::obj::write(&mesh, std::fs::File::create(path)?)?;
+        }
+        other => bail!("cannot export `.{other}`, use .step, .stl or .obj"),
     }
     Ok(())
 }
