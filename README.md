@@ -18,6 +18,7 @@ chamfer 0.3 mounts.side&base.end
 cargo run --release -- check examples/parts/plate.lcad
 cargo run --release -- render examples/parts/plate.lcad plate.png
 cargo run --release -- export examples/parts/plate.lcad plate.step
+cargo run --release -- view examples/parts/plate.lcad
 ```
 
 The format, operations and selectors are in [docs/format.md](docs/format.md).

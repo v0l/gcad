@@ -887,6 +887,35 @@ fn describe_frame(frame: &Frame) -> String {
     )
 }
 
+#[derive(Clone)]
+pub struct Snapshot {
+    pub line: Line,
+    pub result: std::result::Result<String, String>,
+    pub model: Model,
+}
+
+pub fn run_snapshots(lines: &[Line]) -> Vec<Snapshot> {
+    let mut model = Model::default();
+    let mut snapshots = Vec::new();
+    for line in lines {
+        let before = model.clone();
+        let result = model.apply(line).map_err(|error| format!("{error:#}"));
+        let failed = result.is_err();
+        if failed {
+            model = before;
+        }
+        snapshots.push(Snapshot {
+            line: line.clone(),
+            result,
+            model: model.clone(),
+        });
+        if failed {
+            break;
+        }
+    }
+    snapshots
+}
+
 pub struct Run {
     pub model: Model,
     pub steps: Vec<(Line, Result<String>)>,
@@ -896,8 +925,12 @@ pub fn run(lines: &[Line]) -> Run {
     let mut model = Model::default();
     let mut steps = Vec::new();
     for line in lines {
+        let before = model.clone();
         let result = model.apply(line);
         let failed = result.is_err();
+        if failed {
+            model = before;
+        }
         steps.push((line.clone(), result));
         if failed {
             break;

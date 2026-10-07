@@ -117,10 +117,17 @@ linecad check part.lcad                  # run every line, print what each did
 linecad query part.lcad 'base.end&base.side' [--line N]
 linecad render part.lcad part.png        # iso, top, front and right views
 linecad export part.lcad part.step       # or .stl
+linecad view part.lcad [--line N] [--select 'base.end&base.side']
 ```
 
 `check` stops at the first failing line and prints its number and why. After every
 line that changes the solid it prints the face count, volume and bounding box.
+`view` opens a window that rebuilds on every save. The left column is the file,
+one row per line, green when it ran, red where it failed. Clicking a row (or up and
+down) shows the solid as it was after that line, with the faces that line made in
+amber. The select box highlights whatever a selector matches at that line in cyan,
+which is the quickest way to see what a `fillet` or `plane` selector will hit.
+
 `render` lays the views out as iso (top left), top (top right), front from -Y
 (bottom left) and right from +X (bottom right), each with an axis marker: X red,
 Y green, Z blue.

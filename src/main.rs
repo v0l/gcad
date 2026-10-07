@@ -25,6 +25,16 @@ enum Command {
     Export { file: String, output: String },
     /// Draw iso, top, front and right views into one PNG
     Render { file: String, output: String },
+    /// Open the file in a window that rebuilds whenever it is saved
+    View {
+        file: String,
+        /// Highlight what this selector matches
+        #[arg(long, default_value = "")]
+        select: String,
+        /// Show the model as it is after this line
+        #[arg(long)]
+        line: Option<usize>,
+    },
 }
 
 fn load(file: &str, until: Option<usize>) -> Result<Run> {
@@ -109,5 +119,8 @@ fn main() -> Result<()> {
         } => query(&file, &selector, line),
         Command::Export { file, output } => export::export(finished(&load(&file, None)?)?, &output),
         Command::Render { file, output } => render::render(finished(&load(&file, None)?)?, &output),
+        Command::View { file, select, line } => {
+            linecad::view::run(file.into(), select, line).map_err(|error| anyhow!("{error}"))
+        }
     }
 }
