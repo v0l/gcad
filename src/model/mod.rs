@@ -249,6 +249,32 @@ impl Model {
             .ok_or_else(|| anyhow!("`{op}` needs a solid"))
     }
 
+    pub(crate) fn merge_all(
+        &mut self,
+        label: &str,
+        tools: Vec<Solid>,
+        combine: Combine,
+    ) -> Result<()> {
+        let apart = |a: &BoundingBox<Point3>, b: &BoundingBox<Point3>| {
+            (0..3).any(|k| a.max()[k] < b.min()[k] || b.max()[k] < a.min()[k])
+        };
+        let boxes: Vec<BoundingBox<Point3>> = tools.iter().map(geometry::bounds).collect();
+        let disjoint =
+            (0..boxes.len()).all(|i| (i + 1..boxes.len()).all(|j| apart(&boxes[i], &boxes[j])));
+        if tools.len() > 1 && disjoint && self.solid.is_some() {
+            let faces: Vec<Face> = tools.iter().flat_map(select::faces).collect();
+            let together = Solid::new_unchecked(vec![faces.into()]);
+            let before = self.solid.clone();
+            if self.merge(label, together, combine).is_ok() {
+                return Ok(());
+            }
+            self.solid = before;
+        }
+        tools
+            .into_iter()
+            .try_for_each(|tool| self.merge(label, tool, combine))
+    }
+
     pub(crate) fn merge(&mut self, label: &str, tool: Solid, combine: Combine) -> Result<()> {
         let result = match (self.solid.as_ref(), combine) {
             (None, Combine::Add) => tool.clone(),

@@ -23,3 +23,10 @@ fn pipe() {
     let centerline = 12.0 + 14.0 + 12.0 + 2.0 * (PI / 2.0 * 8.0);
     assert_volume(&build(&part("pipe")), PI * 9.0 * centerline, 0.0005);
 }
+
+#[test]
+fn enclosure() {
+    let model = build(&part("enclosure"));
+    assert_eq!(model.solids().len(), 2);
+    assert_volume(&model, 22501.75 + 8895.46, 0.002);
+}

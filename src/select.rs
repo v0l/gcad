@@ -45,6 +45,19 @@ impl Groups {
     }
 }
 
+pub fn edge_owners(faces: &[Face]) -> std::collections::HashMap<EdgeId, Vec<usize>> {
+    let mut owners: std::collections::HashMap<EdgeId, Vec<usize>> = Default::default();
+    faces.iter().enumerate().for_each(|(i, face)| {
+        face.edge_iter().for_each(|edge| {
+            let list = owners.entry(edge.id()).or_default();
+            if !list.contains(&i) {
+                list.push(i);
+            }
+        })
+    });
+    owners
+}
+
 pub fn faces(solid: &Solid) -> Vec<Face> {
     solid
         .boundaries()
@@ -70,6 +83,20 @@ fn sample_points(face: &Face) -> Vec<Point3> {
         .collect()
 }
 
+fn control_hull(surface: &Surface) -> Option<BoundingBox<Point3>> {
+    match surface {
+        Surface::BsplineSurface(s) => Some(s.control_points().iter().flatten().copied().collect()),
+        Surface::NurbsSurface(s) => Some(
+            s.control_points()
+                .iter()
+                .flatten()
+                .map(|v| Point3::from_homogeneous(*v))
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
 pub fn face_on(face: &Face, surface: &Surface, tolerance: f64) -> bool {
     match (face.oriented_surface(), surface) {
         (Surface::Plane(a), Surface::Plane(b)) => {
@@ -77,7 +104,18 @@ pub fn face_on(face: &Face, surface: &Surface, tolerance: f64) -> bool {
                 && (a.origin() - b.origin()).dot(b.normal()).abs() < tolerance
         }
         (Surface::Plane(_), _) | (_, Surface::Plane(_)) => false,
+        (Surface::BsplineSurface(a), Surface::BsplineSurface(b)) if a == *b => true,
+        (Surface::NurbsSurface(a), Surface::NurbsSurface(b)) if a == *b => true,
         (own, _) => {
+            if let Some(hull) = control_hull(surface) {
+                let (low, high) = (hull.min(), hull.max());
+                let slack = tolerance * 10.0;
+                let outside =
+                    |p: Point3| (0..3).any(|k| p[k] < low[k] - slack || p[k] > high[k] + slack);
+                if face.vertex_iter().any(|v| outside(v.point())) {
+                    return false;
+                }
+            }
             let points = sample_points(face);
             let on_surface = |point: &Point3| {
                 surface
@@ -193,10 +231,12 @@ pub fn select_edges(
     tolerance: f64,
 ) -> Result<Vec<Edge>> {
     let faces = faces(solid);
+    let owners_of = edge_owners(&faces);
     let edges_of = |indices: &[usize]| -> Vec<Edge> {
         indices.iter().flat_map(|&i| faces[i].edge_iter()).collect()
     };
     let mut edges: Vec<Edge> = Vec::new();
+    let mut seen = std::collections::HashSet::new();
     for term in expression.split('|') {
         let sets = term
             .split('&')
@@ -207,9 +247,7 @@ pub fn select_edges(
             [a, b] => edges_of(a)
                 .into_iter()
                 .filter(|edge| {
-                    let owners: Vec<usize> = (0..faces.len())
-                        .filter(|&i| faces[i].edge_iter().any(|e| e.is_same(edge)))
-                        .collect();
+                    let owners = owners_of.get(&edge.id()).cloned().unwrap_or_default();
                     owners.iter().any(|i| a.contains(i))
                         && owners.iter().any(|j| {
                             b.contains(j) && owners.iter().any(|i| i != j && a.contains(i))
@@ -219,7 +257,7 @@ pub fn select_edges(
             _ => bail!("`{term}`: use at most one `&` per term"),
         };
         found.into_iter().for_each(|edge| {
-            if !edges.iter().any(|known| known.is_same(&edge)) {
+            if seen.insert(edge.id()) {
                 edges.push(edge);
             }
         });

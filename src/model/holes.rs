@@ -170,8 +170,9 @@ impl Model {
                 floor: matches!(depth, Depth::Blind(_)).then_some("bottom"),
             },
         );
+        let mut batches: Vec<Vec<Solid>> = vec![Vec::new(); pieces.len()];
         for (frame, center) in placements {
-            for piece in &pieces {
+            for (k, piece) in pieces.iter().enumerate() {
                 let circle = |(r, z): (f64, f64)| {
                     Profile::Circle {
                         center,
@@ -206,8 +207,11 @@ impl Model {
                     })
                     .collect();
                 self.record_inverted(&label, groups);
-                self.merge(&label, tool, Combine::Remove)?;
+                batches[k].push(tool);
             }
+        }
+        for batch in batches {
+            self.merge_all(&label, batch, Combine::Remove)?;
         }
         let summary = self.describe_solid()?;
         Ok(match thread {

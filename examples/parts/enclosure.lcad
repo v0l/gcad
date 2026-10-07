@@ -1,0 +1,32 @@
+let w=80 d=50 h=30 t=2 r=6 boss=7 screw=2.5
+rect w d r=r
+box: extrude h
+shell t open=box.end
+plane XY offset=t
+let bx=w/2-r by=d/2-r
+circle boss at=bx,by
+circle boss at=-bx,by
+circle boss at=-bx,-by
+circle boss at=bx,-by
+bosses: extrude 10
+plane bosses.end
+pilot: hole screw bx,by -bx,by -bx,-by bx,-by depth=8
+plane >Y
+cable: hole 8 0,12 depth=4
+plane >X
+slot 20 3 at=0,22
+array count=3 step=0,-5
+vents: cut 4
+color #3a6ea5
+body lid
+plane XY offset=h+10
+rect w d r=r
+top: extrude t
+rect w-2*t-0.4 d-2*t-0.4 r=r-t
+offset -1.5
+lip: extrude -3
+plane top.end
+text LINECAD size=8 at=-17,-4
+logo: cut 0.6
+fillet 1 top.end&top.side
+color #e8e8e8

@@ -496,21 +496,28 @@ impl Profile {
     }
 }
 
+fn curve_samples(curve: &Curve) -> Vec<Point3> {
+    let (t0, t1) = curve.range_tuple();
+    let along = |steps: usize| {
+        (0..=steps)
+            .map(|i| curve.subs(t0 + (t1 - t0) * i as f64 / steps as f64))
+            .collect()
+    };
+    match curve {
+        Curve::Line(_) => along(1),
+        Curve::IntersectionCurve(intersection) => curve_samples(intersection.leader()),
+        _ => along(16),
+    }
+}
+
 pub fn bounds(solid: &Solid) -> BoundingBox<Point3> {
+    let mut seen = std::collections::HashSet::new();
     solid
         .boundaries()
         .iter()
         .flat_map(|shell| shell.edge_iter())
-        .flat_map(|edge| {
-            let curve = edge.curve();
-            let (t0, t1) = curve.range_tuple();
-            let steps = if matches!(curve, Curve::Line(_)) {
-                1
-            } else {
-                16
-            };
-            (0..=steps).map(move |i| curve.subs(t0 + (t1 - t0) * i as f64 / steps as f64))
-        })
+        .filter(|edge| seen.insert(edge.id()))
+        .flat_map(|edge| curve_samples(&edge.curve()))
         .collect()
 }
 

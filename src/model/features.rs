@@ -377,32 +377,48 @@ impl Model {
         let direction = normal * (distance.abs() + start_overlap + end_overlap);
         let label = label_of(line);
         let shapes = loops(&start, &profiles)?;
-        for region in regions(&shapes) {
-            let insets = (
-                -start_overlap * taper,
-                (distance.abs() + end_overlap) * taper,
-            );
-            let tool = prism(&start, &shapes, &region, &profiles, direction, insets)?;
-            let groups = classify(&tool, direction);
+        let insets = (
+            -start_overlap * taper,
+            (distance.abs() + end_overlap) * taper,
+        );
+        let areas = regions(&shapes);
+        let tools = areas
+            .iter()
+            .map(|region| prism(&start, &shapes, region, &profiles, direction, insets))
+            .collect::<Result<Vec<_>>>()?;
+        for tool in &tools {
+            let groups = classify(tool, direction);
             match combine {
                 Combine::Remove => self.record_inverted(&label, groups),
                 _ => self.record(&label, groups),
             }
-            if let Err(error) = self.merge(&label, tool, combine) {
-                if combine != Combine::Add || start_overlap == 0.0 {
-                    return Err(error);
+        }
+        let batched = tools.len() > 1 && self.solid.is_some() && {
+            let before = self.solid.clone();
+            let done = self.merge_all(&label, tools.clone(), combine).is_ok();
+            if !done {
+                self.solid = before;
+            }
+            done
+        };
+        if !batched {
+            for (region, tool) in areas.iter().zip(tools) {
+                if let Err(error) = self.merge(&label, tool, combine) {
+                    if combine != Combine::Add || start_overlap == 0.0 {
+                        return Err(error);
+                    }
+                    let touching = loops(&base, &profiles)?;
+                    let tool = prism(
+                        &base,
+                        &touching,
+                        region,
+                        &profiles,
+                        normal * (distance.abs() + end_overlap),
+                        (0.0, (distance.abs() + end_overlap) * taper),
+                    )
+                    .map_err(|_| error)?;
+                    self.merge(&label, tool, combine)?;
                 }
-                let touching = loops(&base, &profiles)?;
-                let tool = prism(
-                    &base,
-                    &touching,
-                    &region,
-                    &profiles,
-                    normal * (distance.abs() + end_overlap),
-                    (0.0, (distance.abs() + end_overlap) * taper),
-                )
-                .map_err(|_| error)?;
-                self.merge(&label, tool, combine)?;
             }
         }
         self.prisms.insert(
@@ -431,6 +447,7 @@ impl Model {
         let start = removal.frame.offset(clearance);
         let direction = -removal.frame.normal * (distance + clearance);
         let shapes = loops(&start, &removal.profiles)?;
+        let mut tools = Vec::new();
         for region in regions(&shapes) {
             let insets = (-clearance * removal.taper, distance * removal.taper);
             let tool = prism(
@@ -453,8 +470,9 @@ impl Model {
                 })
                 .collect();
             self.record_inverted(label, groups);
-            self.merge(label, tool, Combine::Remove)?;
+            tools.push(tool);
         }
+        self.merge_all(label, tools, Combine::Remove)?;
         self.describe_solid()
     }
 

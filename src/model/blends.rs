@@ -14,13 +14,13 @@ fn plane_normal(face: &Face) -> Option<Vector3> {
     }
 }
 
-fn smooth(edge: &Edge, faces: &[Face]) -> bool {
+fn smooth(edge: &Edge, owners: &[usize], faces: &[Face]) -> bool {
     let curve = edge.curve();
     let (t0, t1) = curve.range_tuple();
     let point = curve.subs((t0 + t1) / 2.0);
-    let normals: Vec<Vector3> = faces
+    let normals: Vec<Vector3> = owners
         .iter()
-        .filter(|face| face.edge_iter().any(|e| e.is_same(edge)))
+        .map(|&i| &faces[i])
         .filter_map(|face| {
             let surface = face.oriented_surface();
             let (u, v) = surface.search_parameter(point, None, 100)?;
@@ -50,9 +50,16 @@ impl Model {
             bail!("`{selector}` matched no edges");
         }
         let faces = select::faces(&solid);
+        let owners = select::edge_owners(&faces);
         let edges: Vec<Edge> = edges
             .into_iter()
-            .filter(|edge| !smooth(edge, &faces))
+            .filter(|edge| {
+                let mine = owners
+                    .get(&edge.id())
+                    .map(Vec::as_slice)
+                    .unwrap_or_default();
+                !smooth(edge, mine, &faces)
+            })
             .collect();
         if edges.is_empty() {
             bail!(
