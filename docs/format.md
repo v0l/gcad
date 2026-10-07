@@ -78,6 +78,8 @@ Sketch:
 | `pen` | `x,y` | starts a path of lines and arcs at a point |
 | `line` | `x,y` | draws a straight segment to the point |
 | `arc` | `x,y` `via=x,y`, or `x,y center=x,y turn=cw\|ccw` | draws an arc to the point through `via`, or about a centre |
+| `dxf` | `file.dxf` `at=x,y` `scale=` | adds the closed outlines in a DXF (lines, arcs, circles, polylines) |
+| `svg` | `file.svg` `at=x,y` `scale=` | adds the closed shapes in an SVG, one user unit to a millimetre, with y turned up |
 | `close` | `trim` | closes the path back to its start and adds it to the sketch; `trim` instead cuts it where its last line crosses an earlier one |
 
 Any profile line can end with `construct`: the profile is kept for reference and
@@ -131,7 +133,8 @@ Bodies:
 | `body` | `name` | sets the current solid aside and starts a new one; the first body is `main` |
 | `combine` | `into from` `mode=add\|cut\|intersect` | joins body `from` into body `into`, or cuts it out, and drops `from` |
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
-| `import` | `file.step` | adds the solids in a STEP file, relative to the `.lcad` file |
+| `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.lcad` file |
+| `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
 
 Measuring, which changes nothing and prints the answer:
 
@@ -204,7 +207,7 @@ Edges, for `fillet` and `chamfer`:
 linecad check part.lcad                  # run every line, print what each did
 linecad query part.lcad 'base.end&base.side' [--line N]
 linecad render part.lcad part.png        # iso, top, front and right views
-linecad export part.lcad part.step       # or .stl, .obj
+linecad export part.lcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing)
 linecad check part.lcad --set w=50       # override a `let` variable
 linecad view part.lcad [--line N] [--select 'base.end&base.side']
 ```

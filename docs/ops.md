@@ -38,8 +38,8 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | construction geometry | supported | `circle 20 construct` | `sketch::construction_geometry` |
 | mirror inside a sketch | supported | `reflect y` | `sketch::sketch_mirror` |
 | pattern inside a sketch | supported | `array count=4 angle=360` | `sketch::sketch_pattern` |
-| DXF import | missing | `dxf file.dxf` | `sketch::dxf_import` |
-| SVG import | missing | `svg file.svg` | `sketch::svg_import` |
+| DXF import | supported | `dxf file.dxf` | `sketch::dxf_import` |
+| SVG import | supported | `svg file.svg` | `sketch::svg_import` |
 
 
 ## Workplanes
@@ -163,10 +163,10 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | PNG views | supported | `linecad render part.lcad part.png` | `output::png` |
 | STEP import | supported | `import part.step` | `output::step_import` |
 | OBJ export | supported | `linecad export part.lcad part.obj` | `output::obj` |
-| 3MF export | missing | `linecad export part.lcad part.3mf` | `output::three_mf` |
-| SVG drawing | missing | `linecad export part.lcad part.svg` | `output::drawing` |
-| STL import | missing | `import part.stl` | `output::stl_import` |
-| STEP colours | missing | `color red` | `output::step_colours` |
+| 3MF export | supported | `linecad export part.lcad part.3mf` | `output::three_mf` |
+| SVG drawing | supported | `linecad export part.lcad part.svg` | `output::drawing` |
+| STL import | supported | `import part.stl` | `output::stl_import` |
+| STEP colours | supported | `color red` | `output::step_colours` |
 
 
 ## Parameters and inspection

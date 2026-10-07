@@ -157,7 +157,6 @@ fn obj() {
 }
 
 #[test]
-#[ignore = "missing: 3mf export"]
 fn three_mf() {
     let path = scratch("box.3mf");
     export::export(&build("rect 10 10\nextrude 5").solids(), &path).expect("exports");
@@ -165,7 +164,6 @@ fn three_mf() {
 }
 
 #[test]
-#[ignore = "missing: svg drawing export"]
 fn drawing() {
     let path = scratch("plate.svg");
     export::export(&build(&part("plate")).solids(), &path).expect("exports");
@@ -177,7 +175,6 @@ fn drawing() {
 }
 
 #[test]
-#[ignore = "missing: stl import"]
 fn stl_import() {
     let path = scratch("import.stl");
     export::export(&build("rect 10 10\nextrude 5").solids(), &path).expect("exports");
@@ -185,10 +182,10 @@ fn stl_import() {
 }
 
 #[test]
-#[ignore = "missing: color"]
 fn step_colours() {
     let path = scratch("red.step");
-    export::export(&build("rect 10 10\nextrude 5\ncolor red").solids(), &path).expect("exports");
+    export::export_coloured(&build("rect 10 10\nextrude 5\ncolor red").parts(), &path)
+        .expect("exports");
     assert!(
         std::fs::read_to_string(&path)
             .expect("written")

@@ -114,7 +114,23 @@ pub fn compose_2d(outer: [f64; 6], inner: [f64; 6]) -> [f64; 6] {
 #[derive(Clone, Debug)]
 pub enum Segment {
     Line((f64, f64)),
-    Arc { to: (f64, f64), via: (f64, f64) },
+    Arc {
+        to: (f64, f64),
+        via: (f64, f64),
+    },
+    Cubic {
+        to: (f64, f64),
+        c1: (f64, f64),
+        c2: (f64, f64),
+    },
+}
+
+impl Segment {
+    pub fn end(&self) -> (f64, f64) {
+        match self {
+            Segment::Line(to) | Segment::Arc { to, .. } | Segment::Cubic { to, .. } => *to,
+        }
+    }
 }
 
 impl Frame {
@@ -163,9 +179,7 @@ fn ellipse_wire(frame: &Frame, center: (f64, f64), rx: f64, ry: f64) -> Wire {
 
 fn path_wire(frame: &Frame, start: (f64, f64), segments: &[Segment]) -> Wire {
     let ends: Vec<(f64, f64)> = std::iter::once(start)
-        .chain(segments.iter().map(|segment| match segment {
-            Segment::Line(to) | Segment::Arc { to, .. } => *to,
-        }))
+        .chain(segments.iter().map(Segment::end))
         .collect();
     let vertices = builder::vertices(ends[..segments.len()].iter().map(|&(u, v)| frame.at(u, v)));
     let count = vertices.len();
@@ -177,6 +191,9 @@ fn path_wire(frame: &Frame, start: (f64, f64), segments: &[Segment]) -> Wire {
             match segment {
                 Segment::Line(_) => builder::line(from, to),
                 Segment::Arc { via, .. } => builder::circle_arc(from, to, frame.at(via.0, via.1)),
+                Segment::Cubic { c1, c2, .. } => {
+                    builder::bezier(from, to, vec![frame.at(c1.0, c1.1), frame.at(c2.0, c2.1)])
+                }
             }
         })
         .collect()
@@ -475,6 +492,33 @@ pub fn volume(solid: &Solid) -> f64 {
 
 pub fn volume_at(solid: &Solid, tolerance: f64) -> f64 {
     mesh(solid, tolerance).volume()
+}
+
+pub fn welded(mesh: &PolygonMesh) -> (Vec<Point3>, Vec<[usize; 3]>) {
+    let scale = mesh.positions().iter().fold(1.0_f64, |m, p| {
+        m.max(p.x.abs()).max(p.y.abs()).max(p.z.abs())
+    });
+    let step = scale * 1.0e-9;
+    let mut index: std::collections::HashMap<[i64; 3], usize> = Default::default();
+    let mut points = Vec::new();
+    let remap: Vec<usize> = mesh
+        .positions()
+        .iter()
+        .map(|p| {
+            let key = [p.x, p.y, p.z].map(|c| (c / step).round() as i64);
+            *index.entry(key).or_insert_with(|| {
+                points.push(*p);
+                points.len() - 1
+            })
+        })
+        .collect();
+    let triangles = mesh
+        .faces()
+        .triangle_iter()
+        .map(|t| t.map(|v| remap[v.pos]))
+        .filter(|[a, b, c]| a != b && b != c && a != c)
+        .collect();
+    (points, triangles)
 }
 
 pub fn ray_hits(mesh: &PolygonMesh, origin: Point3, direction: Vector3) -> Vec<(f64, Vector3)> {

@@ -649,6 +649,45 @@ impl Model {
         Ok(format!("sketch has {} profile(s)", self.sketch.len()))
     }
 
+    pub(crate) fn op_drawing_file(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["file"], &["at", "scale"], false)?;
+        let path = self.relative(args.text("file")?);
+        let text = std::fs::read_to_string(&path)
+            .with_context(|| format!("reading {}", path.display()))?;
+        let profiles = if line.op == "dxf" {
+            super::import::dxf_profiles(&text)?
+        } else {
+            super::import::svg_profiles(&text)?
+        };
+        let (x, y) = args.point("at", &self.scope)?;
+        let scale = positive(
+            args.optional_number("scale", &self.scope)?.unwrap_or(1.0),
+            "scale",
+        )?;
+        let count = profiles.len();
+        for profile in profiles {
+            let placed = if scale == 1.0 && x == 0.0 && y == 0.0 {
+                profile
+            } else {
+                placed(profile, [scale, 0.0, 0.0, scale, x, y])
+            };
+            self.add_profile(placed)?;
+        }
+        Ok(format!(
+            "{count} outline(s) from {}; sketch has {} profile(s)",
+            path.display(),
+            self.sketch.len()
+        ))
+    }
+
+    pub(crate) fn relative(&self, file: &str) -> std::path::PathBuf {
+        let file = std::path::PathBuf::from(file);
+        match &self.dir {
+            Some(dir) if file.is_relative() => dir.join(&file),
+            _ => file,
+        }
+    }
+
     fn last_profile(&self, op: &str) -> Result<Profile> {
         if self.pen.is_some() {
             bail!("a `pen` path is still open; `close` it before `{op}`");
@@ -706,11 +745,9 @@ fn crossing(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> Optio
 
 fn trimmed(start: (f64, f64), segments: &[Segment]) -> Result<((f64, f64), Vec<Segment>)> {
     let ends: Vec<(f64, f64)> = std::iter::once(start)
-        .chain(segments.iter().map(|segment| match segment {
-            Segment::Line(to) | Segment::Arc { to, .. } => *to,
-        }))
+        .chain(segments.iter().map(Segment::end))
         .collect();
-    if segments.iter().any(|s| matches!(s, Segment::Arc { .. })) {
+    if segments.iter().any(|s| !matches!(s, Segment::Line(_))) {
         bail!("`close trim` works on paths of `line`s");
     }
     let n = segments.len();

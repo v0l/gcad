@@ -435,6 +435,56 @@ impl Model {
         self.describe_solid()
     }
 
+    pub(crate) fn op_color(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["colour"], &[], false)?;
+        let text = args.text("colour")?;
+        let named = |name: &str| -> Option<[f64; 3]> {
+            Some(match name {
+                "red" => [0.85, 0.1, 0.1],
+                "green" => [0.1, 0.6, 0.2],
+                "blue" => [0.1, 0.3, 0.85],
+                "yellow" => [0.95, 0.8, 0.1],
+                "orange" => [0.95, 0.5, 0.1],
+                "purple" => [0.5, 0.2, 0.7],
+                "cyan" => [0.1, 0.7, 0.8],
+                "magenta" => [0.85, 0.2, 0.6],
+                "black" => [0.05, 0.05, 0.05],
+                "white" => [0.95, 0.95, 0.95],
+                "grey" | "gray" => [0.5, 0.5, 0.5],
+                "silver" => [0.75, 0.75, 0.78],
+                _ => return None,
+            })
+        };
+        let colour = if let Some(hex) = text.strip_prefix('#') {
+            let channel = |i: usize| {
+                hex.get(i..i + 2)
+                    .and_then(|h| u8::from_str_radix(h, 16).ok())
+                    .map(|v| v as f64 / 255.0)
+            };
+            match (hex.len(), channel(0), channel(2), channel(4)) {
+                (6, Some(r), Some(g), Some(b)) => [r, g, b],
+                _ => bail!("`{text}` is not a colour; write #rrggbb"),
+            }
+        } else if text.contains(',') {
+            let p = point3(text, &self.scope)?;
+            let rgb = [p.x, p.y, p.z];
+            if rgb.iter().any(|c| !(0.0..=1.0).contains(c)) {
+                bail!("colour parts go from 0 to 1, got {text}");
+            }
+            rgb
+        } else {
+            named(text).ok_or_else(|| {
+                anyhow!("`{text}` is not a colour; use a name like red or grey, #rrggbb, or r,g,b from 0 to 1")
+            })?
+        };
+        let name = self.body_name();
+        self.colours.insert(name.clone(), colour);
+        Ok(format!(
+            "body `{name}` is {:.2},{:.2},{:.2}",
+            colour[0], colour[1], colour[2]
+        ))
+    }
+
     pub(crate) fn op_body(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["name"], &[], false)?;
         self.require_empty_sketch("body")?;
@@ -466,7 +516,14 @@ impl Model {
             Some(dir) if file.is_relative() => dir.join(&file),
             _ => file,
         };
-        let solids = read_step(&path).with_context(|| format!("importing {}", path.display()))?;
+        let stl = path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
+        let solids = if stl {
+            vec![super::import::stl_solid(&path)?]
+        } else {
+            read_step(&path).with_context(|| format!("importing {}", path.display()))?
+        };
         let label = label_of(line);
         for solid in solids {
             let groups = select::faces(&solid)

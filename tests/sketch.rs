@@ -191,7 +191,6 @@ fn sketch_pattern() {
 }
 
 #[test]
-#[ignore = "missing: dxf"]
 fn dxf_import() {
     let path = scratch("square.dxf");
     let dxf = "0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n8\n0\n90\n4\n70\n1\n10\n0\n20\n0\n10\n20\n20\n0\n10\n20\n20\n20\n10\n0\n20\n20\n0\nENDSEC\n0\nEOF\n";
@@ -200,7 +199,6 @@ fn dxf_import() {
 }
 
 #[test]
-#[ignore = "missing: svg"]
 fn svg_import() {
     let path = scratch("square.svg");
     std::fs::write(&path, r#"<svg xmlns="http://www.w3.org/2000/svg"><rect x="0" y="0" width="20" height="10"/></svg>"#).expect("writes");

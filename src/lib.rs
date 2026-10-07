@@ -1,3 +1,4 @@
+pub mod drawing;
 pub mod export;
 pub mod geometry;
 pub mod model;

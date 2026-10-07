@@ -4,6 +4,7 @@ mod bodies;
 mod constrain;
 mod features;
 mod holes;
+mod import;
 mod measure;
 mod path;
 mod round;
@@ -65,6 +66,7 @@ pub struct Model {
     pub constraints: Vec<constrain::Constraint>,
     pub construction: Vec<(Frame, Profile)>,
     pub axes: HashMap<String, (Point3, Vector3)>,
+    pub colours: HashMap<String, [f64; 3]>,
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -139,6 +141,23 @@ impl Model {
             .collect()
     }
 
+    pub fn parts(&self) -> Vec<(&Solid, Option<[f64; 3]>)> {
+        let current = if self.body.is_empty() {
+            "main"
+        } else {
+            self.body.as_str()
+        };
+        self.bodies
+            .iter()
+            .map(|(name, solid)| (solid, self.colours.get(name).copied()))
+            .chain(
+                self.solid
+                    .as_ref()
+                    .map(|solid| (solid, self.colours.get(current).copied())),
+            )
+            .collect()
+    }
+
     pub fn apply(&mut self, line: &Line) -> Result<String> {
         if PROFILE_OPS.contains(&line.op.as_str())
             && line.positional.iter().any(|w| w == "construct")
@@ -207,6 +226,8 @@ impl Model {
             "reflect" => self.op_reflect(line),
             "array" => self.op_array(line),
             "axis" => self.op_axis(line),
+            "color" => self.op_color(line),
+            "dxf" | "svg" => self.op_drawing_file(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",

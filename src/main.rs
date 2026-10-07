@@ -32,7 +32,7 @@ enum Command {
         #[arg(long)]
         line: Option<usize>,
     },
-    /// Write the solid as .step, .stl or .obj
+    /// Write the solid as .step, .stl, .obj, .3mf or an .svg drawing
     Export { file: String, output: String },
     /// Draw iso, top, front and right views into one PNG
     Render { file: String, output: String },
@@ -136,7 +136,7 @@ fn main() -> Result<()> {
         Command::Export { file, output } => {
             let run = load(&file, None, &vars)?;
             finished(&run)?;
-            export::export(&run.model.solids(), &output)
+            export::export_coloured(&run.model.parts(), &output)
         }
         Command::Render { file, output } => {
             let run = load(&file, None, &vars)?;
