@@ -195,6 +195,8 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | OBJ export | supported | `linecad export part.lcad part.obj` | `output::obj` |
 | 3MF export | supported | `linecad export part.lcad part.3mf` | `output::three_mf` |
 | SVG drawing | supported | `linecad export part.lcad part.svg` | `output::drawing` |
+| drawing dimensions and hole callouts | supported | overall sizes, `4× ⌀3.2` | `output::drawing_dimensions_and_section` |
+| section view | supported | `linecad export part.lcad part.svg --section y=0` | `output::drawing_dimensions_and_section` |
 | STL import | supported | `import part.stl` | `output::stl_import` |
 | STEP colours | supported | `color red` | `output::step_colours` |
 | STEP assembly structure | supported | `linecad export top.lasm top.step` | `output::step_assembly`, `output::step_assembly_opens_in_opencascade` |

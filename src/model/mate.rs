@@ -107,30 +107,33 @@ fn face_cylinder(points: &[Point3], normals: &[Vector3]) -> Option<Cylinder> {
     })
 }
 
+fn fit_face(face: &Face, tolerance: f64) -> Option<(Cylinder, Vec<Point3>, Vec<Vector3>)> {
+    let single: Shell = vec![face.clone()].into();
+    let meshed = single.robust_triangulation(tolerance);
+    let mesh = meshed.face_iter().next().and_then(|f| f.surface())?;
+    let positions = mesh.positions();
+    let surface_normals = mesh.normals();
+    let mut points = Vec::new();
+    let mut normals = Vec::new();
+    for triangle in mesh.faces().triangle_iter() {
+        for vertex in triangle {
+            if let Some(n) = vertex.nor.and_then(|i| surface_normals.get(i)) {
+                points.push(positions[vertex.pos]);
+                normals.push(n.normalize());
+            }
+        }
+    }
+    let cylinder = face_cylinder(&points, &normals)?;
+    Some((cylinder, points, normals))
+}
+
 pub fn cylinders(solid: &Solid, picked: &[usize]) -> Vec<Cylinder> {
     let all = select::faces(solid);
     let tolerance = geometry::mesh_tolerance(solid) * 0.5;
     let mut found: Vec<Cylinder> = Vec::new();
     for &index in picked {
         let Some(face) = all.get(index) else { continue };
-        let single: Shell = vec![face.clone()].into();
-        let meshed = single.robust_triangulation(tolerance);
-        let Some(mesh) = meshed.face_iter().next().and_then(|f| f.surface()) else {
-            continue;
-        };
-        let positions = mesh.positions();
-        let surface_normals = mesh.normals();
-        let mut points = Vec::new();
-        let mut normals = Vec::new();
-        for triangle in mesh.faces().triangle_iter() {
-            for vertex in triangle {
-                if let Some(n) = vertex.nor.and_then(|i| surface_normals.get(i)) {
-                    points.push(positions[vertex.pos]);
-                    normals.push(n.normalize());
-                }
-            }
-        }
-        let Some(cylinder) = face_cylinder(&points, &normals) else {
+        let Some((cylinder, _, _)) = fit_face(face, tolerance) else {
             continue;
         };
         let size = cylinder.radius.max(1.0e-9);
@@ -144,6 +147,70 @@ pub fn cylinders(solid: &Solid, picked: &[usize]) -> Vec<Cylinder> {
         }
     }
     found
+}
+
+pub fn holes_in(solid: &Solid) -> Vec<Cylinder> {
+    let tolerance = geometry::mesh_tolerance(solid) * 2.0;
+    let mut found: Vec<(Cylinder, Vec<Point3>)> = Vec::new();
+    for face in select::faces(solid) {
+        let Some((cylinder, points, normals)) = fit_face(&face, tolerance) else {
+            continue;
+        };
+        let inward: f64 = points
+            .iter()
+            .zip(&normals)
+            .map(|(p, n)| {
+                let d = *p - cylinder.point;
+                n.dot(d - cylinder.axis * d.dot(cylinder.axis))
+            })
+            .sum();
+        if inward >= 0.0 {
+            continue;
+        }
+        let size = cylinder.radius.max(1.0e-9);
+        match found.iter_mut().find(|(known, _)| {
+            known.parallel(&cylinder)
+                && known.offset_from(&cylinder) < size * 1.0e-3
+                && (known.radius - cylinder.radius).abs() < size * 1.0e-3
+        }) {
+            Some((_, known)) => known.extend(points),
+            None => found.push((cylinder, points)),
+        }
+    }
+    found
+        .into_iter()
+        .filter(|(cylinder, points)| {
+            let axis = cylinder.axis;
+            let u = axis
+                .cross(if axis.x.abs() < 0.9 {
+                    Vector3::unit_x()
+                } else {
+                    Vector3::unit_y()
+                })
+                .normalize();
+            let v = axis.cross(u);
+            let mut angles: Vec<f64> = points
+                .iter()
+                .map(|p| {
+                    let d = *p - cylinder.point;
+                    d.dot(v).atan2(d.dot(u))
+                })
+                .collect();
+            angles.sort_by(f64::total_cmp);
+            let widest = angles
+                .windows(2)
+                .map(|w| w[1] - w[0])
+                .chain(
+                    angles
+                        .first()
+                        .zip(angles.last())
+                        .map(|(a, b)| a + std::f64::consts::TAU - b),
+                )
+                .fold(0.0, f64::max);
+            widest < 0.5
+        })
+        .map(|(cylinder, _)| cylinder)
+        .collect()
 }
 
 fn fixed_part(text: &str) -> String {

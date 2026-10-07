@@ -298,3 +298,40 @@ for i in range(1, parts.Length() + 1):
         String::from_utf8_lossy(&output.stderr)
     );
 }
+
+#[test]
+fn drawing_dimensions_and_section() {
+    let model =
+        build("rect 20 10\nbase: extrude 10\nplane base.end\nholes: hole 4 0,0 6,0\nhole 2 -6,0");
+    let svg = linecad::drawing::drawing_with(
+        &model.parts(),
+        Some(linecad::drawing::Section { axis: 1, at: 0.0 }),
+    );
+    assert!(svg.contains(">20</text>") && svg.contains(">10</text>"));
+    assert!(svg.contains(">2× ⌀4</text>") && svg.contains(">⌀2</text>"));
+    assert!(svg.contains("section y=0") && svg.contains("class=\"cut\""));
+    let solid = model.solid.as_ref().expect("solid");
+    let outlines =
+        linecad::drawing::section_outlines(solid, linecad::drawing::Section { axis: 1, at: 0.0 });
+    let area: f64 = outlines
+        .iter()
+        .map(|outline| {
+            outline
+                .windows(2)
+                .map(|w| w[0].x * w[1].z - w[1].x * w[0].z)
+                .sum::<f64>()
+                .abs()
+                / 2.0
+        })
+        .sum();
+    assert_eq!(outlines.len(), 4);
+    assert!(
+        (area - (200.0 - 10.0 * (4.0 + 4.0 + 2.0))).abs() < 0.01,
+        "{area}"
+    );
+    assert_eq!(
+        "y=0".parse(),
+        Ok(linecad::drawing::Section { axis: 1, at: 0.0 })
+    );
+    assert!("w=1".parse::<linecad::drawing::Section>().is_err());
+}

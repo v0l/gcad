@@ -38,7 +38,13 @@ enum Command {
         line: Option<usize>,
     },
     /// Write the solid as .step, .stl, .obj, .3mf or an .svg drawing
-    Export { file: String, output: String },
+    Export {
+        file: String,
+        output: String,
+        /// For an .svg drawing, add a section view cut across this plane, like y=0
+        #[arg(long)]
+        section: Option<linecad::drawing::Section>,
+    },
     /// List the parts an assembly is made of, counted by file, body and variables
     Bom {
         file: String,
@@ -153,9 +159,24 @@ fn main() -> Result<()> {
             selector,
             line,
         } => query(&file, &selector, line, &vars),
-        Command::Export { file, output } => {
+        Command::Export {
+            file,
+            output,
+            section,
+        } => {
             let run = load(&file, None, &vars)?;
             finished(&run)?;
+            if let Some(section) = section {
+                if !output.to_ascii_lowercase().ends_with(".svg") {
+                    bail!("--section only applies to an .svg drawing");
+                }
+                let parts = run.model.parts();
+                std::fs::write(
+                    &output,
+                    linecad::drawing::drawing_with(&parts, Some(section)),
+                )?;
+                return Ok(());
+            }
             let name = std::path::Path::new(&file)
                 .file_stem()
                 .map(|s| s.to_string_lossy().to_string())

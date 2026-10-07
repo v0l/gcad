@@ -313,10 +313,16 @@ linecad check part.lcad                  # run every line, print what each did
 linecad query part.lcad 'base.end&base.side' [--line N]
 linecad render part.lcad part.png        # iso, top, front and right views
 linecad export part.lcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing)
+linecad export part.lcad part.svg --section y=0   # adds a hatched section across y=0
 linecad check part.lcad --set w=50       # override a `let` variable
 linecad part.lcad                        # open the viewer; plain `linecad` starts with a file picker
 linecad view part.lcad [--line N] [--select 'base.end&base.side']
 ```
+
+An `.svg` drawing shows the top, front, right and iso views with the overall width,
+depth and height dimensioned, and calls out round holes in the views that look down
+them, like `4× ⌀3.2`. `--section x=`, `y=` or `z=` adds a view of the part cut
+across that plane, looking at the cut, with the cut faces hatched.
 
 `check` stops at the first failing line and prints its number and why. After every
 line that changes the solid it prints the face count, volume and bounding box.

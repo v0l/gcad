@@ -6,7 +6,7 @@ mod constrain;
 mod features;
 mod holes;
 mod import;
-mod mate;
+pub mod mate;
 mod measure;
 mod path;
 mod rib;

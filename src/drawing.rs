@@ -1,13 +1,178 @@
 use crate::export::Colour;
 use crate::geometry;
+use monstertruck::mesh::PolygonMesh;
 use monstertruck::modeling::*;
 use std::collections::HashMap;
 use std::fmt::Write as _;
 
 struct View {
-    name: &'static str,
+    name: String,
     right: Vector3,
     up: Vector3,
+    cut: Option<(Vector3, f64)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Section {
+    pub axis: usize,
+    pub at: f64,
+}
+
+impl std::str::FromStr for Section {
+    type Err = String;
+
+    fn from_str(text: &str) -> std::result::Result<Section, String> {
+        let (axis, at) = text
+            .split_once('=')
+            .ok_or("write the section plane as x=0, y=0 or z=0")?;
+        let axis = match axis {
+            "x" | "X" => 0,
+            "y" | "Y" => 1,
+            "z" | "Z" => 2,
+            other => return Err(format!("a section cuts across x, y or z, not `{other}`")),
+        };
+        let at = at.parse().map_err(|_| format!("`{at}` is not a number"))?;
+        Ok(Section { axis, at })
+    }
+}
+
+fn keep(cut: Option<(Vector3, f64)>, p: Point3) -> f64 {
+    cut.map_or(1.0, |(toward, at)| at - p.to_vec().dot(toward))
+}
+
+fn clipped(cut: Option<(Vector3, f64)>, line: &[Point3]) -> Vec<Vec<Point3>> {
+    let mut pieces = Vec::new();
+    let mut current: Vec<Point3> = Vec::new();
+    for pair in line.windows(2) {
+        let (a, b) = (pair[0], pair[1]);
+        let (da, db) = (keep(cut, a), keep(cut, b));
+        let cross =
+            |from: Point3, to: Point3, df: f64, dt: f64| from + (to - from) * (df / (df - dt));
+        match (da >= 0.0, db >= 0.0) {
+            (true, true) => {
+                if current.is_empty() {
+                    current.push(a);
+                }
+                current.push(b);
+            }
+            (true, false) => {
+                if current.is_empty() {
+                    current.push(a);
+                }
+                current.push(cross(a, b, da, db));
+                pieces.push(std::mem::take(&mut current));
+            }
+            (false, true) => {
+                current.push(cross(a, b, da, db));
+                current.push(b);
+            }
+            (false, false) => {}
+        }
+    }
+    if current.len() > 1 {
+        pieces.push(current);
+    }
+    pieces
+}
+
+pub fn section_outlines(solid: &Solid, section: Section) -> Vec<Vec<Point3>> {
+    let mut normal = Vector3::zero();
+    normal[section.axis] = 1.0;
+    section_loops(solid, normal, section.at)
+}
+
+fn section_loops(solid: &Solid, normal: Vector3, at: f64) -> Vec<Vec<Point3>> {
+    section_of(
+        &geometry::mesh(solid, geometry::mesh_tolerance(solid)),
+        solid,
+        normal,
+        at,
+    )
+}
+
+fn section_of(mesh: &PolygonMesh, solid: &Solid, normal: Vector3, at: f64) -> Vec<Vec<Point3>> {
+    let positions = mesh.positions();
+    let scale = geometry::bounds(solid).diameter().max(1.0);
+    let at = at + scale * 1.0e-9;
+    let key = |p: Point3| [p.x, p.y, p.z].map(|c| (c / (scale * 1.0e-9)).round() as i64);
+    let ordered = |p: Point3, q: Point3| {
+        if (p.x, p.y, p.z) < (q.x, q.y, q.z) {
+            (p, q)
+        } else {
+            (q, p)
+        }
+    };
+    let crossing = |p: Point3, q: Point3| {
+        let (p, q) = ordered(p, q);
+        let (dp, dq) = (p.to_vec().dot(normal) - at, q.to_vec().dot(normal) - at);
+        p + (q - p) * (dp / (dp - dq))
+    };
+    let mut links: HashMap<[i64; 3], (Point3, Vec<[i64; 3]>)> = HashMap::new();
+    for triangle in mesh.faces().triangle_iter() {
+        let corners = triangle.map(|v| positions[v.pos]);
+        let side = corners.map(|p| p.to_vec().dot(normal) - at > 0.0);
+        let points: Vec<Point3> = (0..3)
+            .filter(|&i| side[i] != side[(i + 1) % 3])
+            .map(|i| crossing(corners[i], corners[(i + 1) % 3]))
+            .collect();
+        if let [p, q] = points.as_slice() {
+            let (kp, kq) = (key(*p), key(*q));
+            if kp == kq {
+                continue;
+            }
+            links.entry(kp).or_insert((*p, Vec::new())).1.push(kq);
+            links.entry(kq).or_insert((*q, Vec::new())).1.push(kp);
+        }
+    }
+    let mut seen = std::collections::HashSet::new();
+    let mut loops = Vec::new();
+    let starts: Vec<[i64; 3]> = links.keys().copied().collect();
+    for start in starts {
+        if seen.contains(&start) {
+            continue;
+        }
+        let mut chain = vec![links[&start].0];
+        seen.insert(start);
+        let mut here = start;
+        while let Some(next) = links[&here].1.iter().find(|k| !seen.contains(*k)).copied() {
+            seen.insert(next);
+            chain.push(links[&next].0);
+            here = next;
+        }
+        if links[&here].1.contains(&start) {
+            chain.push(chain[0]);
+        }
+        if chain.len() > 2 {
+            loops.push(chain);
+        }
+    }
+    loops
+}
+
+struct Callout {
+    centers: Vec<Point3>,
+    radius: f64,
+}
+
+fn hole_callouts(holes: &[crate::model::mate::Cylinder], toward: Vector3) -> Vec<Callout> {
+    let mut found: Vec<Callout> = Vec::new();
+    for cylinder in holes {
+        if cylinder.axis.cross(toward).magnitude() > 1.0e-6 {
+            continue;
+        }
+        let rounded = (cylinder.radius * 200.0).round() / 200.0;
+        match found
+            .iter_mut()
+            .find(|c| (c.radius - rounded).abs() < 1.0e-9)
+        {
+            Some(known) => known.centers.push(cylinder.point),
+            None => found.push(Callout {
+                centers: vec![cylinder.point],
+                radius: rounded,
+            }),
+        }
+    }
+    found
 }
 
 impl View {
@@ -32,20 +197,11 @@ fn polylines(solid: &Solid) -> Vec<Vec<Point3>> {
             unique
         })
         .iter()
-        .map(|edge| {
-            let curve = edge.curve();
-            let (t0, t1) = curve.range_tuple();
-            let straight = matches!(curve, Curve::Line(_));
-            let steps = if straight { 1 } else { 32 };
-            (0..=steps)
-                .map(|i| curve.subs(t0 + (t1 - t0) * i as f64 / steps as f64))
-                .collect()
-        })
+        .map(|edge| geometry::curve_samples(&edge.curve()))
         .collect()
 }
 
-fn silhouettes(solid: &Solid, toward: Vector3) -> Vec<Vec<Point3>> {
-    let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+fn silhouettes(mesh: &PolygonMesh, solid: &Solid, toward: Vector3) -> Vec<Vec<Point3>> {
     let positions = mesh.positions();
     let scale = geometry::bounds(solid).diameter().max(1.0) * 1.0e-9;
     let key = |p: Point3| [p.x, p.y, p.z].map(|c| (c / scale).round() as i64);
@@ -76,28 +232,50 @@ fn silhouettes(solid: &Solid, toward: Vector3) -> Vec<Vec<Point3>> {
 }
 
 pub fn drawing(parts: &[(&Solid, Option<Colour>)]) -> String {
-    let views = [
-        View {
-            name: "top",
-            right: Vector3::unit_x(),
-            up: Vector3::unit_y(),
-        },
-        View {
-            name: "front",
-            right: Vector3::unit_x(),
-            up: Vector3::unit_z(),
-        },
-        View {
-            name: "right",
-            right: Vector3::unit_y(),
-            up: Vector3::unit_z(),
-        },
-        View {
-            name: "iso",
-            right: Vector3::new(1.0, 1.0, 0.0).normalize(),
-            up: Vector3::new(-1.0, 1.0, 2.0).normalize(),
-        },
+    drawing_with(parts, None)
+}
+
+fn view(name: &str, right: Vector3, up: Vector3) -> View {
+    View {
+        name: name.to_string(),
+        right,
+        up,
+        cut: None,
+    }
+}
+
+fn number(value: f64) -> String {
+    let text = format!("{value:.2}");
+    text.trim_end_matches('0').trim_end_matches('.').to_string()
+}
+
+pub fn drawing_with(parts: &[(&Solid, Option<Colour>)], section: Option<Section>) -> String {
+    let mut views = vec![
+        view("top", Vector3::unit_x(), Vector3::unit_y()),
+        view("front", Vector3::unit_x(), Vector3::unit_z()),
+        view("right", Vector3::unit_y(), Vector3::unit_z()),
+        view(
+            "iso",
+            Vector3::new(1.0, 1.0, 0.0).normalize(),
+            Vector3::new(-1.0, 1.0, 2.0).normalize(),
+        ),
     ];
+    if let Some(Section { axis, at }) = section {
+        let like = match axis {
+            0 => 2,
+            1 => 1,
+            _ => 0,
+        };
+        let (right, up) = (views[like].right, views[like].up);
+        let toward = right.cross(up);
+        let name = format!("section {}={}", ["x", "y", "z"][axis], number(at));
+        views.push(View {
+            name,
+            right,
+            up,
+            cut: Some((toward, at * toward[axis])),
+        });
+    }
     let bounds: BoundingBox<Point3> = parts
         .iter()
         .flat_map(|(solid, _)| {
@@ -106,7 +284,7 @@ pub fn drawing(parts: &[(&Solid, Option<Colour>)]) -> String {
         })
         .collect();
     let size = bounds.max() - bounds.min();
-    let gap = size.x.max(size.y).max(size.z).max(1.0) * 0.25;
+    let gap = size.x.max(size.y).max(size.z).max(1.0) * 0.3;
     let extent = |view: &View| {
         let corners: Vec<(f64, f64)> = (0..8)
             .map(|i| {
@@ -129,25 +307,118 @@ pub fn drawing(parts: &[(&Solid, Option<Colour>)]) -> String {
         )
     };
     let extents: Vec<(f64, f64, f64, f64)> = views.iter().map(extent).collect();
+    let shapes: Vec<(PolygonMesh, Vec<Vec<Point3>>)> = parts
+        .iter()
+        .map(|(solid, _)| {
+            (
+                geometry::mesh(solid, geometry::mesh_tolerance(solid)),
+                polylines(solid),
+            )
+        })
+        .collect();
+    let holes: Vec<Vec<crate::model::mate::Cylinder>> = std::thread::scope(|scope| {
+        let jobs: Vec<_> = parts
+            .iter()
+            .map(|(solid, _)| scope.spawn(move || crate::model::mate::holes_in(solid)))
+            .collect();
+        jobs.into_iter()
+            .map(|job| job.join().unwrap_or_default())
+            .collect()
+    });
     let width = |i: usize| extents[i].1 - extents[i].0;
     let height = |i: usize| extents[i].3 - extents[i].2;
-    let column = [width(0).max(width(1)), width(2).max(width(3))];
-    let row = [height(0).max(height(3)), height(1).max(height(2))];
-    let cells = [(0, 0), (0, 1), (1, 1), (1, 0)];
-    let total_w = gap * 3.0 + column[0] + column[1];
+    let cells = [(0, 0), (0, 1), (1, 1), (1, 0), (2, 1)];
+    let columns = if views.len() > 4 { 3 } else { 2 };
+    let column: Vec<f64> = (0..columns)
+        .map(|c| {
+            (0..views.len())
+                .filter(|&i| cells[i].0 == c)
+                .map(width)
+                .fold(0.0, f64::max)
+        })
+        .collect();
+    let row: Vec<f64> = (0..2)
+        .map(|r| {
+            (0..views.len())
+                .filter(|&i| cells[i].1 == r)
+                .map(height)
+                .fold(0.0, f64::max)
+        })
+        .collect();
+    let total_w = gap * (columns as f64 + 1.0) + column.iter().sum::<f64>();
     let total_h = gap * 4.0 + row[0] + row[1];
+    let stroke = gap * 0.008;
+    let text = gap * 0.12;
     let mut svg = String::new();
     let _ = writeln!(
         svg,
         "<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"{total_w:.3}mm\" height=\"{total_h:.3}mm\" viewBox=\"0 0 {total_w:.3} {total_h:.3}\">"
     );
-    let stroke = gap * 0.01;
+    let arrow = gap * 0.06;
+    let hatch = gap * 0.1;
+    let _ = writeln!(
+        svg,
+        "<defs><marker id=\"arrow\" viewBox=\"0 0 10 10\" refX=\"10\" refY=\"5\" markerUnits=\"userSpaceOnUse\" markerWidth=\"{arrow:.3}\" markerHeight=\"{arrow:.3}\" orient=\"auto-start-reverse\"><path d=\"M0,1 L10,5 L0,9 z\"/></marker>\
+         <pattern id=\"hatch\" patternUnits=\"userSpaceOnUse\" width=\"{hatch:.3}\" height=\"{hatch:.3}\" patternTransform=\"rotate(45)\"><line x1=\"0\" y1=\"0\" x2=\"0\" y2=\"{hatch:.3}\" stroke=\"black\" stroke-width=\"{:.4}\"/></pattern></defs>",
+        stroke
+    );
     let _ = writeln!(svg, "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>");
+    let label = |svg: &mut String, x: f64, y: f64, anchor: &str, rotate: bool, words: &str| {
+        let turn = if rotate {
+            format!(" transform=\"rotate(-90 {x:.3} {y:.3})\"")
+        } else {
+            String::new()
+        };
+        let _ = writeln!(
+            svg,
+            "<text x=\"{x:.3}\" y=\"{y:.3}\" font-family=\"sans-serif\" font-size=\"{text:.3}\" text-anchor=\"{anchor}\"{turn}>{words}</text>"
+        );
+    };
+    let dimension = |svg: &mut String,
+                     from: (f64, f64),
+                     to: (f64, f64),
+                     offset: (f64, f64),
+                     value: f64| {
+        let (a, b) = (
+            (from.0 + offset.0, from.1 + offset.1),
+            (to.0 + offset.0, to.1 + offset.1),
+        );
+        let length = offset.0.hypot(offset.1).max(1.0e-12);
+        let over = (
+            offset.0 / length * gap * 0.05,
+            offset.1 / length * gap * 0.05,
+        );
+        let _ = writeln!(
+            svg,
+            "<g class=\"dimension\" stroke=\"black\" stroke-width=\"{:.4}\" fill=\"none\"><path d=\"M{:.3},{:.3} L{:.3},{:.3} M{:.3},{:.3} L{:.3},{:.3}\"/><path d=\"M{:.3},{:.3} L{:.3},{:.3}\" marker-start=\"url(#arrow)\" marker-end=\"url(#arrow)\"/></g>",
+            stroke * 0.6,
+            from.0 + over.0,
+            from.1 + over.1,
+            a.0 + over.0,
+            a.1 + over.1,
+            to.0 + over.0,
+            to.1 + over.1,
+            b.0 + over.0,
+            b.1 + over.1,
+            a.0,
+            a.1,
+            b.0,
+            b.1
+        );
+        let middle = ((a.0 + b.0) / 2.0, (a.1 + b.1) / 2.0);
+        let vertical = (a.0 - b.0).abs() < 1.0e-9;
+        let (x, y) = if vertical {
+            (middle.0 - text * 0.4, middle.1)
+        } else {
+            (middle.0, middle.1 - text * 0.4)
+        };
+        label(svg, x, y, "middle", vertical, &number(value));
+    };
     for (i, view) in views.iter().enumerate() {
         let (col, rowi) = cells[i];
-        let left = gap + if col == 1 { column[0] + gap } else { 0.0 };
+        let left = gap + (0..col).map(|c| column[c] + gap).sum::<f64>();
         let top = gap + if rowi == 1 { row[0] + gap } else { 0.0 };
-        let (x0, _, _, y1) = extents[i];
+        let (x0, x1, y0, y1) = extents[i];
         let place = |p: Point3| {
             let (u, v) = view.project(p);
             (left + (u - x0), top + (y1 - v))
@@ -155,12 +426,31 @@ pub fn drawing(parts: &[(&Solid, Option<Colour>)]) -> String {
         let _ = writeln!(
             svg,
             "<g id=\"{}\" fill=\"none\" stroke=\"black\" stroke-width=\"{stroke:.4}\" stroke-linecap=\"round\">",
-            view.name
+            view.name.replace(' ', "-").replace('=', "")
         );
-        for (solid, _) in parts {
-            let lines = polylines(solid)
-                .into_iter()
-                .chain(silhouettes(solid, view.toward()));
+        for ((solid, _), (mesh, edges)) in parts.iter().zip(&shapes) {
+            if let Some((toward, at)) = view.cut {
+                for outline in section_of(mesh, solid, toward, at) {
+                    let d: String = outline
+                        .iter()
+                        .enumerate()
+                        .map(|(k, p)| {
+                            let (x, y) = place(*p);
+                            format!("{}{x:.3},{y:.3} ", if k == 0 { "M" } else { "L" })
+                        })
+                        .collect();
+                    let _ = writeln!(
+                        svg,
+                        "<path class=\"cut\" fill=\"url(#hatch)\" fill-rule=\"evenodd\" d=\"{}Z\"/>",
+                        d
+                    );
+                }
+            }
+            let lines = edges
+                .iter()
+                .cloned()
+                .chain(silhouettes(mesh, solid, view.toward()))
+                .flat_map(|line| clipped(view.cut, &line));
             for line in lines {
                 let mut d = String::new();
                 for (k, p) in line.iter().enumerate() {
@@ -171,23 +461,104 @@ pub fn drawing(parts: &[(&Solid, Option<Colour>)]) -> String {
             }
         }
         svg.push_str("</g>\n");
-        let _ = writeln!(
-            svg,
-            "<text x=\"{left:.3}\" y=\"{:.3}\" font-family=\"sans-serif\" font-size=\"{:.3}\">{}</text>",
-            top - gap * 0.2,
-            gap * 0.18,
-            view.name
-        );
+        label(&mut svg, left, top - gap * 0.55, "start", false, &view.name);
+        let (bottom, right) = (top + (y1 - y0), left + (x1 - x0));
+        match view.name.as_str() {
+            "top" => {
+                dimension(
+                    &mut svg,
+                    (left, top),
+                    (right, top),
+                    (0.0, -gap * 0.3),
+                    x1 - x0,
+                );
+                dimension(
+                    &mut svg,
+                    (left, bottom),
+                    (left, top),
+                    (-gap * 0.3, 0.0),
+                    y1 - y0,
+                );
+            }
+            "front" => {
+                dimension(
+                    &mut svg,
+                    (left, bottom),
+                    (left, top),
+                    (-gap * 0.3, 0.0),
+                    y1 - y0,
+                );
+            }
+            _ => {}
+        }
+        if ["top", "front", "right"].contains(&view.name.as_str()) {
+            let mut taken: Vec<(f64, f64)> = Vec::new();
+            for found in &holes {
+                for callout in hole_callouts(found, view.toward()) {
+                    let lean = std::f64::consts::FRAC_1_SQRT_2;
+                    let spot = |center: Point3| {
+                        let (cx, cy) = place(center);
+                        let edge = (cx + callout.radius * lean, cy - callout.radius * lean);
+                        (edge, (edge.0 + gap * 0.25, edge.1 - gap * 0.25))
+                    };
+                    let clear = |end: (f64, f64)| {
+                        taken.iter().all(|t| {
+                            (t.0 - end.0).abs() > gap * 0.8 || (t.1 - end.1).abs() > text * 1.4
+                        })
+                    };
+                    let (edge, end) = callout
+                        .centers
+                        .iter()
+                        .map(|c| spot(*c))
+                        .find(|(_, end)| clear(*end))
+                        .unwrap_or_else(|| {
+                            let (edge, mut end) = spot(callout.centers[0]);
+                            while !clear(end) {
+                                end.1 += text * 1.4;
+                            }
+                            (edge, end)
+                        });
+                    taken.push(end);
+                    let _ = writeln!(
+                        svg,
+                        "<path class=\"callout\" stroke=\"black\" stroke-width=\"{:.4}\" fill=\"none\" marker-start=\"url(#arrow)\" d=\"M{:.3},{:.3} L{:.3},{:.3} L{:.3},{:.3}\"/>",
+                        stroke * 0.6,
+                        edge.0,
+                        edge.1,
+                        end.0,
+                        end.1,
+                        end.0 + gap * 0.1,
+                        end.1
+                    );
+                    let count = if callout.centers.len() > 1 {
+                        format!("{}× ", callout.centers.len())
+                    } else {
+                        String::new()
+                    };
+                    label(
+                        &mut svg,
+                        end.0 + gap * 0.12,
+                        end.1 + text * 0.35,
+                        "start",
+                        false,
+                        &format!("{count}⌀{}", number(callout.radius * 2.0)),
+                    );
+                }
+            }
+        }
     }
-    let _ = writeln!(
-        svg,
-        "<text x=\"{:.3}\" y=\"{:.3}\" font-family=\"sans-serif\" font-size=\"{:.3}\">{:.2} x {:.2} x {:.2} mm</text>",
+    label(
+        &mut svg,
         gap,
         total_h - gap * 0.4,
-        gap * 0.18,
-        size.x,
-        size.y,
-        size.z
+        "start",
+        false,
+        &format!(
+            "{} x {} x {} mm",
+            number(size.x),
+            number(size.y),
+            number(size.z)
+        ),
     );
     svg.push_str("</svg>\n");
     svg
