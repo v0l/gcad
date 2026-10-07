@@ -282,7 +282,7 @@ for i in range(1, parts.Length() + 1):
     props = GProp_GProps()
     BRepGProp.VolumeProperties_s(shape, props, 1e-7)
     c = props.CentreOfMass()
-    print(name(part), name(used), BRepCheck_Analyzer(shape).IsValid(), *(f"{v:.2f}" for v in (c.X(), c.Y(), c.Z())))
+    print(name(part), name(used), BRepCheck_Analyzer(shape).IsValid(), *(f"{v:.2f}".replace("-0.00", "0.00") for v in (c.X(), c.Y(), c.Z())))
 "#;
     let output = std::process::Command::new(&python)
         .args(["-c", script, &out])
