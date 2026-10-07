@@ -318,6 +318,7 @@ linecad render part.lcad part.png        # iso, top, front and right views
 linecad export part.lcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing)
 linecad export part.lcad part.svg --section y=0   # adds a hatched section across y=0
 linecad check part.lcad --set w=50       # override a `let` variable
+linecad check part.lcad --time           # also show how long each line took
 linecad part.lcad                        # open the viewer; plain `linecad` starts with a file picker
 linecad view part.lcad [--line N] [--select 'base.end&base.side']
 ```

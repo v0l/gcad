@@ -29,7 +29,12 @@ fn parse_set(text: &str) -> std::result::Result<(String, f64), String> {
 #[derive(Subcommand)]
 enum Command {
     /// Run every line and report what each one did
-    Check { file: String },
+    Check {
+        file: String,
+        /// Show how long each line took
+        #[arg(long)]
+        time: bool,
+    },
     /// List the faces and edges a selector matches after the whole file (or up to --line)
     Query {
         file: String,
@@ -86,7 +91,7 @@ fn finished(run: &Run) -> Result<()> {
     Ok(())
 }
 
-fn check(file: &str, vars: &[(String, f64)]) -> Result<()> {
+fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
     let run = load(file, None, vars)?;
     let width = run
         .steps
@@ -94,11 +99,27 @@ fn check(file: &str, vars: &[(String, f64)]) -> Result<()> {
         .map(|(line, _)| line.text.len())
         .max()
         .unwrap_or(0);
-    for (line, result) in &run.steps {
+    for (k, (line, result)) in run.steps.iter().enumerate() {
+        let spent = match (time, run.took.get(k)) {
+            (true, Some(d)) => format!("{:>7.0} ms ", d.as_secs_f64() * 1000.0),
+            _ => String::new(),
+        };
         match result {
-            Ok(summary) => println!("{:>4} {:<width$}  ok  {summary}", line.number, line.text),
-            Err(error) => println!("{:>4} {:<width$}  ERROR  {error:#}", line.number, line.text),
+            Ok(summary) => println!(
+                "{:>4} {:<width$}  {spent}ok  {summary}",
+                line.number, line.text
+            ),
+            Err(error) => {
+                println!(
+                    "{:>4} {:<width$}  {spent}ERROR  {error:#}",
+                    line.number, line.text
+                )
+            }
         }
+    }
+    if time {
+        let total: std::time::Duration = run.took.iter().sum();
+        println!("{:.2} s in all", total.as_secs_f64());
     }
     match run.steps.last() {
         Some((line, Err(_))) => bail!("stopped at line {}", line.number),
@@ -153,7 +174,7 @@ fn main() -> Result<()> {
         line: None,
     });
     match command {
-        Command::Check { file } => check(&file, &vars),
+        Command::Check { file, time } => check(&file, &vars, time),
         Command::Query {
             file,
             selector,

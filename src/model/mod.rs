@@ -612,6 +612,7 @@ pub fn run_snapshots(lines: &[Line]) -> Vec<Snapshot> {
 pub struct Run {
     pub model: Model,
     pub steps: Vec<(Line, Result<String>)>,
+    pub took: Vec<std::time::Duration>,
 }
 
 pub fn run_in(dir: Option<PathBuf>, lines: &[Line]) -> Run {
@@ -620,9 +621,12 @@ pub fn run_in(dir: Option<PathBuf>, lines: &[Line]) -> Run {
 
 fn run_model(mut model: Model, lines: &[Line]) -> Run {
     let mut steps = Vec::new();
+    let mut took = Vec::new();
     for line in lines {
         let before = model.clone();
+        let clock = std::time::Instant::now();
         let result = model.apply(line);
+        took.push(clock.elapsed());
         let failed = result.is_err();
         if failed {
             model = before;
@@ -632,7 +636,7 @@ fn run_model(mut model: Model, lines: &[Line]) -> Run {
             break;
         }
     }
-    Run { model, steps }
+    Run { model, steps, took }
 }
 
 pub fn run(lines: &[Line]) -> Run {
