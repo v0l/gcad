@@ -1,0 +1,12 @@
+let w=60 d=40 t=6
+rect w d r=5
+base: extrude t
+plane base.end
+rect 30 16 r=3 at=-8,0
+pocket: cut 3 draft=4
+circle 12 at=18,8
+boss: extrude 10 draft=2
+plane boss.end
+hole 4 18,8 depth=8
+fillet 1 base.end&base.side
+chamfer 0.5 boss.end

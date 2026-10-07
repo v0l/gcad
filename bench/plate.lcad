@@ -1,0 +1,7 @@
+let w=40 h=30 t=3 hole_d=3.2 pitch_x=30 pitch_y=20
+rect w h r=4
+base: extrude t
+plane base.end
+mounts: hole hole_d pitch_x/2,pitch_y/2 -pitch_x/2,pitch_y/2 -pitch_x/2,-pitch_y/2 pitch_x/2,-pitch_y/2
+fillet 0.8 base.end&base.side
+chamfer 0.3 mounts.side&base.end

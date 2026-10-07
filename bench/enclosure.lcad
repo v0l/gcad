@@ -1,0 +1,9 @@
+let w=60 d=40 h=25 wall=2
+rect w d r=5
+body: extrude h
+shell wall open=body.end
+plane body.start
+hole 3.2 22,12 -22,12 -22,-12 22,-12 csink=6.4,90
+plane >Z offset=-h+wall
+text "LINECAD" size=6 at=-14,-3
+cut 0.6

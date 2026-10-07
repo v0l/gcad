@@ -29,7 +29,7 @@ pub fn export(solids: &[&Solid], path: &str) -> Result<()> {
             solids.iter().for_each(|solid| {
                 mesh.merge(geometry::mesh(
                     solid,
-                    geometry::mesh_tolerance(solid) * 0.25,
+                    (geometry::bounds(solid).diameter() * 2.0e-4).max(0.01),
                 ))
             });
             write(&mesh, &mut std::fs::File::create(path)?, StlType::Binary)?;
