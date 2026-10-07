@@ -54,7 +54,8 @@ fn step_text(parts: &[(&Solid, Option<Colour>)]) -> String {
         organization_system: "linecad".to_string(),
         ..Default::default()
     };
-    let compressed: Vec<_> = parts.iter().map(|(solid, _)| solid.compress()).collect();
+    let tidied: Vec<Solid> = parts.iter().map(|(solid, _)| even_leaders(solid)).collect();
+    let compressed: Vec<_> = tidied.iter().map(|solid| solid.compress()).collect();
     let step = CompleteStepDisplay::new(
         compressed.iter().collect::<StepModels<'_, _, _, _>>(),
         header,
@@ -271,6 +272,59 @@ impl Ids {
     fn many<const N: usize>(&mut self) -> [usize; N] {
         std::array::from_fn(|_| self.take())
     }
+}
+
+fn even_leader(curve: &Curve) -> Curve {
+    let Curve::IntersectionCurve(intersection) = curve else {
+        return curve.clone();
+    };
+    let Curve::BsplineCurve(leader) = intersection.leader().as_ref() else {
+        return curve.clone();
+    };
+    let poles = leader.control_points();
+    if leader.degree() != 1 || poles.len() < 4 {
+        return curve.clone();
+    }
+    let lengths: Vec<f64> = std::iter::once(0.0)
+        .chain(poles.windows(2).scan(0.0, |total, pair| {
+            *total += pair[0].distance(pair[1]);
+            Some(*total)
+        }))
+        .collect();
+    let total = *lengths.last().unwrap_or(&0.0);
+    if total <= 0.0 {
+        return curve.clone();
+    }
+    let (t0, t1) = leader.range_tuple();
+    let knots = leader.knot_vector();
+    let pole_parameter = |i: usize| knots[i + 1];
+    let count = poles.len() - 1;
+    let points: Vec<Point3> = (0..=count)
+        .map(|k| {
+            if k == 0 || k == count {
+                return poles[if k == 0 { 0 } else { count }];
+            }
+            let want = total * k as f64 / count as f64;
+            let i = lengths.partition_point(|&l| l <= want).clamp(1, count) - 1;
+            let span = lengths[i + 1] - lengths[i];
+            let f = if span > 0.0 {
+                (want - lengths[i]) / span
+            } else {
+                0.0
+            };
+            let t = pole_parameter(i) + (pole_parameter(i + 1) - pole_parameter(i)) * f;
+            curve.subs(t)
+        })
+        .collect();
+    let mut knots = KnotVector::uniform_knot(1, count);
+    knots.transform(t1 - t0, t0);
+    let mut even = intersection.clone();
+    *even.leader_mut() = Box::new(Curve::BsplineCurve(BsplineCurve::new(knots, points)));
+    Curve::IntersectionCurve(even)
+}
+
+fn even_leaders(solid: &Solid) -> Solid {
+    solid.mapped(|p| *p, even_leader, |s| s.clone())
 }
 
 fn entity_id(line: &str) -> Option<usize> {
