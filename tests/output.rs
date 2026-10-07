@@ -37,8 +37,42 @@ props = GProp_GProps()
 BRepGProp.VolumeProperties_s(shape, props, 1e-7)
 print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
 "#;
-    for name in ["plate", "bracket", "pipe", "ring"] {
-        let model = build(&part(name));
+    let inline = [
+        ("rounded-box", "rect 30 20\nbase: extrude 10\nfillet 2 all"),
+        (
+            "partly-rounded",
+            "rect 20 20\nbase: extrude 20\nfillet 2 base.end&base.side|>X&>Y",
+        ),
+        (
+            "counterbored",
+            "rect 40 30\nbase: extrude 10\nplane base.end\nhole 3.2 10,0 cbore=6,3\nhole 3.2 -10,0 csink=6.4,90",
+        ),
+        ("mirrored", "rect 20 10 at=10,0\nextrude 5\nmirror YZ"),
+        (
+            "lofted",
+            "rect 20 20\nsection\nplane XY offset=10\ncircle 10\nsection\nloft",
+        ),
+        ("spring", "circle 2\nhelix r=10 pitch=5 turns=2\nsweep"),
+        (
+            "drafted",
+            "rect 20 20\nbase: extrude 10\ndraft 5 base.side neutral=base.start",
+        ),
+        (
+            "shelled",
+            "rect 40 30 r=4\nbase: extrude 20\nshell 2 open=base.end",
+        ),
+        (
+            "lettered",
+            "rect 60 15\nbase: extrude 2\nplane base.end\ntext CAD size=8 at=-10,-4\nextrude 1",
+        ),
+        (
+            "sloted",
+            "slot 30 10\nextrude 3\nplane XY offset=3\nellipse 10 6\nextrude 2",
+        ),
+    ];
+    let named = ["plate", "bracket", "pipe", "ring"].map(|name| (name, part(name)));
+    for (name, source) in named.iter().map(|(n, s)| (*n, s.as_str())).chain(inline) {
+        let model = build(source);
         let path = scratch(&format!("{name}.step"));
         export::export(&model.solids(), &path).expect("exports");
         let output = std::process::Command::new(&python)
