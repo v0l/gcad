@@ -173,6 +173,7 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 | `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
 | `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` | joins two parts; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now |
 | `pose` | `joint value` | moves a joint to a new value |
+| `couple` | `driven driver` `ratio=` | makes one joint follow another: `driven` moves `ratio` of its units (degrees or millimetres) for each unit `driver` moves, from where both are now. Gears turn at `ratio=-teeth_a/teeth_b`; a rack slides `ratio=pi*d/360` mm per degree of its pinion. A driven joint cannot be posed itself |
 | `concentric` | `moving:faces fixed:faces` `near=x,y,z` `flip` | turns and moves the moving part so its round faces share an axis with a hole in the fixed one; `near` picks the hole nearest a point, otherwise the one nearest where the part is; it can still slide along and spin about that axis |
 | `flush` | `moving:faces fixed:faces` `offset=` | turns and moves the moving part so its flat faces lie on the fixed part's, facing each other, `offset` apart |
 | `parallel` | `moving:faces fixed:faces` | turns the moving part so its face or axis is parallel to the fixed one; an axis and a face are parallel when the axis lies along the face |
@@ -186,6 +187,17 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 
 `faces` in `parallel`, `angle`, `distance` and `tangent` is either flat faces on one
 plane or the round faces of one cylinder, which stands for its axis.
+
+A part can have several joints to the same parent, and their motions add up. They
+must not depend on the order they are applied in, so they are slides in any
+direction, or turns about one axis together with slides along it. A turn and a slide
+on the same axis make a cylindrical joint:
+
+```
+axis shaft 0,0,0 0,0,1
+joint spin rod frame turn about=shaft
+joint push rod frame slide along=0,0,1 min=0 max=20
+```
 
 A mate holds the parts together, the way a joint does. The first mate of a part
 places it and fixes it to the other part, so it moves when that part moves. Later

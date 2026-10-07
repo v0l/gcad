@@ -123,6 +123,63 @@ impl Mate {
     }
 }
 
+#[derive(Clone, Debug)]
+pub struct Couple {
+    pub driven: String,
+    pub driver: String,
+    pub ratio: f64,
+    pub offset: f64,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Rig {
+    pub joints: Vec<Joint>,
+    pub mates: Vec<Mate>,
+    pub couples: Vec<Couple>,
+}
+
+impl Rig {
+    pub fn driver_of(&self, joint: &str) -> Option<&Couple> {
+        self.couples.iter().find(|c| c.driven == joint)
+    }
+
+    pub fn values(&self) -> Vec<f64> {
+        self.joints.iter().map(|j| j.value).collect()
+    }
+
+    pub fn settle(
+        &self,
+        values: &[f64],
+    ) -> std::result::Result<(Vec<f64>, std::collections::HashMap<String, Matrix4>), String> {
+        let mut values = values.to_vec();
+        let index = |name: &str| self.joints.iter().position(|j| j.name == name);
+        for _ in 0..self.couples.len() {
+            for couple in &self.couples {
+                if let (Some(driven), Some(driver)) = (index(&couple.driven), index(&couple.driver))
+                {
+                    values[driven] = couple.ratio * values[driver] + couple.offset;
+                }
+            }
+        }
+        for (joint, &value) in self.joints.iter().zip(&values) {
+            let (low, high) = joint.range;
+            if value < low - 1.0e-9 || value > high + 1.0e-9 {
+                return Err(format!(
+                    "`{}` goes from {low} to {high}{}, not {value:.3}",
+                    joint.name,
+                    joint.unit()
+                ));
+            }
+        }
+        let moves = posed(&self.joints, &values);
+        let held = broken(&self.mates, &moves);
+        if !held.is_empty() {
+            return Err(format!("it would pull apart {}", held.join(", ")));
+        }
+        Ok((values, moves))
+    }
+}
+
 pub fn broken(mates: &[Mate], moves: &std::collections::HashMap<String, Matrix4>) -> Vec<String> {
     let at = |name: &str| moves.get(name).copied().unwrap_or_else(Matrix4::identity);
     mates
@@ -252,6 +309,26 @@ impl Model {
     }
 }
 
+fn commute(a: JointKind, b: JointKind) -> bool {
+    let along = |through: Point3, axis: Vector3, other: JointKind| match other {
+        JointKind::Turn {
+            through: p,
+            axis: d,
+        } => {
+            let gap = p - through;
+            axis.cross(d).magnitude() < 1.0e-9 && (gap - axis * gap.dot(axis)).magnitude() < 1.0e-9
+        }
+        JointKind::Slide { along } => axis.cross(along).magnitude() < 1.0e-9,
+        JointKind::Fixed => true,
+    };
+    match (a, b) {
+        (JointKind::Turn { through, axis }, other) | (other, JointKind::Turn { through, axis }) => {
+            along(through, axis, other)
+        }
+        _ => true,
+    }
+}
+
 pub const ASSEMBLY_OPERATIONS: &[&str] = &[
     "let",
     "if",
@@ -261,6 +338,7 @@ pub const ASSEMBLY_OPERATIONS: &[&str] = &[
     "rotate",
     "axis",
     "joint",
+    "couple",
     "pose",
     "interference",
     "color",
@@ -304,9 +382,9 @@ pub fn posed(joints: &[Joint], values: &[f64]) -> std::collections::HashMap<Stri
             .get(&joint.parent)
             .copied()
             .unwrap_or_else(Matrix4::identity);
-        let moved = joint.moved(above);
-        let delta = moved.motion(values[i] - joint.value);
-        placed.insert(joint.child.clone(), delta * above);
+        let delta = joint.moved(above).motion(values[i] - joint.value);
+        let mine = placed.get(&joint.child).copied().unwrap_or(above);
+        placed.insert(joint.child.clone(), delta * mine);
     }
     placed
 }
@@ -383,6 +461,7 @@ impl Model {
             "axis" => self.op_axis(line),
             "joint" => self.op_joint(line),
             "pose" => self.op_pose(line),
+            "couple" => self.op_couple(line),
             "interference" => self.op_interference(line),
             "color" => self.op_colour_part(line),
             "measure" => self.op_measure(line),
@@ -469,6 +548,20 @@ impl Model {
                 });
             }
         }
+        for couple in &loaded.couples {
+            let ours = |joint: &str| {
+                loaded.joints.iter().any(|j| {
+                    j.name == joint && picked.contains(&j.child) && picked.contains(&j.parent)
+                })
+            };
+            if ours(&couple.driven) && ours(&couple.driver) {
+                self.couples.push(Couple {
+                    driven: format!("{name}.{}", couple.driven),
+                    driver: format!("{name}.{}", couple.driver),
+                    ..couple.clone()
+                });
+            }
+        }
         for mate in &loaded.mates {
             if mate.parts.iter().all(|p| picked.contains(p)) {
                 self.mates.push(Mate {
@@ -540,29 +633,79 @@ impl Model {
         ))
     }
 
+    pub fn rig(&self) -> Rig {
+        Rig {
+            joints: self.joints.clone(),
+            mates: self.mates.clone(),
+            couples: self.couples.clone(),
+        }
+    }
+
     fn set_joint(&mut self, index: usize, value: f64) -> Result<()> {
         let joint = self.joints[index].clone();
-        let (low, high) = joint.range;
-        if value < low - 1.0e-9 || value > high + 1.0e-9 {
+        let rig = self.rig();
+        if let Some(couple) = rig.driver_of(&joint.name) {
             bail!(
-                "`{}` goes from {low} to {high}{}, not {value}",
+                "`{}` is driven by `{}`; move that instead",
+                joint.name,
+                couple.driver
+            );
+        }
+        let mut values = rig.values();
+        values[index] = value;
+        let (values, _) = rig.settle(&values).map_err(|why| {
+            anyhow!(
+                "`{}` cannot move to {value}{}: {why}",
                 joint.name,
                 joint.unit()
-            );
-        }
-        self.move_subtree(&joint.child, joint.motion(value - joint.value))?;
-        self.joints[index].value = value;
-        let identity = std::collections::HashMap::new();
-        let held = broken(&self.mates, &identity);
-        if !held.is_empty() {
-            bail!(
-                "`{}` cannot move to {value}{}: it would pull apart {}",
-                joint.name,
-                joint.unit(),
-                held.join(", ")
-            );
+            )
+        })?;
+        for (k, &target) in values.iter().enumerate() {
+            let joint = self.joints[k].clone();
+            if target != joint.value {
+                self.move_subtree(&joint.child, joint.motion(target - joint.value))?;
+                self.joints[k].value = target;
+            }
         }
         Ok(())
+    }
+
+    pub(crate) fn op_couple(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["driven", "driver"], &["ratio"], false)?;
+        let (driven, driver) = (args.text("driven")?, args.text("driver")?);
+        let find = |name: &str| {
+            self.joints
+                .iter()
+                .find(|j| j.name == name && j.movable())
+                .cloned()
+                .ok_or_else(|| anyhow!("no joint called `{name}` to couple"))
+        };
+        let (follower, leader) = (find(driven)?, find(driver)?);
+        if driven == driver {
+            bail!("a joint cannot drive itself");
+        }
+        if let Some(couple) = self.couples.iter().find(|c| c.driven == driven) {
+            bail!("`{driven}` is already driven by `{}`", couple.driver);
+        }
+        let mut chain = driver.to_string();
+        while let Some(couple) = self.couples.iter().find(|c| c.driven == chain) {
+            if couple.driver == driven {
+                bail!("`{driven}` already drives `{driver}`");
+            }
+            chain = couple.driver.clone();
+        }
+        let ratio = args.optional_number("ratio", &self.scope)?.unwrap_or(1.0);
+        self.couples.push(Couple {
+            driven: driven.to_string(),
+            driver: driver.to_string(),
+            ratio,
+            offset: follower.value - ratio * leader.value,
+        });
+        Ok(format!(
+            "`{driven}` moves {ratio}{} for each {} `{driver}` moves",
+            follower.unit(),
+            leader.unit().trim()
+        ))
     }
 
     pub(crate) fn op_joint(&mut self, line: &Line) -> Result<String> {
@@ -592,9 +735,22 @@ impl Model {
         if subtree(&self.joints, &child).contains(&parent) {
             bail!("`{parent}` already hangs off `{child}`; joints must form a tree");
         }
-        if let Some(joint) = self.joints.iter().find(|j| j.child == child) {
+        let siblings: Vec<Joint> = self
+            .joints
+            .iter()
+            .filter(|j| j.child == child)
+            .cloned()
+            .collect();
+        if let Some(joint) = siblings.iter().find(|j| !j.movable()) {
             bail!(
-                "`{child}` is already held by `{}`; give a part its joint before mating it",
+                "`{child}` is already held by `{}`; give a part its joints before mating it",
+                joint.name
+            );
+        }
+        if let Some(joint) = siblings.iter().find(|j| j.parent != parent) {
+            bail!(
+                "`{child}` already moves on `{}` through `{}`; all of a part's joints go to one parent",
+                joint.parent,
                 joint.name
             );
         }
@@ -626,6 +782,12 @@ impl Model {
             }
             other => bail!("a joint is `turn` or `slide`, not `{other}`"),
         };
+        if let Some(other) = siblings.iter().find(|j| !commute(j.kind, kind)) {
+            bail!(
+                "`{child}` already moves through `{}`, and the two motions would depend on their order; a part's joints can be slides, and turns about one axis with slides along it",
+                other.name
+            );
+        }
         let (default_low, default_high) = match kind {
             JointKind::Turn { .. } => (-180.0, 180.0),
             _ => (-100.0, 100.0),

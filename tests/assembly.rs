@@ -384,3 +384,47 @@ fn a_parallel_mate_stops_a_joint() {
     );
     assert!(error.contains("already hangs off `a`"), "{error}");
 }
+
+#[test]
+fn a_rod_turns_and_slides_on_one_axis() {
+    let parts = [("rod.lcad", ROD), ("plate.lcad", SLAB)];
+    let assembly = "part plate plate.lcad\npart rod rod.lcad\naxis up 0,0,0 0,0,1\njoint spin rod plate turn about=up\njoint push rod plate slide along=0,0,1 min=0 max=20\npose push 10\npose spin 90\n";
+    let (model, _) = built("a_rod_turns_and_slides", assembly, &parts);
+    let b = extent(&model, "rod");
+    assert!(near(b.min().z, 10.0) && near(b.max().z, 50.0), "{b:?}");
+    let error = failed(
+        "turns_and_slides_that_do_not_commute",
+        "part plate plate.lcad\npart rod rod.lcad\naxis up 0,0,0 0,0,1\njoint spin rod plate turn about=up\njoint push rod plate slide along=1,0,0\n",
+        &parts,
+    );
+    assert!(error.contains("depend on their order"), "{error}");
+}
+
+#[test]
+fn coupled_joints_move_together() {
+    let parts = [("rod.lcad", ROD), ("plate.lcad", SLAB)];
+    let gears = "part frame plate.lcad\npart a rod.lcad\npart b rod.lcad\npart rack rod.lcad\nmove b 20,0,0\nmove rack 0,40,0\naxis ax 0,0,0 0,0,1\naxis bx 20,0,0 20,0,1\njoint ja a frame turn about=ax\njoint jb b frame turn about=bx min=-60 max=60\njoint slide rack frame slide along=1,0,0\ncouple jb ja ratio=-0.5\ncouple slide ja ratio=0.1\n";
+    let (model, _) = built("coupled_joints", &format!("{gears}pose ja 120\n"), &parts);
+    let value = |name: &str| {
+        model
+            .joints
+            .iter()
+            .find(|j| j.name == name)
+            .expect("joint")
+            .value
+    };
+    assert!(near(value("jb"), -60.0) && near(value("slide"), 12.0));
+    assert!(near(extent(&model, "rack").min().x, 12.0 - 2.5));
+    let error = failed(
+        "driven_joint_posed",
+        &format!("{gears}pose jb 10\n"),
+        &parts,
+    );
+    assert!(error.contains("driven by `ja`"), "{error}");
+    let error = failed(
+        "driven_past_its_range",
+        &format!("{gears}pose ja 150\n"),
+        &parts,
+    );
+    assert!(error.contains("`jb` goes from -60 to 60"), "{error}");
+}

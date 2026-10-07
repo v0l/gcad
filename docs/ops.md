@@ -175,6 +175,8 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | check holes line up | supported | `aligned lid:screws.side box:pilot.side tol=0.05` | `assembly::holes_line_up` |
 | turning joint | supported | `joint open box.lid box.main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
 | sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
+| cylindrical joint | supported | a `turn` and a `slide` on one axis | `assembly::a_rod_turns_and_slides_on_one_axis` |
+| gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
 | sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash` |

@@ -26,7 +26,9 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub use args::label_of;
-pub use assembly::{ASSEMBLY_OPERATIONS, Joint, JointKind, Mate, broken, posed, subtree};
+pub use assembly::{
+    ASSEMBLY_OPERATIONS, Couple, Joint, JointKind, Mate, Rig, broken, posed, subtree,
+};
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
 
@@ -79,6 +81,7 @@ pub struct Model {
     pub assembly: bool,
     pub part_groups: HashMap<String, select::Groups>,
     pub mates: Vec<assembly::Mate>,
+    pub couples: Vec<assembly::Couple>,
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -253,8 +256,8 @@ impl Model {
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "rib" => self.op_rib(line),
-            "joint" | "pose" | "interference" | "part" | "concentric" | "flush" | "aligned"
-            | "distance" | "tangent" => {
+            "joint" | "pose" | "couple" | "interference" | "part" | "concentric" | "flush"
+            | "aligned" | "distance" | "tangent" => {
                 bail!(
                     "`{}` belongs in an assembly (.lasm) file, which brings parts in with `part name file.lcad`",
                     line.op
