@@ -188,3 +188,58 @@ fn part_errors_name_the_file() {
     );
     assert!(error.contains("bad.lcad:2"), "{error}");
 }
+
+const PLATE: &str = "rect 40 30\nbase: extrude 5\nplane base.end\nhole: hole 4.2 10,5 -10,-5\n";
+const PIN: &str = "pin: circle 4\npin: extrude 20\n";
+
+fn centre(model: &Model, name: &str) -> [f64; 3] {
+    let b = linecad::geometry::bounds(&model.named_body(name).expect("part"));
+    let c = b.center();
+    [c.x, c.y, c.z]
+}
+
+#[test]
+fn concentric_pin_in_a_hole() {
+    let (model, text) = built(
+        "concentric_pin_in_a_hole",
+        "part plate plate.lcad\npart pin pin.lcad\nrotate pin 90 axis=y\nmove pin 8,4,30\nconcentric pin:pin.side plate:hole.side\nflush pin:pin.start plate:base.end",
+        &[("plate.lcad", PLATE), ("pin.lcad", PIN)],
+    );
+    let [x, y, z] = centre(&model, "pin");
+    assert!(
+        (x - 10.0).abs() < 1.0e-6 && (y - 5.0).abs() < 1.0e-6,
+        "{x} {y} {text}"
+    );
+    assert!((z - 15.0).abs() < 1.0e-6 || (z + 5.0).abs() < 1.0e-6, "{z}");
+}
+
+#[test]
+fn concentric_picks_the_hole_near_a_point() {
+    let (model, _) = built(
+        "concentric_picks_the_hole_near_a_point",
+        "part plate plate.lcad\npart pin pin.lcad\nconcentric pin:pin.side plate:hole.side near=-10,-5,0\nflush pin:pin.start plate:base.end offset=1",
+        &[("plate.lcad", PLATE), ("pin.lcad", PIN)],
+    );
+    let [x, y, z] = centre(&model, "pin");
+    assert!(
+        (x + 10.0).abs() < 1.0e-6 && (y + 5.0).abs() < 1.0e-6 && (z - 16.0).abs() < 1.0e-6,
+        "{x} {y} {z}"
+    );
+}
+
+#[test]
+fn holes_line_up() {
+    let parts = [("plate.lcad", PLATE)];
+    let (_, text) = built(
+        "holes_line_up",
+        "part a plate.lcad\npart b plate.lcad\nmove b 0,0,5\naligned b:hole.side a:hole.side",
+        &parts,
+    );
+    assert!(text.contains("2 hole(s) line up"), "{text}");
+    let error = failed(
+        "holes_do_not_line_up",
+        "part a plate.lcad\npart b plate.lcad\nmove b 0.5,0,5\naligned b:hole.side a:hole.side",
+        &parts,
+    );
+    assert!(error.contains("0.500 off"), "{error}");
+}

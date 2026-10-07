@@ -143,7 +143,16 @@ impl Model {
             .find(|(n, _)| n == name)
             .ok_or_else(|| anyhow!("no body called `{name}`; bodies are {names:?}"))?;
         *solid = moved(solid);
+        if let Some(groups) = self.part_groups.get_mut(name) {
+            groups.0.iter_mut().for_each(|entry| {
+                entry.surface = super::bodies::moved_surface(&entry.surface, transform)
+            });
+        }
         Ok(())
+    }
+
+    pub(crate) fn move_part_tree(&mut self, root: &str, transform: Matrix4) -> Result<Vec<String>> {
+        self.move_subtree(root, transform)
     }
 
     fn move_subtree(&mut self, root: &str, transform: Matrix4) -> Result<Vec<String>> {
@@ -172,6 +181,9 @@ impl Model {
             "interference" => self.op_interference(line),
             "color" => self.op_colour_part(line),
             "measure" => self.op_measure(line),
+            "concentric" => self.op_concentric(line),
+            "flush" => self.op_flush(line),
+            "aligned" => self.op_aligned(line),
             other if super::OPERATIONS.contains(&other) => bail!(
                 "`{other}` makes geometry, which belongs in a part (.lcad) file; bring the part in with `part name file.lcad`"
             ),
@@ -232,6 +244,12 @@ impl Model {
             if let Some(colour) = loaded.colours.get(body) {
                 self.colours.insert(new.clone(), *colour);
             }
+            let groups = loaded
+                .part_groups
+                .get(body)
+                .cloned()
+                .unwrap_or_else(|| loaded.groups.clone());
+            self.part_groups.insert(new.clone(), groups);
             self.bodies.push((new.clone(), solid));
             added.push(new);
         }

@@ -6,6 +6,7 @@ mod constrain;
 mod features;
 mod holes;
 mod import;
+mod mate;
 mod measure;
 mod path;
 mod rib;
@@ -76,6 +77,7 @@ pub struct Model {
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,
     pub assembly: bool,
+    pub part_groups: HashMap<String, select::Groups>,
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -250,10 +252,12 @@ impl Model {
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "rib" => self.op_rib(line),
-            "joint" | "pose" | "interference" | "part" => bail!(
-                "`{}` belongs in an assembly (.lasm) file, which brings parts in with `part name file.lcad`",
-                line.op
-            ),
+            "joint" | "pose" | "interference" | "part" | "concentric" | "flush" | "aligned" => {
+                bail!(
+                    "`{}` belongs in an assembly (.lasm) file, which brings parts in with `part name file.lcad`",
+                    line.op
+                )
+            }
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",

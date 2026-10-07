@@ -28,7 +28,7 @@ fn moved(solid: &Solid, transform: Matrix4) -> Solid {
     oriented(builder::transformed(solid, transform))
 }
 
-fn moved_surface(surface: &Surface, transform: Matrix4) -> Surface {
+pub(crate) fn moved_surface(surface: &Surface, transform: Matrix4) -> Surface {
     let mut moved = surface.transformed(transform);
     if transform.determinant() < 0.0 {
         moved.invert();

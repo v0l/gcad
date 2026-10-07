@@ -28,7 +28,11 @@ fn pipe() {
 fn enclosure() {
     let model = build(&part("enclosure"));
     assert_eq!(model.solids().len(), 2);
-    assert_volume(&model, 22501.75 + 8895.46, 0.002);
+    assert_volume(
+        &model,
+        22501.75 + 8895.46 - 4.0 * std::f64::consts::PI * 1.6 * 1.6 * 2.0,
+        0.002,
+    );
 }
 
 #[test]

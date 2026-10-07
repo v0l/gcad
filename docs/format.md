@@ -173,15 +173,25 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 | `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
 | `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` | joins two parts; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now |
 | `pose` | `joint value` | moves a joint to a new value |
+| `concentric` | `moving:faces fixed:faces` `near=x,y,z` `flip` | turns and moves the moving part so its round faces share an axis with a hole in the fixed one; `near` picks the hole nearest a point, otherwise the one nearest where the part is; it can still slide along and spin about that axis |
+| `flush` | `moving:faces fixed:faces` `offset=` | turns and moves the moving part so its flat faces lie on the fixed part's, facing each other, `offset` apart |
+| `aligned` | `a:faces b:faces` `tol=` | checks that every hole in `a` has a parallel hole in `b` on the same axis, within `tol` (0.05 by default), and fails the line if not |
 | `color` | `part colour` | colours a part, over the colour its file gave it |
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
 | `measure` | `mass`, `overlap a b` | as in part files |
+
+`part:faces` names faces on one part with the selectors of its own file, so
+`case.main:pilot.side` is the side of the `pilot` holes in the part `case.main`. They
+follow the part as it moves.
 
 ```
 let open=-75
 part case ../parts/enclosure.lcad
 axis hinge -40,25,30 40,25,30
 joint lid case.lid case.main turn about=hinge min=-110 max=0 at=open
+pose lid 0
+aligned case.lid:screws.side case.main:pilot.side
+pose lid open
 interference none
 ```
 
