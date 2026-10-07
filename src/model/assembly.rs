@@ -9,6 +9,65 @@ use monstertruck::modeling::*;
 pub enum JointKind {
     Turn { through: Point3, axis: Vector3 },
     Slide { along: Vector3 },
+    Fixed,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Feature {
+    Axis(Point3, Vector3),
+    Plane(Point3, Vector3),
+}
+
+impl Feature {
+    fn moved(self, transform: Matrix4) -> Feature {
+        match self {
+            Feature::Axis(p, d) => Feature::Axis(
+                transform.transform_point(p),
+                transform.transform_vector(d).normalize(),
+            ),
+            Feature::Plane(p, n) => Feature::Plane(
+                transform.transform_point(p),
+                transform.transform_vector(n).normalize(),
+            ),
+        }
+    }
+}
+
+#[derive(Clone, Debug)]
+pub struct Mate {
+    pub text: String,
+    pub parts: [String; 2],
+    pub features: [Feature; 2],
+    pub offset: f64,
+}
+
+impl Mate {
+    pub fn holds(&self, moves: [Matrix4; 2]) -> bool {
+        let [a, b] = [
+            self.features[0].moved(moves[0]),
+            self.features[1].moved(moves[1]),
+        ];
+        let close = 1.0e-3;
+        match (a, b) {
+            (Feature::Axis(pa, da), Feature::Axis(pb, db)) => {
+                let d = pb - pa;
+                da.cross(db).magnitude() < 1.0e-6 && (d - da * d.dot(da)).magnitude() < close
+            }
+            (Feature::Plane(pa, na), Feature::Plane(pb, nb)) => {
+                na.dot(nb) < -1.0 + 1.0e-6 && ((pa - pb).dot(nb) - self.offset).abs() < close
+            }
+            _ => false,
+        }
+    }
+}
+
+pub fn broken(mates: &[Mate], moves: &std::collections::HashMap<String, Matrix4>) -> Vec<String> {
+    let at = |name: &str| moves.get(name).copied().unwrap_or_else(Matrix4::identity);
+    mates
+        .iter()
+        .filter(|m| !m.holds([at(&m.parts[0]), at(&m.parts[1])]))
+        .map(|m| m.text.clone())
+        .collect()
 }
 
 #[derive(Clone, Debug)]
@@ -30,6 +89,7 @@ impl Joint {
                     * Matrix4::from_translation(-through.to_vec())
             }
             JointKind::Slide { along } => Matrix4::from_translation(along * amount),
+            JointKind::Fixed => Matrix4::identity(),
         }
     }
 
@@ -42,6 +102,7 @@ impl Joint {
             JointKind::Slide { along } => JointKind::Slide {
                 along: transform.transform_vector(along).normalize(),
             },
+            JointKind::Fixed => JointKind::Fixed,
         };
         Joint {
             kind,
@@ -53,6 +114,74 @@ impl Joint {
         match self.kind {
             JointKind::Turn { .. } => "°",
             JointKind::Slide { .. } => " mm",
+            JointKind::Fixed => "",
+        }
+    }
+
+    pub fn movable(&self) -> bool {
+        self.kind != JointKind::Fixed
+    }
+}
+
+impl Model {
+    pub(crate) fn parent_of(&self, part: &str) -> Option<String> {
+        self.joints
+            .iter()
+            .find(|j| j.child == part)
+            .map(|j| j.parent.clone())
+    }
+
+    pub(crate) fn mate_parts(
+        &mut self,
+        text: &str,
+        moving: &str,
+        fixed: &str,
+        features: [Feature; 2],
+        offset: f64,
+        transform: Matrix4,
+    ) -> Result<String> {
+        if moving == fixed {
+            bail!("a mate joins two different parts");
+        }
+        match self.parent_of(moving) {
+            Some(parent) if parent != fixed => {
+                let mate = Mate {
+                    text: text.to_string(),
+                    parts: [moving.to_string(), fixed.to_string()],
+                    features,
+                    offset,
+                };
+                if !mate.holds([Matrix4::identity(), Matrix4::identity()]) {
+                    bail!(
+                        "`{moving}` already hangs off `{parent}` and does not meet `{fixed}` this way; place it with its first mate and check the rest hold"
+                    );
+                }
+                self.mates.push(mate);
+                Ok(format!(
+                    "holds; `{moving}` hangs off `{parent}`, so this ties it to `{fixed}` too"
+                ))
+            }
+            parent => {
+                if parent.is_none() && subtree(&self.joints, moving).iter().any(|p| p == fixed) {
+                    bail!("`{fixed}` already hangs off `{moving}`");
+                }
+                let moved = self.move_subtree(moving, transform)?;
+                if parent.is_none() {
+                    self.joints.push(Joint {
+                        name: format!("{moving} on {fixed}"),
+                        child: moving.to_string(),
+                        parent: fixed.to_string(),
+                        kind: JointKind::Fixed,
+                        value: 0.0,
+                        range: (0.0, 0.0),
+                    });
+                }
+                let held = broken(&self.mates, &std::collections::HashMap::new());
+                if !held.is_empty() {
+                    bail!("placing `{moving}` pulls apart {}", held.join(", "));
+                }
+                Ok(format!("moved {}, now held by `{fixed}`", moved.join(", ")))
+            }
         }
     }
 }
@@ -143,16 +272,19 @@ impl Model {
             .find(|(n, _)| n == name)
             .ok_or_else(|| anyhow!("no body called `{name}`; bodies are {names:?}"))?;
         *solid = moved(solid);
+        for mate in self.mates.iter_mut() {
+            for k in 0..2 {
+                if mate.parts[k] == name {
+                    mate.features[k] = mate.features[k].moved(transform);
+                }
+            }
+        }
         if let Some(groups) = self.part_groups.get_mut(name) {
             groups.0.iter_mut().for_each(|entry| {
                 entry.surface = super::bodies::moved_surface(&entry.surface, transform)
             });
         }
         Ok(())
-    }
-
-    pub(crate) fn move_part_tree(&mut self, root: &str, transform: Matrix4) -> Result<Vec<String>> {
-        self.move_subtree(root, transform)
     }
 
     fn move_subtree(&mut self, root: &str, transform: Matrix4) -> Result<Vec<String>> {
@@ -337,6 +469,16 @@ impl Model {
         }
         self.move_subtree(&joint.child, joint.motion(value - joint.value))?;
         self.joints[index].value = value;
+        let identity = std::collections::HashMap::new();
+        let held = broken(&self.mates, &identity);
+        if !held.is_empty() {
+            bail!(
+                "`{}` cannot move to {value}{}: it would pull apart {}",
+                joint.name,
+                joint.unit(),
+                held.join(", ")
+            );
+        }
         Ok(())
     }
 
@@ -367,8 +509,11 @@ impl Model {
         if subtree(&self.joints, &child).contains(&parent) {
             bail!("`{parent}` already hangs off `{child}`; joints must form a tree");
         }
-        if self.joints.iter().any(|j| j.child == child) {
-            bail!("`{child}` already has a joint to its parent");
+        if let Some(joint) = self.joints.iter().find(|j| j.child == child) {
+            bail!(
+                "`{child}` is already held by `{}`; give a part its joint before mating it",
+                joint.name
+            );
         }
         let kind = match args.text("kind")? {
             "turn" => {
@@ -400,7 +545,7 @@ impl Model {
         };
         let (default_low, default_high) = match kind {
             JointKind::Turn { .. } => (-180.0, 180.0),
-            JointKind::Slide { .. } => (-100.0, 100.0),
+            _ => (-100.0, 100.0),
         };
         let low = args
             .optional_number("min", &self.scope)?
@@ -459,6 +604,10 @@ impl Model {
             .map(|(n, s)| (n.clone(), s))
             .chain(self.solid.as_ref().map(|s| (self.current_body(), s)))
             .collect();
+        let meshes: Vec<geometry::Meshed> = named
+            .iter()
+            .map(|(_, s)| geometry::Meshed::new(s))
+            .collect();
         let boxes: Vec<BoundingBox<Point3>> =
             named.iter().map(|(_, s)| geometry::bounds(s)).collect();
         let mut found = Vec::new();
@@ -469,8 +618,8 @@ impl Model {
                 if apart {
                     continue;
                 }
-                let shared = geometry::overlap_volume(named[i].1, named[j].1, 96);
-                if shared > 1.0e-6 * geometry::volume(named[i].1).abs().max(1.0) {
+                let shared = geometry::overlap_of(&meshes[i], &meshes[j], 96);
+                if shared > 1.0e-6 * meshes[i].volume().abs().max(1.0) {
                     found.push((named[i].0.clone(), named[j].0.clone(), shared));
                 }
             }

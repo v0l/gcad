@@ -3,12 +3,12 @@ rect w d r=r
 box: extrude h
 shell t open=box.end
 plane XY offset=t
-let bx=w/2-r by=d/2-r
+let bx=w/2-r-2 by=d/2-r-2
 circle boss at=bx,by
 circle boss at=-bx,by
 circle boss at=-bx,-by
 circle boss at=bx,-by
-bosses: extrude 10
+bosses: extrude h-t-0.2
 plane bosses.end
 pilot: hole screw bx,by -bx,by -bx,-by bx,-by depth=8
 plane >Y

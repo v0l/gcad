@@ -620,8 +620,42 @@ fn column_spans(
         .collect()
 }
 
+pub struct Meshed {
+    triangles: Vec<[Point3; 3]>,
+    bounds: BoundingBox<Point3>,
+}
+
+impl Meshed {
+    pub fn volume(&self) -> f64 {
+        self.triangles
+            .iter()
+            .map(|[a, b, c]| a.to_vec().dot(b.to_vec().cross(c.to_vec())) / 6.0)
+            .sum()
+    }
+}
+
+impl Meshed {
+    pub fn new(solid: &Solid) -> Meshed {
+        let mesh = mesh(solid, mesh_tolerance(solid));
+        let positions = mesh.positions();
+        let triangles: Vec<[Point3; 3]> = mesh
+            .faces()
+            .triangle_iter()
+            .map(|t| t.map(|v| positions[v.pos]))
+            .collect();
+        Meshed {
+            bounds: positions.iter().copied().collect(),
+            triangles,
+        }
+    }
+}
+
 pub fn overlap_volume(a: &Solid, b: &Solid, per_side: usize) -> f64 {
-    let (ba, bb) = (bounds(a), bounds(b));
+    overlap_of(&Meshed::new(a), &Meshed::new(b), per_side)
+}
+
+pub fn overlap_of(ma: &Meshed, mb: &Meshed, per_side: usize) -> f64 {
+    let (ba, bb) = (ma.bounds, mb.bounds);
     let (x0, y0) = (ba.min().x.max(bb.min().x), ba.min().y.max(bb.min().y));
     let (x1, y1) = (ba.max().x.min(bb.max().x), ba.max().y.min(bb.max().y));
     let (z0, z1) = (ba.min().z.max(bb.min().z), ba.max().z.min(bb.max().z));
@@ -630,14 +664,8 @@ pub fn overlap_volume(a: &Solid, b: &Solid, per_side: usize) -> f64 {
     }
     let n = per_side;
     let (dx, dy) = ((x1 - x0) / n as f64, (y1 - y0) / n as f64);
-    let prepare = |solid: &Solid| {
-        let mesh = mesh(solid, mesh_tolerance(solid));
-        let positions = mesh.positions();
-        let triangles: Vec<[Point3; 3]> = mesh
-            .faces()
-            .triangle_iter()
-            .map(|t| t.map(|v| positions[v.pos]))
-            .collect();
+    let prepare = |meshed: &Meshed| {
+        let triangles = meshed.triangles.clone();
         let mut bins = vec![Vec::new(); n * n];
         for (index, tri) in triangles.iter().enumerate() {
             let range = |lo: f64, hi: f64, start: f64, step: f64| {
@@ -664,7 +692,7 @@ pub fn overlap_volume(a: &Solid, b: &Solid, per_side: usize) -> f64 {
         }
         (triangles, bins)
     };
-    let ((ta, bins_a), (tb, bins_b)) = (prepare(a), prepare(b));
+    let ((ta, bins_a), (tb, bins_b)) = (prepare(ma), prepare(mb));
     let mut total = 0.0;
     for i in 0..n {
         for j in 0..n {

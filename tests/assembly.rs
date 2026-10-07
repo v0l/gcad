@@ -243,3 +243,42 @@ fn holes_line_up() {
     );
     assert!(error.contains("0.500 off"), "{error}");
 }
+
+const LID_WITH_HOLES: &str = "rect 40 40\nextrude 10\nplane XY offset=10\npilot: hole 2 15,15 depth=8\nbody lid\nplane XY offset=10\nrect 40 40\ntop: extrude 2\nplane top.end\nscrews: hole 2.5 15,15\n";
+const SCREW: &str = "circle 4\nhead: extrude 1.5\ncircle 2\nshank: extrude -10\n";
+
+#[test]
+fn a_screw_locks_the_hinge() {
+    let parts = [("box.lcad", LID_WITH_HOLES), ("screw.lcad", SCREW)];
+    let screwed = format!(
+        "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nconcentric screw:shank.side box.main:pilot.side\n"
+    );
+    let (model, text) = built("a_screw_locks_the_hinge", &screwed, &parts);
+    assert!(text.contains("ties it to `box.main`"), "{text}");
+    let b = linecad::geometry::bounds(&model.named_body("screw").expect("screw"));
+    assert!(
+        (b.min().z - 2.0).abs() < 1.0e-6 && (b.max().z - 13.5).abs() < 1.0e-6,
+        "{b:?}"
+    );
+    let error = failed(
+        "a_screw_locks_the_hinge_pose",
+        &format!("{screwed}pose open -30"),
+        &parts,
+    );
+    assert!(
+        error.contains("pull apart") && error.contains("box.main:pilot.side"),
+        "{error}"
+    );
+    let (model, _) = built(
+        "an_unscrewed_lid_opens",
+        &format!(
+            "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\npose open -90"
+        ),
+        &parts,
+    );
+    let b = linecad::geometry::bounds(&model.named_body("screw").expect("screw"));
+    assert!(
+        b.max().z - b.min().z < 4.1,
+        "the screw turns with the lid: {b:?}"
+    );
+}

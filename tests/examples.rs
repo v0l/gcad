@@ -28,11 +28,7 @@ fn pipe() {
 fn enclosure() {
     let model = build(&part("enclosure"));
     assert_eq!(model.solids().len(), 2);
-    assert_volume(
-        &model,
-        22501.75 + 8895.46 - 4.0 * std::f64::consts::PI * 1.6 * 1.6 * 2.0,
-        0.002,
-    );
+    assert_volume(&model, 25240.6 + 8831.2, 0.002);
 }
 
 #[test]
@@ -43,5 +39,14 @@ fn enclosure_assembly() {
     ));
     let run = linecad::model::run_path(&path, &[], None).expect("runs");
     assert!(run.steps.iter().all(|(_, r)| r.is_ok()));
-    assert_eq!(run.model.body_names(), ["case.main", "case.lid"]);
+    assert_eq!(
+        run.model.body_names(),
+        ["case.main", "case.lid", "s1", "s2", "s3", "s4"]
+    );
+    let opened =
+        linecad::model::run_path(&path, &[("open".to_string(), -75.0)], None).expect("runs");
+    let (_, last) = opened.steps.last().expect("steps");
+    assert!(
+        format!("{:#}", last.as_ref().expect_err("screws hold the lid")).contains("pull apart")
+    );
 }

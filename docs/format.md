@@ -180,17 +180,28 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
 | `measure` | `mass`, `overlap a b` | as in part files |
 
+A mate holds the parts together, the way a joint does. The first mate of a part
+places it and fixes it to the other part, so it moves when that part moves. Later
+mates of the same part to other parts do not move it: they must already hold, and
+from then on they keep holding. A joint that would pull a mate apart cannot move:
+`pose` fails and the viewer locks its slider. A screw mated to a lid's hole and a
+box's pilot hole keeps a hinged lid shut. `aligned` only checks holes; it holds
+nothing.
+
 `part:faces` names faces on one part with the selectors of its own file, so
 `case.main:pilot.side` is the side of the `pilot` holes in the part `case.main`. They
 follow the part as it moves.
 
 ```
-let open=-75
+let open=0 screwed=1 bx=32 by=17 h=30
 part case ../parts/enclosure.lcad
 axis hinge -40,25,30 40,25,30
 joint lid case.lid case.main turn about=hinge min=-110 max=0 at=open
-pose lid 0
 aligned case.lid:screws.side case.main:pilot.side
+if screwed part s1 ../parts/screw.lcad
+if screwed concentric s1:shank.side case.lid:screws.side near=bx,by,h
+if screwed flush s1:head.start case.lid:top.end
+if screwed concentric s1:shank.side case.main:pilot.side
 pose lid open
 interference none
 ```

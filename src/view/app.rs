@@ -1,7 +1,7 @@
 use super::gl::{self, BACKGROUND, Camera, Placement, Projector};
 use super::scene::{self, Highlight, Scene, V3};
 use crate::geometry;
-use crate::model::{Joint, Snapshot, label_of, posed, snapshots_path};
+use crate::model::{Joint, JointKind, Mate, Snapshot, broken, label_of, posed, snapshots_path};
 use crate::parse::Line as SourceLine;
 use crate::select;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
@@ -48,6 +48,7 @@ struct Shown {
     bounds: ([f64; 3], [f64; 3]),
     query: Option<Result<(usize, usize), String>>,
     joints: Vec<Joint>,
+    mates: Vec<Mate>,
     solids: Vec<(String, Solid)>,
     assembly: bool,
 }
@@ -677,6 +678,7 @@ impl App {
         let Some(shown) = &self.shown else { return };
         let scene = shown.scene.clone();
         let joints = shown.joints.clone();
+        let mates = shown.mates.clone();
         let solids = shown.solids.clone();
         let (min, max) = shown.bounds;
         let faces = shown.faces;
@@ -720,7 +722,7 @@ impl App {
             },
         );
         ui.add_space(8.0);
-        if joints.is_empty() {
+        if !joints.iter().any(Joint::movable) {
             return;
         }
         let mut check = false;
@@ -731,19 +733,55 @@ impl App {
                 Line::new().legend("joints").show(ui);
             },
             |ui| {
+                let held_by = |values: &[f64]| broken(&mates, &posed(&joints, values));
                 for (i, joint) in joints.iter().enumerate() {
-                    if let Some(value) = self.joint_values.get_mut(i) {
-                        let (low, high) = joint.range;
-                        Line::new()
-                            .legend(&joint.name)
-                            .note(format!("{} on {}", joint.child, joint.parent))
-                            .size(11.0)
-                            .show(ui);
-                        ui.add(
-                            egui::Slider::new(value, low..=high)
-                                .suffix(joint.unit())
-                                .clamping(egui::SliderClamping::Always),
-                        );
+                    if !joint.movable() || i >= self.joint_values.len() {
+                        continue;
+                    }
+                    let (low, high) = joint.range;
+                    let step = match joint.kind {
+                        JointKind::Turn { .. } => 0.5,
+                        _ => 0.05,
+                    };
+                    let nudged = |delta: f64| {
+                        let mut values = self.joint_values.clone();
+                        values[i] = (values[i] + delta).clamp(low, high);
+                        (values[i] != self.joint_values[i]).then(|| held_by(&values))
+                    };
+                    let stuck: Vec<String> = [nudged(step), nudged(-step)]
+                        .into_iter()
+                        .flatten()
+                        .reduce(|a, b| {
+                            if a.is_empty() || b.is_empty() {
+                                Vec::new()
+                            } else {
+                                a
+                            }
+                        })
+                        .unwrap_or_default();
+                    Line::new()
+                        .legend(&joint.name)
+                        .note(format!("{} on {}", joint.child, joint.parent))
+                        .size(11.0)
+                        .show(ui);
+                    let before = self.joint_values[i];
+                    ui.add_enabled(
+                        stuck.is_empty(),
+                        egui::Slider::new(&mut self.joint_values[i], low..=high)
+                            .suffix(joint.unit())
+                            .clamping(egui::SliderClamping::Always),
+                    );
+                    if self.joint_values[i] != before && !held_by(&self.joint_values).is_empty() {
+                        self.joint_values[i] = before;
+                    }
+                    if !stuck.is_empty() {
+                        let mut holders: Vec<String> = mates
+                            .iter()
+                            .filter(|m| stuck.contains(&m.text))
+                            .map(|m| format!("{} to {}", m.parts[0], m.parts[1]))
+                            .collect();
+                        holders.dedup();
+                        note(ui, format!("locked: mated {}", holders.join(", ")), WARN);
                     }
                 }
                 ui.horizontal(|ui| {
@@ -778,11 +816,15 @@ impl App {
                         (name.clone(), builder::transformed(solid, m))
                     })
                     .collect();
+                let meshes: Vec<geometry::Meshed> = placed
+                    .iter()
+                    .map(|(_, s)| geometry::Meshed::new(s))
+                    .collect();
                 let mut found = Vec::new();
                 for i in 0..placed.len() {
                     for j in i + 1..placed.len() {
-                        let shared = geometry::overlap_volume(&placed[i].1, &placed[j].1, 96);
-                        if shared > 1.0e-6 * geometry::volume(&placed[i].1).abs().max(1.0) {
+                        let shared = geometry::overlap_of(&meshes[i], &meshes[j], 96);
+                        if shared > 1.0e-6 * meshes[i].volume().abs().max(1.0) {
                             found.push(format!(
                                 "{} and {} share about {shared:.3}",
                                 placed[i].0, placed[j].0
@@ -1336,6 +1378,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
         bounds: ([min.x, min.y, min.z], [max.x, max.y, max.z]),
         query,
         joints: model.joints.clone(),
+        mates: model.mates.clone(),
         solids,
         assembly: model.assembly,
     })

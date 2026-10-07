@@ -1,8 +1,24 @@
-let w=80 d=50 h=30 open=-75
-part case ../parts/enclosure.lcad w=w d=d h=h
+let w=80 d=50 h=30 r=6 open=0 screwed=1
+let bx=w/2-r-2 by=d/2-r-2
+part case ../parts/enclosure.lcad w=w d=d h=h r=r
 axis hinge -w/2,d/2,h w/2,d/2,h
-joint lid case.lid case.main turn about=hinge min=-110 max=0 at=open
-pose lid 0
+joint lid case.lid case.main turn about=hinge min=-110 max=0
 aligned case.lid:screws.side case.main:pilot.side
+if screwed part s1 ../parts/screw.lcad
+if screwed concentric s1:shank.side case.lid:screws.side near=bx,by,h
+if screwed flush s1:head.start case.lid:top.end
+if screwed concentric s1:shank.side case.main:pilot.side
+if screwed part s2 ../parts/screw.lcad
+if screwed concentric s2:shank.side case.lid:screws.side near=-bx,by,h
+if screwed flush s2:head.start case.lid:top.end
+if screwed concentric s2:shank.side case.main:pilot.side
+if screwed part s3 ../parts/screw.lcad
+if screwed concentric s3:shank.side case.lid:screws.side near=-bx,-by,h
+if screwed flush s3:head.start case.lid:top.end
+if screwed concentric s3:shank.side case.main:pilot.side
+if screwed part s4 ../parts/screw.lcad
+if screwed concentric s4:shank.side case.lid:screws.side near=bx,-by,h
+if screwed flush s4:head.start case.lid:top.end
+if screwed concentric s4:shank.side case.main:pilot.side
 pose lid open
 interference none

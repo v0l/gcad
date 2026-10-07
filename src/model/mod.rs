@@ -26,7 +26,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub use args::label_of;
-pub use assembly::{ASSEMBLY_OPERATIONS, Joint, JointKind, posed, subtree};
+pub use assembly::{ASSEMBLY_OPERATIONS, Joint, JointKind, Mate, broken, posed, subtree};
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
 
@@ -78,6 +78,7 @@ pub struct Model {
     pub joints: Vec<assembly::Joint>,
     pub assembly: bool,
     pub part_groups: HashMap<String, select::Groups>,
+    pub mates: Vec<assembly::Mate>,
 }
 
 pub const OPERATIONS: &[&str] = &[

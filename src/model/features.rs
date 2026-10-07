@@ -229,6 +229,27 @@ fn taper_of(args: &Args<'_>, model: &Model) -> Result<f64> {
 }
 
 impl Model {
+    fn backed(&self, frame: &Frame, profiles: &[Profile], below: Vector3) -> Result<bool> {
+        let Some(solid) = self.solid.as_ref() else {
+            return Ok(false);
+        };
+        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+        let direction = Vector3::new(0.5773, 0.5774, 0.5775).normalize();
+        let inside = |p: Point3| {
+            geometry::ray_hits(&mesh, p, direction)
+                .iter()
+                .filter(|(t, _)| *t > 0.0)
+                .count()
+                % 2
+                == 1
+        };
+        let outline: Vec<(f64, f64)> = loops(frame, profiles)?
+            .iter()
+            .flat_map(|l| l.outline.clone())
+            .collect();
+        Ok(outline.iter().all(|&(u, v)| inside(frame.at(u, v) + below)))
+    }
+
     pub(crate) fn on_existing_face(&self, origin: Point3, normal: Vector3) -> bool {
         self.solid.as_ref().is_some_and(|solid| {
             select::faces(solid)
@@ -360,10 +381,14 @@ impl Model {
             frame
         };
         let pad = (distance.abs() * 0.02).max(1.0e-3);
-        let start_overlap = match combine {
-            Combine::Add if !both && self.on_existing_face(frame.origin, normal) => pad,
-            Combine::Common if self.on_existing_face(base.origin, -normal) => pad,
-            _ => 0.0,
+        let starts_on_face =
+            combine == Combine::Add && !both && self.on_existing_face(frame.origin, normal);
+        let backed = starts_on_face && self.backed(&frame, &profiles, -normal * pad * 0.5)?;
+        let overlaps: Vec<f64> = match combine {
+            Combine::Add if backed => vec![pad, 0.0],
+            Combine::Add if starts_on_face => vec![0.0, pad],
+            Combine::Common if self.on_existing_face(base.origin, -normal) => vec![pad],
+            _ => vec![0.0],
         };
         let end_overlap = match combine {
             Combine::Common
@@ -373,53 +398,39 @@ impl Model {
             }
             _ => end_overlap,
         };
-        let start = base.offset(-start_overlap * distance.signum());
-        let direction = normal * (distance.abs() + start_overlap + end_overlap);
         let label = label_of(line);
-        let shapes = loops(&start, &profiles)?;
-        let insets = (
-            -start_overlap * taper,
-            (distance.abs() + end_overlap) * taper,
-        );
-        let areas = regions(&shapes);
-        let tools = areas
-            .iter()
-            .map(|region| prism(&start, &shapes, region, &profiles, direction, insets))
-            .collect::<Result<Vec<_>>>()?;
-        for tool in &tools {
-            let groups = classify(tool, direction);
-            match combine {
-                Combine::Remove => self.record_inverted(&label, groups),
-                _ => self.record(&label, groups),
+        let before = self.solid.clone();
+        let mut outcome = Err(anyhow!("nothing to extrude"));
+        let mut used = 0.0;
+        for &start_overlap in &overlaps {
+            self.solid = before.clone();
+            let start = base.offset(-start_overlap * distance.signum());
+            let direction = normal * (distance.abs() + start_overlap + end_overlap);
+            let shapes = loops(&start, &profiles)?;
+            let insets = (
+                -start_overlap * taper,
+                (distance.abs() + end_overlap) * taper,
+            );
+            let tools = regions(&shapes)
+                .iter()
+                .map(|region| prism(&start, &shapes, region, &profiles, direction, insets))
+                .collect::<Result<Vec<_>>>()?;
+            outcome = self.merge_all(&label, tools.clone(), combine);
+            if outcome.is_ok() {
+                for tool in &tools {
+                    let groups = classify(tool, direction);
+                    match combine {
+                        Combine::Remove => self.record_inverted(&label, groups),
+                        _ => self.record(&label, groups),
+                    }
+                }
+                used = start_overlap;
+                break;
             }
         }
-        let batched = tools.len() > 1 && self.solid.is_some() && {
-            let before = self.solid.clone();
-            let done = self.merge_all(&label, tools.clone(), combine).is_ok();
-            if !done {
-                self.solid = before;
-            }
-            done
-        };
-        if !batched {
-            for (region, tool) in areas.iter().zip(tools) {
-                if let Err(error) = self.merge(&label, tool, combine) {
-                    if combine != Combine::Add || start_overlap == 0.0 {
-                        return Err(error);
-                    }
-                    let touching = loops(&base, &profiles)?;
-                    let tool = prism(
-                        &base,
-                        &touching,
-                        region,
-                        &profiles,
-                        normal * (distance.abs() + end_overlap),
-                        (0.0, (distance.abs() + end_overlap) * taper),
-                    )
-                    .map_err(|_| error)?;
-                    self.merge(&label, tool, combine)?;
-                }
-            }
+        if let Err(error) = outcome {
+            self.solid = before;
+            return Err(error);
         }
         self.prisms.insert(
             label,
@@ -432,7 +443,14 @@ impl Model {
                     .flatten(),
             },
         );
-        self.describe_solid()
+        let summary = self.describe_solid()?;
+        Ok(if starts_on_face && !backed && used > 0.0 {
+            format!(
+                "{summary}; the kernel could not join it flush, so where it overhangs the face it starts {used:.3} below it"
+            )
+        } else {
+            summary
+        })
     }
 
     pub(crate) fn remove(&mut self, label: &str, removal: Removal<'_>) -> Result<String> {

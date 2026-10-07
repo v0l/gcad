@@ -1,5 +1,6 @@
 use super::Model;
 use super::args::{Args, point3};
+use super::assembly::Feature;
 use crate::geometry;
 use crate::parse::Line;
 use crate::select;
@@ -107,15 +108,14 @@ fn face_cylinder(points: &[Point3], normals: &[Vector3]) -> Option<Cylinder> {
 }
 
 pub fn cylinders(solid: &Solid, picked: &[usize]) -> Vec<Cylinder> {
-    let meshed = solid.robust_triangulation(geometry::mesh_tolerance(solid) * 0.5);
-    let faces: Vec<_> = meshed
-        .boundaries()
-        .iter()
-        .flat_map(|shell| shell.face_iter().cloned())
-        .collect();
+    let all = select::faces(solid);
+    let tolerance = geometry::mesh_tolerance(solid) * 0.5;
     let mut found: Vec<Cylinder> = Vec::new();
     for &index in picked {
-        let Some(mesh) = faces.get(index).and_then(|f| f.surface()) else {
+        let Some(face) = all.get(index) else { continue };
+        let single: Shell = vec![face.clone()].into();
+        let meshed = single.robust_triangulation(tolerance);
+        let Some(mesh) = meshed.face_iter().next().and_then(|f| f.surface()) else {
             continue;
         };
         let positions = mesh.positions();
@@ -144,6 +144,12 @@ pub fn cylinders(solid: &Solid, picked: &[usize]) -> Vec<Cylinder> {
         }
     }
     found
+}
+
+fn fixed_part(text: &str) -> String {
+    text.split_once(':')
+        .map_or(text, |(part, _)| part)
+        .to_string()
 }
 
 fn turn_onto(from: Vector3, to: Vector3) -> Matrix3 {
@@ -239,15 +245,15 @@ impl Model {
         let d = target.point - moved;
         let shift = d - goal * d.dot(goal);
         let transform = Matrix4::from_translation(shift) * turn;
-        let moving = self.move_part_tree(&part, transform)?;
+        let fixed = fixed_part(args.text("fixed")?);
+        let features = [
+            Feature::Axis(own.point, own.axis),
+            Feature::Axis(target.point, target.axis),
+        ];
+        let said = self.mate_parts(&line.text, &part, &fixed, features, 0.0, transform)?;
         Ok(format!(
-            "{} on the axis through {:.3},{:.3},{:.3}; radius {:.3} in {:.3}",
-            moving.join(", "),
-            target.point.x,
-            target.point.y,
-            target.point.z,
-            own.radius,
-            target.radius
+            "{said}; radius {:.3} in {:.3}",
+            own.radius, target.radius
         ))
     }
 
@@ -281,16 +287,12 @@ impl Model {
         let origin = turn.transform_point(mine.origin());
         let distance = (theirs.origin() - origin).dot(theirs.normal()) + gap;
         let transform = Matrix4::from_translation(theirs.normal() * distance) * turn;
-        let moving = self.move_part_tree(&part, transform)?;
-        Ok(format!(
-            "{} flush{}",
-            moving.join(", "),
-            if gap != 0.0 {
-                format!(", {gap} apart")
-            } else {
-                String::new()
-            }
-        ))
+        let fixed = fixed_part(args.text("fixed")?);
+        let features = [
+            Feature::Plane(mine.origin(), mine.normal()),
+            Feature::Plane(theirs.origin(), theirs.normal()),
+        ];
+        self.mate_parts(&line.text, &part, &fixed, features, gap, transform)
     }
 
     pub(crate) fn op_aligned(&mut self, line: &Line) -> Result<String> {
