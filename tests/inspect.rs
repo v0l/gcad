@@ -2,6 +2,7 @@ mod common;
 
 use common::*;
 use linecad::select::{select_edges, select_faces};
+use std::f64::consts::PI;
 
 #[test]
 fn variables() {
@@ -64,4 +65,62 @@ fn errors() {
     assert!(failure("rect 10 10\nextrude 2 depth=3").contains("no `depth` argument"));
     assert!(failure("cut 3").contains("needs a sketch"));
     assert!(failure("# not an operation").contains("not an operation"));
+}
+
+#[test]
+#[ignore = "missing: measure"]
+fn measure_distance() {
+    let text = summary("rect 40 30\nbase: extrude 10\nmeasure base.end base.start");
+    assert!(text.contains("10.000"), "{text}");
+}
+
+#[test]
+#[ignore = "missing: measure mass"]
+fn mass_properties() {
+    let text = summary("rect 20 10\nextrude 5\nmeasure mass");
+    assert!(text.contains("centroid 0.000,0.000,2.500"), "{text}");
+}
+
+#[test]
+#[ignore = "missing: measure thickness"]
+fn wall_thickness() {
+    let text = summary("rect 40 30\nbase: extrude 20\nshell 2 open=base.end\nmeasure thickness");
+    assert!(text.contains("min 2.000"), "{text}");
+}
+
+#[test]
+#[ignore = "missing: measure draft"]
+fn draft_analysis() {
+    let text = summary("rect 20 20\nbase: extrude 10 draft=2\nmeasure draft pull=z");
+    assert!(text.contains("0 faces under 1"), "{text}");
+}
+
+#[test]
+#[ignore = "missing: variables from outside the file"]
+fn outside_variables() {
+    let lines = linecad::parse::parse_program("let w=10\nrect w w\nextrude 1").expect("parses");
+    let model = linecad::model::run_with(&[("w".to_string(), 20.0)], &lines).model;
+    assert_volume(&model, 400.0, 1.0e-6);
+}
+
+#[test]
+#[ignore = "missing: include"]
+fn include_file() {
+    let path = scratch("boss.lcad");
+    std::fs::write(&path, "circle d\nextrude 5").expect("writes");
+    assert_volume(
+        &build(&format!("include {path} d=10")),
+        PI * 25.0 * 5.0,
+        0.0005,
+    );
+}
+
+#[test]
+#[ignore = "missing: if"]
+fn conditional() {
+    assert_volume(
+        &build("let w=40\nrect w 10\nbase: extrude 5\nif w>30 chamfer 1 base.end&>Y"),
+        2000.0 - 20.0,
+        1.0e-5,
+    );
 }

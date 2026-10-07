@@ -56,6 +56,7 @@ pub struct Model {
     pub tools: HashMap<String, Vec<(Combine, Solid)>>,
     pub prisms: HashMap<String, Prism>,
     pub dir: Option<PathBuf>,
+    pub fixed: Scope,
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -228,7 +229,10 @@ pub struct Run {
 }
 
 pub fn run_in(dir: Option<PathBuf>, lines: &[Line]) -> Run {
-    let mut model = start(dir);
+    run_model(start(dir), lines)
+}
+
+fn run_model(mut model: Model, lines: &[Line]) -> Run {
     let mut steps = Vec::new();
     for line in lines {
         let before = model.clone();
@@ -247,4 +251,15 @@ pub fn run_in(dir: Option<PathBuf>, lines: &[Line]) -> Run {
 
 pub fn run(lines: &[Line]) -> Run {
     run_in(None, lines)
+}
+
+pub fn run_with(vars: &[(String, f64)], lines: &[Line]) -> Run {
+    run_full(None, vars, lines)
+}
+
+pub fn run_full(dir: Option<PathBuf>, vars: &[(String, f64)], lines: &[Line]) -> Run {
+    let mut model = start(dir);
+    model.fixed = vars.iter().cloned().collect();
+    model.scope = model.fixed.clone();
+    run_model(model, lines)
 }

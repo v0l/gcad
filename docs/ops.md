@@ -29,6 +29,18 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | lines and arcs | supported | `pen`, `line`, `arc via=`, `close` | `sketch::lines_and_arcs` |
 | spline | supported | `spline x,y ... closed` | `sketch::spline` |
 | text | supported | `text LINECAD size=10` | `sketch::text` |
+| polygon with rounded corners | missing | `poly ... r=4` | `sketch::rounded_polygon` |
+| polygon with chamfered corners | missing | `poly ... c=2` | `sketch::chamfered_polygon` |
+| offset outline | missing | `offset 2` | `sketch::offset_outline` |
+| arc by centre | missing | `arc x,y center=x,y` | `sketch::arc_by_centre` |
+| constraints and dimensions | missing | `point`, `dist`, `horizontal` | `sketch::constraints` |
+| trim and extend | missing | `close trim` | `sketch::trim` |
+| construction geometry | missing | `circle 20 construct` | `sketch::construction_geometry` |
+| mirror inside a sketch | missing | `reflect y` | `sketch::sketch_mirror` |
+| pattern inside a sketch | missing | `array count=4 angle=360` | `sketch::sketch_pattern` |
+| DXF import | missing | `dxf file.dxf` | `sketch::dxf_import` |
+| SVG import | missing | `svg file.svg` | `sketch::svg_import` |
+
 
 ## Workplanes
 
@@ -38,6 +50,11 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | offset plane | supported | `plane XY offset=10` | `workplane::offset` |
 | plane on a face | supported | `plane base.end` | `workplane::on_a_face`, `workplane::side_face_keeps_world_coordinates` |
 | rotated plane | supported | `plane XY rx=90` | `workplane::rotated` |
+| plane through three points | missing | `plane x,y,z x,y,z x,y,z` | `workplane::through_three_points` |
+| plane at an angle to an edge | missing | `plane edge=a&b angle=30` | `workplane::at_an_angle_to_an_edge` |
+| plane normal to a path | missing | `plane path at=0.5` | `workplane::normal_to_a_path` |
+| datum axis | missing | `axis name x,y,z x,y,z` | `workplane::datum_axis` |
+
 
 ## Features
 
@@ -56,6 +73,28 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | shell | supported | `shell 2 open=base.end` | `features::shell` |
 | face draft | supported | `draft 5 base.side neutral=base.start` | `features::face_draft` |
 | push or pull a face | supported | `push base.end 2` | `features::push_face` |
+| revolve cut | missing | `revolve 360 mode=cut` | `features::revolve_cut` |
+| sweep cut | missing | `sweep mode=cut` | `features::sweep_cut` |
+| loft cut | missing | `loft mode=cut` | `features::loft_cut` |
+| thin extrude | missing | `extrude 10 thin=2` | `features::thin_extrude` |
+| extrude to an offset from a face | missing | `extrude upto=face offset=-2` | `features::extrude_up_to_offset_face` |
+| extrude to the next face | missing | `extrude next` | `features::extrude_to_next_face` |
+| rib | missing | open `pen` path, then `rib 2` | `features::rib` |
+| smooth loft | missing | `loft smooth` | `features::smooth_loft` |
+| loft between different profiles | missing | `section`s with different edge counts | `features::loft_mixed_profiles` |
+| sweep along a smooth path | missing | `path ... smooth` | `features::sweep_smooth_path` |
+| sweep with twist | missing | `sweep twist=90` | `features::sweep_twist` |
+| sweep with scale | missing | `sweep scale=0.5` | `features::sweep_scale` |
+| modelled thread | missing | `thread M6 on=rod.side` | `features::modelled_thread` |
+| shell with several openings | missing | `shell 2 open=a.end,a.start` | `features::shell_two_openings` |
+| shell of any solid | missing | `shell 1` on a revolve | `features::shell_revolved` |
+| draft curved faces | missing | `draft 5 base.side` on a cylinder | `features::draft_curved` |
+| push in with curved sides | missing | `push base.end -2` on a cylinder | `features::push_curved` |
+| wrap a sketch onto a face | missing | `wrap base.side depth=0.5` | `features::wrap_text` |
+| thicken a face | missing | `thicken base.side 1` | `features::thicken_face` |
+| union with coplanar faces | missing | same-size box on a face | `features::stack_same_size` |
+| cut with coplanar faces | missing | notch flush with the sides | `features::notch_flush_with_sides` |
+
 
 ## Holes
 
@@ -66,6 +105,9 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | counterbore | supported | `hole 3.2 0,0 cbore=6,3` | `holes::counterbore` |
 | countersink | supported | `hole 3.2 0,0 csink=6.4,90` | `holes::countersink` |
 | tapped hole | supported | `hole 3.3 0,0 thread=M4` | `holes::threaded` |
+| angled hole | supported | `plane >Z rx=30` then `hole` | `holes::angled` |
+| hole on a curved face | missing | `hole 4 0,10 on=rod.side` | `holes::on_a_curved_face` |
+
 
 ## Fillets and chamfers
 
@@ -80,6 +122,12 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | variable radius fillet | supported | `fillet 1 edges to=2` | `blends::fillet_variable_radius` |
 | chamfer | supported | `chamfer 1 base.end&base.side` | `blends::chamfer_closed_chain`, `blends::chamfer_hole_rim` |
 | chamfer with two distances | supported | `chamfer 1 edges d2=2` | `blends::chamfer_two_distances` |
+| chamfer where three edges meet | missing | `chamfer 2 all` | `blends::chamfer_every_edge_of_a_box` |
+| round corners on curved faces | missing | `fillet 1 all` on a rounded rect | `blends::fillet_every_edge_of_a_rounded_prism` |
+| round inside corners where three edges meet | missing | `fillet 1 all` on an L shape | `blends::fillet_every_edge_of_an_l_shape` |
+| variable radius along a chain | missing | `fillet 1 chain to=2` | `blends::fillet_variable_chain` |
+| full round | missing | `fillet full base.end` | `blends::full_round` |
+
 
 ## Bodies
 
@@ -96,6 +144,14 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | scale | supported | `scale 2` | `bodies::scale` |
 | split | supported | `split XY offset=5 keep=below` | `bodies::split` |
 | separate bodies | supported | `body second` | `bodies::separate_bodies` |
+| booleans between bodies | missing | `combine main b mode=cut` | `bodies::combine_bodies` |
+| mirror one feature | missing | `mirror YZ of=boss` | `bodies::mirror_feature` |
+| pattern along a path | missing | `repeat h along=path count=4` | `bodies::pattern_along_path` |
+| move or rotate a copy | missing | `move 20,0,0 copy` | `bodies::transform_copy` |
+| scale unevenly | missing | `scale 2,1,1` | `bodies::scale_unevenly` |
+| place one body on another | missing | `place lid on=main.end` | `bodies::assembly_mate` |
+| interference check | missing | `measure overlap main b` | `bodies::interference` |
+
 
 ## Output
 
@@ -105,6 +161,12 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | STL export | supported | `linecad export part.lcad part.stl` | `output::stl` |
 | PNG views | supported | `linecad render part.lcad part.png` | `output::png` |
 | STEP import | supported | `import part.step` | `output::step_import` |
+| OBJ export | missing | `linecad export part.lcad part.obj` | `output::obj` |
+| 3MF export | missing | `linecad export part.lcad part.3mf` | `output::three_mf` |
+| SVG drawing | missing | `linecad export part.lcad part.svg` | `output::drawing` |
+| STL import | missing | `import part.stl` | `output::stl_import` |
+| STEP colours | missing | `color red` | `output::step_colours` |
+
 
 ## Parameters and inspection
 
@@ -114,3 +176,10 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | face and edge selectors | supported | `label.group`, `>Z`, `+X`, `all`, `a,b`, `a&b`, `x\|y` | `inspect::groups_and_edges`, `inspect::directional_faces` |
 | groups survive later edits | supported | | `inspect::groups_survive_later_cuts` |
 | errors that say what to do | supported | | `inspect::errors` |
+| measure distance | missing | `measure faces faces` | `inspect::measure_distance` |
+| mass properties | missing | `measure mass` | `inspect::mass_properties` |
+| wall thickness | missing | `measure thickness` | `inspect::wall_thickness` |
+| draft analysis | missing | `measure draft pull=z` | `inspect::draft_analysis` |
+| variables from outside the file | missing | `linecad check part.lcad --set w=20` | `inspect::outside_variables` |
+| include another file | missing | `include part.lcad d=10` | `inspect::include_file` |
+| conditional lines | missing | `if w>30 chamfer 1 edges` | `inspect::conditional` |

@@ -68,3 +68,44 @@ pub fn part(name: &str) -> String {
     ))
     .expect("example exists")
 }
+
+pub fn summary(source: &str) -> String {
+    let lines = parse_program(source).expect("parses");
+    let result = run(&lines);
+    match result.steps.last() {
+        Some((_, Ok(text))) => text.clone(),
+        Some((line, Err(error))) => panic!("line {} `{}`: {error:#}", line.number, line.text),
+        None => panic!("empty program"),
+    }
+}
+
+pub fn scratch(name: &str) -> String {
+    let dir = std::env::temp_dir().join("linecad-tests");
+    std::fs::create_dir_all(&dir).expect("temp dir");
+    dir.join(name).to_string_lossy().into_owned()
+}
+
+pub fn grid_volume(
+    inside: impl Fn(f64, f64, f64) -> bool,
+    min: [f64; 3],
+    max: [f64; 3],
+    steps: usize,
+) -> f64 {
+    let size = [0, 1, 2].map(|i| (max[i] - min[i]) / steps as f64);
+    let mut count = 0usize;
+    for i in 0..steps {
+        for j in 0..steps {
+            for k in 0..steps {
+                let p = [i, j, k].map(|n| n as f64 + 0.5);
+                if inside(
+                    min[0] + p[0] * size[0],
+                    min[1] + p[1] * size[1],
+                    min[2] + p[2] * size[2],
+                ) {
+                    count += 1;
+                }
+            }
+        }
+    }
+    count as f64 * size[0] * size[1] * size[2]
+}

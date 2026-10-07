@@ -36,7 +36,10 @@ impl Model {
             bail!("`let` takes name=value pairs only");
         }
         line.named.iter().try_for_each(|(name, text)| {
-            let value = eval(text, &self.scope).with_context(|| format!("`{name}`"))?;
+            let value = match self.fixed.get(name) {
+                Some(fixed) => *fixed,
+                None => eval(text, &self.scope).with_context(|| format!("`{name}`"))?,
+            };
             self.scope.insert(name.clone(), value);
             Ok::<(), anyhow::Error>(())
         })?;

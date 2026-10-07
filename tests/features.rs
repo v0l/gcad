@@ -149,3 +149,199 @@ fn push_face() {
         1.0e-6,
     );
 }
+
+#[test]
+#[ignore = "missing: revolve mode=cut"]
+fn revolve_cut() {
+    let model = build(
+        "rect 40 40\nbase: extrude 10\nplane XZ\nrect 4 4 at=10,10\nrevolve 360 axis=y mode=cut",
+    );
+    assert_volume(&model, 16000.0 - PI * (144.0 - 64.0) * 2.0, 0.0005);
+}
+
+#[test]
+#[ignore = "missing: sweep mode=cut"]
+fn sweep_cut() {
+    let model =
+        build("rect 40 40\nbase: extrude 10\ncircle 4\npath -30,0,10 30,0,10\nsweep mode=cut");
+    assert_volume(&model, 16000.0 - 2.0 * PI * 40.0, 0.0005);
+}
+
+#[test]
+#[ignore = "missing: loft mode=cut"]
+fn loft_cut() {
+    let model = build(
+        "rect 40 40\nbase: extrude 10\nplane base.end offset=1\nrect 22 22\nsection\nplane base.end offset=-5\nrect 10 10\nsection\nloft mode=cut",
+    );
+    assert_volume(&model, 16000.0 - frustum(400.0, 100.0, 5.0), 0.0005);
+}
+
+#[test]
+#[ignore = "missing: extrude thin="]
+fn thin_extrude() {
+    assert_volume(
+        &build("rect 40 30\nextrude 10 thin=2"),
+        (1200.0 - 36.0 * 26.0) * 10.0,
+        1.0e-6,
+    );
+}
+
+#[test]
+#[ignore = "missing: extrude upto= offset="]
+fn extrude_up_to_offset_face() {
+    let model = build(
+        "rect 40 30\nbase: extrude 10\nplane XY offset=20\nrect 10 10\nextrude upto=base.end offset=-2",
+    );
+    assert_volume(&model, 13000.0, 1.0e-6);
+}
+
+#[test]
+#[ignore = "missing: extrude next"]
+fn extrude_to_next_face() {
+    let model = build("rect 40 30\nbase: extrude 10\nplane XY offset=20\nrect 10 10\nextrude next");
+    assert_volume(&model, 13000.0, 1.0e-6);
+}
+
+#[test]
+#[ignore = "missing: rib"]
+fn rib() {
+    let model = build(
+        "rect 40 20 at=20,0\nbase: extrude 2\nplane YZ\nrect 20 30 at=0,15\nwall: extrude 2\nplane XZ\npen 2,22\nline 22,2\nrib 2",
+    );
+    assert_volume(&model, 1600.0 + 1200.0 - 80.0 + 400.0, 0.0005);
+}
+
+#[test]
+#[ignore = "missing: loft smooth"]
+fn smooth_loft() {
+    let model = build(
+        "rect 20 20\nsection\nplane XY offset=10\nrect 10 10\nsection\nplane XY offset=20\nrect 20 20\nsection\nloft smooth",
+    );
+    let v = volume(&model);
+    assert!(v > 2.0 * frustum(400.0, 100.0, 10.0) && v < 8000.0, "{v}");
+}
+
+#[test]
+#[ignore = "missing: loft between different edge counts"]
+fn loft_mixed_profiles() {
+    let model = build("circle 20\nsection\nplane XY offset=10\nngon 20 6\nsection\nloft");
+    let v = volume(&model);
+    assert!(
+        v > 0.95 * frustum(PI * 100.0, 259.8, 10.0) && v < 1.05 * frustum(PI * 100.0, 259.8, 10.0),
+        "{v}"
+    );
+}
+
+#[test]
+#[ignore = "missing: path smooth"]
+fn sweep_smooth_path() {
+    let model = build("circle 2\npath 0,0,0 10,0,10 20,0,0 smooth\nsweep");
+    let v = volume(&model);
+    assert!(v > PI * 2.0 * 28.28 && v < PI * 2.0 * 40.0, "{v}");
+}
+
+#[test]
+#[ignore = "missing: sweep twist="]
+fn sweep_twist() {
+    assert_volume(
+        &build("rect 4 2\npath 0,0,0 0,0,20\nsweep twist=90"),
+        160.0,
+        0.002,
+    );
+}
+
+#[test]
+#[ignore = "missing: sweep scale="]
+fn sweep_scale() {
+    assert_volume(
+        &build("circle 4\npath 0,0,0 0,0,10\nsweep scale=0.5"),
+        PI / 3.0 * 10.0 * 7.0,
+        0.002,
+    );
+}
+
+#[test]
+#[ignore = "missing: thread"]
+fn modelled_thread() {
+    let model = build("circle 6\nrod: extrude 10\nthread M6 on=rod.side");
+    let v = volume(&model);
+    assert!(v < PI * 9.0 * 10.0 && v > PI * 2.4 * 2.4 * 10.0, "{v}");
+}
+
+#[test]
+#[ignore = "missing: shell with several openings"]
+fn shell_two_openings() {
+    assert_volume(
+        &build("rect 40 30\nbase: extrude 20\nshell 2 open=base.end,base.start"),
+        (1200.0 - 936.0) * 20.0,
+        1.0e-6,
+    );
+}
+
+#[test]
+#[ignore = "missing: shell of non-extrusions"]
+fn shell_revolved() {
+    let model = build(
+        "plane XZ\npen 0,0\nline 10,0\narc 0,10 center=0,0\nclose\ndome: revolve 360\nshell 1",
+    );
+    assert_volume(&model, 2.0 / 3.0 * PI * (1000.0 - 729.0), 0.002);
+}
+
+#[test]
+#[ignore = "missing: draft curved faces"]
+fn draft_curved() {
+    let top = 10.0 - 10.0 * 5.0_f64.to_radians().tan();
+    let model = build("circle 20\nbase: extrude 10\ndraft 5 base.side neutral=base.start");
+    assert_volume(
+        &model,
+        PI / 3.0 * 10.0 * (100.0 + top * top + 10.0 * top),
+        0.001,
+    );
+}
+
+#[test]
+#[ignore = "missing: push in with curved sides"]
+fn push_curved() {
+    assert_volume(
+        &build("circle 20\nbase: extrude 10\npush base.end -2"),
+        PI * 100.0 * 8.0,
+        0.0005,
+    );
+}
+
+#[test]
+#[ignore = "missing: wrap"]
+fn wrap_text() {
+    let model = build("circle 20\nbase: extrude 20\ntext HI size=8\nwrap base.side depth=0.5");
+    assert!(volume(&model) < PI * 100.0 * 20.0);
+}
+
+#[test]
+#[ignore = "missing: thicken"]
+fn thicken_face() {
+    assert_volume(
+        &build("circle 20\nbase: extrude 10\nthicken base.side 1"),
+        PI * 121.0 * 10.0,
+        0.001,
+    );
+}
+
+#[test]
+#[ignore = "missing: coplanar booleans"]
+fn stack_same_size() {
+    assert_volume(
+        &build("rect 20 20\nbase: extrude 10\nplane base.end\nrect 20 20\nextrude 5"),
+        6000.0,
+        1.0e-6,
+    );
+}
+
+#[test]
+#[ignore = "missing: coplanar booleans"]
+fn notch_flush_with_sides() {
+    assert_volume(
+        &build("rect 20 20\nbase: extrude 10\nplane base.end\nrect 10 20 at=5,0\ncut 5"),
+        3000.0,
+        1.0e-6,
+    );
+}

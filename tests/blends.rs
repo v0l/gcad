@@ -124,3 +124,56 @@ fn chamfer_two_distances() {
         1.0e-5,
     );
 }
+
+#[test]
+#[ignore = "missing: chamfer where three edges meet"]
+fn chamfer_every_edge_of_a_box() {
+    let (h, d) = (10.0, 2.0);
+    let inside = |x: f64, y: f64, z: f64| {
+        let (x, y, z) = (x.abs(), y.abs(), z.abs());
+        x + y <= 2.0 * h - d && y + z <= 2.0 * h - d && x + z <= 2.0 * h - d
+    };
+    let expected = grid_volume(inside, [-h; 3], [h; 3], 200);
+    assert_volume(
+        &build("rect 20 20\nplane XY offset=-10\nextrude 20\nchamfer 2 all"),
+        expected,
+        0.002,
+    );
+}
+
+#[test]
+#[ignore = "missing: rounding corners on curved faces"]
+fn fillet_every_edge_of_a_rounded_prism() {
+    let model = build("rect 20 20 r=5\nextrude 10\nfillet 1 all");
+    let v = volume(&model);
+    assert!(v < (400.0 - (4.0 - PI) * 25.0) * 10.0 && v > 3500.0, "{v}");
+}
+
+#[test]
+#[ignore = "missing: rounding inside corners where three edges meet"]
+fn fillet_every_edge_of_an_l_shape() {
+    let model = build("poly 0,0 20,0 20,10 10,10 10,20 0,20\nextrude 10\nfillet 1 all");
+    let v = volume(&model);
+    assert!(v < 3000.0 && v > 2850.0, "{v}");
+}
+
+#[test]
+#[ignore = "missing: variable radius along a chain"]
+fn fillet_variable_chain() {
+    let model = build(&format!("{PLATE}fillet 1 base.end&base.side to=2"));
+    let v = volume(&model);
+    assert!(
+        v < 3600.0 - 140.0 * SPANDREL && v > 3600.0 - 140.0 * SPANDREL * 4.0,
+        "{v}"
+    );
+}
+
+#[test]
+#[ignore = "missing: fillet full"]
+fn full_round() {
+    assert_volume(
+        &build("rect 40 4\nbase: extrude 10\nfillet full base.end"),
+        40.0 * (32.0 + 2.0 * PI),
+        0.0005,
+    );
+}

@@ -65,3 +65,37 @@ fn rotated() {
         [5.0, 0.0, 5.0],
     );
 }
+
+#[test]
+#[ignore = "missing: plane through three points"]
+fn through_three_points() {
+    let model = build("plane 0,0,0 10,0,0 0,10,10");
+    let n = model.frame.expect("a plane").normal;
+    assert!(
+        (n.y + 0.5_f64.sqrt()).abs() < 1.0e-9 && (n.z - 0.5_f64.sqrt()).abs() < 1.0e-9,
+        "{n:?}"
+    );
+}
+
+#[test]
+#[ignore = "missing: plane edge= angle="]
+fn at_an_angle_to_an_edge() {
+    let model = build("rect 40 30\nbase: extrude 10\nplane edge=base.end&>Y angle=30");
+    let n = model.frame.expect("a plane").normal;
+    assert!((n.z - 30.0_f64.to_radians().cos()).abs() < 1.0e-9, "{n:?}");
+}
+
+#[test]
+#[ignore = "missing: plane path"]
+fn normal_to_a_path() {
+    let model = build("path 0,0,0 10,0,0\nplane path at=0.5");
+    let frame = model.frame.expect("a plane");
+    assert!((frame.origin.x - 5.0).abs() < 1.0e-9 && (frame.normal.x - 1.0).abs() < 1.0e-9);
+}
+
+#[test]
+#[ignore = "missing: axis"]
+fn datum_axis() {
+    let model = build("axis spin 20,0,0 20,0,1\nplane XZ\nrect 4 10 at=8,5\nrevolve 360 axis=spin");
+    assert_volume(&model, 2.0 * PI * 12.0 * 40.0, 0.0005);
+}

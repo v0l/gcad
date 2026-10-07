@@ -3,12 +3,6 @@ mod common;
 use common::*;
 use linecad::{export, render};
 
-fn scratch(name: &str) -> String {
-    let dir = std::env::temp_dir().join("linecad-tests");
-    std::fs::create_dir_all(&dir).expect("temp dir");
-    dir.join(name).to_string_lossy().into_owned()
-}
-
 #[test]
 fn step() {
     let model = build(&part("plate"));
@@ -139,4 +133,57 @@ fn step_import() {
     let path = scratch("import.step");
     export::export(&model.solids(), &path).expect("exports");
     assert_volume(&build(&format!("import {path}")), volume(&model), 0.0005);
+}
+
+#[test]
+#[ignore = "missing: obj export"]
+fn obj() {
+    let path = scratch("box.obj");
+    export::export(&build("rect 10 10\nextrude 5").solids(), &path).expect("exports");
+    assert!(
+        std::fs::read_to_string(&path)
+            .expect("written")
+            .lines()
+            .any(|l| l.starts_with("f "))
+    );
+}
+
+#[test]
+#[ignore = "missing: 3mf export"]
+fn three_mf() {
+    let path = scratch("box.3mf");
+    export::export(&build("rect 10 10\nextrude 5").solids(), &path).expect("exports");
+    assert_eq!(&std::fs::read(&path).expect("written")[..2], b"PK");
+}
+
+#[test]
+#[ignore = "missing: svg drawing export"]
+fn drawing() {
+    let path = scratch("plate.svg");
+    export::export(&build(&part("plate")).solids(), &path).expect("exports");
+    assert!(
+        std::fs::read_to_string(&path)
+            .expect("written")
+            .contains("<path")
+    );
+}
+
+#[test]
+#[ignore = "missing: stl import"]
+fn stl_import() {
+    let path = scratch("import.stl");
+    export::export(&build("rect 10 10\nextrude 5").solids(), &path).expect("exports");
+    assert_volume(&build(&format!("import {path}")), 500.0, 1.0e-6);
+}
+
+#[test]
+#[ignore = "missing: color"]
+fn step_colours() {
+    let path = scratch("red.step");
+    export::export(&build("rect 10 10\nextrude 5\ncolor red").solids(), &path).expect("exports");
+    assert!(
+        std::fs::read_to_string(&path)
+            .expect("written")
+            .contains("COLOUR_RGB")
+    );
 }

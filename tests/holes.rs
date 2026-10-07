@@ -51,3 +51,20 @@ fn threaded() {
     let model = build(&format!("{BLOCK}tapped: hole 3.3 0,0 thread=M4"));
     assert_volume(&model, 12000.0 - PI * 1.65 * 1.65 * 10.0, 0.0002);
 }
+
+#[test]
+fn angled() {
+    let model = build("rect 40 30\nbase: extrude 10\nplane >Z rx=30\nhole 4 0,0");
+    assert_volume(
+        &model,
+        12000.0 - PI * 4.0 * 10.0 / 30.0_f64.to_radians().cos(),
+        0.0005,
+    );
+}
+
+#[test]
+#[ignore = "missing: hole on a curved face"]
+fn on_a_curved_face() {
+    let model = build("circle 20\nrod: extrude 20\nhole 4 0,10 on=rod.side");
+    assert_volume(&model, PI * 100.0 * 20.0 - PI * 4.0 * 20.0, 0.002);
+}
