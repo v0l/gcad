@@ -59,7 +59,6 @@ fn fillet_cylinder_rim() {
 }
 
 #[test]
-#[ignore = "missing: vertex blends"]
 fn fillet_every_edge_of_a_box() {
     let (s, r): (f64, f64) = (16.0, 2.0);
     let rounded = s.powi(3) + 6.0 * s * s * r + 3.0 * PI * s * r * r + 4.0 / 3.0 * PI * r.powi(3);
@@ -68,6 +67,23 @@ fn fillet_every_edge_of_a_box() {
         rounded,
         0.002,
     );
+}
+
+#[test]
+fn fillet_every_edge_of_a_prism() {
+    let model = build("ngon 30 6\nextrude 10\nfillet 1.5 all");
+    assert_volume(&model, 5754.47, 0.0005);
+}
+
+#[test]
+#[ignore = "missing: vertex blends for some of the edges at a corner"]
+fn fillet_some_edges_at_a_corner() {
+    let model =
+        build("rect 20 20\nbase: extrude 20\nfillet 2 base.end&base.side|base.side&base.side");
+    let prism = (400.0 - (4.0 - PI) * 4.0) * 20.0;
+    let removed =
+        64.0 * SPANDREL * 4.0 + 2.0 * PI * (2.0 - 2.0 * SPANDREL_CENTROID) * SPANDREL * 4.0;
+    assert_volume(&model, prism - removed, 0.001);
 }
 
 #[test]

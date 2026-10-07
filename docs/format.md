@@ -175,8 +175,9 @@ Y green, Z blue.
 
 ## Limits
 
-- Fillets and chamfers fail where three selected edges meet at one corner, such as
-  every edge of a box. Round the vertical edges in the sketch with `rect r=` instead.
+- Rounding every edge of a flat-faced convex solid (`fillet r all`) works and gives
+  spherical corners. Rounding only some of the edges that meet at a corner fails;
+  round the vertical edges in the sketch with `rect r=` and fillet the rest.
 - `draft` and pushing a face inward work on flat-sided parts, where every moved corner
   is where three flat faces meet.
 - `shell` hollows the extrusion that owns the open face, so do it before adding other

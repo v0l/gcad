@@ -42,6 +42,42 @@ impl Model {
                 positive(second, "d2")?,
             );
         }
+        let every_edge = solid
+            .boundaries()
+            .iter()
+            .flat_map(|shell| shell.edge_iter())
+            .fold(Vec::<Edge>::new(), |mut all, e| {
+                if !all.iter().any(|known| known.is_same(&e)) {
+                    all.push(e);
+                }
+                all
+            });
+        if matches!(profile, FilletProfile::Round)
+            && !args.has("to")
+            && every_edge.len() == edges.len()
+        {
+            let before: Vec<Surface> = select::faces(&solid)
+                .iter()
+                .map(|face| face.oriented_surface())
+                .collect();
+            let result = super::round::round_every_edge(&solid, size)
+                .map_err(|error| anyhow!("rounding every edge: {error}"))?;
+            let label = label_of(line);
+            select::faces(&result)
+                .iter()
+                .filter(|face| {
+                    !before
+                        .iter()
+                        .any(|surface| select::face_on(face, surface, tolerance))
+                })
+                .for_each(|face| self.groups.record(&label, "faces", face.oriented_surface()));
+            self.solid = Some(result);
+            return Ok(format!(
+                "{} edge(s); {}",
+                edges.len(),
+                self.describe_solid()?
+            ));
+        }
         let options = match args.optional_number("to", &self.scope)? {
             Some(end) => {
                 let end = positive(end, "to")?;
