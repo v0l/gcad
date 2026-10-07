@@ -47,9 +47,20 @@ pub fn assert_volume(model: &Model, expected: f64, relative: f64) {
 }
 
 pub fn bounds(model: &Model) -> ([f64; 3], [f64; 3]) {
-    let b = geometry::bounds(model.solid.as_ref().expect("a solid"));
-    let (min, max) = (b.min(), b.max());
-    ([min.x, min.y, min.z], [max.x, max.y, max.z])
+    model
+        .solids()
+        .iter()
+        .map(|solid| geometry::bounds(solid))
+        .fold(
+            ([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]),
+            |(lo, hi), b| {
+                let (min, max) = (b.min(), b.max());
+                (
+                    [lo[0].min(min.x), lo[1].min(min.y), lo[2].min(min.z)],
+                    [hi[0].max(max.x), hi[1].max(max.y), hi[2].max(max.z)],
+                )
+            },
+        )
 }
 
 pub fn assert_bounds(model: &Model, min: [f64; 3], max: [f64; 3]) {

@@ -63,7 +63,7 @@ pub const OPERATIONS: &[&str] = &[
     "let", "plane", "rect", "circle", "poly", "ngon", "offset", "slot", "ellipse", "pen", "line",
     "arc", "close", "spline", "text", "section", "loft", "extrude", "cut", "revolve", "path",
     "helix", "sweep", "hole", "fillet", "chamfer", "shell", "draft", "push", "mirror", "repeat",
-    "move", "rotate", "scale", "split", "body", "import",
+    "move", "rotate", "scale", "split", "body", "combine", "place", "import",
 ];
 
 impl Model {
@@ -119,6 +119,8 @@ impl Model {
             "scale" => self.op_scale(line),
             "split" => self.op_split(line),
             "body" => self.op_body(line),
+            "combine" => self.op_combine(line),
+            "place" => self.op_place(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",

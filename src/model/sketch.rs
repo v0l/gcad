@@ -167,8 +167,32 @@ impl Model {
     pub(crate) fn op_plane(&mut self, line: &Line) -> Result<String> {
         self.require_empty_sketch("plane")
             .map_err(|e| anyhow!("{e}; extrude or cut it before moving the plane"))?;
-        let args = Args::new(line, &["on"], &["offset", "rx", "ry", "rz"], false)?;
-        let mut frame = self.plane_from(args.text("on")?)?;
+        let args = Args::new(line, &["on"], &["offset", "rx", "ry", "rz"], true)?;
+        let mut frame = match args.rest.as_slice() {
+            [] => self.plane_from(args.text("on")?)?,
+            [second, third] => {
+                let points = [args.text("on")?, second, third]
+                    .map(|text| super::args::point3(text, &self.scope));
+                let [a, b, c] = [
+                    points[0].as_ref().map_err(|e| anyhow!("{e:#}"))?,
+                    points[1].as_ref().map_err(|e| anyhow!("{e:#}"))?,
+                    points[2].as_ref().map_err(|e| anyhow!("{e:#}"))?,
+                ];
+                let x = *b - *a;
+                let normal = x.cross(*c - *a);
+                if normal.magnitude() < 1.0e-12 {
+                    bail!("the three points are in a line");
+                }
+                let (x, normal) = (x.normalize(), normal.normalize());
+                Frame {
+                    origin: *a,
+                    x,
+                    y: normal.cross(x),
+                    normal,
+                }
+            }
+            _ => bail!("`plane` takes a name, a face selector or three x,y,z points"),
+        };
         frame = frame.offset(args.optional_number("offset", &self.scope)?.unwrap_or(0.0));
         for (name, axis) in [("rx", frame.x), ("ry", frame.y), ("rz", frame.normal)] {
             if let Some(degrees) = args.optional_number(name, &self.scope)? {

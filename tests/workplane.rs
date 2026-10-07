@@ -67,7 +67,6 @@ fn rotated() {
 }
 
 #[test]
-#[ignore = "missing: plane through three points"]
 fn through_three_points() {
     let model = build("plane 0,0,0 10,0,0 0,10,10");
     let n = model.frame.expect("a plane").normal;

@@ -50,7 +50,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | offset plane | supported | `plane XY offset=10` | `workplane::offset` |
 | plane on a face | supported | `plane base.end` | `workplane::on_a_face`, `workplane::side_face_keeps_world_coordinates` |
 | rotated plane | supported | `plane XY rx=90` | `workplane::rotated` |
-| plane through three points | missing | `plane x,y,z x,y,z x,y,z` | `workplane::through_three_points` |
+| plane through three points | supported | `plane x,y,z x,y,z x,y,z` | `workplane::through_three_points` |
 | plane at an angle to an edge | missing | `plane edge=a&b angle=30` | `workplane::at_an_angle_to_an_edge` |
 | plane normal to a path | missing | `plane path at=0.5` | `workplane::normal_to_a_path` |
 | datum axis | missing | `axis name x,y,z x,y,z` | `workplane::datum_axis` |
@@ -144,12 +144,12 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | scale | supported | `scale 2` | `bodies::scale` |
 | split | supported | `split XY offset=5 keep=below` | `bodies::split` |
 | separate bodies | supported | `body second` | `bodies::separate_bodies` |
-| booleans between bodies | missing | `combine main b mode=cut` | `bodies::combine_bodies` |
-| mirror one feature | missing | `mirror YZ of=boss` | `bodies::mirror_feature` |
+| booleans between bodies | supported | `combine main b mode=cut` | `bodies::combine_bodies` |
+| mirror one feature | supported | `mirror YZ of=boss` | `bodies::mirror_feature` |
 | pattern along a path | missing | `repeat h along=path count=4` | `bodies::pattern_along_path` |
-| move or rotate a copy | missing | `move 20,0,0 copy` | `bodies::transform_copy` |
-| scale unevenly | missing | `scale 2,1,1` | `bodies::scale_unevenly` |
-| place one body on another | missing | `place lid on=main.end` | `bodies::assembly_mate` |
+| move or rotate a copy | supported | `move 20,0,0 copy` | `bodies::transform_copy` |
+| scale unevenly | supported | `scale 2,1,1` | `bodies::scale_unevenly` |
+| place one body on another | supported | `place lid on=>Z` | `bodies::assembly_mate` |
 | interference check | missing | `measure overlap main b` | `bodies::interference` |
 
 

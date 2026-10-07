@@ -36,7 +36,124 @@ fn moved_surface(surface: &Surface, transform: Matrix4) -> Surface {
     moved
 }
 
+fn copy_flag(args: &Args<'_>) -> Result<bool> {
+    match args.values.get("copy").copied() {
+        None => Ok(false),
+        Some("copy") => Ok(true),
+        Some(other) => bail!("`{other}` is not an option; did you mean `copy`?"),
+    }
+}
+
 impl Model {
+    fn body_name(&self) -> String {
+        if self.body.is_empty() {
+            "main".to_string()
+        } else {
+            self.body.clone()
+        }
+    }
+
+    fn named_body(&self, name: &str) -> Result<Solid> {
+        if name == self.body_name() {
+            return self
+                .solid
+                .clone()
+                .ok_or_else(|| anyhow!("body `{name}` has no solid yet"));
+        }
+        self.bodies
+            .iter()
+            .find(|(n, _)| n == name)
+            .map(|(_, s)| s.clone())
+            .ok_or_else(|| {
+                anyhow!(
+                    "no body called `{name}`; bodies are {:?}",
+                    self.bodies
+                        .iter()
+                        .map(|(n, _)| n.clone())
+                        .chain(std::iter::once(self.body_name()))
+                        .collect::<Vec<_>>()
+                )
+            })
+    }
+
+    pub(crate) fn op_combine(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["into", "from"], &["mode"], false)?;
+        let combine = super::args::combine_mode(&args)?;
+        let (into, from) = (
+            args.text("into")?.to_string(),
+            args.text("from")?.to_string(),
+        );
+        if into == from {
+            bail!("combine two different bodies");
+        }
+        let (a, b) = (self.named_body(&into)?, self.named_body(&from)?);
+        let result = match combine {
+            Combine::Add => monstertruck::solid::or_normalized(&a, &b),
+            Combine::Remove => monstertruck::solid::difference_normalized(&a, &b),
+            Combine::Common => monstertruck::solid::and_normalized(&a, &b),
+        }
+        .map_err(|error| anyhow!("combine failed: {error}"))?;
+        let active = self.body_name();
+        let mut others: Vec<(String, Solid)> = self
+            .bodies
+            .drain(..)
+            .filter(|(n, _)| *n != into && *n != from)
+            .collect();
+        if active != into
+            && active != from
+            && let Some(solid) = self.solid.take()
+        {
+            others.push((active, solid));
+        }
+        self.bodies = others;
+        self.solid = Some(result);
+        self.body = into;
+        self.describe_solid()
+    }
+
+    pub(crate) fn op_place(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["body"], &["on"], false)?;
+        let name = args.text("body")?.to_string();
+        let selector = args.text("on")?;
+        let tolerance = self.tolerance();
+        let target = self
+            .bodies
+            .iter()
+            .map(|(n, s)| (n.clone(), s.clone()))
+            .chain(self.solid.clone().map(|s| (self.body_name(), s)))
+            .filter(|(n, _)| *n != name)
+            .find_map(|(_, solid)| {
+                let faces = select::faces(&solid);
+                select::select_faces(selector, &solid, &self.groups, tolerance)
+                    .ok()?
+                    .into_iter()
+                    .find_map(|i| match faces[i].oriented_surface() {
+                        Surface::Plane(plane) => Some(plane),
+                        _ => None,
+                    })
+            })
+            .ok_or_else(|| anyhow!("`{selector}` matched no flat face on the other bodies"))?;
+        let normal = target.normal();
+        let level = normal.dot(target.origin().to_vec());
+        let body = self.named_body(&name)?;
+        let lowest = body
+            .boundaries()
+            .iter()
+            .flat_map(|shell| shell.vertex_iter())
+            .map(|v| normal.dot(v.point().to_vec()))
+            .fold(f64::INFINITY, f64::min);
+        let shifted = moved(&body, Matrix4::from_translation(normal * (level - lowest)));
+        if name == self.body_name() {
+            self.solid = Some(shifted);
+        } else if let Some(entry) = self.bodies.iter_mut().find(|(n, _)| *n == name) {
+            entry.1 = shifted;
+        }
+        Ok(format!(
+            "moved `{name}` {:.3} onto the face",
+            level - lowest
+        ))
+    }
+
     fn transform_all(&mut self, transform: Matrix4) -> Result<()> {
         let solid = self
             .solid
@@ -70,7 +187,24 @@ impl Model {
     }
 
     pub(crate) fn op_mirror(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["on"], &["offset"], false)?;
+        let args = Args::new(line, &["on"], &["offset", "of"], false)?;
+        if let Some(of) = args.values.get("of") {
+            let frame = self
+                .plane_from(args.text("on")?)?
+                .offset(args.optional_number("offset", &self.scope)?.unwrap_or(0.0));
+            let transform = reflection(&frame);
+            let tools = self
+                .tools
+                .get(*of)
+                .cloned()
+                .ok_or_else(|| anyhow!("`{of}` made no material to mirror"))?;
+            let label = label_of(line);
+            self.copy_groups(Some(of), transform, of);
+            for (combine, tool) in tools {
+                self.merge(&label, moved(&tool, transform), combine)?;
+            }
+            return self.describe_solid();
+        }
         let frame = self
             .plane_from(args.text("on")?)?
             .offset(args.optional_number("offset", &self.scope)?.unwrap_or(0.0));
@@ -146,15 +280,28 @@ impl Model {
         self.describe_solid()
     }
 
-    pub(crate) fn op_move(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["by"], &[], false)?;
-        let by = point3(args.text("by")?, &self.scope)?;
-        self.transform_all(Matrix4::from_translation(by.to_vec()))?;
+    fn place_or_copy(&mut self, line: &Line, transform: Matrix4, copy: bool) -> Result<String> {
+        if copy {
+            let duplicate = moved(self.active(&line.op)?, transform);
+            let label = label_of(line);
+            self.copy_groups(None, transform, &label);
+            self.merge(&label, duplicate, Combine::Add)?;
+        } else {
+            self.transform_all(transform)?;
+        }
         self.describe_solid()
     }
 
+    pub(crate) fn op_move(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["by", "copy"], &[], false)?;
+        let by = point3(args.text("by")?, &self.scope)?;
+        let copy = copy_flag(&args)?;
+        self.place_or_copy(line, Matrix4::from_translation(by.to_vec()), copy)
+    }
+
     pub(crate) fn op_rotate(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["angle"], &["axis", "about"], false)?;
+        let args = Args::new(line, &["angle", "copy"], &["axis", "about"], false)?;
+        let copy = copy_flag(&args)?;
         let angle = args.number("angle", &self.scope)?;
         let direction = axis(args.values.get("axis").copied().unwrap_or("z"))?;
         let center = args
@@ -163,23 +310,35 @@ impl Model {
             .map(|text| point3(text, &self.scope))
             .transpose()?
             .unwrap_or_else(Point3::origin);
-        self.transform_all(about(
-            center,
-            Matrix4::from_axis_angle(direction, Deg(angle)),
-        ))?;
-        self.describe_solid()
+        self.place_or_copy(
+            line,
+            about(center, Matrix4::from_axis_angle(direction, Deg(angle))),
+            copy,
+        )
     }
 
     pub(crate) fn op_scale(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["factor"], &["about"], false)?;
-        let factor = positive(args.number("factor", &self.scope)?, "scale factor")?;
+        let text = args.text("factor")?;
+        let factors = if text.contains(',') {
+            let p = point3(text, &self.scope)?;
+            [p.x, p.y, p.z]
+        } else {
+            [args.number("factor", &self.scope)?; 3]
+        };
+        factors
+            .iter()
+            .try_for_each(|f| positive(*f, "scale factor").map(|_| ()))?;
         let center = args
             .values
             .get("about")
             .map(|text| point3(text, &self.scope))
             .transpose()?
             .unwrap_or_else(Point3::origin);
-        self.transform_all(about(center, Matrix4::from_scale(factor)))?;
+        self.transform_all(about(
+            center,
+            Matrix4::from_nonuniform_scale(factors[0], factors[1], factors[2]),
+        ))?;
         self.describe_solid()
     }
 
