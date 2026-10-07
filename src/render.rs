@@ -132,16 +132,25 @@ fn edge_polylines(solid: &Solid) -> Vec<Vec<Point3>> {
 }
 
 pub fn render(solids: &[&Solid], path: &str) -> Result<()> {
-    let mut mesh = monstertruck::mesh::PolygonMesh::default();
-    solids
-        .iter()
-        .for_each(|solid| mesh.merge(geometry::mesh(solid, geometry::mesh_tolerance(solid))));
-    let positions = mesh.positions();
-    let triangles: Vec<[usize; 3]> = mesh
-        .faces()
-        .triangle_iter()
-        .map(|t| [t[0].pos, t[1].pos, t[2].pos])
-        .collect();
+    let parts: Vec<(&Solid, Option<[f64; 3]>)> = solids.iter().map(|s| (*s, None)).collect();
+    render_coloured(&parts, path)
+}
+
+pub fn render_coloured(parts: &[(&Solid, Option<[f64; 3]>)], path: &str) -> Result<()> {
+    let solids: Vec<&Solid> = parts.iter().map(|(s, _)| *s).collect();
+    let mut positions: Vec<Point3> = Vec::new();
+    let mut triangles: Vec<([usize; 3], [f64; 3])> = Vec::new();
+    for (solid, colour) in parts {
+        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+        let base = positions.len();
+        positions.extend(mesh.positions().iter().copied());
+        let tint = colour.unwrap_or([150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0]);
+        triangles.extend(
+            mesh.faces()
+                .triangle_iter()
+                .map(|t| ([t[0].pos + base, t[1].pos + base, t[2].pos + base], tint)),
+        );
+    }
     let edges: Vec<Vec<Point3>> = solids
         .iter()
         .flat_map(|solid| edge_polylines(solid))
@@ -176,7 +185,7 @@ pub fn render(solids: &[&Solid], path: &str) -> Result<()> {
             depth: vec![f64::NEG_INFINITY; (CELL * CELL) as usize],
             offset: ((index as u32 % 2) * CELL, (index as u32 / 2) * CELL),
         };
-        for triangle in &triangles {
+        for (triangle, tint) in &triangles {
             let [a, b, c] = triangle.map(|i| positions[i]);
             let normal = (b - a).cross(c - a);
             if normal.magnitude2() < 1.0e-24 {
@@ -187,11 +196,7 @@ pub fn render(solids: &[&Solid], path: &str) -> Result<()> {
                 .dot(Vector3::new(0.3, -0.5, 0.8).normalize());
             let facing = normal.normalize().dot(view.toward_eye).abs();
             let shade = 0.35 + 0.4 * facing + 0.25 * light.max(0.0);
-            let color = Rgb([
-                (150.0 * shade) as u8,
-                (175.0 * shade) as u8,
-                (205.0 * shade) as u8,
-            ]);
+            let color = Rgb(tint.map(|c| (255.0 * c * shade).clamp(0.0, 255.0) as u8));
             canvas.triangle(triangle.map(|i| to_pixel(projected[i])), color);
         }
         let bias = depth_range * 0.01;

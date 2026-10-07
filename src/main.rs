@@ -151,7 +151,7 @@ fn main() -> Result<()> {
         Command::Render { file, output } => {
             let run = load(&file, None, &vars)?;
             finished(&run)?;
-            render::render(&run.model.solids(), &output)
+            render::render_coloured(&run.model.parts(), &output)
         }
         Command::View { file, select, line } => {
             linecad::view::run(file.map(Into::into), select, line, vars)
