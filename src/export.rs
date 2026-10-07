@@ -66,6 +66,213 @@ fn step_text(parts: &[(&Solid, Option<Colour>)]) -> String {
     with_colours(&step, parts)
 }
 
+pub struct Instance<'a> {
+    pub name: String,
+    pub product: usize,
+    pub placement: Matrix4,
+    pub solid: &'a Solid,
+}
+
+pub struct Product {
+    pub name: String,
+    pub solid: Solid,
+    pub colour: Option<Colour>,
+}
+
+pub fn assembly(model: &crate::model::Model) -> (Vec<Product>, Vec<Instance<'_>>) {
+    let mut products: Vec<(Option<crate::model::Source>, Product)> = Vec::new();
+    let mut instances = Vec::new();
+    for (name, solid) in model.named_solids() {
+        let source = model.sources.get(&name).cloned();
+        let placement = model
+            .placements
+            .get(&name)
+            .copied()
+            .unwrap_or_else(Matrix4::identity);
+        let known = products
+            .iter()
+            .position(|(s, _)| source.is_some() && *s == source);
+        let product = match known {
+            Some(index) => index,
+            None => {
+                let local = placement
+                    .invert()
+                    .map(|undo| builder::transformed(solid, undo))
+                    .unwrap_or_else(|| solid.clone());
+                let label = source
+                    .as_ref()
+                    .map(|s| {
+                        let stem = s
+                            .file
+                            .file_stem()
+                            .map(|f| f.to_string_lossy().to_string())
+                            .unwrap_or_default();
+                        if s.body == "main" {
+                            stem
+                        } else {
+                            format!("{stem}.{}", s.body)
+                        }
+                    })
+                    .unwrap_or_else(|| name.clone());
+                products.push((
+                    source,
+                    Product {
+                        name: label,
+                        solid: local,
+                        colour: model.colours.get(&name).copied(),
+                    },
+                ));
+                products.len() - 1
+            }
+        };
+        instances.push(Instance {
+            name,
+            product,
+            placement,
+            solid,
+        });
+    }
+    (products.into_iter().map(|(_, p)| p).collect(), instances)
+}
+
+pub fn export_model(model: &crate::model::Model, name: &str, path: &str) -> Result<()> {
+    let step = path.to_ascii_lowercase();
+    if model.assembly && (step.ends_with(".step") || step.ends_with(".stp")) {
+        let (products, instances) = assembly(model);
+        std::fs::write(path, assembly_step(name, &products, &instances))?;
+        return Ok(());
+    }
+    export_coloured(&model.parts(), path)
+}
+
+fn quoted(text: &str) -> String {
+    text.replace('\'', "''")
+}
+
+pub fn assembly_step(name: &str, products: &[Product], instances: &[Instance<'_>]) -> String {
+    let parts: Vec<(&Solid, Option<Colour>)> =
+        products.iter().map(|p| (&p.solid, p.colour)).collect();
+    let step = step_text(&parts);
+    let breps: Vec<usize> = step
+        .lines()
+        .filter(|line| line.contains("= MANIFOLD_SOLID_BREP("))
+        .filter_map(entity_id)
+        .collect();
+    let find = |kind: &str| {
+        step.lines()
+            .find(|line| line.contains(kind))
+            .and_then(entity_id)
+    };
+    let (Some(root_rep), Some(root_pd), Some(root_product), Some(root_context)) = (
+        find("= ADVANCED_BREP_SHAPE_REPRESENTATION("),
+        find("= PRODUCT_DEFINITION('design'"),
+        find("= PRODUCT('"),
+        find("= PRODUCT_CONTEXT("),
+    ) else {
+        return step;
+    };
+    let definition_context = find("= PRODUCT_DEFINITION_CONTEXT(").unwrap_or(0);
+    let geometry_context = step
+        .lines()
+        .find(|line| line.contains("= ADVANCED_BREP_SHAPE_REPRESENTATION("))
+        .and_then(|line| line.rsplit('#').next())
+        .and_then(|tail| tail.split(|c: char| !c.is_ascii_digit()).next())
+        .and_then(|digits| digits.parse::<usize>().ok())
+        .unwrap_or(0);
+    if breps.len() != products.len() {
+        return step;
+    }
+    let mut ids = Ids(step.lines().filter_map(entity_id).max().unwrap_or(0) + 1);
+    let mut added = String::new();
+    let axis = |ids: &mut Ids, added: &mut String, m: Matrix4| {
+        let (o, z, x) = (
+            m.w.truncate(),
+            m.z.truncate().normalize(),
+            m.x.truncate().normalize(),
+        );
+        let (p, dz, dx, a) = (ids.take(), ids.take(), ids.take(), ids.take());
+        let _ = writeln!(
+            added,
+            "#{p} = CARTESIAN_POINT('', ({:.9}, {:.9}, {:.9}));\n\
+             #{dz} = DIRECTION('', ({:.12}, {:.12}, {:.12}));\n\
+             #{dx} = DIRECTION('', ({:.12}, {:.12}, {:.12}));\n\
+             #{a} = AXIS2_PLACEMENT_3D('', #{p}, #{dz}, #{dx});",
+            o.x, o.y, o.z, z.x, z.y, z.z, x.x, x.y, x.z
+        );
+        a
+    };
+    let root_axis = axis(&mut ids, &mut added, Matrix4::identity());
+    let mut product_reps = Vec::new();
+    for (product, brep) in products.iter().zip(&breps) {
+        let label = quoted(&product.name);
+        let own_axis = axis(&mut ids, &mut added, Matrix4::identity());
+        let [prod, pdf, pd, pds, rep, sdr] = ids.many();
+        let _ = writeln!(
+            added,
+            "#{prod} = PRODUCT('{label}', '{label}', '', (#{root_context}));\n\
+             #{pdf} = PRODUCT_DEFINITION_FORMATION('', '', #{prod});\n\
+             #{pd} = PRODUCT_DEFINITION('design', '', #{pdf}, #{definition_context});\n\
+             #{pds} = PRODUCT_DEFINITION_SHAPE('', '', #{pd});\n\
+             #{rep} = ADVANCED_BREP_SHAPE_REPRESENTATION('{label}', (#{brep}, #{own_axis}), #{geometry_context});\n\
+             #{sdr} = SHAPE_DEFINITION_REPRESENTATION(#{pds}, #{rep});"
+        );
+        product_reps.push((pd, rep, own_axis));
+    }
+    let mut placed_axes = vec![root_axis];
+    for (k, instance) in instances.iter().enumerate() {
+        let (pd, rep, own_axis) = product_reps[instance.product];
+        let there = axis(&mut ids, &mut added, instance.placement);
+        placed_axes.push(there);
+        let label = quoted(&instance.name);
+        let [transform, relation, nauo, pds, cdsr] = ids.many();
+        let _ = writeln!(
+            added,
+            "#{transform} = ITEM_DEFINED_TRANSFORMATION('', '', #{own_axis}, #{there});\n\
+             #{relation} = ( REPRESENTATION_RELATIONSHIP('', '', #{rep}, #{root_rep}) REPRESENTATION_RELATIONSHIP_WITH_TRANSFORMATION(#{transform}) SHAPE_REPRESENTATION_RELATIONSHIP() );\n\
+             #{nauo} = NEXT_ASSEMBLY_USAGE_OCCURRENCE('{}', '{label}', '', #{root_pd}, #{pd}, $);\n\
+             #{pds} = PRODUCT_DEFINITION_SHAPE('{label}', '', #{nauo});\n\
+             #{cdsr} = CONTEXT_DEPENDENT_SHAPE_REPRESENTATION(#{relation}, #{pds});",
+            k + 1
+        );
+    }
+    let assembly_name = quoted(name);
+    let root_items = placed_axes
+        .iter()
+        .map(|a| format!("#{a}"))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let rewritten: Vec<String> = step
+        .lines()
+        .map(|line| match entity_id(line) {
+            Some(id) if id == root_rep => format!(
+                "#{id} = SHAPE_REPRESENTATION('{assembly_name}', ({root_items}), #{geometry_context});"
+            ),
+            Some(id) if id == root_product => format!(
+                "#{id} = PRODUCT('{assembly_name}', '{assembly_name}', '', (#{root_context}));"
+            ),
+            _ => line.to_string(),
+        })
+        .collect();
+    let step = rewritten.join("\n") + "\n";
+    match step.rfind("ENDSEC;") {
+        Some(at) => format!("{}{added}{}", &step[..at], &step[at..]),
+        None => step,
+    }
+}
+
+struct Ids(usize);
+
+impl Ids {
+    fn take(&mut self) -> usize {
+        self.0 += 1;
+        self.0 - 1
+    }
+
+    fn many<const N: usize>(&mut self) -> [usize; N] {
+        std::array::from_fn(|_| self.take())
+    }
+}
+
 fn entity_id(line: &str) -> Option<usize> {
     line.trim_start()
         .strip_prefix('#')?

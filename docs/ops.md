@@ -195,6 +195,7 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | SVG drawing | supported | `linecad export part.lcad part.svg` | `output::drawing` |
 | STL import | supported | `import part.stl` | `output::stl_import` |
 | STEP colours | supported | `color red` | `output::step_colours` |
+| STEP assembly structure | supported | `linecad export top.lasm top.step` | `output::step_assembly`, `output::step_assembly_opens_in_opencascade` |
 
 
 ## Parameters and inspection

@@ -431,6 +431,12 @@ impl Model {
             .find(|(n, _)| n == name)
             .ok_or_else(|| anyhow!("no body called `{name}`; bodies are {names:?}"))?;
         *solid = moved(solid);
+        let placed = self
+            .placements
+            .get(name)
+            .copied()
+            .unwrap_or_else(Matrix4::identity);
+        self.placements.insert(name.to_string(), transform * placed);
         for mate in self.mates.iter_mut() {
             for k in 0..2 {
                 if mate.parts[k] == name {
@@ -544,6 +550,9 @@ impl Model {
                 vars: vars.clone(),
             });
             self.sources.insert(new.clone(), source);
+            if let Some(placed) = loaded.placements.get(body) {
+                self.placements.insert(new.clone(), *placed);
+            }
             if let Some(material) = loaded.materials.get(body) {
                 self.materials.insert(new.clone(), material.clone());
             }

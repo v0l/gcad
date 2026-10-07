@@ -201,3 +201,100 @@ fn step_colours() {
             .contains("COLOUR_RGB")
     );
 }
+
+fn screwed_plate() -> std::path::PathBuf {
+    let dir = std::path::PathBuf::from(scratch("step_assembly"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("plate.lcad"),
+        "rect 40 20\nbase: extrude 5\nplane base.end\nholes: hole 3 -10,0 10,0\ncolor #3a6ea5\n",
+    )
+    .expect("plate");
+    std::fs::write(
+        dir.join("pin.lcad"),
+        "circle 5\nhead: extrude 1\ncircle 3\npin: extrude -5\ncolor red\n",
+    )
+    .expect("pin");
+    let path = dir.join("kit.lasm");
+    std::fs::write(
+        &path,
+        "part plate plate.lcad\npart a pin.lcad\npart b pin.lcad\nconcentric a:pin.side plate:holes.side near=-10,0,5\nflush a:head.start plate:base.end\nconcentric b:pin.side plate:holes.side near=10,0,5\nflush b:head.start plate:base.end\n",
+    )
+    .expect("assembly");
+    path
+}
+
+#[test]
+fn step_assembly() {
+    let path = screwed_plate();
+    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    let out = scratch("kit.step");
+    export::export_model(&run.model, "kit", &out).expect("exports");
+    let text = std::fs::read_to_string(&out).expect("written");
+    assert_eq!(text.matches("NEXT_ASSEMBLY_USAGE_OCCURRENCE(").count(), 3);
+    assert_eq!(text.matches("= MANIFOLD_SOLID_BREP(").count(), 2);
+    assert!(text.contains("PRODUCT('kit'") && text.contains("PRODUCT('pin'"));
+}
+
+#[test]
+#[ignore = "needs OpenCascade: set LINECAD_OCP_PYTHON to a python with OCP and run with --ignored"]
+fn step_assembly_opens_in_opencascade() {
+    let python = std::env::var("LINECAD_OCP_PYTHON").expect("LINECAD_OCP_PYTHON");
+    let path = screwed_plate();
+    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    let out = scratch("kit_occt.step");
+    export::export_model(&run.model, "kit", &out).expect("exports");
+    let script = r#"
+import sys
+from OCP.STEPCAFControl import STEPCAFControl_Reader
+from OCP.TDocStd import TDocStd_Document
+from OCP.TCollection import TCollection_ExtendedString
+from OCP.XCAFDoc import XCAFDoc_DocumentTool
+from OCP.TDF import TDF_LabelSequence, TDF_Label
+from OCP.TDataStd import TDataStd_Name
+from OCP.BRepCheck import BRepCheck_Analyzer
+from OCP.BRepGProp import BRepGProp
+from OCP.GProp import GProp_GProps
+doc = TDocStd_Document(TCollection_ExtendedString("doc"))
+r = STEPCAFControl_Reader()
+r.SetNameMode(True)
+r.ReadFile(sys.argv[1])
+r.Transfer(doc)
+tool = XCAFDoc_DocumentTool.ShapeTool_s(doc.Main())
+def name(label):
+    n = TDataStd_Name()
+    return n.Get().ToExtString() if label.FindAttribute(TDataStd_Name.GetID_s(), n) else "?"
+roots = TDF_LabelSequence()
+tool.GetFreeShapes(roots)
+top = roots.Value(1)
+parts = TDF_LabelSequence()
+tool.GetComponents_s(top, parts)
+print(roots.Length(), name(top), parts.Length())
+for i in range(1, parts.Length() + 1):
+    part = parts.Value(i)
+    used = TDF_Label()
+    tool.GetReferredShape_s(part, used)
+    shape = tool.GetShape_s(part)
+    props = GProp_GProps()
+    BRepGProp.VolumeProperties_s(shape, props, 1e-7)
+    c = props.CentreOfMass()
+    print(name(part), name(used), BRepCheck_Analyzer(shape).IsValid(), *(f"{v:.2f}" for v in (c.X(), c.Y(), c.Z())))
+"#;
+    let output = std::process::Command::new(&python)
+        .args(["-c", script, &out])
+        .output()
+        .expect("python runs");
+    let stdout = String::from_utf8_lossy(&output.stdout);
+    let lines: Vec<&str> = stdout.lines().collect();
+    assert_eq!(
+        lines,
+        [
+            "1 kit 3",
+            "plate plate True 0.00 0.00 2.50",
+            "a pin True -10.00 0.00 3.57",
+            "b pin True 10.00 0.00 3.57",
+        ],
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}

@@ -231,6 +231,10 @@ interference none
 and set of variables, with how many there are, the material, and the volume and mass
 of each. `--csv` writes the same as CSV, with the part names in the last column.
 
+A `.step` export of an assembly keeps its structure: each part file and set of
+variables becomes one product, and each part placed in the assembly is an instance of
+it with its own name and position, so four screws are one screw used four times.
+
 `check`, `render`, `export` and the viewer take either kind of file, and `--set`
 reaches the assembly's own variables. The viewer rebuilds when any part file next to
 the assembly is saved.

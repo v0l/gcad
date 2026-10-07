@@ -78,6 +78,7 @@ pub struct Model {
     pub colours: HashMap<String, [f64; 3]>,
     pub materials: HashMap<String, bodies::Material>,
     pub sources: HashMap<String, assembly::Source>,
+    pub placements: HashMap<String, Matrix4>,
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,
     pub assembly: bool,
