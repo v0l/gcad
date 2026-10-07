@@ -855,37 +855,38 @@ impl GearShape {
         ((radius / self.base).powi(2) - 1.0).max(0.0).sqrt()
     }
 
-    fn flank(&self, centre: f64, side: f64, from: f64, to: f64, at: (f64, f64)) -> Segment {
+    fn flank(&self, centre: f64, side: f64, rolls: [f64; 4], at: (f64, f64)) -> Segment {
         let lead = self.half_at_pitch + involute(self.pressure);
-        let point = |t: f64| {
+        let [p0, b1, b2, p3] = rolls.map(|t| {
             let r = self.base * (1.0 + t * t).sqrt();
             let a = centre + side * (lead - (t - t.atan()));
             (at.0 + r * a.cos(), at.1 + r * a.sin())
+        });
+        let first = |i: usize, p: [(f64, f64); 4]| {
+            let pick = |q: (f64, f64)| if i == 0 { q.0 } else { q.1 };
+            let [p0, b1, b2, p3] = p.map(pick);
+            let near = 27.0 * b1 - 8.0 * p0 - p3;
+            let far = 27.0 * b2 - p0 - 8.0 * p3;
+            ((2.0 * near - far) / 18.0, (2.0 * far - near) / 18.0)
         };
-        let velocity = |t: f64| {
-            let r = self.base * (1.0 + t * t).sqrt();
-            let a = centre + side * (lead - (t - t.atan()));
-            let grow = self.base * t / (1.0 + t * t).sqrt();
-            let turn = -side * t * t / (1.0 + t * t) * r;
-            (
-                grow * a.cos() - turn * a.sin(),
-                grow * a.sin() + turn * a.cos(),
-            )
-        };
-        let step = (to - from) / 3.0;
-        let (p0, p1) = (point(from), point(to));
-        let (v0, v1) = (velocity(from), velocity(to));
+        let points = [p0, b1, b2, p3];
+        let (x, y) = (first(0, points), first(1, points));
         Segment::Cubic {
-            to: p1,
-            c1: (p0.0 + step * v0.0, p0.1 + step * v0.1),
-            c2: (p1.0 - step * v1.0, p1.1 - step * v1.1),
+            to: p3,
+            c1: (x.0, y.0),
+            c2: (x.1, y.1),
         }
     }
 
     fn outline(&self, start: f64, at: (f64, f64)) -> ((f64, f64), Vec<Segment>) {
         let low = self.root.max(self.base);
-        let (start_roll, end_roll) = (self.roll(low), self.roll(self.tip));
-        let middle = (start_roll + end_roll) / 2.0;
+        let (foot_roll, tip_roll) = (self.roll(low), self.roll(self.tip));
+        let middle = foot_roll + (tip_roll - foot_roll) * 0.4;
+        let inner = [0.0, 1.0, 2.0, 3.0].map(|k| {
+            (foot_roll * foot_roll + (middle * middle - foot_roll * foot_roll) * k / 3.0).sqrt()
+        });
+        let outer = [0.0, 1.0, 2.0, 3.0].map(|k| middle + (tip_roll - middle) * k / 3.0);
+        let reversed = |r: [f64; 4]| [r[3], r[2], r[1], r[0]];
         let gap = std::f64::consts::PI / self.teeth as f64;
         let polar = |r: f64, a: f64| (at.0 + r * a.cos(), at.1 + r * a.sin());
         let foot = self.half(low);
@@ -899,14 +900,14 @@ impl GearShape {
                 radial(c - foot, low)
                     .into_iter()
                     .chain([
-                        self.flank(c, -1.0, start_roll, middle, at),
-                        self.flank(c, -1.0, middle, end_roll, at),
+                        self.flank(c, -1.0, inner, at),
+                        self.flank(c, -1.0, outer, at),
                         Segment::Arc {
                             to: polar(self.tip, c + tip),
                             via: polar(self.tip, c),
                         },
-                        self.flank(c, 1.0, end_roll, middle, at),
-                        self.flank(c, 1.0, middle, start_roll, at),
+                        self.flank(c, 1.0, reversed(outer), at),
+                        self.flank(c, 1.0, reversed(inner), at),
                     ])
                     .chain(radial(c + foot, self.root))
                     .chain(std::iter::once(Segment::Arc {
