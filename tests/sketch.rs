@@ -74,9 +74,8 @@ fn involute_gear_area(teeth: f64, module: f64) -> f64 {
     let pitch = module * teeth / 2.0;
     let base = pitch * pressure.cos();
     let involute = |a: f64| a.tan() - a;
-    let half = |r: f64| {
-        PI / (2.0 * teeth) + involute(pressure) - involute((base / r.max(base)).acos())
-    };
+    let half =
+        |r: f64| PI / (2.0 * teeth) + involute(pressure) - involute((base / r.max(base)).acos());
     let (root, tip) = (pitch - 1.25 * module, pitch + module);
     let steps = 20000;
     let tooth: f64 = (0..steps)

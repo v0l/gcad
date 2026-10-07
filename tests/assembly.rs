@@ -649,7 +649,12 @@ fn meshed(test: &str, phase: f64) -> Vec<Result<String, String>> {
     ]
     .join("\n");
     let frame = "plane XY offset=-20\nrect 80 40 at=16,0\nextrude 5\n";
-    steps(test, &assembly, &[("gear.lcad", GEAR), ("frame.lcad", frame)]).1
+    steps(
+        test,
+        &assembly,
+        &[("gear.lcad", GEAR), ("frame.lcad", frame)],
+    )
+    .1
 }
 
 #[test]
@@ -657,6 +662,9 @@ fn gears_in_mesh_turn_without_touching() {
     let results = meshed("gears_in_mesh", 15.0);
     assert!(results.iter().all(Result::is_ok), "{results:?}");
     let failed = meshed("gears_out_of_phase", 0.0);
-    let clash = failed.iter().find_map(|r| r.as_ref().err()).expect("teeth clash");
+    let clash = failed
+        .iter()
+        .find_map(|r| r.as_ref().err())
+        .expect("teeth clash");
     assert!(clash.contains("a and b"), "{clash}");
 }
