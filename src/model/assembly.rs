@@ -109,7 +109,7 @@ impl Mate {
                 match (a, b) {
                     (Feature::Plane(..), Feature::Plane(..))
                     | (Feature::Axis(..), Feature::Axis(..)) => {
-                        degrees < 1.0e-3 || degrees > 180.0 - 1.0e-3
+                        !(1.0e-3..=180.0 - 1.0e-3).contains(&degrees)
                     }
                     _ => (degrees - 90.0).abs() < 1.0e-3,
                 }
