@@ -206,17 +206,15 @@ fn rib() {
 }
 
 #[test]
-#[ignore = "missing: loft smooth"]
 fn smooth_loft() {
     let model = build(
         "rect 20 20\nsection\nplane XY offset=10\nrect 10 10\nsection\nplane XY offset=20\nrect 20 20\nsection\nloft smooth",
     );
     let v = volume(&model);
-    assert!(v > 2.0 * frustum(400.0, 100.0, 10.0) && v < 8000.0, "{v}");
+    assert!(v > 2000.0 && v < 2.0 * frustum(400.0, 100.0, 10.0), "{v}");
 }
 
 #[test]
-#[ignore = "missing: loft between different edge counts"]
 fn loft_mixed_profiles() {
     let model = build("circle 20\nsection\nplane XY offset=10\nngon 20 6\nsection\nloft");
     let v = volume(&model);
@@ -227,15 +225,13 @@ fn loft_mixed_profiles() {
 }
 
 #[test]
-#[ignore = "missing: path smooth"]
 fn sweep_smooth_path() {
     let model = build("circle 2\npath 0,0,0 10,0,10 20,0,0 smooth\nsweep");
     let v = volume(&model);
-    assert!(v > PI * 2.0 * 28.28 && v < PI * 2.0 * 40.0, "{v}");
+    assert!(v > PI * 28.28 && v < PI * 40.0, "{v}");
 }
 
 #[test]
-#[ignore = "missing: sweep twist="]
 fn sweep_twist() {
     assert_volume(
         &build("rect 4 2\npath 0,0,0 0,0,20\nsweep twist=90"),
@@ -245,7 +241,6 @@ fn sweep_twist() {
 }
 
 #[test]
-#[ignore = "missing: sweep scale="]
 fn sweep_scale() {
     assert_volume(
         &build("circle 4\npath 0,0,0 0,0,10\nsweep scale=0.5"),

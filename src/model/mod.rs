@@ -9,6 +9,7 @@ mod measure;
 mod path;
 mod round;
 mod sketch;
+mod skin;
 mod solids;
 mod weld;
 
@@ -16,6 +17,7 @@ use crate::geometry::{self, Frame, Profile, Segment};
 use crate::parse::{Line, Scope};
 use crate::select::{self, Groups};
 use anyhow::{Result, anyhow, bail};
+use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -341,7 +343,8 @@ impl Model {
 
     pub fn describe_solid(&self) -> Result<String> {
         let solid = self.solid.as_ref().ok_or_else(|| anyhow!("no solid"))?;
-        let bounds = geometry::bounds(solid);
+        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+        let bounds: BoundingBox<Point3> = mesh.positions().iter().copied().collect();
         let tidy = |v: f64| if v.abs() < 5.0e-4 { 0.0 } else { v };
         let (min, max) = (bounds.min().map(tidy), bounds.max().map(tidy));
         let others = match self.bodies.len() {
@@ -351,7 +354,7 @@ impl Model {
         Ok(format!(
             "{} faces, volume {:.3}, bbox [{:.3}, {:.3}, {:.3}]..[{:.3}, {:.3}, {:.3}]{others}",
             select::faces(solid).len(),
-            geometry::volume(solid),
+            mesh.volume(),
             min.x,
             min.y,
             min.z,

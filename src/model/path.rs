@@ -19,6 +19,27 @@ pub enum SweepPath {
         pitch: f64,
         turns: f64,
     },
+    Spline {
+        points: Vec<Point3>,
+    },
+}
+
+fn spline_curve(points: &[Point3]) -> Result<BsplineCurve<Point3>> {
+    let mut params = vec![0.0];
+    for pair in points.windows(2) {
+        params.push(params.last().expect("non-empty") + pair[0].distance(pair[1]));
+    }
+    let total = *params.last().expect("non-empty");
+    params.iter_mut().for_each(|t| *t /= total);
+    let degree = 3.min(points.len() - 1);
+    let n = points.len();
+    let mut knots = vec![0.0; degree + 1];
+    knots
+        .extend((1..n - degree).map(|j| params[j..j + degree].iter().sum::<f64>() / degree as f64));
+    knots.extend(vec![1.0; degree + 1]);
+    let pairs: Vec<(f64, Point3)> = params.into_iter().zip(points.iter().copied()).collect();
+    BsplineCurve::try_interpolate(KnotVector::from(knots), pairs)
+        .map_err(|e| anyhow!("smooth path: {e}"))
 }
 
 enum Piece {
@@ -149,6 +170,26 @@ impl SweepPath {
                     tangent,
                 ))
             }
+            SweepPath::Spline { points } => {
+                let curve = spline_curve(points)?;
+                let dense: Vec<Point3> = (0..=512).map(|i| curve.subs(i as f64 / 512.0)).collect();
+                let lengths: Vec<f64> = std::iter::once(0.0)
+                    .chain(dense.windows(2).scan(0.0, |sum, pair| {
+                        *sum += pair[0].distance(pair[1]);
+                        Some(*sum)
+                    }))
+                    .collect();
+                let target = fraction.clamp(0.0, 1.0) * lengths[512];
+                let k = lengths
+                    .windows(2)
+                    .position(|w| w[1] >= target)
+                    .unwrap_or(511);
+                let t = (k as f64
+                    + ((target - lengths[k]) / (lengths[k + 1] - lengths[k]).max(1.0e-300))
+                        .clamp(0.0, 1.0))
+                    / 512.0;
+                Ok((curve.subs(t), curve.der(t).normalize()))
+            }
             SweepPath::Polyline { points, bend } => {
                 let (first, parts) = pieces(points, *bend)?;
                 let length = |piece: &Piece| match piece {
@@ -192,13 +233,30 @@ impl SweepPath {
 impl Model {
     pub(crate) fn op_path(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &[], &["r"], true)?;
+        let smooth = args.rest.last() == Some(&"smooth");
         let points = args
             .rest
             .iter()
+            .filter(|text| **text != "smooth")
             .map(|text| point3(text, &self.scope))
             .collect::<Result<Vec<_>>>()?;
         if points.len() < 2 {
             bail!("`path` needs at least two x,y,z points");
+        }
+        if smooth {
+            if args.has("r") {
+                bail!("a `smooth` path has no corners to bend; drop `r=`");
+            }
+            let curve = spline_curve(&points)?;
+            let length: f64 = (0..256)
+                .map(|i| {
+                    curve
+                        .subs(i as f64 / 256.0)
+                        .distance(curve.subs((i + 1) as f64 / 256.0))
+                })
+                .sum();
+            self.path = Some(SweepPath::Spline { points });
+            return Ok(format!("smooth path {length:.3} long"));
         }
         let bend = args.optional_number("r", &self.scope)?.unwrap_or(0.0);
         let (_, parts) = pieces(&points, bend)?;
@@ -237,15 +295,24 @@ impl Model {
     }
 
     pub(crate) fn op_sweep(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &[], &["mode"], false)?;
+        let args = Args::new(line, &[], &["mode", "twist", "scale"], false)?;
         let combine = super::args::combine_mode(&args)?;
         let path = self
             .path
             .clone()
             .ok_or_else(|| anyhow!("`sweep` needs a `path` or `helix` first"))?;
+        let twist = args.optional_number("twist", &self.scope)?.unwrap_or(0.0);
+        let scale = positive(
+            args.optional_number("scale", &self.scope)?.unwrap_or(1.0),
+            "scale",
+        )?;
         let (sketch, profiles) = self.take_sketch("sweep")?;
         let label = label_of(line);
+        let (start_point, _) = path.at(0.0)?;
+        let (end_point, _) = path.at(1.0)?;
+        let shaped = twist != 0.0 || scale != 1.0 || matches!(path, SweepPath::Spline { .. });
         let tools = match path {
+            path if shaped => skinned_sweep(&path, &sketch, &profiles, twist, scale)?,
             SweepPath::Polyline { points, bend } => {
                 let (direction, parts) = pieces(&points, bend)?;
                 let frame = start_frame(&sketch, points[0], direction);
@@ -259,6 +326,7 @@ impl Model {
                     })
                     .collect::<Result<Vec<_>>>()?
             }
+            SweepPath::Spline { .. } => unreachable!("smooth paths are skinned"),
             SweepPath::Helix {
                 frame,
                 radius,
@@ -278,23 +346,26 @@ impl Model {
                 vec![loft_wires(&wires)?]
             }
         };
+        let tolerance = self.tolerance() * 100.0;
         for tool in tools {
-            let faces = select::faces(&tool);
-            let count = faces.len();
-            let groups = faces
+            let groups = select::faces(&tool)
                 .iter()
-                .enumerate()
-                .map(|(i, face)| {
-                    (
-                        if i == 0 {
-                            "start"
-                        } else if i + 1 == count {
-                            "end"
-                        } else {
-                            "side"
-                        },
-                        face.oriented_surface(),
-                    )
+                .map(|face| {
+                    let surface = face.oriented_surface();
+                    let on = |p: Point3| match &surface {
+                        Surface::Plane(plane) => {
+                            (p - plane.origin()).dot(plane.normal()).abs() < tolerance
+                        }
+                        _ => false,
+                    };
+                    let group = if on(start_point) {
+                        "start"
+                    } else if on(end_point) {
+                        "end"
+                    } else {
+                        "side"
+                    };
+                    (group, surface)
                 })
                 .collect();
             self.record_for(&label, groups, combine);
@@ -302,6 +373,76 @@ impl Model {
         }
         self.describe_solid()
     }
+}
+
+fn skinned_sweep(
+    path: &SweepPath,
+    sketch: &Frame,
+    profiles: &[crate::geometry::Profile],
+    twist: f64,
+    scale: f64,
+) -> Result<Vec<Solid>> {
+    let curved = !matches!(path, SweepPath::Polyline { points, .. } if points.len() == 2);
+    let stations = [
+        2,
+        (twist.abs() / 10.0).ceil() as usize + 1,
+        if curved { 33 } else { 2 },
+        if scale != 1.0 { 5 } else { 2 },
+    ]
+    .into_iter()
+    .max()
+    .unwrap_or(2);
+    let (origin, tangent) = path.at(0.0)?;
+    let mut frame = start_frame(sketch, origin, tangent);
+    let mut frames = Vec::new();
+    for k in 0..stations {
+        let f = k as f64 / (stations - 1) as f64;
+        let (point, tangent) = path.at(f)?;
+        let turn = frame.normal.cross(tangent);
+        let x = if turn.magnitude() > 1.0e-12 {
+            let angle = frame.normal.dot(tangent).clamp(-1.0, 1.0).acos();
+            Matrix3::from_axis_angle(turn.normalize(), Rad(angle)) * frame.x
+        } else {
+            frame.x
+        };
+        let x = (x - tangent * x.dot(tangent)).normalize();
+        frame = Frame {
+            origin: point,
+            x,
+            y: tangent.cross(x),
+            normal: tangent,
+        };
+        let spin = Matrix3::from_axis_angle(tangent, Deg(twist * f));
+        let size = 1.0 + (scale - 1.0) * f;
+        frames.push(Frame {
+            origin: point,
+            x: spin * frame.x * size,
+            y: spin * frame.y * size,
+            normal: tangent,
+        });
+    }
+    let shapes = loops(&frames[0], profiles)?;
+    let at_station = |k: usize, index: usize| -> Result<Wire> {
+        let loops = loops(&frames[k], profiles)?;
+        Ok(loops[index].wire.clone())
+    };
+    regions(&shapes)
+        .iter()
+        .map(|region| {
+            let skin_of = |index: usize| -> Result<Solid> {
+                let wires = (0..stations)
+                    .map(|k| at_station(k, index))
+                    .collect::<Result<Vec<_>>>()?;
+                super::skin::skin(&wires, true)
+            };
+            let mut solid = skin_of(region[0])?;
+            for &hole in &region[1..] {
+                solid = monstertruck::solid::difference_normalized(&solid, &skin_of(hole)?)
+                    .map_err(|e| anyhow!("cutting a hole through the sweep: {e}"))?;
+            }
+            Ok(solid)
+        })
+        .collect()
 }
 
 fn sweep_face(wires: Vec<Wire>, direction: Vector3, parts: &[Piece]) -> Result<Solid> {

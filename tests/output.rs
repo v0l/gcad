@@ -42,6 +42,15 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
             "rect 40 40\nbase: extrude 10\nplane XZ\nrect 4 4 at=10,10\nrevolve 360 axis=y mode=cut",
         ),
         ("rounded-poly", "poly 0,0 30,0 30,20 0,20 r=4\nextrude 5"),
+        ("twisted", "rect 4 2\npath 0,0,0 0,0,20\nsweep twist=90"),
+        (
+            "smooth-sweep",
+            "circle 2\npath 0,0,0 10,0,10 20,0,0 smooth\nsweep",
+        ),
+        (
+            "mixed-loft",
+            "circle 20\nsection\nplane XY offset=10\nngon 20 6\nsection\nloft",
+        ),
         (
             "partly-rounded",
             "rect 20 20\nbase: extrude 20\nfillet 2 base.end&base.side|>X&>Y",

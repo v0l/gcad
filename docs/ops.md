@@ -80,11 +80,11 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | extrude to an offset from a face | supported | `extrude upto=face offset=-2` | `features::extrude_up_to_offset_face` |
 | extrude to the next face | supported | `extrude next` | `features::extrude_to_next_face` |
 | rib | missing | open `pen` path, then `rib 2` | `features::rib` |
-| smooth loft | missing | `loft smooth` | `features::smooth_loft` |
-| loft between different profiles | missing | `section`s with different edge counts | `features::loft_mixed_profiles` |
-| sweep along a smooth path | missing | `path ... smooth` | `features::sweep_smooth_path` |
-| sweep with twist | missing | `sweep twist=90` | `features::sweep_twist` |
-| sweep with scale | missing | `sweep scale=0.5` | `features::sweep_scale` |
+| smooth loft | supported | `loft smooth` | `features::smooth_loft` |
+| loft between different profiles | supported | `section`s with different edge counts | `features::loft_mixed_profiles` |
+| sweep along a smooth path | supported | `path ... smooth` | `features::sweep_smooth_path` |
+| sweep with twist | supported | `sweep twist=90` | `features::sweep_twist` |
+| sweep with scale | supported | `sweep scale=0.5` | `features::sweep_scale` |
 | modelled thread | missing | `thread M6 on=rod.side` | `features::modelled_thread` |
 | shell with several openings | missing | `shell 2 open=a.end,a.start` | `features::shell_two_openings` |
 | shell of any solid | missing | `shell 1` on a revolve | `features::shell_revolved` |

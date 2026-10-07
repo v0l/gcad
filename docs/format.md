@@ -105,11 +105,11 @@ Features:
 | `extrude` | `d`, `next` or `upto=faces` `offset=`, `both`, `draft=`, `thin=`, `mode=add\|cut\|intersect` | adds the sketch along the plane normal (negative `d` goes the other way); `both` centres it on the plane; `upto` stops at a flat face, `offset` past it; `next` stops at the first face the sketch reaches; `draft` tapers it inward by degrees; `thin` makes walls that thick inside the profile |
 | `cut` | `d` or `thru`, `draft=` | removes the sketch from the solid, going into it against the plane normal |
 | `revolve` | `angle` `axis=x\|y\|name` `mode=` | spins the sketch about the workplane's x or y axis through its origin, or a named `axis` |
-| `path` | `x,y,z x,y,z ...` `r=` | sets the sweep path in world coordinates; corners are bent with radius `r` |
+| `path` | `x,y,z x,y,z ...` `r=` or `smooth` | sets the sweep path in world coordinates; corners are bent with radius `r`, or `smooth` makes one curve through the points |
 | `helix` | `r= pitch= turns=` `at=x,y` | sets a helical sweep path about the workplane normal |
-| `sweep` | `mode=` | carries the sketch from the path start along the path |
+| `sweep` | `mode=` `twist=` `scale=` | carries the sketch from the path start along the path, turning it `twist` degrees and sizing it to `scale` by the end |
 | `section` | | stores the sketch as one cross-section for `loft` |
-| `loft` | `mode=` | joins the stored sections with ruled faces; every section needs the same number of edges |
+| `loft` | `smooth` `mode=` | joins the stored sections with ruled faces, or one smooth surface through them all with `smooth`; sections with different edge counts are matched up by splitting edges |
 | `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it |
 | `shell` | `t` `open=label.end` | hollows an extrusion to walls `t` thick, leaving the named cap open |
 | `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face |

@@ -395,8 +395,13 @@ impl Model {
     }
 
     pub(crate) fn op_loft(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &[], &["mode"], false)?;
+        let args = Args::new(line, &["how"], &["mode"], false)?;
         let combine = combine_mode(&args)?;
+        let smooth = match args.values.get("how").copied() {
+            None => false,
+            Some("smooth") => true,
+            Some(other) => bail!("`{other}` is not a loft option; did you mean `smooth`?"),
+        };
         if self.sections.len() < 2 {
             bail!(
                 "`loft` needs at least two `section` lines, it has {}",
@@ -420,12 +425,11 @@ impl Model {
             })
             .collect::<Result<Vec<_>>>()?;
         let counts: Vec<usize> = wires.iter().map(|wire| wire.len()).collect();
-        if counts.windows(2).any(|pair| pair[0] != pair[1]) {
-            bail!(
-                "sections have {counts:?} edges; loft needs the same number in each (a rect and a poly of 4 points, a circle and a circle)"
-            );
-        }
-        let tool = loft_wires(&wires)?;
+        let tool = if smooth || counts.windows(2).any(|pair| pair[0] != pair[1]) {
+            super::skin::skin(&wires, smooth)?
+        } else {
+            loft_wires(&wires)?
+        };
         let label = label_of(line);
         let faces = select::faces(&tool);
         let count = faces.len();
