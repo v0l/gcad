@@ -8,22 +8,8 @@ if screwed part s1 ../parts/screw.lcad
 if screwed concentric s1:shank.side case.lid:screws.side near=bx,by,h
 if screwed flush s1:head.start case.lid:top.end
 if screwed concentric s1:shank.side case.main:pilot.side
-if screwed part s2 ../parts/screw.lcad
-if screwed concentric s2:shank.side case.lid:screws.side near=-bx,by,h
-if screwed flush s2:head.start case.lid:top.end
-if screwed concentric s2:shank.side case.main:pilot.side
-if screwed part s3 ../parts/screw.lcad
-if screwed concentric s3:shank.side case.lid:screws.side near=-bx,-by,h
-if screwed flush s3:head.start case.lid:top.end
-if screwed concentric s3:shank.side case.main:pilot.side
-if screwed part s4 ../parts/screw.lcad
-if screwed concentric s4:shank.side case.lid:screws.side near=bx,-by,h
-if screwed flush s4:head.start case.lid:top.end
-if screwed concentric s4:shank.side case.main:pilot.side
+if screwed explode s1 0,0,25
+if screwed pattern s1 holes=case.lid:screws.side
 pose lid open
 explode case.lid 0,0,30
-if screwed explode s1 0,0,25
-if screwed explode s2 0,0,25
-if screwed explode s3 0,0,25
-if screwed explode s4 0,0,25
 interference none

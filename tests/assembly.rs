@@ -580,3 +580,52 @@ fn a_four_bar_linkage_follows_its_crank() {
             .all(|m| m.holds([monstertruck::modeling::Matrix4::from_scale(1.0); 2]))
     );
 }
+
+#[test]
+fn pattern_copies_a_part_and_its_mates() {
+    let plate = "rect 60 20\nbase: extrude 5\nplane base.end\nholes: hole 3 -20,0 0,0 20,0\n";
+    let pin = "circle 5\nhead: extrude 1\ncircle 3\npin: extrude -5\n";
+    let parts = [("plate.lcad", plate), ("pin.lcad", pin)];
+    let pinned = "part plate plate.lcad\npart p pin.lcad\nconcentric p:pin.side plate:holes.side near=-20,0,5\nflush p:head.start plate:base.end\npattern p holes=plate:holes.side\n";
+    let (model, text) = built("pattern_holes", pinned, &parts);
+    assert!(text.contains("p_2, p_3, each with 2 mate(s)"), "{text}");
+    let mut centres: Vec<f64> = ["p", "p_2", "p_3"]
+        .iter()
+        .map(|n| {
+            let b = extent(&model, n);
+            assert!(near(b.max().z, 6.0) && near(b.min().z, 0.0), "{n}: {b:?}");
+            (b.min().x + b.max().x) / 2.0
+        })
+        .collect();
+    centres.sort_by(f64::total_cmp);
+    assert!(
+        near(centres[0], -20.0) && near(centres[1], 0.0) && near(centres[2], 20.0),
+        "{centres:?}"
+    );
+    assert_eq!(
+        model.joints.iter().filter(|j| j.parent == "plate").count(),
+        3
+    );
+    let (model, _) = built(
+        "pattern_step",
+        "part plate plate.lcad\npart p pin.lcad\npattern p count=3 step=10,0,0\n",
+        &parts,
+    );
+    assert!(near(
+        extent(&model, "p_3").min().x - extent(&model, "p").min().x,
+        20.0
+    ));
+    let (model, _) = built(
+        "pattern_turn",
+        "part plate plate.lcad\npart p pin.lcad\nmove p 20,0,0\naxis up 0,0,0 0,0,1\npattern p count=4 angle=360 axis=up\n",
+        &parts,
+    );
+    let b = extent(&model, "p_2");
+    assert!(near((b.min().y + b.max().y) / 2.0, 20.0), "{b:?}");
+    let error = failed(
+        "pattern_unmated",
+        "part plate plate.lcad\npart p pin.lcad\npattern p holes=plate:holes.side\n",
+        &parts,
+    );
+    assert!(error.contains("mate it into one first"), "{error}");
+}

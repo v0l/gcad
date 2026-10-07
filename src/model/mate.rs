@@ -334,7 +334,7 @@ impl Model {
         }
     }
 
-    fn holes(&self, text: &str) -> Result<(String, Vec<Cylinder>)> {
+    pub(crate) fn holes(&self, text: &str) -> Result<(String, Vec<Cylinder>)> {
         let (part, solid, faces) = self.reference(text)?;
         let key = self.fit_key(&part, text, &faces);
         let found = self.cache.cylinders(key, || cylinders(&solid, &faces));

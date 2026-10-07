@@ -9,6 +9,7 @@ mod import;
 pub mod mate;
 mod measure;
 mod path;
+mod pattern;
 mod rib;
 mod round;
 mod sketch;

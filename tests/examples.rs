@@ -41,7 +41,7 @@ fn enclosure_assembly() {
     assert!(run.steps.iter().all(|(_, r)| r.is_ok()));
     assert_eq!(
         run.model.body_names(),
-        ["case.main", "case.lid", "s1", "s2", "s3", "s4"]
+        ["case.main", "case.lid", "s1", "s1_2", "s1_3", "s1_4"]
     );
     let opened =
         linecad::model::run_path(&path, &[("open".to_string(), -75.0)], None).expect("runs");

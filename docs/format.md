@@ -185,6 +185,7 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 | `distance` | `moving:faces fixed:faces length` | makes two faces, two axes, or an axis and a face parallel and `length` apart, keeping the moving part on the side it is on |
 | `tangent` | `moving:faces fixed:faces` | lays a round face on a flat one, or against another round face, with its axis parallel |
 | `aligned` | `a:faces b:faces` `tol=` | checks that every hole in `a` has a parallel hole in `b` on the same axis, within `tol` (0.05 by default), and fails the line if not |
+| `pattern` | `part holes=part:faces`, or `count=` with `step=x,y,z` or `angle=` `axis=` | copies a part. `holes=` puts a copy in each other hole of a set the part is `concentric` with, and gives each copy the part's mates; `step=` and `angle=` space `count` copies out from the part. Copies are called `part_2`, `part_3` and so on |
 | `explode` | `part x,y,z` | moves a part and the parts held by it by that much in exploded views only: `render --explode` and the viewer's explode slider. It does not change where the part is for mates, joints, interference or export |
 | `color` | `part colour` | colours a part, over the colour its file gave it |
 | `material` | `part name` `density=` | sets a part's material, over the one its file gave it |
@@ -236,9 +237,10 @@ if screwed part s1 ../parts/screw.lcad
 if screwed concentric s1:shank.side case.lid:screws.side near=bx,by,h
 if screwed flush s1:head.start case.lid:top.end
 if screwed concentric s1:shank.side case.main:pilot.side
+if screwed explode s1 0,0,25
+if screwed pattern s1 holes=case.lid:screws.side
 pose lid open
 explode case.lid 0,0,30
-if screwed explode s1 0,0,25
 interference none
 ```
 
