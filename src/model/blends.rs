@@ -42,26 +42,24 @@ impl Model {
                 positive(second, "d2")?,
             );
         }
-        let every_edge = solid
+        let three_at_a_corner = solid
             .boundaries()
             .iter()
-            .flat_map(|shell| shell.edge_iter())
-            .fold(Vec::<Edge>::new(), |mut all, e| {
-                if !all.iter().any(|known| known.is_same(&e)) {
-                    all.push(e);
-                }
-                all
+            .flat_map(|shell| shell.vertex_iter())
+            .any(|vertex| {
+                edges
+                    .iter()
+                    .filter(|edge| edge.front() == &vertex || edge.back() == &vertex)
+                    .count()
+                    >= 3
             });
-        if matches!(profile, FilletProfile::Round)
-            && !args.has("to")
-            && every_edge.len() == edges.len()
-        {
+        if matches!(profile, FilletProfile::Round) && !args.has("to") && three_at_a_corner {
             let before: Vec<Surface> = select::faces(&solid)
                 .iter()
                 .map(|face| face.oriented_surface())
                 .collect();
-            let result = super::round::round_every_edge(&solid, size)
-                .map_err(|error| anyhow!("rounding every edge: {error}"))?;
+            let result = super::round::round_edges(&solid, &edges, size)
+                .map_err(|error| anyhow!("rounding a corner where three edges meet: {error}"))?;
             let label = label_of(line);
             select::faces(&result)
                 .iter()

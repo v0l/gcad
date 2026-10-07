@@ -76,7 +76,13 @@ fn fillet_every_edge_of_a_prism() {
 }
 
 #[test]
-#[ignore = "missing: vertex blends for some of the edges at a corner"]
+fn fillet_three_edges_at_one_corner() {
+    let model = build("rect 20 20\nextrude 20\nfillet 2 >X&>Y|>X&>Z|>Y&>Z");
+    let removed = 3.0 * 18.0 * SPANDREL * 4.0 + 8.0 * (1.0 - PI / 6.0);
+    assert_volume(&model, 8000.0 - removed, 0.0002);
+}
+
+#[test]
 fn fillet_some_edges_at_a_corner() {
     let model =
         build("rect 20 20\nbase: extrude 20\nfillet 2 base.end&base.side|base.side&base.side");

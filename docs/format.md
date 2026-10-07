@@ -175,9 +175,9 @@ Y green, Z blue.
 
 ## Limits
 
-- Rounding every edge of a flat-faced convex solid (`fillet r all`) works and gives
-  spherical corners. Rounding only some of the edges that meet at a corner fails;
-  round the vertical edges in the sketch with `rect r=` and fillet the rest.
+- Where three rounded edges meet, the corner is a sphere. Rounding at such corners
+  needs flat faces, straight outside edges, and square faces wherever a rounded edge
+  meets one that is not rounded.
 - `draft` and pushing a face inward work on flat-sided parts, where every moved corner
   is where three flat faces meet.
 - `shell` hollows the extrusion that owns the open face, so do it before adding other

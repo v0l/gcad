@@ -76,7 +76,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | fillet a smooth chain | supported | rounded or circular edges | `blends::fillet_smooth_chain`, `blends::fillet_cylinder_rim` |
 | fillet parallel edges | supported | `fillet 3 base.side&base.side` | `blends::fillet_vertical_edges` |
 | fillet every edge of a flat-faced convex solid | supported | `fillet 2 all` | `blends::fillet_every_edge_of_a_box`, `blends::fillet_every_edge_of_a_prism` |
-| fillet some of the edges where three meet | missing | `fillet 2 base.end&base.side\|base.side&base.side` | `blends::fillet_some_edges_at_a_corner` |
+| fillet some of the edges where three meet | supported | `fillet 2 base.end&base.side\|base.side&base.side` | `blends::fillet_some_edges_at_a_corner`, `blends::fillet_three_edges_at_one_corner` |
 | variable radius fillet | supported | `fillet 1 edges to=2` | `blends::fillet_variable_radius` |
 | chamfer | supported | `chamfer 1 base.end&base.side` | `blends::chamfer_closed_chain`, `blends::chamfer_hole_rim` |
 | chamfer with two distances | supported | `chamfer 1 edges d2=2` | `blends::chamfer_two_distances` |
