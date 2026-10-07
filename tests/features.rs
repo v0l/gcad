@@ -258,7 +258,6 @@ fn modelled_thread() {
 }
 
 #[test]
-#[ignore = "missing: shell with several openings"]
 fn shell_two_openings() {
     assert_volume(
         &build("rect 40 30\nbase: extrude 20\nshell 2 open=base.end,base.start"),
@@ -268,16 +267,14 @@ fn shell_two_openings() {
 }
 
 #[test]
-#[ignore = "missing: shell of non-extrusions"]
 fn shell_revolved() {
     let model = build(
-        "plane XZ\npen 0,0\nline 10,0\narc 0,10 center=0,0\nclose\ndome: revolve 360\nshell 1",
+        "plane XZ\npen 0,0\nline 10,0\narc 0,10 center=0,0\nclose\ndome: revolve 360\nshell 1 open=dome.caps",
     );
     assert_volume(&model, 2.0 / 3.0 * PI * (1000.0 - 729.0), 0.002);
 }
 
 #[test]
-#[ignore = "missing: draft curved faces"]
 fn draft_curved() {
     let top = 10.0 - 10.0 * 5.0_f64.to_radians().tan();
     let model = build("circle 20\nbase: extrude 10\ndraft 5 base.side neutral=base.start");
@@ -289,7 +286,6 @@ fn draft_curved() {
 }
 
 #[test]
-#[ignore = "missing: push in with curved sides"]
 fn push_curved() {
     assert_volume(
         &build("circle 20\nbase: extrude 10\npush base.end -2"),
@@ -306,7 +302,6 @@ fn wrap_text() {
 }
 
 #[test]
-#[ignore = "missing: thicken"]
 fn thicken_face() {
     assert_volume(
         &build("circle 20\nbase: extrude 10\nthicken base.side 1"),

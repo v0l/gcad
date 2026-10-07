@@ -86,12 +86,12 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | sweep with twist | supported | `sweep twist=90` | `features::sweep_twist` |
 | sweep with scale | supported | `sweep scale=0.5` | `features::sweep_scale` |
 | modelled thread | missing | `thread M6 on=rod.side` | `features::modelled_thread` |
-| shell with several openings | missing | `shell 2 open=a.end,a.start` | `features::shell_two_openings` |
-| shell of any solid | missing | `shell 1` on a revolve | `features::shell_revolved` |
-| draft curved faces | missing | `draft 5 base.side` on a cylinder | `features::draft_curved` |
-| push in with curved sides | missing | `push base.end -2` on a cylinder | `features::push_curved` |
+| shell with several openings | supported | `shell 2 open=a.end,a.start` | `features::shell_two_openings` |
+| shell of any solid | supported | `shell 1` on a revolve | `features::shell_revolved` |
+| draft curved faces | supported | `draft 5 base.side` on a cylinder | `features::draft_curved` |
+| push in with curved sides | supported | `push base.end -2` on a cylinder | `features::push_curved` |
 | wrap a sketch onto a face | missing | `wrap base.side depth=0.5` | `features::wrap_text` |
-| thicken a face | missing | `thicken base.side 1` | `features::thicken_face` |
+| thicken a face | supported | `thicken base.side 1` | `features::thicken_face` |
 | union with coplanar faces | supported | same-size box on a face | `features::stack_same_size` |
 | cut with coplanar faces | supported | notch flush with the sides | `features::notch_flush_with_sides` |
 | union flush with some sides | missing | step on top, flush with three sides | `features::step_flush_with_sides` |
@@ -107,7 +107,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | countersink | supported | `hole 3.2 0,0 csink=6.4,90` | `holes::countersink` |
 | tapped hole | supported | `hole 3.3 0,0 thread=M4` | `holes::threaded` |
 | angled hole | supported | `plane >Z rx=30` then `hole` | `holes::angled` |
-| hole on a curved face | missing | `hole 4 0,10 on=rod.side` | `holes::on_a_curved_face` |
+| hole on a curved face | supported | `hole 4 0,10 on=rod.side` | `holes::on_a_curved_face` |
 
 
 ## Fillets and chamfers

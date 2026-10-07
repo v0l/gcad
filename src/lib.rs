@@ -2,6 +2,7 @@ pub mod drawing;
 pub mod export;
 pub mod geometry;
 pub mod model;
+pub mod offset;
 pub mod parse;
 pub mod render;
 pub mod select;

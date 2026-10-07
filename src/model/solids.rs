@@ -142,11 +142,52 @@ fn span_surface(surface: &Surface, face: &Face, span: f64) -> Option<NurbsSurfac
         .find(fits)
 }
 
+fn flat(surface: &Surface) -> Option<Plane> {
+    let (u, v) = surface.try_range_tuple();
+    let ((u0, u1), (v0, v1)) = (u?, v?);
+    let samples: Vec<(Point3, Vector3)> = (0..5)
+        .flat_map(|i| {
+            (0..5).map(move |j| {
+                (
+                    u0 + (u1 - u0) * (0.1 + 0.2 * i as f64),
+                    v0 + (v1 - v0) * (0.1 + 0.2 * j as f64),
+                )
+            })
+        })
+        .map(|(u, v)| (surface.subs(u, v), surface.normal(u, v)))
+        .collect();
+    let (origin, normal) = samples[12];
+    if !normal.magnitude().is_finite() || normal.magnitude() < 0.5 {
+        return None;
+    }
+    let size = samples
+        .iter()
+        .map(|(p, _)| p.distance(origin))
+        .fold(0.0, f64::max)
+        .max(1.0e-9);
+    let level = samples.iter().all(|(p, n)| {
+        n.dot(normal) > 1.0 - 1.0e-9 && (p - origin).dot(normal).abs() < size * 1.0e-9
+    });
+    if !level {
+        return None;
+    }
+    let x = samples
+        .iter()
+        .map(|(p, _)| *p - origin)
+        .find(|d| d.magnitude() > size * 0.1)?
+        .normalize();
+    Some(Plane::new(origin, origin + x, origin + normal.cross(x)))
+}
+
 pub(crate) fn rational(solid: Solid, span: f64) -> Solid {
     let copy = builder::clone(&solid);
     for face in copy.boundaries().iter().flat_map(|shell| shell.face_iter()) {
         let surface = face.surface();
         if !matches!(surface, Surface::RevolutionSurface(_)) {
+            continue;
+        }
+        if let Some(plane) = flat(&surface) {
+            face.set_surface(Surface::Plane(plane));
             continue;
         }
         let Some(mut nurbs) = span_surface(&surface, face, span) else {

@@ -110,10 +110,11 @@ Features:
 | `sweep` | `mode=` `twist=` `scale=` | carries the sketch from the path start along the path, turning it `twist` degrees and sizing it to `scale` by the end |
 | `section` | | stores the sketch as one cross-section for `loft` |
 | `loft` | `smooth` `mode=` | joins the stored sections with ruled faces, or one smooth surface through them all with `smooth`; sections with different edge counts are matched up by splitting edges |
-| `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it |
-| `shell` | `t` `open=label.end` | hollows an extrusion to walls `t` thick, leaving the named cap open |
-| `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face |
-| `push` | `faces d` | moves flat faces `d` along their normal, out (positive) or in (negative) |
+| `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` `on=label.side` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it; with `on=` the points are angle,height on the side of an extruded circle and the holes go in square to it |
+| `shell` | `t` `open=faces,...` | hollows an extrusion (open `label.end`, `label.start` or both) or a full revolve (open its flat `label.caps`) to walls `t` thick |
+| `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face; `label.side` of an extrusion that is the whole solid tapers curved sides too |
+| `push` | `faces d` | moves flat faces `d` along their normal, out (positive) or in (negative); an extrusion's `label.end` or `label.start` moves in even with curved sides |
+| `thicken` | `faces t` | grows every side of an extrusion (`label.side`) outward by `t`, or pushes flat faces out by `t` |
 | `fillet` | `size edges` `to=` | rounds the edges with radius `size`, or from `size` to `to` along them |
 | `chamfer` | `size edges` `d2=` | bevels the edges by `size`; with `d2`, the edges must be written `a&b` and `size` is cut along `a`, `d2` along `b` |
 
@@ -232,7 +233,8 @@ Y green, Z blue.
   meets one that is not rounded.
 - `draft` and pushing a face inward work on flat-sided parts, where every moved corner
   is where three flat faces meet.
-- `shell` hollows the extrusion that owns the open face, so do it before adding other
-  features to that extrusion.
+- `shell` hollows the extrusion or revolve that owns the open face, so do it before
+  adding other features to it. A revolve that touches its axis can only be shelled
+  while it is the whole solid.
 - Hole and cut edges made by booleans are fine polylines, not exact circles.
 - `draft` works on profiles without holes.

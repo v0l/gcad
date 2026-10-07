@@ -45,6 +45,7 @@ pub struct Prism {
     pub frame: Frame,
     pub profiles: Vec<Profile>,
     pub distance: f64,
+    pub alone: Option<Vec<monstertruck::topology::FaceId<Surface>>>,
 }
 
 #[derive(Clone, Default)]
@@ -69,6 +70,7 @@ pub struct Model {
     pub construction: Vec<(Frame, Profile)>,
     pub axes: HashMap<String, (Point3, Vector3)>,
     pub colours: HashMap<String, [f64; 3]>,
+    pub revolves: HashMap<String, features::Revolve>,
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -230,6 +232,7 @@ impl Model {
             "axis" => self.op_axis(line),
             "color" => self.op_color(line),
             "dxf" | "svg" => self.op_drawing_file(line),
+            "thicken" => self.op_thicken(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",

@@ -372,6 +372,34 @@ impl Profile {
         }
     }
 
+    pub fn as_path(&self) -> Option<((f64, f64), Vec<Segment>)> {
+        let closed = |points: &[(f64, f64)]| {
+            let segments = points[1..]
+                .iter()
+                .chain(std::iter::once(&points[0]))
+                .map(|p| Segment::Line(*p))
+                .collect();
+            Some((points[0], segments))
+        };
+        match self {
+            Profile::Path { start, segments } => Some((*start, segments.clone())),
+            Profile::Polygon { points } => closed(points),
+            Profile::Rect {
+                center,
+                width,
+                height,
+                radius,
+            } if *radius == 0.0 => {
+                let (hw, hh) = (width / 2.0, height / 2.0);
+                closed(
+                    &[(-hw, -hh), (hw, -hh), (hw, hh), (-hw, hh)]
+                        .map(|(u, v)| (center.0 + u, center.1 + v)),
+                )
+            }
+            _ => None,
+        }
+    }
+
     pub fn inset(&self, delta: f64) -> std::result::Result<Profile, String> {
         match self {
             Profile::Rect {
@@ -427,10 +455,14 @@ impl Profile {
                 inner: Box::new(inner.inset(delta)?),
                 matrix: *matrix,
             }),
-            Profile::Ellipse { .. }
-            | Profile::Path { .. }
-            | Profile::Spline { .. }
-            | Profile::Text { .. } => Err("draft works on rect, circle, poly and slot".to_string()),
+            Profile::Path { start, segments } => {
+                let (start, segments) =
+                    crate::offset::offset_path(*start, segments, &vec![delta; segments.len()])?;
+                Ok(Profile::Path { start, segments })
+            }
+            Profile::Ellipse { .. } | Profile::Spline { .. } | Profile::Text { .. } => {
+                Err("draft works on rect, circle, poly, slot and pen paths".to_string())
+            }
             Profile::Polygon { points } => {
                 let n = points.len();
                 let area: f64 = (0..n)
@@ -468,8 +500,17 @@ pub fn bounds(solid: &Solid) -> BoundingBox<Point3> {
     solid
         .boundaries()
         .iter()
-        .flat_map(|shell| shell.vertex_iter())
-        .map(|vertex| vertex.point())
+        .flat_map(|shell| shell.edge_iter())
+        .flat_map(|edge| {
+            let curve = edge.curve();
+            let (t0, t1) = curve.range_tuple();
+            let steps = if matches!(curve, Curve::Line(_)) {
+                1
+            } else {
+                16
+            };
+            (0..=steps).map(move |i| curve.subs(t0 + (t1 - t0) * i as f64 / steps as f64))
+        })
         .collect()
 }
 

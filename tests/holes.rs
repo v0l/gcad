@@ -63,7 +63,6 @@ fn angled() {
 }
 
 #[test]
-#[ignore = "missing: hole on a curved face"]
 fn on_a_curved_face() {
     let model = build("circle 20\nrod: extrude 20\nhole 4 0,10 on=rod.side");
     assert_volume(&model, PI * 100.0 * 20.0 - PI * 4.0 * 20.0, 0.002);
