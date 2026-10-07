@@ -1,0 +1,26 @@
+[package]
+name = "linecad"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "1.0.104"
+monstertruck = { version = "0.4.1", features = ["solid", "step"] }
+monstertruck-io = { version = "0.4.1", features = ["step"] }
+serde_json = "1.0.151"
+
+[patch.crates-io]
+monstertruck = { path = "../monstertruck/monstertruck" }
+monstertruck-core = { path = "../monstertruck/monstertruck-core" }
+monstertruck-traits = { path = "../monstertruck/monstertruck-traits" }
+monstertruck-derive = { path = "../monstertruck/monstertruck-derive" }
+monstertruck-geometry = { path = "../monstertruck/monstertruck-geometry" }
+monstertruck-topology = { path = "../monstertruck/monstertruck-topology" }
+monstertruck-mesh = { path = "../monstertruck/monstertruck-mesh" }
+monstertruck-meshing = { path = "../monstertruck/monstertruck-meshing" }
+monstertruck-modeling = { path = "../monstertruck/monstertruck-modeling" }
+monstertruck-solid = { path = "../monstertruck/monstertruck-solid" }
+monstertruck-fillet = { path = "../monstertruck/monstertruck-fillet" }
+monstertruck-healing = { path = "../monstertruck/monstertruck-healing" }
+monstertruck-assembly = { path = "../monstertruck/monstertruck-assembly" }
+monstertruck-io = { path = "../monstertruck/monstertruck-io" }
