@@ -29,10 +29,10 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | lines and arcs | supported | `pen`, `line`, `arc via=`, `close` | `sketch::lines_and_arcs` |
 | spline | supported | `spline x,y ... closed` | `sketch::spline` |
 | text | supported | `text LINECAD size=10` | `sketch::text` |
-| polygon with rounded corners | missing | `poly ... r=4` | `sketch::rounded_polygon` |
-| polygon with chamfered corners | missing | `poly ... c=2` | `sketch::chamfered_polygon` |
-| offset outline | missing | `offset 2` | `sketch::offset_outline` |
-| arc by centre | missing | `arc x,y center=x,y` | `sketch::arc_by_centre` |
+| polygon with rounded corners | supported | `poly ... r=4` | `sketch::rounded_polygon` |
+| polygon with chamfered corners | supported | `poly ... c=2` | `sketch::chamfered_polygon` |
+| offset outline | supported | `offset 2` | `sketch::offset_outline` |
+| arc by centre | supported | `arc x,y center=x,y` | `sketch::arc_by_centre` |
 | constraints and dimensions | missing | `point`, `dist`, `horizontal` | `sketch::constraints` |
 | trim and extend | missing | `close trim` | `sketch::trim` |
 | construction geometry | missing | `circle 20 construct` | `sketch::construction_geometry` |
@@ -76,8 +76,8 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | revolve cut | supported | `revolve 360 mode=cut` | `features::revolve_cut` |
 | sweep cut | supported | `sweep mode=cut` | `features::sweep_cut` |
 | loft cut | supported | `loft mode=cut` | `features::loft_cut` |
-| thin extrude | missing | `extrude 10 thin=2` | `features::thin_extrude` |
-| extrude to an offset from a face | missing | `extrude upto=face offset=-2` | `features::extrude_up_to_offset_face` |
+| thin extrude | supported | `extrude 10 thin=2` | `features::thin_extrude` |
+| extrude to an offset from a face | supported | `extrude upto=face offset=-2` | `features::extrude_up_to_offset_face` |
 | extrude to the next face | missing | `extrude next` | `features::extrude_to_next_face` |
 | rib | missing | open `pen` path, then `rib 2` | `features::rib` |
 | smooth loft | missing | `loft smooth` | `features::smooth_loft` |

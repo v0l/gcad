@@ -60,10 +60,10 @@ pub struct Model {
 }
 
 pub const OPERATIONS: &[&str] = &[
-    "let", "plane", "rect", "circle", "poly", "ngon", "slot", "ellipse", "pen", "line", "arc",
-    "close", "spline", "text", "section", "loft", "extrude", "cut", "revolve", "path", "helix",
-    "sweep", "hole", "fillet", "chamfer", "shell", "draft", "push", "mirror", "repeat", "move",
-    "rotate", "scale", "split", "body", "import",
+    "let", "plane", "rect", "circle", "poly", "ngon", "offset", "slot", "ellipse", "pen", "line",
+    "arc", "close", "spline", "text", "section", "loft", "extrude", "cut", "revolve", "path",
+    "helix", "sweep", "hole", "fillet", "chamfer", "shell", "draft", "push", "mirror", "repeat",
+    "move", "rotate", "scale", "split", "body", "import",
 ];
 
 impl Model {
@@ -89,6 +89,7 @@ impl Model {
             "circle" => self.op_circle(line),
             "poly" => self.op_poly(line),
             "ngon" => self.op_ngon(line),
+            "offset" => self.op_offset(line),
             "slot" => self.op_slot(line),
             "ellipse" => self.op_ellipse(line),
             "pen" => self.op_pen(line),

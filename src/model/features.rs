@@ -111,7 +111,12 @@ impl Model {
     }
 
     pub(crate) fn op_extrude(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["d", "how"], &["draft", "mode", "upto"], false)?;
+        let args = Args::new(
+            line,
+            &["d", "how"],
+            &["draft", "mode", "upto", "offset", "thin"],
+            false,
+        )?;
         let combine = match args.values.get("mode").copied() {
             None | Some("add") => Combine::Add,
             Some("intersect") => Combine::Common,
@@ -124,13 +129,24 @@ impl Model {
             Some(other) => bail!("`{other}` is not an extrude option; did you mean `both`?"),
         };
         let taper = taper_of(&args, self)?;
-        let (frame, profiles) = self.take_sketch("extrude")?;
+        let (frame, mut profiles) = self.take_sketch("extrude")?;
+        if let Some(wall) = args.optional_number("thin", &self.scope)? {
+            let wall = positive(wall, "thin")?;
+            profiles = profiles
+                .iter()
+                .map(|p| p.inset(wall).map(|inner| [p.clone(), inner]))
+                .collect::<std::result::Result<Vec<_>, _>>()
+                .map_err(|error| anyhow!("thin: {error}"))?
+                .concat();
+        }
         let (distance, end_overlap) = match args.values.get("upto") {
             Some(selector) => {
                 if args.has("d") {
                     bail!("give either a distance or `upto=`, not both");
                 }
-                let target = self.face_frame(selector)?;
+                let target = self
+                    .face_frame(selector)?
+                    .offset(args.optional_number("offset", &self.scope)?.unwrap_or(0.0));
                 let distance = (target.origin - frame.origin).dot(target.normal)
                     / frame.normal.dot(target.normal);
                 if distance.abs() < 1.0e-9 {

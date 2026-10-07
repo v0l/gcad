@@ -30,6 +30,94 @@ fn rotate(frame: Frame, axis: Vector3, degrees: f64) -> Frame {
     }
 }
 
+fn arc_middle(
+    from: (f64, f64),
+    to: (f64, f64),
+    centre: (f64, f64),
+    clockwise: bool,
+) -> Result<(f64, f64)> {
+    let (a, b) = (
+        (from.0 - centre.0, from.1 - centre.1),
+        (to.0 - centre.0, to.1 - centre.1),
+    );
+    let (ra, rb) = (
+        (a.0 * a.0 + a.1 * a.1).sqrt(),
+        (b.0 * b.0 + b.1 * b.1).sqrt(),
+    );
+    if (ra - rb).abs() > 1.0e-6 * ra.max(1.0) {
+        bail!("the arc's ends are {ra:.3} and {rb:.3} from its centre; they must be the same");
+    }
+    let start = a.1.atan2(a.0);
+    let mut sweep = b.1.atan2(b.0) - start;
+    if clockwise {
+        sweep = -((-sweep).rem_euclid(std::f64::consts::TAU));
+    } else {
+        sweep = sweep.rem_euclid(std::f64::consts::TAU);
+    }
+    if sweep.abs() < 1.0e-9 {
+        bail!("the arc's ends are the same point");
+    }
+    let middle = start + sweep / 2.0;
+    Ok((centre.0 + ra * middle.cos(), centre.1 + ra * middle.sin()))
+}
+
+fn cornered(points: &[(f64, f64)], size: f64, round: bool) -> Result<Profile> {
+    let n = points.len();
+    let unit = |from: (f64, f64), to: (f64, f64)| {
+        let (dx, dy) = (to.0 - from.0, to.1 - from.1);
+        let length = (dx * dx + dy * dy).sqrt();
+        ((dx / length, dy / length), length)
+    };
+    let corners: Vec<((f64, f64), (f64, f64), Option<(f64, f64)>, f64)> = (0..n)
+        .map(|i| {
+            let (v, previous, next) = (points[i], points[(i + n - 1) % n], points[(i + 1) % n]);
+            let ((ax, ay), _) = unit(v, previous);
+            let ((bx, by), _) = unit(v, next);
+            let angle = (ax * bx + ay * by).clamp(-1.0, 1.0).acos();
+            let setback = if round {
+                size / (angle / 2.0).tan()
+            } else {
+                size
+            };
+            let enter = (v.0 + ax * setback, v.1 + ay * setback);
+            let leave = (v.0 + bx * setback, v.1 + by * setback);
+            let via = round.then(|| {
+                let (mx, my) = (ax + bx, ay + by);
+                let m = (mx * mx + my * my).sqrt();
+                let to_centre = size / (angle / 2.0).sin();
+                let centre = (v.0 + mx / m * to_centre, v.1 + my / m * to_centre);
+                (centre.0 - mx / m * size, centre.1 - my / m * size)
+            });
+            (enter, leave, via, setback)
+        })
+        .collect();
+    for i in 0..n {
+        let (_, length) = unit(points[i], points[(i + 1) % n]);
+        if corners[i].3 + corners[(i + 1) % n].3 > length + 1.0e-9 {
+            bail!(
+                "corner size {size} does not fit the side from point {} to {}",
+                i + 1,
+                (i + 1) % n + 1
+            );
+        }
+    }
+    let start = corners[0].1;
+    let mut segments = Vec::new();
+    let mut cursor = start;
+    for i in 1..=n {
+        let (enter, leave, via, _) = corners[i % n];
+        if (enter.0 - cursor.0).hypot(enter.1 - cursor.1) > 1.0e-9 {
+            segments.push(Segment::Line(enter));
+        }
+        cursor = leave;
+        segments.push(match via {
+            Some(via) => Segment::Arc { to: leave, via },
+            None => Segment::Line(leave),
+        });
+    }
+    Ok(Profile::Path { start, segments })
+}
+
 impl Model {
     pub(crate) fn op_let(&mut self, line: &Line) -> Result<String> {
         if !line.positional.is_empty() {
@@ -160,7 +248,7 @@ impl Model {
     }
 
     pub(crate) fn op_poly(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &[], &[], true)?;
+        let args = Args::new(line, &[], &["r", "c"], true)?;
         let points = args
             .rest
             .iter()
@@ -169,7 +257,22 @@ impl Model {
         if points.len() < 3 {
             bail!("`poly` needs at least three x,y points");
         }
-        self.add_profile(Profile::Polygon { points })
+        let corner = match (
+            args.optional_number("r", &self.scope)?,
+            args.optional_number("c", &self.scope)?,
+        ) {
+            (Some(_), Some(_)) => bail!("give `r=` or `c=`, not both"),
+            (Some(r), None) => Some((positive(r, "r")?, true)),
+            (None, Some(c)) => Some((positive(c, "c")?, false)),
+            (None, None) => None,
+        };
+        match corner {
+            None => self.add_profile(Profile::Polygon { points }),
+            Some((size, round)) => {
+                let path = cornered(&points, size, round)?;
+                self.add_profile(path)
+            }
+        }
     }
 
     pub(crate) fn op_ngon(&mut self, line: &Line) -> Result<String> {
@@ -248,9 +351,26 @@ impl Model {
     }
 
     pub(crate) fn op_arc(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["to"], &["via"], false)?;
+        let args = Args::new(line, &["to", "turn"], &["via", "center"], false)?;
         let to = eval_point(args.text("to")?, &self.scope)?;
-        let via = eval_point(args.text("via")?, &self.scope)?;
+        let cursor = self
+            .pen
+            .as_ref()
+            .map(|pen| pen.cursor)
+            .ok_or_else(|| anyhow!("`arc` needs a `pen x,y` first"))?;
+        let via = match (args.values.get("via"), args.values.get("center")) {
+            (Some(text), None) => eval_point(text, &self.scope)?,
+            (None, Some(text)) => {
+                let centre = eval_point(text, &self.scope)?;
+                let clockwise = match args.values.get("turn").copied() {
+                    None | Some("ccw") => false,
+                    Some("cw") => true,
+                    Some(other) => bail!("the arc turns `cw` or `ccw`, got `{other}`"),
+                };
+                arc_middle(cursor, to, centre, clockwise)?
+            }
+            _ => bail!("`arc` needs `via=x,y` or `center=x,y`"),
+        };
         let pen = self.pen_mut("arc")?;
         let (a, b) = (
             (via.0 - pen.cursor.0, via.1 - pen.cursor.1),
@@ -309,6 +429,19 @@ impl Model {
         )?;
         let at = args.point("at", &self.scope)?;
         self.add_profile(Profile::Text { text, size, at })
+    }
+
+    pub(crate) fn op_offset(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["d"], &[], false)?;
+        let distance = args.number("d", &self.scope)?;
+        let last = self
+            .sketch
+            .last()
+            .ok_or_else(|| anyhow!("`offset` copies the last profile and there is none"))?;
+        let grown = last
+            .inset(-distance)
+            .map_err(|error| anyhow!("offset: {error}"))?;
+        self.add_profile(grown)
     }
 
     pub(crate) fn take_sketch(&mut self, op: &str) -> Result<(Frame, Vec<Profile>)> {

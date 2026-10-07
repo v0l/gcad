@@ -112,7 +112,6 @@ fn text() {
 }
 
 #[test]
-#[ignore = "missing: poly r="]
 fn rounded_polygon() {
     assert_volume(
         &build("poly 0,0 30,0 30,20 0,20 r=4\nextrude 5"),
@@ -122,7 +121,6 @@ fn rounded_polygon() {
 }
 
 #[test]
-#[ignore = "missing: poly c="]
 fn chamfered_polygon() {
     assert_volume(
         &build("poly 0,0 30,0 30,20 0,20 c=2\nextrude 5"),
@@ -132,7 +130,6 @@ fn chamfered_polygon() {
 }
 
 #[test]
-#[ignore = "missing: offset"]
 fn offset_outline() {
     assert_volume(
         &build("rect 20 10\noffset 2\nextrude 5"),
@@ -142,7 +139,6 @@ fn offset_outline() {
 }
 
 #[test]
-#[ignore = "missing: arc center="]
 fn arc_by_centre() {
     assert_volume(
         &build("pen 0,0\nline 20,0\narc 0,20 center=0,0\nclose\nextrude 5"),

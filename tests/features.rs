@@ -174,7 +174,6 @@ fn loft_cut() {
 }
 
 #[test]
-#[ignore = "missing: extrude thin="]
 fn thin_extrude() {
     assert_volume(
         &build("rect 40 30\nextrude 10 thin=2"),
@@ -184,7 +183,6 @@ fn thin_extrude() {
 }
 
 #[test]
-#[ignore = "missing: extrude upto= offset="]
 fn extrude_up_to_offset_face() {
     let model = build(
         "rect 40 30\nbase: extrude 10\nplane XY offset=20\nrect 10 10\nextrude upto=base.end offset=-2",
