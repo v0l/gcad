@@ -231,6 +231,7 @@ linecad query part.lcad 'base.end&base.side' [--line N]
 linecad render part.lcad part.png        # iso, top, front and right views
 linecad export part.lcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing)
 linecad check part.lcad --set w=50       # override a `let` variable
+linecad part.lcad                        # open the viewer; plain `linecad` starts with a file picker
 linecad view part.lcad [--line N] [--select 'base.end&base.side']
 ```
 
@@ -241,6 +242,18 @@ one row per line, green when it ran, red where it failed. Clicking a row (or up 
 down) shows the solid as it was after that line, with the faces that line made in
 amber. The select box highlights whatever a selector matches at that line in cyan,
 which is the quickest way to see what a `fillet` or `plane` selector will hit.
+
+The viewer also has:
+
+- a view cube in the corner: click a face of it, or the iso, top, front, right, back,
+  left and bottom buttons under it, to look from that side;
+- measure mode (the measure button): click two points on the model to get the
+  distance between them and along each axis, corners snap, and each pick names the
+  face it landed on with its area;
+- a parts card listing every body in its `color`, with a switch to hide each one;
+- a joints card with a slider for every `joint`, which moves the parts without
+  rebuilding, and a check for parts that overlap at the slider positions;
+- open (or ctrl-O) to switch to another `.lcad` file.
 
 `render` lays the views out as iso (top left), top (top right), front from -Y
 (bottom left) and right from +X (bottom right), each with an axis marker: X red,

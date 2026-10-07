@@ -103,7 +103,7 @@ impl Model {
             .collect()
     }
 
-    pub(crate) fn current_body(&self) -> String {
+    pub fn current_body(&self) -> String {
         if self.body.is_empty() {
             "main".to_string()
         } else {

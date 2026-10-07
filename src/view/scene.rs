@@ -1,4 +1,5 @@
 use crate::geometry;
+use crate::model::Model;
 use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -10,6 +11,23 @@ pub struct Surface {
     pub positions: Vec<V3>,
     pub normals: Vec<V3>,
     pub colour: V3,
+    pub body: usize,
+    pub face: Option<usize>,
+}
+
+#[derive(Clone)]
+pub struct Part {
+    pub name: String,
+    pub colour: V3,
+    pub volume: f64,
+    pub current: bool,
+}
+
+#[derive(Clone)]
+pub struct FaceInfo {
+    pub body: usize,
+    pub kind: String,
+    pub area: f64,
 }
 
 #[derive(Default)]
@@ -18,6 +36,9 @@ pub struct Scene {
     pub surfaces: Vec<Surface>,
     pub centre: V3,
     pub radius: f32,
+    pub parts: Vec<Part>,
+    pub vertices: Vec<(usize, V3)>,
+    pub faces: Vec<FaceInfo>,
 }
 
 pub struct Highlight<'a> {
@@ -51,16 +72,40 @@ fn norm(a: V3) -> V3 {
     [a[0] / l, a[1] / l, a[2] / l]
 }
 
-fn face_colour(index: usize, highlights: &[Highlight<'_>]) -> V3 {
+fn face_colour(index: usize, base: V3, highlights: &[Highlight<'_>]) -> V3 {
     highlights
         .iter()
         .rev()
         .find(|h| h.faces.contains(&index))
-        .map_or(BODY, |h| h.colour)
+        .map_or(base, |h| h.colour)
 }
 
-fn faces(solid: &Solid, highlights: &[Highlight<'_>], out: &mut Vec<Surface>) {
+fn describe(surface: &monstertruck::modeling::Surface) -> String {
+    match surface {
+        monstertruck::modeling::Surface::Plane(plane) => {
+            let n = plane.normal();
+            let tidy = |v: f64| if v.abs() < 5.0e-4 { 0.0 } else { v };
+            format!(
+                "flat, normal {:.3}, {:.3}, {:.3}",
+                tidy(n.x),
+                tidy(n.y),
+                tidy(n.z)
+            )
+        }
+        _ => "curved".to_string(),
+    }
+}
+
+fn faces(
+    solid: &Solid,
+    body: usize,
+    base: V3,
+    highlights: &[Highlight<'_>],
+    out: &mut Vec<Surface>,
+    info: &mut Vec<FaceInfo>,
+) {
     let meshed = solid.robust_triangulation(geometry::mesh_tolerance(solid) * 0.5);
+    let originals: Vec<Face> = crate::select::faces(solid);
     let faces = meshed
         .boundaries()
         .iter()
@@ -69,13 +114,18 @@ fn faces(solid: &Solid, highlights: &[Highlight<'_>], out: &mut Vec<Surface>) {
     for (index, face) in faces.iter().enumerate() {
         let Some(mesh) = face.surface() else { continue };
         let mut surface = Surface {
-            colour: face_colour(index, highlights),
+            colour: face_colour(index, base, highlights),
+            body,
+            face: Some(info.len()),
             ..Default::default()
         };
         let positions = mesh.positions();
         let normals = mesh.normals();
+        let mut area = 0.0;
         for triangle in mesh.faces().triangle_iter() {
             let corners = triangle.map(|v| v3(positions[v.pos]));
+            let [a, b, c] = triangle.map(|v| positions[v.pos]);
+            area += (b - a).cross(c - a).magnitude() / 2.0;
             let flat = norm(cross(
                 sub(corners[1], corners[0]),
                 sub(corners[2], corners[0]),
@@ -89,19 +139,22 @@ fn faces(solid: &Solid, highlights: &[Highlight<'_>], out: &mut Vec<Surface>) {
                 surface.normals.push(n);
             }
         }
+        info.push(FaceInfo {
+            body,
+            kind: originals
+                .get(index)
+                .map_or_else(|| "face".to_string(), |f| describe(&f.oriented_surface())),
+            area,
+        });
         out.push(surface);
     }
 }
 
 fn polyline(edge: &Edge) -> Vec<V3> {
-    let mut points: Vec<V3> = geometry::curve_samples(&edge.curve())
+    geometry::curve_samples(&edge.curve())
         .into_iter()
         .map(v3)
-        .collect();
-    if !edge.orientation() {
-        points.reverse();
-    }
-    points
+        .collect()
 }
 
 fn tube(points: &[V3], radius: f32, out: &mut Surface) {
@@ -148,43 +201,73 @@ fn tube(points: &[V3], radius: f32, out: &mut Surface) {
 }
 
 pub fn build(
-    solid: &Solid,
-    others: &[&Solid],
+    model: &Model,
     highlights: &[Highlight<'_>],
     marked: &[Edge],
     marked_colour: V3,
 ) -> Scene {
     static NEXT: AtomicU64 = AtomicU64::new(1);
-    let all: Vec<&Solid> = std::iter::once(solid)
-        .chain(others.iter().copied())
-        .collect();
-    let bounds: BoundingBox<Point3> = all
+    let current = model.current_body();
+    let bodies: Vec<(String, &Solid)> = model
+        .bodies
         .iter()
-        .flat_map(|s| {
+        .map(|(name, solid)| (name.clone(), solid))
+        .chain(model.solid.as_ref().map(|solid| (current.clone(), solid)))
+        .collect();
+    let bounds: BoundingBox<Point3> = bodies
+        .iter()
+        .flat_map(|(_, s)| {
             let b = geometry::bounds(s);
             [b.min(), b.max()]
         })
         .collect();
     let radius = (bounds.diameter() / 2.0).max(1.0e-3) as f32;
     let mut surfaces = Vec::new();
-    faces(solid, highlights, &mut surfaces);
-    others
-        .iter()
-        .for_each(|other| faces(other, &[], &mut surfaces));
-    let mut edges = Surface {
-        colour: EDGE,
-        ..Default::default()
-    };
-    let mut seen = std::collections::HashSet::new();
+    let mut info = Vec::new();
+    let mut parts = Vec::new();
+    let mut vertices = Vec::new();
     let skip: std::collections::HashSet<_> = marked.iter().map(|m| m.id()).collect();
-    all.iter()
-        .flat_map(|s| s.boundaries().iter())
-        .flat_map(|shell| shell.edge_iter())
-        .filter(|edge| seen.insert(edge.id()) && !skip.contains(&edge.id()))
-        .for_each(|edge| tube(&polyline(&edge), radius * 0.0018, &mut edges));
-    surfaces.push(edges);
+    for (body, (name, solid)) in bodies.iter().enumerate() {
+        let is_current = *name == current && model.solid.is_some();
+        let colour = model
+            .colours
+            .get(name)
+            .map_or(BODY, |c| c.map(|v| v as f32));
+        let own: &[Highlight<'_>] = if is_current { highlights } else { &[] };
+        faces(solid, body, colour, own, &mut surfaces, &mut info);
+        let mut edges = Surface {
+            colour: EDGE,
+            body,
+            ..Default::default()
+        };
+        let mut seen = std::collections::HashSet::new();
+        solid
+            .boundaries()
+            .iter()
+            .flat_map(|shell| shell.edge_iter())
+            .filter(|edge| seen.insert(edge.id()) && !skip.contains(&edge.id()))
+            .for_each(|edge| tube(&polyline(&edge), radius * 0.0018, &mut edges));
+        surfaces.push(edges);
+        let mut seen = std::collections::HashSet::new();
+        vertices.extend(
+            solid
+                .boundaries()
+                .iter()
+                .flat_map(|shell| shell.vertex_iter())
+                .filter(|v| seen.insert(v.id()))
+                .map(|v| (body, v3(v.point()))),
+        );
+        parts.push(Part {
+            name: name.clone(),
+            colour,
+            volume: geometry::volume(solid),
+            current: is_current,
+        });
+    }
+    let current_index = parts.iter().position(|p| p.current).unwrap_or(0);
     let mut highlighted = Surface {
         colour: marked_colour,
+        body: current_index,
         ..Default::default()
     };
     marked
@@ -196,5 +279,8 @@ pub fn build(
         surfaces,
         centre: v3(bounds.center()),
         radius,
+        parts,
+        vertices,
+        faces: info,
     }
 }

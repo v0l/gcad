@@ -4,10 +4,15 @@ use linecad::model::{Run, run_full};
 use linecad::{export, parse, render, select};
 
 #[derive(Parser)]
-#[command(about = "Line-per-operation parametric CAD")]
+#[command(
+    about = "Line-per-operation parametric CAD",
+    args_conflicts_with_subcommands = true
+)]
 struct Cli {
     #[command(subcommand)]
-    command: Command,
+    command: Option<Command>,
+    /// Open this file in the viewer (the default when no command is given)
+    file: Option<String>,
     /// Set a variable, overriding the file's `let`, as name=value (repeatable)
     #[arg(long = "set", global = true, value_parser = parse_set)]
     set: Vec<(String, f64)>,
@@ -38,7 +43,7 @@ enum Command {
     Render { file: String, output: String },
     /// Open the file in a window that rebuilds whenever it is saved
     View {
-        file: String,
+        file: Option<String>,
         /// Highlight what this selector matches
         #[arg(long, default_value = "")]
         select: String,
@@ -126,7 +131,12 @@ fn query(file: &str, selector: &str, until: Option<usize>, vars: &[(String, f64)
 fn main() -> Result<()> {
     let cli = Cli::parse();
     let vars = cli.set;
-    match cli.command {
+    let command = cli.command.unwrap_or(Command::View {
+        file: cli.file,
+        select: String::new(),
+        line: None,
+    });
+    match command {
         Command::Check { file } => check(&file, &vars),
         Command::Query {
             file,
@@ -144,7 +154,8 @@ fn main() -> Result<()> {
             render::render(&run.model.solids(), &output)
         }
         Command::View { file, select, line } => {
-            linecad::view::run(file.into(), select, line, vars).map_err(|error| anyhow!("{error}"))
+            linecad::view::run(file.map(Into::into), select, line, vars)
+                .map_err(|error| anyhow!("{error}"))
         }
     }
 }

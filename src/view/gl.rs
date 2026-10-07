@@ -1,6 +1,6 @@
 use super::scene::{Scene, V3};
 use eframe::egui_glow;
-use egui::{Color32, Rect, Ui, Vec2};
+use egui::{Color32, Pos2, Rect, Ui, Vec2};
 use std::cell::RefCell;
 use std::sync::Arc;
 use three_d::*;
@@ -62,6 +62,58 @@ fn dot(a: V3, b: V3) -> f32 {
 
 fn norm(a: V3) -> V3 {
     scale(a, 1.0 / dot(a, a).sqrt().max(1.0e-12))
+}
+
+pub struct Projector {
+    pub eye: V3,
+    pub right: V3,
+    pub up: V3,
+    pub forward: V3,
+    pub focal: f32,
+    pub centre: Pos2,
+}
+
+impl Projector {
+    pub fn new(scene: &Scene, cam: &Camera, rect: Rect) -> Projector {
+        let vw = view(scene, cam, rect.size());
+        let forward = norm(sub(vw.target, vw.eye));
+        let right = norm(cross(forward, vw.up));
+        Projector {
+            eye: vw.eye,
+            right,
+            up: vw.up,
+            forward,
+            focal: rect.width().min(rect.height()) * 1.25 * cam.zoom,
+            centre: rect.center(),
+        }
+    }
+
+    pub fn project(&self, p: V3) -> Option<Pos2> {
+        let d = sub(p, self.eye);
+        let z = dot(d, self.forward);
+        (z > 1.0e-6).then(|| {
+            Pos2::new(
+                self.centre.x + dot(d, self.right) / z * self.focal,
+                self.centre.y - dot(d, self.up) / z * self.focal,
+            )
+        })
+    }
+
+    pub fn ray(&self, at: Pos2) -> (V3, V3) {
+        let (dx, dy) = (
+            (at.x - self.centre.x) / self.focal,
+            (at.y - self.centre.y) / self.focal,
+        );
+        let direction = norm(add(
+            add(self.forward, scale(self.right, dx)),
+            scale(self.up, -dy),
+        ));
+        (self.eye, direction)
+    }
+}
+
+fn sub(a: V3, b: V3) -> V3 {
+    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
 pub fn view(scene: &Scene, cam: &Camera, size: Vec2) -> View {
@@ -176,7 +228,7 @@ void main() {
 struct Gpu {
     context: Context,
     scene: u64,
-    objects: Vec<Gm<Mesh, Shaded>>,
+    objects: Vec<(usize, Gm<Mesh, Shaded>)>,
 }
 
 impl Gpu {
@@ -198,7 +250,7 @@ impl Gpu {
                     key: vec3(0.0, 0.0, 1.0),
                     fill: vec3(0.0, 0.0, 1.0),
                 };
-                Gm::new(Mesh::new(&self.context, &cpu), material)
+                (s.body, Gm::new(Mesh::new(&self.context, &cpu), material))
             })
             .collect();
         self.scene = scene.id;
@@ -209,7 +261,15 @@ thread_local! {
     static GPU: RefCell<Option<Gpu>> = const { RefCell::new(None) };
 }
 
-pub fn paint(ui: &Ui, rect: Rect, scene: Arc<Scene>, cam: Camera) {
+pub type Placement = [f32; 16];
+
+pub fn paint(
+    ui: &Ui,
+    rect: Rect,
+    scene: Arc<Scene>,
+    cam: Camera,
+    placements: Arc<Vec<(Placement, bool)>>,
+) {
     let callback = egui_glow::CallbackFn::new(move |info, painter| {
         GPU.with(|cell| {
             let mut slot = cell.borrow_mut();
@@ -250,10 +310,16 @@ pub fn paint(ui: &Ui, rect: Rect, scene: Arc<Scene>, cam: Camera) {
                 vw.near,
                 vw.far,
             );
-            gpu.objects.iter_mut().for_each(|gm| {
+            gpu.objects.iter_mut().for_each(|(body, gm)| {
                 gm.material.eye = v3(vw.eye);
                 gm.material.key = v3(vw.key);
                 gm.material.fill = v3(vw.fill);
+                if let Some((m, _)) = placements.get(*body) {
+                    gm.set_transformation(Mat4::new(
+                        m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11],
+                        m[12], m[13], m[14], m[15],
+                    ));
+                }
             });
             let x0 = clip.left_px.max(vp.left_px);
             let y0 = clip.from_bottom_px.max(vp.from_bottom_px);
@@ -278,7 +344,12 @@ pub fn paint(ui: &Ui, rect: Rect, scene: Arc<Scene>, cam: Camera) {
                 scissor,
                 ClearState::color_and_depth(bg[0], bg[1], bg[2], 1.0, 1.0),
             );
-            target.render_partially(scissor, &camera, gpu.objects.iter(), &[]);
+            let shown = gpu
+                .objects
+                .iter()
+                .filter(|(body, _)| placements.get(*body).is_none_or(|(_, visible)| *visible))
+                .map(|(_, gm)| gm);
+            target.render_partially(scissor, &camera, shown, &[]);
             let _ = target.into_framebuffer();
         });
     });
