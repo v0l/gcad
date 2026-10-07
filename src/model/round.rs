@@ -172,7 +172,14 @@ fn square(a: Vector3, b: Vector3) -> bool {
     a.dot(b).abs() < 1.0e-9
 }
 
-pub(crate) fn round_edges(solid: &Solid, selected: &[Edge], radius: f64) -> Result<Solid> {
+pub(crate) fn round_edges(
+    solid: &Solid,
+    selected: &[Edge],
+    radius: f64,
+    flat: bool,
+) -> Result<Solid> {
+    let bend =
+        |p: Point3, q: Point3, curve: Curve| if flat { Curve::Line(Line(p, q)) } else { curve };
     let [shell] = solid.boundaries().as_slice() else {
         bail!("rounding corners works on a single closed solid")
     };
@@ -413,7 +420,11 @@ pub(crate) fn round_edges(solid: &Solid, selected: &[Edge], radius: f64) -> Resu
                     let (p, q) = (endpoint(i, v, a), endpoint(i, v, b));
                     connectors.push((
                         v,
-                        Edge::new(&vertex_at(p), &vertex_at(q), circular_arc(p, q, *centre)),
+                        Edge::new(
+                            &vertex_at(p),
+                            &vertex_at(q),
+                            bend(p, q, circular_arc(p, q, *centre)),
+                        ),
                     ));
                 }
             }
@@ -423,7 +434,11 @@ pub(crate) fn round_edges(solid: &Solid, selected: &[Edge], radius: f64) -> Resu
                 meet,
             } => {
                 let start = *centre + normal(*common) * radius;
-                let curve = elliptic_quarter(*centre, start - *centre, *meet - *centre);
+                let curve = bend(
+                    start,
+                    *meet,
+                    elliptic_quarter(*centre, start - *centre, *meet - *centre),
+                );
                 connectors.push((v, Edge::new(&vertex_at(start), &vertex_at(*meet), curve)));
             }
             Corner::End {
@@ -435,7 +450,11 @@ pub(crate) fn round_edges(solid: &Solid, selected: &[Edge], radius: f64) -> Resu
                 );
                 connectors.push((
                     v,
-                    Edge::new(&vertex_at(p), &vertex_at(q), circular_arc(p, q, *centre)),
+                    Edge::new(
+                        &vertex_at(p),
+                        &vertex_at(q),
+                        bend(p, q, circular_arc(p, q, *centre)),
+                    ),
                 ));
             }
         }
@@ -525,8 +544,20 @@ pub(crate) fn round_edges(solid: &Solid, selected: &[Edge], radius: f64) -> Resu
         .ok_or_else(|| anyhow!("an edge is degenerate"))?;
         let length = (edge.absolute_back().point() - edge.absolute_front().point()).magnitude()
             + 4.0 * radius;
-        let surface = cylinder(start, [normal(*a), normal(*b)], radius, direction * length);
         let outward = (normal(*a) + normal(*b)).normalize();
+        if flat {
+            let plane = flat_through(
+                [
+                    side_a.front().point(),
+                    side_a.back().point(),
+                    side_b.front().point(),
+                ],
+                outward,
+            );
+            new_faces.push(face_from(loop_edges, Surface::Plane(plane), outward, true)?);
+            continue;
+        }
+        let surface = cylinder(start, [normal(*a), normal(*b)], radius, direction * length);
         let faces_out = surface
             .normal(0.5, 0.5)
             .dot(surface.subs(0.5, 0.5) - start - direction * (length / 2.0))
@@ -550,16 +581,27 @@ pub(crate) fn round_edges(solid: &Solid, selected: &[Edge], radius: f64) -> Resu
             .collect();
         let normals = faces.map(normal);
         let outward = (normals[0] + normals[1] + normals[2]).normalize();
-        new_faces.push(face_from(
-            order_loop(arcs)?,
-            sphere(*centre, radius, normals),
-            outward,
-            true,
-        )?);
+        let ordered = order_loop(arcs)?;
+        let surface = if flat {
+            let corners: Vec<Point3> = ordered.iter().map(|e| e.front().point()).collect();
+            Surface::Plane(flat_through([corners[0], corners[1], corners[2]], outward))
+        } else {
+            sphere(*centre, radius, normals)
+        };
+        new_faces.push(face_from(ordered, surface, outward, true)?);
     }
 
     let shell: Shell = new_faces.into();
     Solid::try_new(vec![shell]).map_err(|error| anyhow!("rounded solid is not closed: {error}"))
+}
+
+fn flat_through(points: [Point3; 3], outward: Vector3) -> Plane {
+    let normal = (points[1] - points[0]).cross(points[2] - points[0]);
+    if normal.dot(outward) >= 0.0 {
+        Plane::new(points[0], points[1], points[2])
+    } else {
+        Plane::new(points[0], points[2], points[1])
+    }
 }
 
 fn order_loop(mut edges: Vec<Edge>) -> Result<Vec<Edge>> {

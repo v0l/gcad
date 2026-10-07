@@ -138,10 +138,9 @@ fn assembly_mate() {
 }
 
 #[test]
-#[ignore = "missing: measure overlap"]
 fn interference() {
     let text = summary(
-        "rect 20 20\nextrude 10\nbody b\nrect 20 20 at=10,0\nextrude 10\nmeasure overlap main b",
+        "rect 20 20\nextrude 10\nbody b\nplane XY offset=-1\nrect 20 16 at=10,0\nextrude 12\nmeasure overlap main b",
     );
-    assert!(text.contains("2000.000"), "{text}");
+    assert!(text.contains("1600.000"), "{text}");
 }

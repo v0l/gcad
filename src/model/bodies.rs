@@ -53,7 +53,7 @@ impl Model {
         }
     }
 
-    fn named_body(&self, name: &str) -> Result<Solid> {
+    pub(crate) fn named_body(&self, name: &str) -> Result<Solid> {
         if name == self.body_name() {
             return self
                 .solid

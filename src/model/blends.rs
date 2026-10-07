@@ -53,12 +53,13 @@ impl Model {
                     .count()
                     >= 3
             });
-        if matches!(profile, FilletProfile::Round) && !args.has("to") && three_at_a_corner {
+        if !args.has("to") && three_at_a_corner {
+            let flat = matches!(profile, FilletProfile::Chamfer);
             let before: Vec<Surface> = select::faces(&solid)
                 .iter()
                 .map(|face| face.oriented_surface())
                 .collect();
-            let result = super::round::round_edges(&solid, &edges, size)
+            let result = super::round::round_edges(&solid, &edges, size, flat)
                 .map_err(|error| anyhow!("rounding a corner where three edges meet: {error}"))?;
             let label = label_of(line);
             select::faces(&result)
@@ -133,13 +134,17 @@ impl Model {
         first: f64,
         second: f64,
     ) -> Result<String> {
-        let (first_set, _) = selector
-            .split_once('&')
-            .filter(|_| !selector.contains('|'))
-            .ok_or_else(|| anyhow!("`d2=` needs edges written as `a&b`: `{first}` is cut along faces `a`, `d2` along `b`"))?;
         let solid = self.active("chamfer")?.clone();
         let faces = select::faces(&solid);
-        let on_first = select::select_faces(first_set, &solid, &self.groups, self.tolerance())?;
+        let on_first = if first == second {
+            Vec::new()
+        } else {
+            let (first_set, _) = selector
+                .split_once('&')
+                .filter(|_| !selector.contains('|'))
+                .ok_or_else(|| anyhow!("`d2=` needs edges written as `a&b`: `{first}` is cut along faces `a`, `d2` along `b`"))?;
+            select::select_faces(first_set, &solid, &self.groups, self.tolerance())?
+        };
         let margin = (geometry::bounds(&solid).diameter() * 0.01).max(1.0e-3);
         let label = label_of(line);
         let mut tools = Vec::new();
@@ -149,7 +154,7 @@ impl Model {
             let (t0, t1) = curve.range_tuple();
             let middle = curve.subs((t0 + t1) / 2.0);
             if (middle - a.midpoint(b)).magnitude() > margin * 1.0e-3 {
-                bail!("`d2=` chamfers straight edges; one of `{selector}` is curved");
+                bail!("this chamfer works on straight edges; one of `{selector}` is curved");
             }
             let owners: Vec<usize> = (0..faces.len())
                 .filter(|&i| faces[i].edge_iter().any(|e| e.is_same(edge)))
@@ -164,7 +169,7 @@ impl Model {
             };
             let (na, nb) = plane_normal(&faces[fa])
                 .zip(plane_normal(&faces[fb]))
-                .ok_or_else(|| anyhow!("`d2=` chamfers edges between flat faces"))?;
+                .ok_or_else(|| anyhow!("this chamfer works on edges between flat faces"))?;
             let along = (b - a).normalize();
             let (ua, ub) = (into_face(along, na, nb), into_face(along, nb, na));
             let frame = Frame::from_normal(a - along * margin, along);

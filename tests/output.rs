@@ -34,6 +34,15 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
     let inline = [
         ("rounded-box", "rect 30 20\nbase: extrude 10\nfillet 2 all"),
         (
+            "chamfered-box",
+            "rect 30 20\nbase: extrude 10\nchamfer 2 all",
+        ),
+        (
+            "revolve-cut",
+            "rect 40 40\nbase: extrude 10\nplane XZ\nrect 4 4 at=10,10\nrevolve 360 axis=y mode=cut",
+        ),
+        ("rounded-poly", "poly 0,0 30,0 30,20 0,20 r=4\nextrude 5"),
+        (
             "partly-rounded",
             "rect 20 20\nbase: extrude 20\nfillet 2 base.end&base.side|>X&>Y",
         ),

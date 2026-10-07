@@ -122,7 +122,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | variable radius fillet | supported | `fillet 1 edges to=2` | `blends::fillet_variable_radius` |
 | chamfer | supported | `chamfer 1 base.end&base.side` | `blends::chamfer_closed_chain`, `blends::chamfer_hole_rim` |
 | chamfer with two distances | supported | `chamfer 1 edges d2=2` | `blends::chamfer_two_distances` |
-| chamfer where three edges meet | missing | `chamfer 2 all` | `blends::chamfer_every_edge_of_a_box` |
+| chamfer where three edges meet | supported | `chamfer 2 all` | `blends::chamfer_every_edge_of_a_box` |
 | round corners on curved faces | missing | `fillet 1 all` on a rounded rect | `blends::fillet_every_edge_of_a_rounded_prism` |
 | round inside corners where three edges meet | missing | `fillet 1 all` on an L shape | `blends::fillet_every_edge_of_an_l_shape` |
 | variable radius along a chain | missing | `fillet 1 chain to=2` | `blends::fillet_variable_chain` |
@@ -150,7 +150,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | move or rotate a copy | supported | `move 20,0,0 copy` | `bodies::transform_copy` |
 | scale unevenly | supported | `scale 2,1,1` | `bodies::scale_unevenly` |
 | place one body on another | supported | `place lid on=>Z` | `bodies::assembly_mate` |
-| interference check | missing | `measure overlap main b` | `bodies::interference` |
+| interference check | supported | `measure overlap main b` | `bodies::interference` |
 
 
 ## Output
@@ -176,8 +176,8 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | face and edge selectors | supported | `label.group`, `>Z`, `+X`, `all`, `a,b`, `a&b`, `x\|y` | `inspect::groups_and_edges`, `inspect::directional_faces` |
 | groups survive later edits | supported | | `inspect::groups_survive_later_cuts` |
 | errors that say what to do | supported | | `inspect::errors` |
-| measure distance | missing | `measure faces faces` | `inspect::measure_distance` |
-| mass properties | missing | `measure mass` | `inspect::mass_properties` |
+| measure distance | supported | `measure faces faces` | `inspect::measure_distance` |
+| mass properties | supported | `measure mass` | `inspect::mass_properties` |
 | wall thickness | missing | `measure thickness` | `inspect::wall_thickness` |
 | draft analysis | missing | `measure draft pull=z` | `inspect::draft_analysis` |
 | variables from outside the file | missing | `linecad check part.lcad --set w=20` | `inspect::outside_variables` |

@@ -165,8 +165,7 @@ impl Model {
     }
 
     pub(crate) fn op_plane(&mut self, line: &Line) -> Result<String> {
-        self.require_empty_sketch("plane")
-            .map_err(|e| anyhow!("{e}; extrude or cut it before moving the plane"))?;
+        self.require_empty_sketch("plane")?;
         let args = Args::new(line, &["on"], &["offset", "rx", "ry", "rz"], true)?;
         let mut frame = match args.rest.as_slice() {
             [] => self.plane_from(args.text("on")?)?,

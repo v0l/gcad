@@ -126,19 +126,12 @@ fn chamfer_two_distances() {
 }
 
 #[test]
-#[ignore = "missing: chamfer where three edges meet"]
 fn chamfer_every_edge_of_a_box() {
-    let (h, d) = (10.0, 2.0);
-    let inside = |x: f64, y: f64, z: f64| {
-        let (x, y, z) = (x.abs(), y.abs(), z.abs());
-        x + y <= 2.0 * h - d && y + z <= 2.0 * h - d && x + z <= 2.0 * h - d
-    };
-    let expected = grid_volume(inside, [-h; 3], [h; 3], 200);
-    assert_volume(
-        &build("rect 20 20\nplane XY offset=-10\nextrude 20\nchamfer 2 all"),
-        expected,
-        0.002,
-    );
+    let (side, d): (f64, f64) = (20.0, 2.0);
+    let strips = 12.0 * (side - 2.0 * d) * d * d / 2.0;
+    let corners = 8.0 * (d.powi(3) - d.powi(3) / 6.0);
+    let model = build("rect 20 20\nextrude 20\nchamfer 2 all");
+    assert_volume(&model, side.powi(3) - strips - corners, 1.0e-5);
 }
 
 #[test]

@@ -68,14 +68,12 @@ fn errors() {
 }
 
 #[test]
-#[ignore = "missing: measure"]
 fn measure_distance() {
     let text = summary("rect 40 30\nbase: extrude 10\nmeasure base.end base.start");
     assert!(text.contains("10.000"), "{text}");
 }
 
 #[test]
-#[ignore = "missing: measure mass"]
 fn mass_properties() {
     let text = summary("rect 20 10\nextrude 5\nmeasure mass");
     assert!(text.contains("centroid 0.000,0.000,2.500"), "{text}");

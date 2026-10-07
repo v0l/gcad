@@ -3,6 +3,7 @@ mod blends;
 mod bodies;
 mod features;
 mod holes;
+mod measure;
 mod path;
 mod round;
 mod sketch;
@@ -18,6 +19,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub use args::label_of;
+pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -63,7 +65,7 @@ pub const OPERATIONS: &[&str] = &[
     "let", "plane", "rect", "circle", "poly", "ngon", "offset", "slot", "ellipse", "pen", "line",
     "arc", "close", "spline", "text", "section", "loft", "extrude", "cut", "revolve", "path",
     "helix", "sweep", "hole", "fillet", "chamfer", "shell", "draft", "push", "mirror", "repeat",
-    "move", "rotate", "scale", "split", "body", "combine", "place", "import",
+    "move", "rotate", "scale", "split", "body", "combine", "place", "measure", "import",
 ];
 
 impl Model {
@@ -121,6 +123,7 @@ impl Model {
             "body" => self.op_body(line),
             "combine" => self.op_combine(line),
             "place" => self.op_place(line),
+            "measure" => self.op_measure(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",
