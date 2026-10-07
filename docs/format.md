@@ -252,6 +252,10 @@ A `.step` export of an assembly keeps its structure: each part file and set of
 variables becomes one product, and each part placed in the assembly is an instance of
 it with its own name and position, so four screws are one screw used four times.
 
+An `.svg` export of an assembly draws it exploded, if it has `explode` lines, with a
+parts list (item, quantity, part, material, mass) and a numbered balloon on one of
+each item in the iso view.
+
 `check`, `render`, `export` and the viewer take either kind of file, and `--set`
 reaches the assembly's own variables. The viewer rebuilds when any part file next to
 the assembly is saved.

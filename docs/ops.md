@@ -182,6 +182,7 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
 | pattern parts | supported | `pattern s1 holes=case.lid:screws.side`, `count=` `step=`/`angle=` | `assembly::pattern_copies_a_part_and_its_mates` |
 | exploded view | supported | `explode lid 0,0,30`, `render --explode` | `assembly::exploded_views_move_parts_apart` |
+| assembly drawing with parts list | supported | `linecad export top.lasm top.svg` | `output::assembly_drawing_lists_parts` |
 | bill of materials | supported | `linecad bom top.lasm [--csv]` | `assembly::bill_of_materials_counts_parts` |
 | sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash` |
 

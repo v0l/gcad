@@ -235,6 +235,17 @@ pub fn drawing(parts: &[(&Solid, Option<Colour>)]) -> String {
     drawing_with(parts, None)
 }
 
+pub struct PartsList {
+    pub rows: Vec<Vec<String>>,
+    pub balloons: Vec<(usize, usize)>,
+}
+
+const PARTS_HEADER: [&str; 5] = ["item", "qty", "part", "material", "mass g"];
+
+pub fn drawing_with(parts: &[(&Solid, Option<Colour>)], section: Option<Section>) -> String {
+    annotated(parts, section, None)
+}
+
 fn view(name: &str, right: Vector3, up: Vector3) -> View {
     View {
         name: name.to_string(),
@@ -249,7 +260,11 @@ fn number(value: f64) -> String {
     text.trim_end_matches('0').trim_end_matches('.').to_string()
 }
 
-pub fn drawing_with(parts: &[(&Solid, Option<Colour>)], section: Option<Section>) -> String {
+pub fn annotated(
+    parts: &[(&Solid, Option<Colour>)],
+    section: Option<Section>,
+    list: Option<&PartsList>,
+) -> String {
     let mut views = vec![
         view("top", Vector3::unit_x(), Vector3::unit_y()),
         view("front", Vector3::unit_x(), Vector3::unit_z()),
@@ -346,9 +361,11 @@ pub fn drawing_with(parts: &[(&Solid, Option<Colour>)], section: Option<Section>
         })
         .collect();
     let total_w = gap * (columns as f64 + 1.0) + column.iter().sum::<f64>();
-    let total_h = gap * 4.0 + row[0] + row[1];
     let stroke = gap * 0.008;
     let text = gap * 0.12;
+    let line_height = text * 1.7;
+    let table_h = list.map_or(0.0, |l| (l.rows.len() + 1) as f64 * line_height + gap * 0.5);
+    let total_h = gap * 4.0 + row[0] + row[1] + table_h;
     let mut svg = String::new();
     let _ = writeln!(
         svg,
@@ -491,6 +508,60 @@ pub fn drawing_with(parts: &[(&Solid, Option<Colour>)], section: Option<Section>
             }
             _ => {}
         }
+        if let (Some(list), "iso") = (list, view.name.as_str()) {
+            let middle = place(Point3::from_vec(
+                (bounds.min().to_vec() + bounds.max().to_vec()) / 2.0,
+            ));
+            for &(item, part) in &list.balloons {
+                let Some((solid, _)) = parts.get(part) else {
+                    continue;
+                };
+                let b = geometry::bounds(solid);
+                let at = place(Point3::from_vec(
+                    (b.min().to_vec() + b.max().to_vec()) / 2.0,
+                ));
+                let away = (at.0 - middle.0, at.1 - middle.1);
+                let length = away.0.hypot(away.1).max(1.0e-9);
+                let push = gap * 0.9;
+                let centre = (
+                    at.0 + away.0 / length * push,
+                    at.1 + away.1 / length * push - gap * 0.3,
+                );
+                let radius = text * 0.9;
+                let toward = (at.0 - centre.0, at.1 - centre.1);
+                let reach = toward.0.hypot(toward.1).max(1.0e-9);
+                let rim = (
+                    centre.0 + toward.0 / reach * radius,
+                    centre.1 + toward.1 / reach * radius,
+                );
+                let _ = writeln!(
+                    svg,
+                    "<g class=\"balloon\" stroke=\"black\" stroke-width=\"{:.4}\" fill=\"white\"><path fill=\"none\" d=\"M{:.3},{:.3} L{:.3},{:.3}\"/><circle cx=\"{:.3}\" cy=\"{:.3}\" r=\"{radius:.3}\"/></g>",
+                    stroke * 0.6,
+                    rim.0,
+                    rim.1,
+                    at.0,
+                    at.1,
+                    centre.0,
+                    centre.1
+                );
+                let _ = writeln!(
+                    svg,
+                    "<circle cx=\"{:.3}\" cy=\"{:.3}\" r=\"{:.3}\"/>",
+                    at.0,
+                    at.1,
+                    stroke * 1.5
+                );
+                label(
+                    &mut svg,
+                    centre.0,
+                    centre.1 + text * 0.35,
+                    "middle",
+                    false,
+                    &item.to_string(),
+                );
+            }
+        }
         if ["top", "front", "right"].contains(&view.name.as_str()) {
             let mut taken: Vec<(f64, f64)> = Vec::new();
             for found in &holes {
@@ -546,6 +617,55 @@ pub fn drawing_with(parts: &[(&Solid, Option<Colour>)], section: Option<Section>
                 }
             }
         }
+    }
+    if let Some(list) = list {
+        let char_w = text * 0.62;
+        let widths: Vec<f64> = (0..PARTS_HEADER.len())
+            .map(|k| {
+                list.rows
+                    .iter()
+                    .map(|r| r.get(k).map_or(0, |c| c.chars().count()))
+                    .chain([PARTS_HEADER[k].len()])
+                    .max()
+                    .unwrap_or(0) as f64
+                    * char_w
+                    + text
+            })
+            .collect();
+        let table_w: f64 = widths.iter().sum();
+        let left = total_w - gap - table_w;
+        let top = total_h - gap * 0.9 - table_h + gap * 0.5;
+        let rows = std::iter::once(PARTS_HEADER.map(String::from).to_vec())
+            .chain(list.rows.iter().cloned());
+        for (r, cells) in rows.enumerate() {
+            let y = top + r as f64 * line_height;
+            let _ = writeln!(
+                svg,
+                "<path stroke=\"black\" stroke-width=\"{:.4}\" d=\"M{left:.3},{y:.3} L{:.3},{y:.3}\"/>",
+                stroke * 0.6,
+                left + table_w
+            );
+            let mut x = left;
+            for (k, cell) in cells.iter().enumerate() {
+                label(
+                    &mut svg,
+                    x + text * 0.4,
+                    y + line_height * 0.7,
+                    "start",
+                    false,
+                    cell,
+                );
+                x += widths[k];
+            }
+        }
+        let bottom = top + (list.rows.len() + 1) as f64 * line_height;
+        let _ = writeln!(
+            svg,
+            "<path class=\"parts-list\" stroke=\"black\" stroke-width=\"{:.4}\" fill=\"none\" d=\"M{left:.3},{top:.3} L{:.3},{top:.3} L{:.3},{bottom:.3} L{left:.3},{bottom:.3} Z\"/>",
+            stroke * 0.6,
+            left + table_w,
+            left + table_w
+        );
     }
     label(
         &mut svg,

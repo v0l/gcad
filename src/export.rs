@@ -136,8 +136,61 @@ pub fn assembly(model: &crate::model::Model) -> (Vec<Product>, Vec<Instance<'_>>
     (products.into_iter().map(|(_, p)| p).collect(), instances)
 }
 
-pub fn export_model(model: &crate::model::Model, name: &str, path: &str) -> Result<()> {
+pub fn parts_list(
+    model: &crate::model::Model,
+    file: &std::path::Path,
+) -> crate::drawing::PartsList {
+    let items = crate::bom::items(model, file);
+    let names: Vec<String> = model.named_solids().into_iter().map(|(n, _)| n).collect();
+    crate::drawing::PartsList {
+        rows: items
+            .iter()
+            .enumerate()
+            .map(|(k, item)| {
+                let stem = std::path::Path::new(&item.file)
+                    .file_stem()
+                    .map(|s| s.to_string_lossy().to_string())
+                    .unwrap_or_default();
+                vec![
+                    (k + 1).to_string(),
+                    item.names.len().to_string(),
+                    if item.body == "main" {
+                        stem
+                    } else {
+                        format!("{stem}.{}", item.body)
+                    },
+                    item.material.clone().unwrap_or_else(|| "-".into()),
+                    item.grams
+                        .map(|g| format!("{g:.2}"))
+                        .unwrap_or_else(|| "-".into()),
+                ]
+            })
+            .collect(),
+        balloons: items
+            .iter()
+            .enumerate()
+            .filter_map(|(k, item)| {
+                let first = item.names.first()?;
+                Some((k + 1, names.iter().position(|n| n == first)?))
+            })
+            .collect(),
+    }
+}
+
+pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &str) -> Result<()> {
+    let name = file
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let name = name.as_str();
     let step = path.to_ascii_lowercase();
+    if model.assembly && step.ends_with(".svg") {
+        let exploded = model.exploded_parts(if model.explode.is_empty() { 0.0 } else { 1.0 });
+        let parts: Vec<(&Solid, Option<Colour>)> = exploded.iter().map(|(s, c)| (s, *c)).collect();
+        let list = parts_list(model, file);
+        std::fs::write(path, crate::drawing::annotated(&parts, None, Some(&list)))?;
+        return Ok(());
+    }
     if model.assembly && (step.ends_with(".step") || step.ends_with(".stp")) {
         let (products, instances) = assembly(model);
         std::fs::write(path, assembly_step(name, &products, &instances))?;

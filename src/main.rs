@@ -198,11 +198,7 @@ fn main() -> Result<()> {
                 )?;
                 return Ok(());
             }
-            let name = std::path::Path::new(&file)
-                .file_stem()
-                .map(|s| s.to_string_lossy().to_string())
-                .unwrap_or_default();
-            export::export_model(&run.model, &name, &output)
+            export::export_model(&run.model, std::path::Path::new(&file), &output)
         }
         Command::Bom { file, csv } => {
             let run = load(&file, None, &vars)?;

@@ -110,7 +110,9 @@ fn face_cylinder(points: &[Point3], normals: &[Vector3]) -> Option<Cylinder> {
 fn fit_face(face: &Face, tolerance: f64) -> Option<(Cylinder, Vec<Point3>, Vec<Vector3>)> {
     let single: Shell = vec![face.clone()].into();
     let meshed = single.robust_triangulation(tolerance);
-    let mesh = meshed.face_iter().next().and_then(|f| f.surface())?;
+    let meshed_face = meshed.face_iter().next()?;
+    let outward = if meshed_face.orientation() { 1.0 } else { -1.0 };
+    let mesh = meshed_face.surface()?;
     let positions = mesh.positions();
     let surface_normals = mesh.normals();
     let mut points = Vec::new();
@@ -119,7 +121,7 @@ fn fit_face(face: &Face, tolerance: f64) -> Option<(Cylinder, Vec<Point3>, Vec<V
         for vertex in triangle {
             if let Some(n) = vertex.nor.and_then(|i| surface_normals.get(i)) {
                 points.push(positions[vertex.pos]);
-                normals.push(n.normalize());
+                normals.push(n.normalize() * outward);
             }
         }
     }

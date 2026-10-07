@@ -233,7 +233,7 @@ fn step_assembly() {
     let path = screwed_plate();
     let run = linecad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit.step");
-    export::export_model(&run.model, "kit", &out).expect("exports");
+    export::export_model(&run.model, &path, &out).expect("exports");
     let text = std::fs::read_to_string(&out).expect("written");
     assert_eq!(text.matches("NEXT_ASSEMBLY_USAGE_OCCURRENCE(").count(), 3);
     assert_eq!(text.matches("= MANIFOLD_SOLID_BREP(").count(), 2);
@@ -247,7 +247,7 @@ fn step_assembly_opens_in_opencascade() {
     let path = screwed_plate();
     let run = linecad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit_occt.step");
-    export::export_model(&run.model, "kit", &out).expect("exports");
+    export::export_model(&run.model, &path, &out).expect("exports");
     let script = r#"
 import sys
 from OCP.STEPCAFControl import STEPCAFControl_Reader
@@ -338,4 +338,19 @@ fn drawing_dimensions_and_section() {
         Ok(linecad::drawing::Section { axis: 1, at: 0.0 })
     );
     assert!("w=1".parse::<linecad::drawing::Section>().is_err());
+}
+
+#[test]
+fn assembly_drawing_lists_parts() {
+    let path = screwed_plate();
+    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    let out = scratch("kit.svg");
+    export::export_model(&run.model, &path, &out).expect("exports");
+    let svg = std::fs::read_to_string(&out).expect("written");
+    for words in [">item<", ">plate<", ">pin<", ">2<"] {
+        assert!(svg.contains(words), "{words}");
+    }
+    assert_eq!(svg.matches("class=\"balloon\"").count(), 2);
+    assert!(svg.contains("class=\"parts-list\""));
+    assert!(svg.contains(">2× ⌀3<"));
 }
