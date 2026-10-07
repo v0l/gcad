@@ -496,7 +496,7 @@ impl Profile {
     }
 }
 
-fn curve_samples(curve: &Curve) -> Vec<Point3> {
+pub fn curve_samples(curve: &Curve) -> Vec<Point3> {
     let (t0, t1) = curve.range_tuple();
     let along = |steps: usize| {
         (0..=steps)
@@ -506,7 +506,7 @@ fn curve_samples(curve: &Curve) -> Vec<Point3> {
     match curve {
         Curve::Line(_) => along(1),
         Curve::IntersectionCurve(intersection) => curve_samples(intersection.leader()),
-        _ => along(16),
+        _ => along(32),
     }
 }
 
@@ -592,4 +592,99 @@ pub fn ray_hits(mesh: &PolygonMesh, origin: Point3, direction: Vector3) -> Vec<(
             Some((e2.dot(q) / det, e1.cross(e2).normalize()))
         })
         .collect()
+}
+
+fn column_spans(
+    triangles: &[[Point3; 3]],
+    bins: &[Vec<usize>],
+    cell: usize,
+    (x, y): (f64, f64),
+) -> Vec<(f64, f64)> {
+    let mut hits: Vec<f64> = bins[cell]
+        .iter()
+        .filter_map(|&t| {
+            let [a, b, c] = triangles[t];
+            let d = (b.x - a.x) * (c.y - a.y) - (b.y - a.y) * (c.x - a.x);
+            if d.abs() < 1.0e-14 {
+                return None;
+            }
+            let u = ((x - a.x) * (c.y - a.y) - (y - a.y) * (c.x - a.x)) / d;
+            let v = ((b.x - a.x) * (y - a.y) - (b.y - a.y) * (x - a.x)) / d;
+            (u >= 0.0 && v >= 0.0 && u + v <= 1.0)
+                .then_some(a.z + u * (b.z - a.z) + v * (c.z - a.z))
+        })
+        .collect();
+    hits.sort_by(f64::total_cmp);
+    hits.chunks_exact(2)
+        .map(|pair| (pair[0], pair[1]))
+        .collect()
+}
+
+pub fn overlap_volume(a: &Solid, b: &Solid, per_side: usize) -> f64 {
+    let (ba, bb) = (bounds(a), bounds(b));
+    let (x0, y0) = (ba.min().x.max(bb.min().x), ba.min().y.max(bb.min().y));
+    let (x1, y1) = (ba.max().x.min(bb.max().x), ba.max().y.min(bb.max().y));
+    let (z0, z1) = (ba.min().z.max(bb.min().z), ba.max().z.min(bb.max().z));
+    if x1 <= x0 || y1 <= y0 || z1 <= z0 {
+        return 0.0;
+    }
+    let n = per_side;
+    let (dx, dy) = ((x1 - x0) / n as f64, (y1 - y0) / n as f64);
+    let prepare = |solid: &Solid| {
+        let mesh = mesh(solid, mesh_tolerance(solid));
+        let positions = mesh.positions();
+        let triangles: Vec<[Point3; 3]> = mesh
+            .faces()
+            .triangle_iter()
+            .map(|t| t.map(|v| positions[v.pos]))
+            .collect();
+        let mut bins = vec![Vec::new(); n * n];
+        for (index, tri) in triangles.iter().enumerate() {
+            let range = |lo: f64, hi: f64, start: f64, step: f64| {
+                let a = (((lo - start) / step).floor().max(0.0) as usize).min(n - 1);
+                let b = (((hi - start) / step).floor().max(0.0) as usize).min(n - 1);
+                a..=b
+            };
+            let (lx, hx) = (
+                tri.iter().map(|p| p.x).fold(f64::INFINITY, f64::min),
+                tri.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max),
+            );
+            let (ly, hy) = (
+                tri.iter().map(|p| p.y).fold(f64::INFINITY, f64::min),
+                tri.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max),
+            );
+            if hx < x0 || lx > x1 || hy < y0 || ly > y1 {
+                continue;
+            }
+            for i in range(lx, hx, x0, dx) {
+                for j in range(ly, hy, y0, dy) {
+                    bins[i * n + j].push(index);
+                }
+            }
+        }
+        (triangles, bins)
+    };
+    let ((ta, bins_a), (tb, bins_b)) = (prepare(a), prepare(b));
+    let mut total = 0.0;
+    for i in 0..n {
+        for j in 0..n {
+            let point = (
+                x0 + dx * (i as f64 + 0.5 + 1.0e-7 * std::f64::consts::E),
+                y0 + dy * (j as f64 + 0.5 + 1.0e-7 * std::f64::consts::PI),
+            );
+            let (sa, sb) = (
+                column_spans(&ta, &bins_a, i * n + j, point),
+                column_spans(&tb, &bins_b, i * n + j, point),
+            );
+            let shared: f64 = sa
+                .iter()
+                .flat_map(|p| {
+                    sb.iter()
+                        .map(move |q| (p.1.min(q.1).min(z1) - p.0.max(q.0).max(z0)).max(0.0))
+                })
+                .sum();
+            total += shared * dx * dy;
+        }
+    }
+    total
 }

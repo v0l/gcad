@@ -1,12 +1,13 @@
 use std::collections::BTreeMap;
 
-const CATEGORIES: [&str; 8] = [
+const CATEGORIES: [&str; 9] = [
     "sketch",
     "workplane",
     "features",
     "holes",
     "blends",
     "bodies",
+    "assembly",
     "output",
     "inspect",
 ];

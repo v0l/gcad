@@ -139,6 +139,18 @@ Bodies:
 | `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.lcad` file |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
 
+Assemblies. Each `body` is a part. Joints hang one body off another, so moving a
+joint moves that body and everything hanging off it:
+
+| operation | parameters | does |
+|---|---|---|
+| `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` | joins two bodies; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now |
+| `pose` | `joint value` | moves a joint to a new value |
+| `interference` | `none`, `joint=` `steps=` | reports the volume each pair of bodies shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
+
+Build each part first and add joints at the end: posing moves the solids but not the
+face groups their selectors use.
+
 Measuring, which changes nothing and prints the answer:
 
 | operation | parameters | prints |

@@ -94,16 +94,14 @@ fn faces(solid: &Solid, highlights: &[Highlight<'_>], out: &mut Vec<Surface>) {
 }
 
 fn polyline(edge: &Edge) -> Vec<V3> {
-    let curve = edge.curve();
-    let (t0, t1) = curve.range_tuple();
-    let count = if matches!(curve, Curve::Line(_)) {
-        1
-    } else {
-        32
-    };
-    (0..=count)
-        .map(|i| v3(curve.subs(t0 + (t1 - t0) * i as f64 / count as f64)))
-        .collect()
+    let mut points: Vec<V3> = geometry::curve_samples(&edge.curve())
+        .into_iter()
+        .map(v3)
+        .collect();
+    if !edge.orientation() {
+        points.reverse();
+    }
+    points
 }
 
 fn tube(points: &[V3], radius: f32, out: &mut Surface) {
@@ -177,15 +175,12 @@ pub fn build(
         colour: EDGE,
         ..Default::default()
     };
-    let mut seen = Vec::new();
+    let mut seen = std::collections::HashSet::new();
+    let skip: std::collections::HashSet<_> = marked.iter().map(|m| m.id()).collect();
     all.iter()
         .flat_map(|s| s.boundaries().iter())
         .flat_map(|shell| shell.edge_iter())
-        .filter(|edge| {
-            let fresh = !seen.contains(&edge.id());
-            seen.push(edge.id());
-            fresh && !marked.iter().any(|m| m.is_same(edge))
-        })
+        .filter(|edge| seen.insert(edge.id()) && !skip.contains(&edge.id()))
         .for_each(|edge| tube(&polyline(&edge), radius * 0.0018, &mut edges));
     surfaces.push(edges);
     let mut highlighted = Surface {

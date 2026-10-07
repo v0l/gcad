@@ -19,7 +19,7 @@ array count=3 step=0,-5
 vents: cut 4
 color #3a6ea5
 body lid
-plane XY offset=h+10
+plane XY offset=h
 rect w d r=r
 top: extrude t
 rect w-2*t-0.4 d-2*t-0.4 r=r-t
@@ -30,3 +30,6 @@ text LINECAD size=8 at=-17,-4
 logo: cut 0.6
 fillet 1 top.end&top.side
 color #e8e8e8
+axis hinge -w/2,d/2,h w/2,d/2,h
+joint open lid main turn about=hinge min=-110 max=0 at=-75
+interference none

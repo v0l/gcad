@@ -153,6 +153,16 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | place one body on another | supported | `place lid on=>Z` | `bodies::assembly_mate` |
 | interference check | supported | `measure overlap main b` | `bodies::interference` |
 
+## Assemblies
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| turning joint | supported | `joint open lid main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
+| sliding joint | supported | `joint pull drawer main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
+| posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
+| check every pair of bodies | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
+| sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash` |
+
 
 ## Output
 

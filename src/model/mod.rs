@@ -1,4 +1,5 @@
 mod args;
+mod assembly;
 mod blends;
 mod bodies;
 mod constrain;
@@ -24,6 +25,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub use args::label_of;
+pub use assembly::{Joint, JointKind, posed, subtree};
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
 
@@ -72,6 +74,7 @@ pub struct Model {
     pub axes: HashMap<String, (Point3, Vector3)>,
     pub colours: HashMap<String, [f64; 3]>,
     pub revolves: HashMap<String, features::Revolve>,
+    pub joints: Vec<assembly::Joint>,
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -235,6 +238,9 @@ impl Model {
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "rib" => self.op_rib(line),
+            "joint" => self.op_joint(line),
+            "pose" => self.op_pose(line),
+            "interference" => self.op_interference(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",
