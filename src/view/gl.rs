@@ -26,7 +26,7 @@ impl Default for Camera {
             pitch: 0.55,
             zoom: 1.0,
             pan: Vec2::ZERO,
-            ortho: false,
+            ortho: true,
         }
     }
 }

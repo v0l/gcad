@@ -349,7 +349,7 @@ The viewer also has:
   face it landed on with its area;
 - section: cuts the model across x, y or z at a slider position, with flip to show
   the other half; the cut faces are orange, and measure picks ignore what is cut away;
-- ortho: switches the camera to an orthographic projection;
+- ortho: on by default, as in most mechanical CAD; switch it off for a perspective view;
 - a parts card listing every body in its `color`, with a switch to hide each one, and
   an explode slider when the assembly has `explode` lines;
 - a joints card with a slider for every `joint`, which moves the parts without
