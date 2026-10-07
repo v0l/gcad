@@ -319,7 +319,7 @@ fn even_leader(curve: &Curve) -> Curve {
     let mut knots = KnotVector::uniform_knot(1, count);
     knots.transform(t1 - t0, t0);
     let mut even = intersection.clone();
-    *even.leader_mut() = Box::new(Curve::BsplineCurve(BsplineCurve::new(knots, points)));
+    **even.leader_mut() = Curve::BsplineCurve(BsplineCurve::new(knots, points));
     Curve::IntersectionCurve(even)
 }
 

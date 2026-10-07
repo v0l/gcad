@@ -272,9 +272,7 @@ impl Rig {
                     .flat_map(|m| m.residuals([at(&m.parts[0]), at(&m.parts[1])]))
                     .collect()
             });
-            if let Err(why) = self.settle(&place(&x, at)) {
-                return Err(why);
-            }
+            self.settle(&place(&x, at))?;
         }
         self.settle(&place(&x, value))
     }
