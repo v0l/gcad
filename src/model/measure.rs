@@ -45,8 +45,23 @@ impl Model {
             ("mass", []) => {
                 let mass = mass_properties(&self.solids());
                 let c = mass.centroid;
+                let weighed = self.weights();
+                let grams: f64 = weighed.iter().filter_map(|(_, g)| *g).sum();
+                let bare: Vec<String> = weighed
+                    .iter()
+                    .filter(|(_, g)| g.is_none())
+                    .map(|(n, _)| n.clone())
+                    .collect();
+                let weight = match (grams > 0.0, bare.is_empty()) {
+                    (false, _) => String::new(),
+                    (true, true) => format!(", mass {grams:.3} g"),
+                    (true, false) => format!(
+                        ", mass {grams:.3} g without {} (no material)",
+                        bare.join(", ")
+                    ),
+                };
                 Ok(format!(
-                    "volume {:.3} area {:.3} centroid {:.3},{:.3},{:.3}",
+                    "volume {:.3} area {:.3} centroid {:.3},{:.3},{:.3}{weight}",
                     mass.volume,
                     mass.area,
                     tidy(c.x),
@@ -73,6 +88,19 @@ impl Model {
                 "`measure` takes `mass`, `thickness`, `draft pull=`, `overlap body body`, or two face selectors"
             ),
         }
+    }
+
+    pub fn weights(&self) -> Vec<(String, Option<f64>)> {
+        self.named_solids()
+            .into_iter()
+            .map(|(name, solid)| {
+                let grams = self
+                    .materials
+                    .get(&name)
+                    .map(|m| geometry::volume(solid).abs() * m.density / 1000.0);
+                (name, grams)
+            })
+            .collect()
     }
 
     fn thickness(&self) -> Result<String> {

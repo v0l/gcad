@@ -4,3 +4,4 @@ head: extrude rise
 circle d
 shank: extrude -l
 color silver
+material steel

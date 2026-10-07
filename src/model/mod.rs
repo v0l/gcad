@@ -76,6 +76,7 @@ pub struct Model {
     pub construction: Vec<(Frame, Profile)>,
     pub axes: HashMap<String, (Point3, Vector3)>,
     pub colours: HashMap<String, [f64; 3]>,
+    pub materials: HashMap<String, bodies::Material>,
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,
     pub assembly: bool,
@@ -86,6 +87,7 @@ pub struct Model {
 
 pub const OPERATIONS: &[&str] = &[
     "let",
+    "material",
     "plane",
     "rect",
     "circle",
@@ -253,6 +255,7 @@ impl Model {
             "array" => self.op_array(line),
             "axis" => self.op_axis(line),
             "color" => self.op_color(line),
+            "material" => self.op_material(line),
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "rib" => self.op_rib(line),

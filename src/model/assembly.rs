@@ -342,6 +342,7 @@ pub const ASSEMBLY_OPERATIONS: &[&str] = &[
     "pose",
     "interference",
     "color",
+    "material",
     "measure",
     "concentric",
     "flush",
@@ -464,6 +465,7 @@ impl Model {
             "couple" => self.op_couple(line),
             "interference" => self.op_interference(line),
             "color" => self.op_colour_part(line),
+            "material" => self.op_material(line),
             "measure" => self.op_measure(line),
             "concentric" => self.op_concentric(line),
             "flush" => self.op_flush(line),
@@ -528,6 +530,9 @@ impl Model {
             let solid = loaded.named_body(body)?;
             if let Some(colour) = loaded.colours.get(body) {
                 self.colours.insert(new.clone(), *colour);
+            }
+            if let Some(material) = loaded.materials.get(body) {
+                self.materials.insert(new.clone(), material.clone());
             }
             let groups = loaded
                 .part_groups

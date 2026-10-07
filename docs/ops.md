@@ -206,6 +206,7 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | errors that say what to do | supported | | `inspect::errors` |
 | measure distance | supported | `measure faces faces` | `inspect::measure_distance` |
 | mass properties | supported | `measure mass` | `inspect::mass_properties` |
+| materials and mass | supported | `material steel`, `material pla density=1.24` | `inspect::material_mass`, `assembly::materials_follow_parts` |
 | wall thickness | supported | `measure thickness` | `inspect::wall_thickness` |
 | draft analysis | supported | `measure draft pull=z` | `inspect::draft_analysis` |
 | variables from outside the file | supported | `linecad check part.lcad --set w=20` | `inspect::outside_variables` |

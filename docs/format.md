@@ -143,13 +143,14 @@ Bodies:
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
 | `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.lcad` file |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
+| `material` | `name` `density=` | sets what the current body is made of, for its mass. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood. `density=` in g/cm³ gives any other |
 
 Measuring, which changes nothing and prints the answer:
 
 | operation | parameters | prints |
 |---|---|---|
 | `measure` | `faces faces` | the distance between two sets of faces |
-| `measure` | `mass` | volume, surface area and centroid of every body |
+| `measure` | `mass` | volume, surface area and centroid of every body, and the mass in grams of those with a `material` |
 | `measure` | `overlap a b` | the volume two bodies share |
 | `measure` | `thickness` | the thinnest wall and where it is |
 | `measure` | `draft` `pull=x\|y\|z` `min=` | how many faces have under `min` degrees (1 by default) of draft |
@@ -182,6 +183,7 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 | `tangent` | `moving:faces fixed:faces` | lays a round face on a flat one, or against another round face, with its axis parallel |
 | `aligned` | `a:faces b:faces` `tol=` | checks that every hole in `a` has a parallel hole in `b` on the same axis, within `tol` (0.05 by default), and fails the line if not |
 | `color` | `part colour` | colours a part, over the colour its file gave it |
+| `material` | `part name` `density=` | sets a part's material, over the one its file gave it |
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
 | `measure` | `mass`, `overlap a b` | as in part files |
 

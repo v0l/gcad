@@ -428,3 +428,22 @@ fn coupled_joints_move_together() {
     );
     assert!(error.contains("`jb` goes from -60 to 60"), "{error}");
 }
+
+#[test]
+fn materials_follow_parts() {
+    let parts = [("rod.lcad", "circle 10\nextrude 10\nmaterial aluminium\n")];
+    let (_, text) = built(
+        "materials_follow_parts",
+        "part a rod.lcad\npart b rod.lcad\nmove b 20,0,0\nmaterial b steel\nmeasure mass\n",
+        &parts,
+    );
+    let volume = std::f64::consts::PI * 25.0 * 10.0;
+    let grams = volume * (2.7 + 7.85) / 1000.0;
+    let said: f64 = text
+        .split("mass ")
+        .nth(1)
+        .and_then(|t| t.split(' ').next())
+        .and_then(|t| t.parse().ok())
+        .expect("mass");
+    assert!((said - grams).abs() < grams * 2.0e-3, "{text}");
+}

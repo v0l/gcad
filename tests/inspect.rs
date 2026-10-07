@@ -117,3 +117,19 @@ fn conditional() {
         1.0e-5,
     );
 }
+
+#[test]
+fn material_mass() {
+    let text = summary(
+        "rect 10 10\nextrude 10\nmaterial steel\nbody b\nrect 10 10\nextrude -10\nmaterial pla\nmeasure mass",
+    );
+    assert!(text.contains("mass 9.090 g"), "{text}");
+    let text = summary(
+        "rect 10 10\nextrude 10\nmaterial density=2\nbody b\nrect 10 10\nextrude -10\nmeasure mass",
+    );
+    assert!(
+        text.contains("mass 2.000 g without b (no material)"),
+        "{text}"
+    );
+    assert!(failure("rect 10 10\nextrude 10\nmaterial unobtainium").contains("density="));
+}

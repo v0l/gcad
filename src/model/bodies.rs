@@ -446,6 +446,61 @@ impl Model {
         ))
     }
 
+    pub(crate) fn op_material(&mut self, line: &Line) -> Result<String> {
+        let name = if self.assembly {
+            let part = line
+                .positional
+                .first()
+                .ok_or_else(|| anyhow!("write `material part name [density=g/cm³]`"))?
+                .clone();
+            if !self.body_names().contains(&part) {
+                bail!("no part called `{part}`; parts are {:?}", self.body_names());
+            }
+            part
+        } else {
+            self.body_name()
+        };
+        let wanted: &[&str] = if self.assembly { &["part"] } else { &[] };
+        let args = Args::new(line, wanted, &["density"], true)?;
+        let label = match args.rest.as_slice() {
+            [] => None,
+            [one] => Some(one.to_string()),
+            _ => bail!("give one material name, like `material steel`"),
+        };
+        let density = match (args.optional_number("density", &self.scope)?, &label) {
+            (Some(d), _) if d <= 0.0 => bail!("density must be above zero, not {d}"),
+            (Some(d), _) => d,
+            (None, Some(label)) => density_of(label).ok_or_else(|| {
+                anyhow!(
+                    "no density known for `{label}`; give `density=` in g/cm³, or use one of {}",
+                    MATERIALS
+                        .iter()
+                        .map(|(n, _)| *n)
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                )
+            })?,
+            (None, None) => bail!("write `material steel` or `material name density=1.2`"),
+        };
+        let label = label.unwrap_or_else(|| format!("{density} g/cm³"));
+        self.materials.insert(
+            name.clone(),
+            Material {
+                name: label.clone(),
+                density,
+            },
+        );
+        Ok(format!("`{name}` is {label}, {density} g/cm³"))
+    }
+
+    pub fn named_solids(&self) -> Vec<(String, &Solid)> {
+        self.bodies
+            .iter()
+            .map(|(n, s)| (n.clone(), s))
+            .chain(self.solid.as_ref().map(|s| (self.body_name(), s)))
+            .collect()
+    }
+
     pub(crate) fn colour_of(&self, text: &str) -> Result<[f64; 3]> {
         let named = |name: &str| -> Option<[f64; 3]> {
             Some(match name {
@@ -604,4 +659,35 @@ fn read_step(path: &std::path::Path) -> Result<Vec<Solid>> {
         bail!("the file has no solids");
     }
     Ok(solids)
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Material {
+    pub name: String,
+    pub density: f64,
+}
+
+pub const MATERIALS: &[(&str, f64)] = &[
+    ("steel", 7.85),
+    ("stainless", 8.0),
+    ("aluminium", 2.7),
+    ("aluminum", 2.7),
+    ("brass", 8.5),
+    ("copper", 8.96),
+    ("titanium", 4.43),
+    ("pla", 1.24),
+    ("petg", 1.27),
+    ("abs", 1.04),
+    ("asa", 1.07),
+    ("nylon", 1.14),
+    ("tpu", 1.21),
+    ("polycarbonate", 1.2),
+    ("acrylic", 1.18),
+    ("resin", 1.2),
+    ("wood", 0.6),
+];
+
+pub fn density_of(name: &str) -> Option<f64> {
+    let name = name.to_ascii_lowercase();
+    MATERIALS.iter().find(|(n, _)| *n == name).map(|(_, d)| *d)
 }
