@@ -395,6 +395,15 @@ impl Model {
                 });
             }
         }
+        for mate in &loaded.mates {
+            if mate.parts.iter().all(|p| picked.contains(p)) {
+                self.mates.push(Mate {
+                    text: format!("{name}: {}", mate.text),
+                    parts: mate.parts.clone().map(|p| rename(&p)),
+                    ..mate.clone()
+                });
+            }
+        }
         Ok(format!("{} from {}", added.join(", "), path.display()))
     }
 

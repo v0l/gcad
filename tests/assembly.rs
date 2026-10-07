@@ -282,3 +282,21 @@ fn a_screw_locks_the_hinge() {
         "the screw turns with the lid: {b:?}"
     );
 }
+
+#[test]
+fn a_sub_assembly_keeps_its_mates() {
+    let parts = [
+        ("box.lcad", LID_WITH_HOLES),
+        ("screw.lcad", SCREW),
+        (
+            "boxed.lasm",
+            "part box box.lcad\naxis hinge -20,20,10 20,20,10\njoint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nconcentric screw:shank.side box.main:pilot.side\n",
+        ),
+    ];
+    let error = failed(
+        "a_sub_assembly_keeps_its_mates",
+        "part kit boxed.lasm\npose kit.open -30\n",
+        &parts,
+    );
+    assert!(error.contains("pull apart"), "{error}");
+}
