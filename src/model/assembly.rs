@@ -123,6 +123,13 @@ impl Mate {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Source {
+    pub file: std::path::PathBuf,
+    pub body: String,
+    pub vars: Vec<(String, f64)>,
+}
+
 #[derive(Clone, Debug)]
 pub struct Couple {
     pub driven: String,
@@ -531,6 +538,12 @@ impl Model {
             if let Some(colour) = loaded.colours.get(body) {
                 self.colours.insert(new.clone(), *colour);
             }
+            let source = loaded.sources.get(body).cloned().unwrap_or_else(|| Source {
+                file: path.clone(),
+                body: body.clone(),
+                vars: vars.clone(),
+            });
+            self.sources.insert(new.clone(), source);
             if let Some(material) = loaded.materials.get(body) {
                 self.materials.insert(new.clone(), material.clone());
             }

@@ -227,6 +227,10 @@ pose lid open
 interference none
 ```
 
+`linecad bom file` lists what a file is made of: one row per body of each part file
+and set of variables, with how many there are, the material, and the volume and mass
+of each. `--csv` writes the same as CSV, with the part names in the last column.
+
 `check`, `render`, `export` and the viewer take either kind of file, and `--set`
 reaches the assembly's own variables. The viewer rebuilds when any part file next to
 the assembly is saved.

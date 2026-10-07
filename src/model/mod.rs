@@ -27,7 +27,7 @@ use std::path::PathBuf;
 
 pub use args::label_of;
 pub use assembly::{
-    ASSEMBLY_OPERATIONS, Couple, Joint, JointKind, Mate, Rig, broken, posed, subtree,
+    ASSEMBLY_OPERATIONS, Couple, Joint, JointKind, Mate, Rig, Source, broken, posed, subtree,
 };
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
@@ -77,6 +77,7 @@ pub struct Model {
     pub axes: HashMap<String, (Point3, Vector3)>,
     pub colours: HashMap<String, [f64; 3]>,
     pub materials: HashMap<String, bodies::Material>,
+    pub sources: HashMap<String, assembly::Source>,
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,
     pub assembly: bool,

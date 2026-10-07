@@ -39,6 +39,13 @@ enum Command {
     },
     /// Write the solid as .step, .stl, .obj, .3mf or an .svg drawing
     Export { file: String, output: String },
+    /// List the parts an assembly is made of, counted by file, body and variables
+    Bom {
+        file: String,
+        /// Write CSV instead of a table
+        #[arg(long)]
+        csv: bool,
+    },
     /// Draw iso, top, front and right views into one PNG
     Render { file: String, output: String },
     /// Open the file in a window that rebuilds whenever it is saved
@@ -144,6 +151,17 @@ fn main() -> Result<()> {
             let run = load(&file, None, &vars)?;
             finished(&run)?;
             export::export_coloured(&run.model.parts(), &output)
+        }
+        Command::Bom { file, csv } => {
+            let run = load(&file, None, &vars)?;
+            finished(&run)?;
+            let items = linecad::bom::items(&run.model, std::path::Path::new(&file));
+            if csv {
+                print!("{}", linecad::bom::csv(&items));
+            } else {
+                println!("{}", linecad::bom::table(&items));
+            }
+            Ok(())
         }
         Command::Render { file, output } => {
             let run = load(&file, None, &vars)?;

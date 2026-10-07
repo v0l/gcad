@@ -447,3 +447,48 @@ fn materials_follow_parts() {
         .expect("mass");
     assert!((said - grams).abs() < grams * 2.0e-3, "{text}");
 }
+
+#[test]
+fn bill_of_materials_counts_parts() {
+    let parts = [
+        (
+            "rod.lcad",
+            "let d=10\ncircle d\nextrude 10\nmaterial steel\n",
+        ),
+        ("plate.lcad", SLAB),
+    ];
+    let path = files(
+        "bill_of_materials_counts_parts",
+        "part base plate.lcad\npart a rod.lcad\npart b rod.lcad\npart c rod.lcad d=20\nmove b 20,0,0\nmove c 40,0,0\n",
+        &parts,
+    );
+    let run = run_path(&path, &[], None).expect("runs");
+    let items = linecad::bom::items(&run.model, &path);
+    let summary: Vec<(usize, &str, &str)> = items
+        .iter()
+        .map(|i| (i.names.len(), i.file.as_str(), i.variant.as_str()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            (1, "plate.lcad", ""),
+            (2, "rod.lcad", ""),
+            (1, "rod.lcad", "d=20")
+        ]
+    );
+    assert!(items[0].grams.is_none());
+    let grams = std::f64::consts::PI * 25.0 * 10.0 * 7.85 / 1000.0;
+    assert!((items[1].grams.expect("steel") - grams).abs() < grams * 2.0e-3);
+    let table = linecad::bom::table(&items);
+    assert!(
+        table.ends_with("4 parts, 36.98 g without the parts that have no material"),
+        "{table}"
+    );
+    assert!(
+        linecad::bom::csv(&items)
+            .lines()
+            .nth(2)
+            .expect("row")
+            .starts_with("2,rod.lcad,main,,steel,")
+    );
+}
