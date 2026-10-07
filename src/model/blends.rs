@@ -14,6 +14,22 @@ fn plane_normal(face: &Face) -> Option<Vector3> {
     }
 }
 
+fn smooth(edge: &Edge, faces: &[Face]) -> bool {
+    let curve = edge.curve();
+    let (t0, t1) = curve.range_tuple();
+    let point = curve.subs((t0 + t1) / 2.0);
+    let normals: Vec<Vector3> = faces
+        .iter()
+        .filter(|face| face.edge_iter().any(|e| e.is_same(edge)))
+        .filter_map(|face| {
+            let surface = face.oriented_surface();
+            let (u, v) = surface.search_parameter(point, None, 100)?;
+            Some(surface.normal(u, v))
+        })
+        .collect();
+    matches!(normals.as_slice(), [a, b] if a.dot(*b) > 1.0 - 1.0e-6)
+}
+
 fn into_face(edge: Vector3, own: Vector3, other: Vector3) -> Vector3 {
     let u = edge.cross(own).normalize();
     if u.dot(other) < 0.0 { u } else { -u }
@@ -32,6 +48,16 @@ impl Model {
         let edges = select::select_edges(selector, &solid, &self.groups, tolerance)?;
         if edges.is_empty() {
             bail!("`{selector}` matched no edges");
+        }
+        let faces = select::faces(&solid);
+        let edges: Vec<Edge> = edges
+            .into_iter()
+            .filter(|edge| !smooth(edge, &faces))
+            .collect();
+        if edges.is_empty() {
+            bail!(
+                "every edge of `{selector}` joins faces smoothly, so there is no corner to round"
+            );
         }
         if let Some(second) = args.optional_number("d2", &self.scope)? {
             if !matches!(profile, FilletProfile::Chamfer) {

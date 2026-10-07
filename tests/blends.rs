@@ -135,7 +135,6 @@ fn chamfer_every_edge_of_a_box() {
 }
 
 #[test]
-#[ignore = "missing: rounding corners on curved faces"]
 fn fillet_every_edge_of_a_rounded_prism() {
     let model = build("rect 20 20 r=5\nextrude 10\nfillet 1 all");
     let v = volume(&model);

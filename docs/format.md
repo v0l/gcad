@@ -202,6 +202,8 @@ Edges, for `fillet` and `chamfer`:
 | `x\|y` | edges in `x` or `y` |
 
 `base.end&base.side` is the top perimeter of an extrusion and leaves hole rims alone.
+`fillet` and `chamfer` skip edges where the faces already meet smoothly, such as the
+lines where a rounded corner of a `rect r=` joins its flat sides.
 `base.side&base.side` is the vertical edges between its side walls.
 
 ## Checking a file
