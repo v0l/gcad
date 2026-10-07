@@ -157,14 +157,18 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 
 ## Assemblies
 
+Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and join them.
+
 | operation | status | syntax | tests |
 |---|---|---|---|
-| turning joint | supported | `joint open lid main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
-| sliding joint | supported | `joint pull drawer main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
+| bring in a part file | supported | `part box box.lcad body=lid` | `assembly::parts_from_files` |
+| set a part's variables | supported | `part plate plate.lcad w=size` | `assembly::part_variables` |
+| geometry stays in part files | supported | `rect` in a `.lasm` fails | `assembly::geometry_stays_in_parts`, `assembly::part_errors_name_the_file` |
+| turning joint | supported | `joint open box.lid box.main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
+| sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
-| check every pair of bodies | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
+| check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
 | sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash` |
-
 
 ## Output
 

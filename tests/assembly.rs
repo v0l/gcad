@@ -1,16 +1,84 @@
 mod common;
 
-use common::*;
+use common::scratch;
+use linecad::model::{Model, run_path};
 
-const HINGED: &str = "rect 40 40\nextrude 10\nbody lid\nplane XY offset=10\nrect 40 40\nextrude 2\naxis hinge -20,20,10 20,20,10\n";
+const BOX: &str = "rect 40 40\nextrude 10\nbody lid\nplane XY offset=10\nrect 40 40\nextrude 2\n";
+
+fn files(test: &str, assembly: &str, parts: &[(&str, &str)]) -> std::path::PathBuf {
+    let dir = std::path::PathBuf::from(scratch(test));
+    std::fs::create_dir_all(&dir).expect("dir");
+    for (name, text) in parts {
+        std::fs::write(dir.join(name), text).expect("part");
+    }
+    let path = dir.join("top.lasm");
+    std::fs::write(&path, assembly).expect("assembly");
+    path
+}
+
+fn steps(
+    test: &str,
+    assembly: &str,
+    parts: &[(&str, &str)],
+) -> (Model, Vec<Result<String, String>>) {
+    let run = run_path(&files(test, assembly, parts), &[], None).expect("runs");
+    let results = run
+        .steps
+        .iter()
+        .map(|(_, r)| r.as_ref().map(Clone::clone).map_err(|e| format!("{e:#}")))
+        .collect();
+    (run.model, results)
+}
+
+fn built(test: &str, assembly: &str, parts: &[(&str, &str)]) -> (Model, String) {
+    let (model, results) = steps(test, assembly, parts);
+    match results.last() {
+        Some(Ok(text)) => (model, text.clone()),
+        Some(Err(error)) => panic!("{error}"),
+        None => panic!("empty"),
+    }
+}
+
+fn failed(test: &str, assembly: &str, parts: &[(&str, &str)]) -> String {
+    match steps(test, assembly, parts).1.last() {
+        Some(Err(error)) => error.clone(),
+        other => panic!("expected a failure, got {other:?}"),
+    }
+}
+
+const HINGE: &str = "part box box.lcad\naxis hinge -20,20,10 20,20,10\n";
+
+#[test]
+fn parts_from_files() {
+    let (model, _) = built(
+        "parts_from_files",
+        "part box box.lcad\npart spare box.lcad body=lid\nmove spare 0,0,20",
+        &[("box.lcad", BOX)],
+    );
+    assert_eq!(model.body_names(), ["box.main", "box.lid", "spare"]);
+    let spare = linecad::geometry::bounds(&model.named_body("spare").expect("spare"));
+    assert!((spare.min().z - 30.0).abs() < 1.0e-6, "{spare:?}");
+}
+
+#[test]
+fn part_variables() {
+    let (model, _) = built(
+        "part_variables",
+        "let size=20\npart plate plate.lcad w=size",
+        &[("plate.lcad", "let w=10\nrect w w\nextrude 1")],
+    );
+    let plate = linecad::geometry::bounds(&model.named_body("plate").expect("plate"));
+    assert!((plate.max().x - 10.0).abs() < 1.0e-6, "{plate:?}");
+}
 
 #[test]
 fn hinge_opens_the_lid() {
-    let model = build(&format!(
-        "{HINGED}joint open lid main turn about=hinge min=-120 max=0 at=-90"
-    ));
-    let lid = model.named_body("lid").expect("lid");
-    let b = linecad::geometry::bounds(&lid);
+    let (model, _) = built(
+        "hinge_opens_the_lid",
+        &format!("{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0 at=-90"),
+        &[("box.lcad", BOX)],
+    );
+    let b = linecad::geometry::bounds(&model.named_body("box.lid").expect("lid"));
     assert!(
         (b.min().z - 10.0).abs() < 1.0e-6 && (b.max().z - 50.0).abs() < 1.0e-6,
         "{b:?}"
@@ -22,51 +90,101 @@ fn hinge_opens_the_lid() {
 }
 
 #[test]
+fn slide_moves_a_drawer() {
+    let parts = [(
+        "drawer.lcad",
+        "rect 40 40\nextrude 10\nbody drawer\nplane XY offset=10\nrect 30 30\nextrude 5",
+    )];
+    let (model, _) = built(
+        "slide_moves_a_drawer",
+        "part chest drawer.lcad\njoint pull chest.drawer chest.main slide along=0,-1,0 min=0 max=30 at=25",
+        &parts,
+    );
+    let b = linecad::geometry::bounds(&model.named_body("chest.drawer").expect("drawer"));
+    assert!(
+        (b.min().y + 40.0).abs() < 1.0e-6 && (b.max().y + 10.0).abs() < 1.0e-6,
+        "{b:?}"
+    );
+    let error = failed(
+        "slide_out_of_range",
+        "part chest drawer.lcad\njoint pull chest.drawer chest.main slide along=0,-1,0 min=0 max=30 at=40",
+        &parts,
+    );
+    assert!(error.contains("goes from 0 to 30"), "{error}");
+}
+
+#[test]
 fn pose_moves_children() {
-    let model = build(&format!(
-        "{HINGED}joint open lid main turn about=hinge min=-120 max=0\nbody knob\nplane XY offset=12\ncircle 6 at=0,-10\nextrude 4\njoint fix knob lid slide along=0,0,1 min=0 max=0\npose open -90"
-    ));
-    let knob = model.named_body("knob").expect("knob");
-    let b = linecad::geometry::bounds(&knob);
+    let (model, _) = built(
+        "pose_moves_children",
+        &format!(
+            "{HINGE}part knob knob.lcad\nmove knob 0,-10,12\njoint open box.lid box.main turn about=hinge min=-120 max=0\njoint fix knob box.lid slide along=0,0,1 min=0 max=0\npose open -90"
+        ),
+        &[("box.lcad", BOX), ("knob.lcad", "circle 6\nextrude 4")],
+    );
+    let b = linecad::geometry::bounds(&model.named_body("knob").expect("knob"));
     assert!(b.min().y > 21.9 && b.max().y < 26.1, "{b:?}");
 }
 
 #[test]
 fn clear_assembly() {
-    let text = summary(&format!(
-        "{HINGED}joint open lid main turn about=hinge min=-120 max=0 at=-90\ninterference none"
-    ));
+    let (_, text) = built(
+        "clear_assembly",
+        &format!(
+            "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0 at=-90\ninterference none"
+        ),
+        &[("box.lcad", BOX)],
+    );
     assert!(text.contains("no overlaps"), "{text}");
 }
 
 #[test]
 fn sweep_finds_a_clash() {
-    let text = summary(&format!(
-        "{HINGED}joint open lid main turn about=hinge min=-60 max=60\ninterference joint=open steps=4"
-    ));
+    let (_, text) = built(
+        "sweep_finds_a_clash",
+        &format!(
+            "{HINGE}joint open box.lid box.main turn about=hinge min=-60 max=60\ninterference joint=open steps=4"
+        ),
+        &[("box.lcad", BOX)],
+    );
     assert!(
-        text.contains("at 30.0°") && text.contains("lid and main") || text.contains("main and lid"),
+        text.contains("at 30.0°") && text.contains("box.main and box.lid"),
         "{text}"
     );
 }
 
 #[test]
 fn strict_interference_fails() {
-    let error = failure(&format!(
-        "{HINGED}joint open lid main turn about=hinge min=0 max=60 at=45\ninterference none"
-    ));
+    let error = failed(
+        "strict_interference_fails",
+        &format!(
+            "{HINGE}joint open box.lid box.main turn about=hinge min=0 max=60 at=45\ninterference none"
+        ),
+        &[("box.lcad", BOX)],
+    );
     assert!(error.contains("overlap"), "{error}");
 }
 
 #[test]
-fn slide_moves_a_drawer() {
-    let model = build(
-        "rect 40 40\nextrude 10\nbody drawer\nplane XY offset=10\nrect 30 30\nextrude 5\njoint pull drawer main slide along=0,-1,0 min=0 max=30 at=25",
+fn geometry_stays_in_parts() {
+    let error = failed(
+        "geometry_stays_in_parts",
+        "part box box.lcad\nrect 10 10",
+        &[("box.lcad", BOX)],
     );
-    let b = linecad::geometry::bounds(&model.named_body("drawer").expect("drawer"));
-    assert!(
-        (b.min().y + 40.0).abs() < 1.0e-6 && (b.max().y + 10.0).abs() < 1.0e-6,
-        "{b:?}"
+    assert!(error.contains("part (.lcad) file"), "{error}");
+    let error = common::failure(
+        "rect 10 10\nextrude 1\nbody b\nrect 5 5\nextrude 1\njoint j b main slide along=1,0,0",
     );
-    assert!(failure("rect 40 40\nextrude 10\nbody drawer\nplane XY offset=10\nrect 30 30\nextrude 5\njoint pull drawer main slide along=0,-1,0 min=0 max=30 at=40").contains("goes from 0 to 30"));
+    assert!(error.contains("assembly (.lasm) file"), "{error}");
+}
+
+#[test]
+fn part_errors_name_the_file() {
+    let error = failed(
+        "part_errors_name_the_file",
+        "part bad bad.lcad",
+        &[("bad.lcad", "rect 10 10\nfillet 1 all")],
+    );
+    assert!(error.contains("bad.lcad:2"), "{error}");
 }

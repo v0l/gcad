@@ -1,7 +1,7 @@
-use anyhow::{Context, Result, anyhow, bail};
+use anyhow::{Result, anyhow, bail};
 use clap::{Parser, Subcommand};
-use linecad::model::{Run, run_full};
-use linecad::{export, parse, render, select};
+use linecad::model::{Run, run_path};
+use linecad::{export, render, select};
 
 #[derive(Parser)]
 #[command(
@@ -54,25 +54,17 @@ enum Command {
 }
 
 fn load(file: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<Run> {
-    let source = std::fs::read_to_string(file).with_context(|| format!("reading {file}"))?;
-    let lines: Vec<_> = parse::parse_program(&source)?
-        .into_iter()
-        .filter(|line| until.is_none_or(|last| line.number <= last))
-        .collect();
-    let dir = std::path::Path::new(file)
-        .parent()
-        .map(std::path::Path::to_path_buf);
-    Ok(run_full(dir, vars, &lines))
+    run_path(std::path::Path::new(file), vars, until)
 }
 
-fn finished(run: &Run) -> Result<&monstertruck::modeling::Solid> {
+fn finished(run: &Run) -> Result<()> {
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("line {}: {}: {error:#}", line.number, line.text);
     }
-    run.model
-        .solid
-        .as_ref()
-        .ok_or_else(|| anyhow!("the file builds no solid"))
+    if run.model.solids().is_empty() {
+        bail!("the file builds no solid");
+    }
+    Ok(())
 }
 
 fn check(file: &str, vars: &[(String, f64)]) -> Result<()> {
@@ -91,13 +83,18 @@ fn check(file: &str, vars: &[(String, f64)]) -> Result<()> {
     }
     match run.steps.last() {
         Some((line, Err(_))) => bail!("stopped at line {}", line.number),
-        _ => finished(&run).map(|_| ()),
+        _ => finished(&run),
     }
 }
 
 fn query(file: &str, selector: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<()> {
     let run = load(file, until, vars)?;
-    let solid = finished(&run)?;
+    finished(&run)?;
+    let solid = run
+        .model
+        .solid
+        .as_ref()
+        .ok_or_else(|| anyhow!("`query` looks at a part file's current body"))?;
     let tolerance = run.model.tolerance();
     let faces = select::faces(solid);
     let edge_part = selector.contains('&') || selector.contains('|');

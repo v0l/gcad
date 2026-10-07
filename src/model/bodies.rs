@@ -54,7 +54,7 @@ impl Model {
     }
 
     pub fn named_body(&self, name: &str) -> Result<Solid> {
-        if name == self.body_name() {
+        if name == self.body_name() && self.solid.is_some() {
             return self
                 .solid
                 .clone()
@@ -437,7 +437,16 @@ impl Model {
 
     pub(crate) fn op_color(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["colour"], &[], false)?;
-        let text = args.text("colour")?;
+        let colour = self.colour_of(args.text("colour")?)?;
+        let name = self.body_name();
+        self.colours.insert(name.clone(), colour);
+        Ok(format!(
+            "body `{name}` is {:.2},{:.2},{:.2}",
+            colour[0], colour[1], colour[2]
+        ))
+    }
+
+    pub(crate) fn colour_of(&self, text: &str) -> Result<[f64; 3]> {
         let named = |name: &str| -> Option<[f64; 3]> {
             Some(match name {
                 "red" => [0.85, 0.1, 0.1],
@@ -477,12 +486,7 @@ impl Model {
                 anyhow!("`{text}` is not a colour; use a name like red or grey, #rrggbb, or r,g,b from 0 to 1")
             })?
         };
-        let name = self.body_name();
-        self.colours.insert(name.clone(), colour);
-        Ok(format!(
-            "body `{name}` is {:.2},{:.2},{:.2}",
-            colour[0], colour[1], colour[2]
-        ))
+        Ok(colour)
     }
 
     pub(crate) fn op_body(&mut self, line: &Line) -> Result<String> {

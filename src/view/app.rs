@@ -1,8 +1,8 @@
 use super::gl::{self, BACKGROUND, Camera, Placement, Projector};
 use super::scene::{self, Highlight, Scene, V3};
 use crate::geometry;
-use crate::model::{Joint, Snapshot, label_of, posed, run_snapshots_full};
-use crate::parse::{Line as SourceLine, parse_program};
+use crate::model::{Joint, Snapshot, label_of, posed, snapshots_path};
+use crate::parse::Line as SourceLine;
 use crate::select;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use egui_bench::prelude::*;
@@ -20,22 +20,15 @@ struct Program {
     error: Option<String>,
 }
 
-fn evaluate(path: &PathBuf, vars: &[(String, f64)]) -> Program {
-    match std::fs::read_to_string(path)
-        .map_err(|e| e.to_string())
-        .and_then(|s| parse_program(&s).map_err(|e| format!("{e:#}")))
-    {
-        Ok(lines) => Program {
-            snapshots: run_snapshots_full(
-                path.parent().map(std::path::Path::to_path_buf),
-                vars,
-                &lines,
-            ),
+fn evaluate(path: &std::path::Path, vars: &[(String, f64)]) -> Program {
+    match snapshots_path(path, vars) {
+        Ok((lines, snapshots)) => Program {
+            snapshots,
             lines,
             error: None,
         },
         Err(error) => Program {
-            error: Some(error),
+            error: Some(format!("{error:#}")),
             ..Default::default()
         },
     }
@@ -56,6 +49,7 @@ struct Shown {
     query: Option<Result<(usize, usize), String>>,
     joints: Vec<Joint>,
     solids: Vec<(String, Solid)>,
+    assembly: bool,
 }
 
 enum Status {
@@ -268,7 +262,11 @@ impl App {
         let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
             if let Ok(event) = res
                 && changes_content(&event.kind)
-                && event.paths.iter().any(|p| p == &watched)
+                && event.paths.iter().any(|p| {
+                    p == &watched
+                        || p.parent() == watched.parent()
+                            && p.extension().is_some_and(|e| e == "lcad" || e == "lasm")
+                })
             {
                 let _ = tx.send(());
                 ctx.request_repaint();
@@ -838,7 +836,9 @@ impl App {
                     self.measure_card(ui);
                 }
                 self.parts_card(ui);
-                self.select_card(ui);
+                if !self.shown.as_ref().is_some_and(|s| s.assembly) {
+                    self.select_card(ui);
+                }
             });
     }
 
@@ -1019,7 +1019,7 @@ impl App {
                 &self.path,
                 self.loading.is_some() || self.building.is_some(),
             ) {
-                (None, _) => "open a .lcad file",
+                (None, _) => "open a .lcad part or .lasm assembly",
                 (_, true) => "building",
                 _ => "no solid at this line",
             };
@@ -1114,7 +1114,7 @@ impl App {
         let mut close = false;
         let mut go: Option<PathBuf> = None;
         let mut open = true;
-        egui::Window::new("open a .lcad file")
+        egui::Window::new("open a part or assembly")
             .open(&mut open)
             .collapsible(false)
             .resizable(false)
@@ -1204,7 +1204,7 @@ impl App {
                             }
                         }
                         if entries.is_empty() {
-                            hint(ui, "no folders or .lcad files here");
+                            hint(ui, "no folders, .lcad or .lasm files here");
                         }
                     });
                 ui.add_space(6.0);
@@ -1332,11 +1332,12 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
     Some(Shown {
         key,
         scene: Arc::new(scene),
-        faces: model.solid.as_ref().map_or(0, |s| select::faces(s).len()),
+        faces: model.solids().iter().map(|s| select::faces(s).len()).sum(),
         bounds: ([min.x, min.y, min.z], [max.x, max.y, max.z]),
         query,
         joints: model.joints.clone(),
         solids,
+        assembly: model.assembly,
     })
 }
 

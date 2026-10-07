@@ -18,8 +18,12 @@ chamfer 0.3 mounts.side&base.end
 cargo run --release -- check examples/parts/plate.lcad
 cargo run --release -- render examples/parts/plate.lcad plate.png
 cargo run --release -- export examples/parts/plate.lcad plate.step
-cargo run --release -- examples/parts/enclosure.lcad
+cargo run --release -- examples/assemblies/enclosure.lasm
 ```
+
+Part files (`.lcad`) build one or more bodies. Assembly files (`.lasm`) bring parts in
+from part files, place them, join them with turning and sliding joints and check
+that they do not overlap.
 
 With no command, `linecad` opens the viewer: a live view of the file that rebuilds on
 save, with a view cube, measuring, and sliders for an assembly's joints.

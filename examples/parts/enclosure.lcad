@@ -1,4 +1,4 @@
-let w=80 d=50 h=30 t=2 r=6 boss=7 screw=2.5 open=-75
+let w=80 d=50 h=30 t=2 r=6 boss=7 screw=2.5
 rect w d r=r
 box: extrude h
 shell t open=box.end
@@ -30,6 +30,3 @@ text LINECAD size=8 at=-17,-4
 logo: cut 0.6
 fillet 1 top.end&top.side
 color #e8e8e8
-axis hinge -w/2,d/2,h w/2,d/2,h
-joint hinge lid main turn about=hinge min=-110 max=0 at=open
-interference none

@@ -57,6 +57,21 @@ impl Joint {
     }
 }
 
+pub const ASSEMBLY_OPERATIONS: &[&str] = &[
+    "let",
+    "if",
+    "include",
+    "part",
+    "move",
+    "rotate",
+    "axis",
+    "joint",
+    "pose",
+    "interference",
+    "color",
+    "measure",
+];
+
 pub fn subtree(joints: &[Joint], root: &str) -> Vec<String> {
     let mut found = vec![root.to_string()];
     let mut index = 0;
@@ -95,7 +110,7 @@ pub fn posed(joints: &[Joint], values: &[f64]) -> std::collections::HashMap<Stri
 }
 
 impl Model {
-    pub(crate) fn body_names(&self) -> Vec<String> {
+    pub fn body_names(&self) -> Vec<String> {
         self.bodies
             .iter()
             .map(|(name, _)| name.clone())
@@ -113,7 +128,7 @@ impl Model {
 
     fn move_body(&mut self, name: &str, transform: Matrix4) -> Result<()> {
         let moved = |solid: &Solid| super::solids::oriented(builder::transformed(solid, transform));
-        if name == self.current_body() {
+        if name == self.current_body() && self.solid.is_some() {
             let solid = self
                 .solid
                 .as_ref()
@@ -131,6 +146,167 @@ impl Model {
         Ok(())
     }
 
+    fn move_subtree(&mut self, root: &str, transform: Matrix4) -> Result<Vec<String>> {
+        let moving = subtree(&self.joints, root);
+        for body in &moving {
+            self.move_body(body, transform)?;
+        }
+        for other in self.joints.iter_mut() {
+            if moving.contains(&other.parent) {
+                *other = other.moved(transform);
+            }
+        }
+        Ok(moving)
+    }
+
+    pub(crate) fn apply_assembly(&mut self, line: &Line) -> Result<String> {
+        match line.op.as_str() {
+            "let" => self.op_let(line),
+            "if" | "include" => self.apply_shared(line),
+            "part" => self.op_part(line),
+            "move" => self.op_move_part(line),
+            "rotate" => self.op_rotate_part(line),
+            "axis" => self.op_axis(line),
+            "joint" => self.op_joint(line),
+            "pose" => self.op_pose(line),
+            "interference" => self.op_interference(line),
+            "color" => self.op_colour_part(line),
+            "measure" => self.op_measure(line),
+            other if super::OPERATIONS.contains(&other) => bail!(
+                "`{other}` makes geometry, which belongs in a part (.lcad) file; bring the part in with `part name file.lcad`"
+            ),
+            other => bail!(
+                "unknown assembly operation `{other}`; assemblies use {}",
+                ASSEMBLY_OPERATIONS.join(", ")
+            ),
+        }
+    }
+
+    fn op_part(&mut self, line: &Line) -> Result<String> {
+        let [name, file] = line.positional.as_slice() else {
+            bail!("write `part name file.lcad [body=b] [variable=value ...]`");
+        };
+        if name.contains('.') {
+            bail!("part names cannot contain `.`");
+        }
+        if self.depth >= 16 {
+            bail!("parts are nested more than 16 deep");
+        }
+        let path = self.relative(file);
+        let mut only = None;
+        let mut vars = Vec::new();
+        for (key, text) in &line.named {
+            if key == "body" {
+                only = Some(text.clone());
+            } else {
+                vars.push((key.clone(), crate::parse::eval(text, &self.scope)?));
+            }
+        }
+        let loaded = super::load_model(&path, &vars, self.depth + 1)?;
+        let names = loaded.body_names();
+        let picked: Vec<String> = match &only {
+            Some(body) if !names.contains(body) => {
+                bail!("{} has no body `{body}`; it has {names:?}", path.display())
+            }
+            Some(body) => vec![body.clone()],
+            None => names.clone(),
+        };
+        if picked.is_empty() {
+            bail!("{} builds no solid", path.display());
+        }
+        let rename = |body: &str| {
+            if picked.len() == 1 {
+                name.clone()
+            } else {
+                format!("{name}.{body}")
+            }
+        };
+        let taken = self.body_names();
+        let mut added = Vec::new();
+        for body in &picked {
+            let new = rename(body);
+            if taken.contains(&new) {
+                bail!("there is already a part called `{new}`");
+            }
+            let solid = loaded.named_body(body)?;
+            if let Some(colour) = loaded.colours.get(body) {
+                self.colours.insert(new.clone(), *colour);
+            }
+            self.bodies.push((new.clone(), solid));
+            added.push(new);
+        }
+        for joint in &loaded.joints {
+            if picked.contains(&joint.child) && picked.contains(&joint.parent) {
+                self.joints.push(Joint {
+                    name: format!("{name}.{}", joint.name),
+                    child: rename(&joint.child),
+                    parent: rename(&joint.parent),
+                    ..joint.clone()
+                });
+            }
+        }
+        Ok(format!("{} from {}", added.join(", "), path.display()))
+    }
+
+    fn part_transform(&mut self, line: &Line, transform: Matrix4) -> Result<String> {
+        let name = line
+            .positional
+            .first()
+            .ok_or_else(|| anyhow!("name the part to move"))?;
+        if !self.body_names().contains(name) {
+            bail!("no part called `{name}`; parts are {:?}", self.body_names());
+        }
+        let moved = self.move_subtree(name, transform)?;
+        Ok(format!("moved {}", moved.join(", ")))
+    }
+
+    fn op_move_part(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["part", "by"], &[], false)?;
+        let by = point3(args.text("by")?, &self.scope)?;
+        self.part_transform(line, Matrix4::from_translation(by.to_vec()))
+    }
+
+    fn op_rotate_part(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["part", "angle"], &["axis", "about"], false)?;
+        let angle = args.number("angle", &self.scope)?;
+        let named = args
+            .values
+            .get("axis")
+            .and_then(|name| self.axes.get(*name))
+            .copied();
+        let (through, direction) = match (named, args.values.get("about")) {
+            (Some(_), Some(_)) => {
+                bail!("a datum axis already passes through a point; drop `about=`")
+            }
+            (Some(axis), None) => axis,
+            (None, about) => (
+                about
+                    .map(|text| point3(text, &self.scope))
+                    .transpose()?
+                    .unwrap_or_else(Point3::origin),
+                super::args::axis(args.values.get("axis").copied().unwrap_or("z"))?,
+            ),
+        };
+        let transform = Matrix4::from_translation(through.to_vec())
+            * Matrix4::from_axis_angle(direction, Deg(angle))
+            * Matrix4::from_translation(-through.to_vec());
+        self.part_transform(line, transform)
+    }
+
+    fn op_colour_part(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["part", "colour"], &[], false)?;
+        let name = args.text("part")?.to_string();
+        if !self.body_names().contains(&name) {
+            bail!("no part called `{name}`; parts are {:?}", self.body_names());
+        }
+        let colour = self.colour_of(args.text("colour")?)?;
+        self.colours.insert(name.clone(), colour);
+        Ok(format!(
+            "`{name}` is {:.2},{:.2},{:.2}",
+            colour[0], colour[1], colour[2]
+        ))
+    }
+
     fn set_joint(&mut self, index: usize, value: f64) -> Result<()> {
         let joint = self.joints[index].clone();
         let (low, high) = joint.range;
@@ -141,16 +317,7 @@ impl Model {
                 joint.unit()
             );
         }
-        let transform = joint.motion(value - joint.value);
-        let moving = subtree(&self.joints, &joint.child);
-        for body in &moving {
-            self.move_body(body, transform)?;
-        }
-        for other in self.joints.iter_mut() {
-            if moving.contains(&other.parent) {
-                *other = other.moved(transform);
-            }
-        }
+        self.move_subtree(&joint.child, joint.motion(value - joint.value))?;
         self.joints[index].value = value;
         Ok(())
     }

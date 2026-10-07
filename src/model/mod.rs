@@ -25,7 +25,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 
 pub use args::label_of;
-pub use assembly::{Joint, JointKind, posed, subtree};
+pub use assembly::{ASSEMBLY_OPERATIONS, Joint, JointKind, posed, subtree};
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
 
@@ -75,6 +75,7 @@ pub struct Model {
     pub colours: HashMap<String, [f64; 3]>,
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,
+    pub assembly: bool,
 }
 
 pub const OPERATIONS: &[&str] = &[
@@ -166,7 +167,17 @@ impl Model {
             .collect()
     }
 
+    pub(crate) fn apply_shared(&mut self, line: &Line) -> Result<String> {
+        match line.op.as_str() {
+            "if" => self.op_if(line),
+            _ => self.op_include(line),
+        }
+    }
+
     pub fn apply(&mut self, line: &Line) -> Result<String> {
+        if self.assembly {
+            return self.apply_assembly(line);
+        }
         if PROFILE_OPS.contains(&line.op.as_str())
             && line.positional.iter().any(|w| w == "construct")
         {
@@ -239,9 +250,10 @@ impl Model {
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "rib" => self.op_rib(line),
-            "joint" => self.op_joint(line),
-            "pose" => self.op_pose(line),
-            "interference" => self.op_interference(line),
+            "joint" | "pose" | "interference" | "part" => bail!(
+                "`{}` belongs in an assembly (.lasm) file, which brings parts in with `part name file.lcad`",
+                line.op
+            ),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",
@@ -417,6 +429,59 @@ fn start(dir: Option<PathBuf>) -> Model {
     }
 }
 
+pub fn is_assembly(path: &std::path::Path) -> bool {
+    path.extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("lasm"))
+}
+
+fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Model {
+    let mut model = start(path.parent().map(std::path::Path::to_path_buf));
+    model.fixed = vars.iter().cloned().collect();
+    model.scope = model.fixed.clone();
+    model.assembly = is_assembly(path);
+    model.depth = depth;
+    model
+}
+
+fn read_lines(path: &std::path::Path) -> Result<Vec<Line>> {
+    let source =
+        std::fs::read_to_string(path).map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
+    crate::parse::parse_program(&source).map_err(|e| anyhow!("{}: {e:#}", path.display()))
+}
+
+pub(crate) fn load_model(
+    path: &std::path::Path,
+    vars: &[(String, f64)],
+    depth: usize,
+) -> Result<Model> {
+    let run = run_model(start_for(path, vars, depth), &read_lines(path)?);
+    if let Some((line, Err(error))) = run.steps.last() {
+        bail!("{}:{}: {error:#}", path.display(), line.number);
+    }
+    Ok(run.model)
+}
+
+pub fn run_path(
+    path: &std::path::Path,
+    vars: &[(String, f64)],
+    until: Option<usize>,
+) -> Result<Run> {
+    let lines: Vec<Line> = read_lines(path)?
+        .into_iter()
+        .filter(|line| until.is_none_or(|last| line.number <= last))
+        .collect();
+    Ok(run_model(start_for(path, vars, 0), &lines))
+}
+
+pub fn snapshots_path(
+    path: &std::path::Path,
+    vars: &[(String, f64)],
+) -> Result<(Vec<Line>, Vec<Snapshot>)> {
+    let lines = read_lines(path)?;
+    let snapshots = snapshots_from(start_for(path, vars, 0), &lines);
+    Ok((lines, snapshots))
+}
+
 pub fn run_snapshots_in(dir: Option<PathBuf>, lines: &[Line]) -> Vec<Snapshot> {
     run_snapshots_full(dir, &[], lines)
 }
@@ -429,6 +494,10 @@ pub fn run_snapshots_full(
     let mut model = start(dir);
     model.fixed = vars.iter().cloned().collect();
     model.scope = model.fixed.clone();
+    snapshots_from(model, lines)
+}
+
+fn snapshots_from(mut model: Model, lines: &[Line]) -> Vec<Snapshot> {
     let mut snapshots = Vec::new();
     for line in lines {
         let before = model.clone();
@@ -485,6 +554,12 @@ pub fn run(lines: &[Line]) -> Run {
 
 pub fn run_with(vars: &[(String, f64)], lines: &[Line]) -> Run {
     run_full(None, vars, lines)
+}
+
+pub fn run_assembly(dir: Option<PathBuf>, lines: &[Line]) -> Run {
+    let mut model = start(dir);
+    model.assembly = true;
+    run_model(model, lines)
 }
 
 pub fn run_full(dir: Option<PathBuf>, vars: &[(String, f64)], lines: &[Line]) -> Run {

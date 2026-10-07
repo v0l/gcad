@@ -1,0 +1,5 @@
+let w=80 d=50 h=30 open=-75
+part case ../parts/enclosure.lcad w=w d=d h=h
+axis hinge -w/2,d/2,h w/2,d/2,h
+joint lid case.lid case.main turn about=hinge min=-110 max=0 at=open
+interference none

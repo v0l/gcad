@@ -43,7 +43,7 @@ The file runs against these pieces of state, the way G-code runs against a machi
 | points | `point`, `dist`, `horizontal`, `vertical`, `angle` | any 2D point |
 | axes | `axis` | `revolve`, `rotate` |
 | solid | every operation that makes or removes material | `fillet`, `chamfer`, `shell`, `draft`, `push`, selectors |
-| bodies | `body` | export and render, which take every body |
+| bodies | `body` | export, render and assemblies, which take every body |
 
 ## Operations
 
@@ -144,18 +144,6 @@ Bodies:
 | `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.lcad` file |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
 
-Assemblies. Each `body` is a part. Joints hang one body off another, so moving a
-joint moves that body and everything hanging off it:
-
-| operation | parameters | does |
-|---|---|---|
-| `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` | joins two bodies; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now |
-| `pose` | `joint value` | moves a joint to a new value |
-| `interference` | `none`, `joint=` `steps=` | reports the volume each pair of bodies shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
-
-Build each part first and add joints at the end: posing moves the solids but not the
-face groups their selectors use.
-
 Measuring, which changes nothing and prints the answer:
 
 | operation | parameters | prints |
@@ -169,6 +157,37 @@ Measuring, which changes nothing and prints the answer:
 Profiles drawn inside another profile in the same sketch become holes in it.
 A sketch for `sweep` is drawn around the workplane origin; `sweep` moves it to the first
 path point (or the start of the helix) and turns it to face along the path.
+
+## Assemblies
+
+A `.lcad` file is a part file: it builds one or more bodies. A `.lasm` file is an
+assembly: it brings bodies in from part files, places them and joins them, and makes
+no geometry of its own. Its lines have the same shape and use `let`, `if` and
+`include` the same way.
+
+| operation | parameters | does |
+|---|---|---|
+| `part` | `name file.lcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.lasm` file brings in its parts and joints too |
+| `move` | `part x,y,z` | moves a part and everything jointed to it |
+| `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it |
+| `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
+| `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` | joins two parts; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now |
+| `pose` | `joint value` | moves a joint to a new value |
+| `color` | `part colour` | colours a part, over the colour its file gave it |
+| `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
+| `measure` | `mass`, `overlap a b` | as in part files |
+
+```
+let open=-75
+part case ../parts/enclosure.lcad
+axis hinge -40,25,30 40,25,30
+joint lid case.lid case.main turn about=hinge min=-110 max=0 at=open
+interference none
+```
+
+`check`, `render`, `export` and the viewer take either kind of file, and `--set`
+reaches the assembly's own variables. The viewer rebuilds when any part file next to
+the assembly is saved.
 
 ## Workplanes
 

@@ -30,3 +30,14 @@ fn enclosure() {
     assert_eq!(model.solids().len(), 2);
     assert_volume(&model, 22501.75 + 8895.46, 0.002);
 }
+
+#[test]
+fn enclosure_assembly() {
+    let path = std::path::PathBuf::from(format!(
+        "{}/examples/assemblies/enclosure.lasm",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    assert!(run.steps.iter().all(|(_, r)| r.is_ok()));
+    assert_eq!(run.model.body_names(), ["case.main", "case.lid"]);
+}
