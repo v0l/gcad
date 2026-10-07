@@ -130,6 +130,65 @@ fn start_frame(sketch: &Frame, origin: Point3, direction: Vector3) -> Frame {
     }
 }
 
+impl SweepPath {
+    pub fn at(&self, fraction: f64) -> Result<(Point3, Vector3)> {
+        match self {
+            SweepPath::Helix {
+                frame,
+                radius,
+                pitch,
+                turns,
+            } => {
+                let angle = fraction * turns * std::f64::consts::TAU;
+                let radial = frame.x * angle.cos() + frame.y * angle.sin();
+                let around = -frame.x * angle.sin() + frame.y * angle.cos();
+                let tangent =
+                    (around * (radius * std::f64::consts::TAU) + frame.normal * *pitch).normalize();
+                Ok((
+                    frame.origin + radial * *radius + frame.normal * (pitch * turns * fraction),
+                    tangent,
+                ))
+            }
+            SweepPath::Polyline { points, bend } => {
+                let (first, parts) = pieces(points, *bend)?;
+                let length = |piece: &Piece| match piece {
+                    Piece::Straight(v) => v.magnitude(),
+                    Piece::Bend { angle, .. } => bend * angle,
+                };
+                let total: f64 = parts.iter().map(length).sum();
+                let mut remaining = fraction.clamp(0.0, 1.0) * total;
+                let (mut position, mut tangent) = (points[0], first);
+                for (i, piece) in parts.iter().enumerate() {
+                    let size = length(piece);
+                    let last = i + 1 == parts.len();
+                    let t = if remaining >= size && !last {
+                        1.0
+                    } else {
+                        (remaining / size).min(1.0)
+                    };
+                    match piece {
+                        Piece::Straight(v) => {
+                            position += *v * t;
+                            tangent = v.normalize();
+                        }
+                        Piece::Bend { axis, angle, .. } => {
+                            let centre = position + axis.cross(tangent).normalize() * *bend;
+                            let turn = Matrix3::from_axis_angle(*axis, Rad(angle * t));
+                            position = centre + turn * (position - centre);
+                            tangent = turn * tangent;
+                        }
+                    }
+                    remaining -= size;
+                    if remaining <= 0.0 {
+                        break;
+                    }
+                }
+                Ok((position, tangent))
+            }
+        }
+    }
+}
+
 impl Model {
     pub(crate) fn op_path(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &[], &["r"], true)?;

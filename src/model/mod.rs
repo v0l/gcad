@@ -1,6 +1,7 @@
 mod args;
 mod blends;
 mod bodies;
+mod constrain;
 mod features;
 mod holes;
 mod measure;
@@ -60,14 +61,67 @@ pub struct Model {
     pub dir: Option<PathBuf>,
     pub fixed: Scope,
     pub depth: usize,
+    pub points: Vec<constrain::SketchPoint>,
+    pub constraints: Vec<constrain::Constraint>,
+    pub construction: Vec<(Frame, Profile)>,
+    pub axes: HashMap<String, (Point3, Vector3)>,
 }
 
 pub const OPERATIONS: &[&str] = &[
-    "let", "plane", "rect", "circle", "poly", "ngon", "offset", "slot", "ellipse", "pen", "line",
-    "arc", "close", "spline", "text", "section", "loft", "extrude", "cut", "revolve", "path",
-    "helix", "sweep", "hole", "fillet", "chamfer", "shell", "draft", "push", "mirror", "repeat",
-    "move", "rotate", "scale", "split", "body", "combine", "place", "measure", "import", "if",
+    "let",
+    "plane",
+    "rect",
+    "circle",
+    "poly",
+    "ngon",
+    "offset",
+    "slot",
+    "ellipse",
+    "pen",
+    "line",
+    "arc",
+    "close",
+    "spline",
+    "text",
+    "section",
+    "loft",
+    "extrude",
+    "cut",
+    "revolve",
+    "path",
+    "helix",
+    "sweep",
+    "hole",
+    "fillet",
+    "chamfer",
+    "shell",
+    "draft",
+    "push",
+    "mirror",
+    "repeat",
+    "move",
+    "rotate",
+    "scale",
+    "split",
+    "body",
+    "combine",
+    "place",
+    "measure",
+    "import",
+    "if",
     "include",
+    "point",
+    "dist",
+    "horizontal",
+    "vertical",
+    "angle",
+    "reflect",
+    "array",
+    "axis",
+];
+
+const PROFILE_OPS: &[&str] = &[
+    "rect", "circle", "poly", "ngon", "offset", "slot", "ellipse", "close", "spline", "text",
 ];
 
 impl Model {
@@ -86,6 +140,26 @@ impl Model {
     }
 
     pub fn apply(&mut self, line: &Line) -> Result<String> {
+        if PROFILE_OPS.contains(&line.op.as_str())
+            && line.positional.iter().any(|w| w == "construct")
+        {
+            let mut plain = line.clone();
+            plain.positional.retain(|w| w != "construct");
+            let count = self.sketch.len();
+            self.apply_op(&plain)?;
+            let frame = self.sketch_frame();
+            let added: Vec<Profile> = self.sketch.drain(count..).collect();
+            self.construction
+                .extend(added.into_iter().map(|p| (frame, p)));
+            return Ok(format!(
+                "construction; sketch has {} profile(s)",
+                self.sketch.len()
+            ));
+        }
+        self.apply_op(line)
+    }
+
+    fn apply_op(&mut self, line: &Line) -> Result<String> {
         match line.op.as_str() {
             "let" => self.op_let(line),
             "plane" => self.op_plane(line),
@@ -128,6 +202,11 @@ impl Model {
             "measure" => self.op_measure(line),
             "if" => self.op_if(line),
             "include" => self.op_include(line),
+            "point" => self.op_point(line),
+            "dist" | "horizontal" | "vertical" | "angle" => self.op_constrain(line),
+            "reflect" => self.op_reflect(line),
+            "array" => self.op_array(line),
+            "axis" => self.op_axis(line),
             "import" => self.op_import(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",

@@ -87,6 +87,28 @@ pub enum Profile {
         size: f64,
         at: (f64, f64),
     },
+    Placed {
+        inner: Box<Profile>,
+        matrix: [f64; 6],
+    },
+}
+
+pub fn place_2d(matrix: [f64; 6], (u, v): (f64, f64)) -> (f64, f64) {
+    let [a, b, c, d, tx, ty] = matrix;
+    (a * u + b * v + tx, c * u + d * v + ty)
+}
+
+pub fn compose_2d(outer: [f64; 6], inner: [f64; 6]) -> [f64; 6] {
+    let [a, b, c, d, tx, ty] = outer;
+    let [e, f, g, h, ux, uy] = inner;
+    [
+        a * e + b * g,
+        a * f + b * h,
+        c * e + d * g,
+        c * f + d * h,
+        a * ux + b * uy + tx,
+        c * ux + d * uy + ty,
+    ]
 }
 
 #[derive(Clone, Debug)]
@@ -276,6 +298,27 @@ impl Profile {
             Profile::Path { start, segments } => vec![path_wire(frame, *start, segments)],
             Profile::Spline { points } => vec![spline_wire(frame, points)?],
             Profile::Text { text, size, at } => text_wires(frame, text, *size, *at)?,
+            Profile::Placed { inner, matrix } => {
+                let [a, b, c, d, tx, ty] = *matrix;
+                let local = Matrix4::from_cols(
+                    Vector4::new(a, c, 0.0, 0.0),
+                    Vector4::new(b, d, 0.0, 0.0),
+                    Vector4::new(0.0, 0.0, 1.0, 0.0),
+                    Vector4::new(tx, ty, 0.0, 1.0),
+                );
+                let placement = frame.matrix()
+                    * local
+                    * frame.matrix().invert().ok_or("the plane is degenerate")?;
+                let wires = inner.wires(frame)?;
+                let mirrored = a * d - b * c < 0.0;
+                wires
+                    .iter()
+                    .map(|wire| {
+                        let moved = builder::transformed(wire, placement);
+                        if mirrored { moved.inverse() } else { moved }
+                    })
+                    .collect()
+            }
             other => vec![other.wire(frame)],
         })
     }
@@ -363,6 +406,10 @@ impl Profile {
                     angle: *angle,
                 })
             }
+            Profile::Placed { inner, matrix } => Ok(Profile::Placed {
+                inner: Box::new(inner.inset(delta)?),
+                matrix: *matrix,
+            }),
             Profile::Ellipse { .. }
             | Profile::Path { .. }
             | Profile::Spline { .. }
@@ -428,4 +475,29 @@ pub fn volume(solid: &Solid) -> f64 {
 
 pub fn volume_at(solid: &Solid, tolerance: f64) -> f64 {
     mesh(solid, tolerance).volume()
+}
+
+pub fn ray_hits(mesh: &PolygonMesh, origin: Point3, direction: Vector3) -> Vec<(f64, Vector3)> {
+    let positions = mesh.positions();
+    mesh.faces()
+        .triangle_iter()
+        .filter_map(|triangle| {
+            let [a, b, c] = triangle.map(|v| positions[v.pos]);
+            let (e1, e2) = (b - a, c - a);
+            let p = direction.cross(e2);
+            let det = e1.dot(p);
+            if det.abs() < 1.0e-14 {
+                return None;
+            }
+            let s = origin - a;
+            let u = s.dot(p) / det;
+            let q = s.cross(e1);
+            let v = direction.dot(q) / det;
+            let eps = 1.0e-9;
+            if u < -eps || v < -eps || u + v > 1.0 + eps {
+                return None;
+            }
+            Some((e2.dot(q) / det, e1.cross(e2).normalize()))
+        })
+        .collect()
 }

@@ -231,7 +231,7 @@ impl Model {
     }
 
     pub(crate) fn op_repeat(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["of"], &["count", "step", "angle"], false)?;
+        let args = Args::new(line, &["of"], &["count", "step", "angle", "along"], false)?;
         let of = args.text("of")?;
         let tools = self.tools.get(of).cloned().ok_or_else(|| {
             let mut known: Vec<&String> = self.tools.keys().collect();
@@ -244,10 +244,48 @@ impl Model {
         }
         let count = count as usize;
         let frame = self.sketch_frame();
+        let along = match args.values.get("along").copied() {
+            None => None,
+            Some("path") => {
+                let path = self
+                    .path
+                    .clone()
+                    .ok_or_else(|| anyhow!("`along=path` needs a `path` or `helix` first"))?;
+                let open = !matches!(&path, super::SweepPath::Polyline { points, .. } if (points[0] - points[points.len() - 1]).magnitude() < 1.0e-9);
+                let steps = if open { count - 1 } else { count };
+                let (start, start_tangent) = path.at(0.0)?;
+                let stations = (1..count)
+                    .map(|k| {
+                        let (point, tangent) = path.at(k as f64 / steps as f64)?;
+                        let turn = start_tangent.cross(tangent);
+                        let rotation = if turn.magnitude() < 1.0e-12 {
+                            Matrix4::identity()
+                        } else {
+                            Matrix4::from_axis_angle(
+                                turn.normalize(),
+                                Rad(start_tangent.dot(tangent).clamp(-1.0, 1.0).acos()),
+                            )
+                        };
+                        Ok(Matrix4::from_translation(point.to_vec())
+                            * rotation
+                            * Matrix4::from_translation(-start.to_vec()))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                Some(stations)
+            }
+            Some(other) => bail!("`along=` takes `path`, got `{other}`"),
+        };
         let place: Box<dyn Fn(usize) -> Matrix4> = match (
             args.optional_point("step", &self.scope)?,
             args.optional_number("angle", &self.scope)?,
         ) {
+            _ if along.is_some() => {
+                if args.has("step") || args.has("angle") {
+                    bail!("give `along=`, `step=` or `angle=`, only one");
+                }
+                let stations = along.expect("checked");
+                Box::new(move |k| stations[k - 1])
+            }
             (Some((x, y)), None) => {
                 let step = frame.x * x + frame.y * y;
                 Box::new(move |k| Matrix4::from_translation(step * k as f64))
@@ -266,7 +304,7 @@ impl Model {
                 })
             }
             _ => bail!(
-                "give `step=x,y` for a row or `angle=` for a circle about the workplane normal"
+                "give `step=x,y` for a row, `angle=` for a circle about the workplane normal, or `along=path`"
             ),
         };
         let label = label_of(line);
@@ -303,13 +341,23 @@ impl Model {
         let args = Args::new(line, &["angle", "copy"], &["axis", "about"], false)?;
         let copy = copy_flag(&args)?;
         let angle = args.number("angle", &self.scope)?;
-        let direction = axis(args.values.get("axis").copied().unwrap_or("z"))?;
-        let center = args
+        let named = args
             .values
-            .get("about")
-            .map(|text| point3(text, &self.scope))
-            .transpose()?
-            .unwrap_or_else(Point3::origin);
+            .get("axis")
+            .and_then(|name| self.axes.get(*name))
+            .copied();
+        let direction = match named {
+            Some((_, direction)) => direction,
+            None => axis(args.values.get("axis").copied().unwrap_or("z"))?,
+        };
+        let center = match (args.values.get("about"), named) {
+            (Some(_), Some(_)) => {
+                bail!("a datum axis already passes through a point; drop `about=`")
+            }
+            (Some(text), None) => point3(text, &self.scope)?,
+            (None, Some((through, _))) => through,
+            (None, None) => Point3::origin(),
+        };
         self.place_or_copy(
             line,
             about(center, Matrix4::from_axis_angle(direction, Deg(angle))),

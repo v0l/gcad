@@ -116,6 +116,9 @@ pub fn eval_point(text: &str, scope: &Scope) -> Result<(f64, f64)> {
     let parts = split_top_level(text, ',');
     match parts.as_slice() {
         [x, y] => Ok((eval(x, scope)?, eval(y, scope)?)),
+        [name] if scope.contains_key(&format!("{name}.x")) => {
+            Ok((scope[&format!("{name}.x")], scope[&format!("{name}.y")]))
+        }
         _ => bail!("`{text}` is not a point, write it as x,y"),
     }
 }
@@ -184,7 +187,11 @@ fn tokenize(text: &str) -> Result<Vec<Token>> {
             ));
         } else if c.is_ascii_alphabetic() || c == '_' {
             let start = i;
-            while i < chars.len() && (chars[i].is_ascii_alphanumeric() || chars[i] == '_') {
+            while i < chars.len()
+                && (chars[i].is_ascii_alphanumeric()
+                    || chars[i] == '_'
+                    || (chars[i] == '.' && chars.get(i + 1).is_some_and(char::is_ascii_alphabetic)))
+            {
                 i += 1;
             }
             tokens.push(Token::Name(chars[start..i].iter().collect()));

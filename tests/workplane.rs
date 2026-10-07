@@ -77,7 +77,6 @@ fn through_three_points() {
 }
 
 #[test]
-#[ignore = "missing: plane edge= angle="]
 fn at_an_angle_to_an_edge() {
     let model = build("rect 40 30\nbase: extrude 10\nplane edge=base.end&>Y angle=30");
     let n = model.frame.expect("a plane").normal;
@@ -85,7 +84,6 @@ fn at_an_angle_to_an_edge() {
 }
 
 #[test]
-#[ignore = "missing: plane path"]
 fn normal_to_a_path() {
     let model = build("path 0,0,0 10,0,0\nplane path at=0.5");
     let frame = model.frame.expect("a plane");
@@ -93,7 +91,6 @@ fn normal_to_a_path() {
 }
 
 #[test]
-#[ignore = "missing: axis"]
 fn datum_axis() {
     let model = build("axis spin 20,0,0 20,0,1\nplane XZ\nrect 4 10 at=8,5\nrevolve 360 axis=spin");
     assert_volume(&model, 2.0 * PI * 12.0 * 40.0, 0.0005);

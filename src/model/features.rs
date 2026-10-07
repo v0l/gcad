@@ -110,6 +110,47 @@ impl Model {
         })
     }
 
+    fn next_face(&self, frame: &Frame, profiles: &[Profile]) -> Result<Frame> {
+        let solid = self
+            .solid
+            .as_ref()
+            .ok_or_else(|| anyhow!("`extrude next` needs a solid to grow into"))?;
+        let outline: Vec<(f64, f64)> = loops(frame, profiles)?
+            .iter()
+            .flat_map(|l| l.outline.clone())
+            .collect();
+        let n = outline.len() as f64;
+        let (u, v) = outline
+            .iter()
+            .fold((0.0, 0.0), |(su, sv), (u, v)| (su + u / n, sv + v / n));
+        let centre = frame.at(u, v);
+        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+        let tolerance = self.tolerance() * 10.0;
+        let nearest = |direction: Vector3| {
+            geometry::ray_hits(&mesh, centre, direction)
+                .into_iter()
+                .filter(|(t, n)| *t > tolerance && n.dot(direction) < 0.0)
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+        };
+        let (t, direction) = nearest(frame.normal)
+            .map(|(t, _)| (t, frame.normal))
+            .or_else(|| nearest(-frame.normal).map(|(t, _)| (t, -frame.normal)))
+            .ok_or_else(|| anyhow!("no face of the solid lies ahead of or behind the sketch"))?;
+        let hit = centre + direction * t;
+        select::faces(solid)
+            .iter()
+            .find_map(|face| match face.oriented_surface() {
+                Surface::Plane(plane)
+                    if plane.normal().dot(direction) < -1.0e-9
+                        && (hit - plane.origin()).dot(plane.normal()).abs() < tolerance =>
+                {
+                    Some(Frame::from_normal(hit, plane.normal()))
+                }
+                _ => None,
+            })
+            .ok_or_else(|| anyhow!("the next face is curved; `extrude next` stops at flat faces"))
+    }
+
     pub(crate) fn op_extrude(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(
             line,
@@ -139,18 +180,29 @@ impl Model {
                 .map_err(|error| anyhow!("thin: {error}"))?
                 .concat();
         }
-        let (distance, end_overlap) = match args.values.get("upto") {
-            Some(selector) => {
+        let next = args.values.get("d") == Some(&"next");
+        let target = match (args.values.get("upto"), next) {
+            (Some(_), true) => bail!("give `next` or `upto=`, not both"),
+            (Some(selector), false) => {
                 if args.has("d") {
                     bail!("give either a distance or `upto=`, not both");
                 }
-                let target = self
-                    .face_frame(selector)?
-                    .offset(args.optional_number("offset", &self.scope)?.unwrap_or(0.0));
+                Some((self.face_frame(selector)?, format!("`{selector}`")))
+            }
+            (None, true) => Some((
+                self.next_face(&frame, &profiles)?,
+                "the next face".to_string(),
+            )),
+            (None, false) => None,
+        };
+        let (distance, end_overlap) = match target {
+            Some((face, name)) => {
+                let target =
+                    face.offset(args.optional_number("offset", &self.scope)?.unwrap_or(0.0));
                 let distance = (target.origin - frame.origin).dot(target.normal)
                     / frame.normal.dot(target.normal);
                 if distance.abs() < 1.0e-9 {
-                    bail!("`{selector}` is on the sketch plane");
+                    bail!("{name} is on the sketch plane");
                 }
                 let into_material = target.normal.dot(frame.normal * distance.signum()) < 0.0;
                 (
@@ -298,10 +350,12 @@ impl Model {
             bail!("revolve angle must be within -360..360 and not zero, got {angle}");
         }
         let (frame, profiles) = self.take_sketch("revolve")?;
-        let axis = match args.values.get("axis").copied().unwrap_or("y") {
-            "x" => frame.x,
-            "y" => frame.y,
-            other => bail!("axis must be x or y of the plane, got `{other}`"),
+        let (through, axis) = match args.values.get("axis").copied().unwrap_or("y") {
+            "x" => (frame.origin, frame.x),
+            "y" => (frame.origin, frame.y),
+            name => self.axes.get(name).copied().ok_or_else(|| {
+                anyhow!("axis must be x or y of the plane or a datum `axis`, got `{name}`")
+            })?,
         };
         let sweep = if angle.abs() == 360.0 {
             builder::SweepAngle::Closed
@@ -317,7 +371,7 @@ impl Model {
             let face: Face = profile::attach_plane_normalized(wires)
                 .map_err(|error| anyhow!("cannot face the sketch: {error}"))?;
             let tool = oriented(rational(
-                builder::revolve(&face, frame.origin, axis, sweep, division),
+                builder::revolve(&face, through, axis, sweep, division),
                 angle.abs().to_radians() / division as f64,
             ));
             let groups = select::faces(&tool)

@@ -4,6 +4,7 @@ use crate::geometry;
 use crate::parse::Line;
 use crate::select;
 use anyhow::{Result, anyhow, bail};
+use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
 
 pub struct MassProperties {
@@ -38,7 +39,7 @@ fn tidy(v: f64) -> f64 {
 
 impl Model {
     pub(crate) fn op_measure(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["what"], &[], true)?;
+        let args = Args::new(line, &["what"], &["pull", "min"], true)?;
         let what = args.text("what")?;
         match (what, args.rest.as_slice()) {
             ("mass", []) => {
@@ -61,9 +62,91 @@ impl Model {
                 };
                 Ok(format!("overlap {overlap:.3}"))
             }
+            ("thickness", []) => self.thickness(),
+            ("draft", []) => {
+                let pull = args.values.get("pull").copied().unwrap_or("z");
+                let least = args.optional_number("min", &self.scope)?.unwrap_or(1.0);
+                self.draft(pull, least)
+            }
             (faces_a, [faces_b]) => self.distance(faces_a, faces_b),
-            _ => bail!("`measure` takes `mass`, `overlap body body`, or two face selectors"),
+            _ => bail!(
+                "`measure` takes `mass`, `thickness`, `draft pull=`, `overlap body body`, or two face selectors"
+            ),
         }
+    }
+
+    fn thickness(&self) -> Result<String> {
+        let solid = self.active("measure")?;
+        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid) * 5.0);
+        let positions = mesh.positions();
+        let floor = self.tolerance() * 10.0;
+        let (thinnest, at) = mesh
+            .faces()
+            .triangle_iter()
+            .filter_map(|triangle| {
+                let [a, b, c] = triangle.map(|v| positions[v.pos]);
+                let normal = (b - a).cross(c - a);
+                if normal.magnitude() < 1.0e-14 {
+                    return None;
+                }
+                let centre = Point3::from_vec((a.to_vec() + b.to_vec() + c.to_vec()) / 3.0);
+                let inward = -normal.normalize();
+                geometry::ray_hits(&mesh, centre, inward)
+                    .into_iter()
+                    .filter(|(t, n)| *t > floor && n.dot(inward) > 0.0)
+                    .map(|(t, _)| t)
+                    .min_by(f64::total_cmp)
+                    .map(|t| (t, centre))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .ok_or_else(|| anyhow!("could not find the walls of the solid"))?;
+        Ok(format!(
+            "thickness min {thinnest:.3} at {:.3},{:.3},{:.3}",
+            tidy(at.x),
+            tidy(at.y),
+            tidy(at.z)
+        ))
+    }
+
+    fn draft(&self, pull: &str, least: f64) -> Result<String> {
+        let solid = self.active("measure")?;
+        let pull = super::args::axis(pull)?;
+        let tolerance = geometry::mesh_tolerance(solid);
+        let mut drafts = Vec::new();
+        for shell in solid.boundaries() {
+            for face in shell.robust_triangulation(tolerance).face_iter() {
+                let Some(mesh) = face.surface() else { continue };
+                let positions = mesh.positions();
+                let angle = mesh
+                    .faces()
+                    .triangle_iter()
+                    .filter_map(|triangle| {
+                        let [a, b, c] = triangle.map(|v| positions[v.pos]);
+                        let normal = (b - a).cross(c - a);
+                        (normal.magnitude() > 1.0e-14).then(|| {
+                            normal
+                                .normalize()
+                                .dot(pull)
+                                .clamp(-1.0, 1.0)
+                                .asin()
+                                .to_degrees()
+                        })
+                    })
+                    .min_by(|a, b| a.abs().total_cmp(&b.abs()));
+                drafts.extend(angle);
+            }
+        }
+        let under = drafts.iter().filter(|d| d.abs() < least - 1.0e-6).count();
+        let smallest = drafts
+            .iter()
+            .copied()
+            .min_by(|a, b| a.abs().total_cmp(&b.abs()))
+            .unwrap_or(90.0);
+        Ok(format!(
+            "{under} faces under {least}° of draft, least {:.3}° across {} faces",
+            tidy(smallest),
+            drafts.len()
+        ))
     }
 
     fn distance(&self, a: &str, b: &str) -> Result<String> {

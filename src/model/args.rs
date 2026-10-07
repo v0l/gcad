@@ -118,7 +118,7 @@ pub(crate) fn axis(text: &str) -> Result<Vector3> {
         "x" => Ok(Vector3::unit_x()),
         "y" => Ok(Vector3::unit_y()),
         "z" => Ok(Vector3::unit_z()),
-        other => bail!("axis must be x, y or z, got `{other}`"),
+        other => bail!("axis must be x, y, z or a datum `axis`, got `{other}`"),
     }
 }
 

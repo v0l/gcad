@@ -80,14 +80,12 @@ fn mass_properties() {
 }
 
 #[test]
-#[ignore = "missing: measure thickness"]
 fn wall_thickness() {
     let text = summary("rect 40 30\nbase: extrude 20\nshell 2 open=base.end\nmeasure thickness");
     assert!(text.contains("min 2.000"), "{text}");
 }
 
 #[test]
-#[ignore = "missing: measure draft"]
 fn draft_analysis() {
     let text = summary("rect 20 20\nbase: extrude 10 draft=2\nmeasure draft pull=z");
     assert!(text.contains("0 faces under 1"), "{text}");

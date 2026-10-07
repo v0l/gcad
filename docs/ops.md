@@ -33,11 +33,11 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | polygon with chamfered corners | supported | `poly ... c=2` | `sketch::chamfered_polygon` |
 | offset outline | supported | `offset 2` | `sketch::offset_outline` |
 | arc by centre | supported | `arc x,y center=x,y` | `sketch::arc_by_centre` |
-| constraints and dimensions | missing | `point`, `dist`, `horizontal` | `sketch::constraints` |
-| trim and extend | missing | `close trim` | `sketch::trim` |
-| construction geometry | missing | `circle 20 construct` | `sketch::construction_geometry` |
-| mirror inside a sketch | missing | `reflect y` | `sketch::sketch_mirror` |
-| pattern inside a sketch | missing | `array count=4 angle=360` | `sketch::sketch_pattern` |
+| constraints and dimensions | supported | `point`, `dist`, `horizontal` | `sketch::constraints` |
+| trim and extend | supported | `close trim` | `sketch::trim` |
+| construction geometry | supported | `circle 20 construct` | `sketch::construction_geometry` |
+| mirror inside a sketch | supported | `reflect y` | `sketch::sketch_mirror` |
+| pattern inside a sketch | supported | `array count=4 angle=360` | `sketch::sketch_pattern` |
 | DXF import | missing | `dxf file.dxf` | `sketch::dxf_import` |
 | SVG import | missing | `svg file.svg` | `sketch::svg_import` |
 
@@ -51,9 +51,9 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | plane on a face | supported | `plane base.end` | `workplane::on_a_face`, `workplane::side_face_keeps_world_coordinates` |
 | rotated plane | supported | `plane XY rx=90` | `workplane::rotated` |
 | plane through three points | supported | `plane x,y,z x,y,z x,y,z` | `workplane::through_three_points` |
-| plane at an angle to an edge | missing | `plane edge=a&b angle=30` | `workplane::at_an_angle_to_an_edge` |
-| plane normal to a path | missing | `plane path at=0.5` | `workplane::normal_to_a_path` |
-| datum axis | missing | `axis name x,y,z x,y,z` | `workplane::datum_axis` |
+| plane at an angle to an edge | supported | `plane edge=a&b angle=30` | `workplane::at_an_angle_to_an_edge` |
+| plane normal to a path | supported | `plane path at=0.5` | `workplane::normal_to_a_path` |
+| datum axis | supported | `axis name x,y,z x,y,z` | `workplane::datum_axis` |
 
 
 ## Features
@@ -78,7 +78,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | loft cut | supported | `loft mode=cut` | `features::loft_cut` |
 | thin extrude | supported | `extrude 10 thin=2` | `features::thin_extrude` |
 | extrude to an offset from a face | supported | `extrude upto=face offset=-2` | `features::extrude_up_to_offset_face` |
-| extrude to the next face | missing | `extrude next` | `features::extrude_to_next_face` |
+| extrude to the next face | supported | `extrude next` | `features::extrude_to_next_face` |
 | rib | missing | open `pen` path, then `rib 2` | `features::rib` |
 | smooth loft | missing | `loft smooth` | `features::smooth_loft` |
 | loft between different profiles | missing | `section`s with different edge counts | `features::loft_mixed_profiles` |
@@ -147,7 +147,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | separate bodies | supported | `body second` | `bodies::separate_bodies` |
 | booleans between bodies | supported | `combine main b mode=cut` | `bodies::combine_bodies` |
 | mirror one feature | supported | `mirror YZ of=boss` | `bodies::mirror_feature` |
-| pattern along a path | missing | `repeat h along=path count=4` | `bodies::pattern_along_path` |
+| pattern along a path | supported | `repeat h along=path count=4` | `bodies::pattern_along_path` |
 | move or rotate a copy | supported | `move 20,0,0 copy` | `bodies::transform_copy` |
 | scale unevenly | supported | `scale 2,1,1` | `bodies::scale_unevenly` |
 | place one body on another | supported | `place lid on=>Z` | `bodies::assembly_mate` |
@@ -179,8 +179,8 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | errors that say what to do | supported | | `inspect::errors` |
 | measure distance | supported | `measure faces faces` | `inspect::measure_distance` |
 | mass properties | supported | `measure mass` | `inspect::mass_properties` |
-| wall thickness | missing | `measure thickness` | `inspect::wall_thickness` |
-| draft analysis | missing | `measure draft pull=z` | `inspect::draft_analysis` |
+| wall thickness | supported | `measure thickness` | `inspect::wall_thickness` |
+| draft analysis | supported | `measure draft pull=z` | `inspect::draft_analysis` |
 | variables from outside the file | supported | `linecad check part.lcad --set w=20` | `inspect::outside_variables` |
 | include another file | supported | `include part.lcad d=10` | `inspect::include_file` |
 | conditional lines | supported | `if w>30 chamfer 1 edges` | `inspect::conditional` |

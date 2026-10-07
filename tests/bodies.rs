@@ -108,7 +108,6 @@ fn mirror_feature() {
 }
 
 #[test]
-#[ignore = "missing: repeat along="]
 fn pattern_along_path() {
     let model = build(
         "rect 40 30\nbase: extrude 3\nplane base.end\nh: hole 3 -15,0\npath -15,0,3 15,0,3\nrepeat h along=path count=4",

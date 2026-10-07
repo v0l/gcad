@@ -191,7 +191,6 @@ fn extrude_up_to_offset_face() {
 }
 
 #[test]
-#[ignore = "missing: extrude next"]
 fn extrude_to_next_face() {
     let model = build("rect 40 30\nbase: extrude 10\nplane XY offset=20\nrect 10 10\nextrude next");
     assert_volume(&model, 13000.0, 1.0e-6);

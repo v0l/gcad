@@ -148,7 +148,6 @@ fn arc_by_centre() {
 }
 
 #[test]
-#[ignore = "missing: point, dist, horizontal"]
 fn constraints() {
     let model = build(
         "point a 0,0\npoint b\npoint c\ndist a b 30\ndist b c 40\ndist a c 50\nhorizontal a b\npoly a b c\nextrude 1",
@@ -157,7 +156,6 @@ fn constraints() {
 }
 
 #[test]
-#[ignore = "missing: close trim"]
 fn trim() {
     assert_volume(
         &build("pen 0,0\nline 30,0\nline 30,20\nline 0,20\nline 0,-5\nclose trim\nextrude 5"),
@@ -167,7 +165,6 @@ fn trim() {
 }
 
 #[test]
-#[ignore = "missing: construct"]
 fn construction_geometry() {
     assert_volume(
         &build("rect 10 10\ncircle 20 construct\nextrude 5"),
@@ -177,7 +174,6 @@ fn construction_geometry() {
 }
 
 #[test]
-#[ignore = "missing: reflect"]
 fn sketch_mirror() {
     assert_volume(
         &build("poly 1,0 11,0 1,10\nreflect y\nextrude 5"),
@@ -187,7 +183,6 @@ fn sketch_mirror() {
 }
 
 #[test]
-#[ignore = "missing: array"]
 fn sketch_pattern() {
     let model = build(
         "rect 40 40\nbase: extrude 5\nplane base.end\ncircle 4 at=10,0\narray count=4 angle=360\ncut thru",

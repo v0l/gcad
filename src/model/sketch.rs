@@ -1,6 +1,6 @@
 use super::args::{Args, positive};
 use super::{Model, Pen};
-use crate::geometry::{Frame, Profile, Segment};
+use crate::geometry::{Frame, Profile, Segment, compose_2d};
 use crate::parse::{Line, eval, eval_point};
 use crate::select;
 use anyhow::{Context, Result, anyhow, bail};
@@ -68,7 +68,8 @@ fn cornered(points: &[(f64, f64)], size: f64, round: bool) -> Result<Profile> {
         let length = (dx * dx + dy * dy).sqrt();
         ((dx / length, dy / length), length)
     };
-    let corners: Vec<((f64, f64), (f64, f64), Option<(f64, f64)>, f64)> = (0..n)
+    type Corner = ((f64, f64), (f64, f64), Option<(f64, f64)>, f64);
+    let corners: Vec<Corner> = (0..n)
         .map(|i| {
             let (v, previous, next) = (points[i], points[(i + n - 1) % n], points[(i + 1) % n]);
             let ((ax, ay), _) = unit(v, previous);
@@ -164,8 +165,110 @@ impl Model {
         }
     }
 
+    pub(crate) fn op_axis(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["name", "from", "to"], &[], false)?;
+        let name = args.text("name")?;
+        if ["x", "y", "z"].contains(&name) {
+            bail!("`{name}` is already an axis; pick another name");
+        }
+        let from = super::args::point3(args.text("from")?, &self.scope)?;
+        let to = super::args::point3(args.text("to")?, &self.scope)?;
+        let direction = to - from;
+        if direction.magnitude() < 1.0e-12 {
+            bail!("the axis needs two different points");
+        }
+        self.axes
+            .insert(name.to_string(), (from, direction.normalize()));
+        Ok(format!(
+            "axis {name} through {} along {}",
+            super::args::describe_point(from),
+            super::args::describe_point(Point3::from_vec(direction.normalize()))
+        ))
+    }
+
+    fn edge_plane(&self, selector: &str, degrees: f64) -> Result<Frame> {
+        let solid = self.active("plane")?;
+        let (first_set, _) = selector
+            .split_once('&')
+            .filter(|_| !selector.contains('|'))
+            .ok_or_else(|| {
+                anyhow!(
+                    "write the edge as `a&b`; the plane starts on face `a` and turns toward `b`"
+                )
+            })?;
+        let edges = select::select_edges(selector, solid, &self.groups, self.tolerance())?;
+        let [edge] = edges.as_slice() else {
+            bail!(
+                "`{selector}` matched {} edges; the plane needs one",
+                edges.len()
+            );
+        };
+        let faces = select::faces(solid);
+        let on_first = select::select_faces(first_set, solid, &self.groups, self.tolerance())?;
+        let owners: Vec<usize> = (0..faces.len())
+            .filter(|&i| faces[i].edge_iter().any(|e| e.is_same(edge)))
+            .collect();
+        let flat = |i: usize| match faces[i].oriented_surface() {
+            Surface::Plane(plane) => Ok(plane.normal()),
+            _ => bail!("the plane turns about an edge between flat faces"),
+        };
+        let (Some(&a), Some(&b)) = (
+            owners.iter().find(|i| on_first.contains(i)),
+            owners.iter().find(|i| !on_first.contains(i)),
+        ) else {
+            bail!("`{selector}` is not an edge of face `{first_set}`");
+        };
+        let (na, nb) = (flat(a)?, flat(b)?);
+        let (p, q) = (edge.front().point(), edge.back().point());
+        let curve = edge.curve();
+        let (t0, t1) = curve.range_tuple();
+        if (curve.subs((t0 + t1) / 2.0) - p.midpoint(q)).magnitude() > self.tolerance() * 10.0 {
+            bail!("the plane turns about a straight edge; `{selector}` is curved");
+        }
+        let along = (q - p).normalize();
+        let mut toward = along.cross(na);
+        if toward.dot(nb) < 0.0 {
+            toward = -toward;
+        }
+        let (s, c) = degrees.to_radians().sin_cos();
+        let normal = na * c + toward * s;
+        Ok(Frame {
+            origin: p.midpoint(q),
+            x: along,
+            y: normal.cross(along),
+            normal,
+        })
+    }
+
     pub(crate) fn op_plane(&mut self, line: &Line) -> Result<String> {
         self.require_empty_sketch("plane")?;
+        if let Some(selector) = line
+            .named
+            .iter()
+            .find(|(k, _)| k == "edge")
+            .map(|(_, v)| v.clone())
+        {
+            let args = Args::new(line, &[], &["edge", "angle"], false)?;
+            let degrees = args.optional_number("angle", &self.scope)?.unwrap_or(0.0);
+            let frame = self.edge_plane(&selector, degrees)?;
+            self.frame = Some(frame);
+            return Ok(describe_frame(&frame));
+        }
+        if line.positional.first().map(String::as_str) == Some("path") {
+            let args = Args::new(line, &["path"], &["at"], false)?;
+            let fraction = args.optional_number("at", &self.scope)?.unwrap_or(0.0);
+            if !(0.0..=1.0).contains(&fraction) {
+                bail!("`at=` is a fraction of the path from 0 to 1, got {fraction}");
+            }
+            let path = self
+                .path
+                .as_ref()
+                .ok_or_else(|| anyhow!("`plane path` needs a `path` or `helix` first"))?;
+            let (origin, tangent) = path.at(fraction)?;
+            let frame = Frame::from_normal(origin, tangent);
+            self.frame = Some(frame);
+            return Ok(describe_frame(&frame));
+        }
         let args = Args::new(line, &["on"], &["offset", "rx", "ry", "rz"], true)?;
         let mut frame = match args.rest.as_slice() {
             [] => self.plane_from(args.text("on")?)?,
@@ -408,7 +511,21 @@ impl Model {
     }
 
     pub(crate) fn op_close(&mut self, line: &Line) -> Result<String> {
-        Args::new(line, &[], &[], false)?;
+        let args = Args::new(line, &[], &[], true)?;
+        let trim = match args.rest.as_slice() {
+            [] => false,
+            ["trim"] => true,
+            _ => bail!("`close` takes nothing, or `trim` to cut the path where it crosses itself"),
+        };
+        if trim {
+            let pen = self
+                .pen
+                .as_ref()
+                .ok_or_else(|| anyhow!("`close` needs a `pen x,y` first"))?;
+            let (start, segments) = trimmed(pen.start, &pen.segments)?;
+            self.pen = None;
+            return self.add_profile(Profile::Path { start, segments });
+        }
         let mut pen = self
             .pen
             .take()
@@ -467,6 +584,81 @@ impl Model {
         self.add_profile(grown)
     }
 
+    pub(crate) fn op_reflect(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &[], &[], true)?;
+        let (origin, (dx, dy)) = match args.rest.as_slice() {
+            ["x"] => ((0.0, 0.0), (1.0, 0.0)),
+            ["y"] => ((0.0, 0.0), (0.0, 1.0)),
+            [a, b] => {
+                let (a, b) = (eval_point(a, &self.scope)?, eval_point(b, &self.scope)?);
+                let length = (b.0 - a.0).hypot(b.1 - a.1);
+                if length < 1.0e-12 {
+                    bail!("the two points of the mirror line are the same");
+                }
+                (a, ((b.0 - a.0) / length, (b.1 - a.1) / length))
+            }
+            _ => bail!("`reflect` takes `x`, `y` or two x,y points on the mirror line"),
+        };
+        let (a, b, d) = (2.0 * dx * dx - 1.0, 2.0 * dx * dy, 2.0 * dy * dy - 1.0);
+        let matrix = [
+            a,
+            b,
+            b,
+            d,
+            origin.0 - (a * origin.0 + b * origin.1),
+            origin.1 - (b * origin.0 + d * origin.1),
+        ];
+        let last = self.last_profile("reflect")?;
+        self.add_profile(placed(last, matrix))
+    }
+
+    pub(crate) fn op_array(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["count"], &["angle", "at", "step"], false)?;
+        let count = args.number("count", &self.scope)?;
+        if count < 2.0 || count.fract() != 0.0 {
+            bail!("count must be a whole number of at least 2, got {count}");
+        }
+        let count = count as usize;
+        let last = self.last_profile("array")?;
+        let matrices: Vec<[f64; 6]> = match (
+            args.optional_number("angle", &self.scope)?,
+            args.optional_point("step", &self.scope)?,
+        ) {
+            (Some(angle), None) => {
+                let (cx, cy) = args.point("at", &self.scope)?;
+                let step = if (angle.abs() - 360.0).abs() < 1.0e-9 {
+                    angle / count as f64
+                } else {
+                    angle / (count - 1) as f64
+                };
+                (1..count)
+                    .map(|i| {
+                        let (s, c) = (step * i as f64).to_radians().sin_cos();
+                        [c, -s, s, c, cx - (c * cx - s * cy), cy - (s * cx + c * cy)]
+                    })
+                    .collect()
+            }
+            (None, Some((sx, sy))) => (1..count)
+                .map(|i| [1.0, 0.0, 0.0, 1.0, sx * i as f64, sy * i as f64])
+                .collect(),
+            _ => bail!("`array` needs `angle=` (with optional `at=`) or `step=x,y`"),
+        };
+        for matrix in matrices {
+            self.sketch.push(placed(last.clone(), matrix));
+        }
+        Ok(format!("sketch has {} profile(s)", self.sketch.len()))
+    }
+
+    fn last_profile(&self, op: &str) -> Result<Profile> {
+        if self.pen.is_some() {
+            bail!("a `pen` path is still open; `close` it before `{op}`");
+        }
+        self.sketch
+            .last()
+            .cloned()
+            .ok_or_else(|| anyhow!("`{op}` copies the last profile and there is none"))
+    }
+
     pub(crate) fn take_sketch(&mut self, op: &str) -> Result<(Frame, Vec<Profile>)> {
         if self.pen.is_some() {
             bail!("a `pen` path is still open; `close` it before `{op}`");
@@ -483,4 +675,61 @@ impl Model {
         self.sections.push(section);
         Ok(format!("{} section(s) for `loft`", self.sections.len()))
     }
+}
+
+fn placed(profile: Profile, matrix: [f64; 6]) -> Profile {
+    match profile {
+        Profile::Placed { inner, matrix: own } => Profile::Placed {
+            inner,
+            matrix: compose_2d(matrix, own),
+        },
+        other => Profile::Placed {
+            inner: Box::new(other),
+            matrix,
+        },
+    }
+}
+
+fn crossing(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> Option<(f64, f64)> {
+    let (r, s) = ((b.0 - a.0, b.1 - a.1), (d.0 - c.0, d.1 - c.1));
+    let denominator = r.0 * s.1 - r.1 * s.0;
+    if denominator.abs() < 1.0e-12 {
+        return None;
+    }
+    let (qp0, qp1) = (c.0 - a.0, c.1 - a.1);
+    let t = (qp0 * s.1 - qp1 * s.0) / denominator;
+    let u = (qp0 * r.1 - qp1 * r.0) / denominator;
+    let eps = 1.0e-9;
+    ((-eps..=1.0 + eps).contains(&t) && (-eps..=1.0 + eps).contains(&u))
+        .then_some((a.0 + r.0 * t, a.1 + r.1 * t))
+}
+
+fn trimmed(start: (f64, f64), segments: &[Segment]) -> Result<((f64, f64), Vec<Segment>)> {
+    let ends: Vec<(f64, f64)> = std::iter::once(start)
+        .chain(segments.iter().map(|segment| match segment {
+            Segment::Line(to) | Segment::Arc { to, .. } => *to,
+        }))
+        .collect();
+    if segments.iter().any(|s| matches!(s, Segment::Arc { .. })) {
+        bail!("`close trim` works on paths of `line`s");
+    }
+    let n = segments.len();
+    for last in (1..n).rev() {
+        for first in 0..last.saturating_sub(1) {
+            if let Some(meet) = crossing(ends[first], ends[first + 1], ends[last], ends[last + 1]) {
+                let away = |p: &(f64, f64)| (p.0 - meet.0).hypot(p.1 - meet.1) > 1.0e-9;
+                let kept: Vec<Segment> = ends[first + 1..=last]
+                    .iter()
+                    .filter(|p| away(p))
+                    .chain(std::iter::once(&meet))
+                    .map(|p| Segment::Line(*p))
+                    .collect();
+                if kept.len() < 3 {
+                    bail!("the trimmed path has too few sides");
+                }
+                return Ok((meet, kept));
+            }
+        }
+    }
+    bail!("the path never crosses itself, so there is nothing to trim; use `close`")
 }
