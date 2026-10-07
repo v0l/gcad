@@ -1,6 +1,6 @@
+use super::Model;
 use super::args::{Args, describe_point, label_of, point3, positive};
 use super::solids::{loft_wires, loops, oriented, regions};
-use super::{Combine, Model};
 use crate::geometry::Frame;
 use crate::parse::Line;
 use crate::select;
@@ -178,7 +178,8 @@ impl Model {
     }
 
     pub(crate) fn op_sweep(&mut self, line: &Line) -> Result<String> {
-        Args::new(line, &[], &[], false)?;
+        let args = Args::new(line, &[], &["mode"], false)?;
+        let combine = super::args::combine_mode(&args)?;
         let path = self
             .path
             .clone()
@@ -237,8 +238,8 @@ impl Model {
                     )
                 })
                 .collect();
-            self.record(&label, groups);
-            self.merge(&label, tool, Combine::Add)?;
+            self.record_for(&label, groups, combine);
+            self.merge(&label, tool, combine)?;
         }
         self.describe_solid()
     }

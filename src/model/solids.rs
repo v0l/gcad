@@ -2,6 +2,7 @@ use super::Model;
 use crate::geometry::{self, Frame, Profile};
 use crate::select;
 use anyhow::{Result, anyhow, bail};
+use monstertruck::geometry::prelude::TryIntoHomogeneousBsplineCurve;
 use monstertruck::modeling::*;
 
 pub(crate) struct Loop {
@@ -70,6 +71,102 @@ pub(crate) fn regions(loops: &[Loop]) -> Vec<Vec<usize>> {
                 .collect()
         })
         .collect()
+}
+
+fn revolved_span(
+    profile: &BsplineCurve<Vector4>,
+    origin: Point3,
+    axis: Vector3,
+    span: f64,
+) -> NurbsSurface<Vector4> {
+    let (half_cos, half_tan) = ((span / 2.0).cos(), (span / 2.0).tan());
+    let rows = profile
+        .control_points()
+        .iter()
+        .map(|cp| {
+            let (point, weight) = (cp.to_point(), cp.weight());
+            let centre = origin + axis * (point - origin).dot(axis);
+            let radial = point - centre;
+            let side = axis.cross(radial);
+            let middle = centre + radial + side * half_tan;
+            let end = centre + radial * span.cos() + side * span.sin();
+            vec![
+                point.to_vec().extend(1.0) * weight,
+                middle.to_vec().extend(1.0) * (weight * half_cos),
+                end.to_vec().extend(1.0) * weight,
+            ]
+        })
+        .collect();
+    NurbsSurface::new(BsplineSurface::new(
+        (profile.knot_vector().clone(), KnotVector::bezier_knot(2)),
+        rows,
+    ))
+}
+
+fn span_surface(surface: &Surface, face: &Face, span: f64) -> Option<NurbsSurface<Vector4>> {
+    let Surface::RevolutionSurface(processor) = surface else {
+        return None;
+    };
+    let transform = *processor.transform();
+    let revolution = processor.entity();
+    let profile = revolution
+        .entity_curve()
+        .try_into_homogeneous_bspline_curve()?;
+    let profile = BsplineCurve::new(
+        profile.knot_vector().clone(),
+        profile
+            .control_points()
+            .iter()
+            .map(|p| transform * *p)
+            .collect(),
+    );
+    let origin = transform.transform_point(revolution.origin());
+    let axis = transform.transform_vector(revolution.axis()).normalize();
+    let fits = |nurbs: &NurbsSurface<Vector4>| {
+        let size = face
+            .vertex_iter()
+            .map(|v| v.point().to_vec().magnitude())
+            .fold(1.0, f64::max);
+        face.vertex_iter().all(|v| {
+            nurbs
+                .search_nearest_parameter(v.point(), None, 100)
+                .is_some_and(|(u, w)| {
+                    nurbs.subs(u, w).distance(v.point()) < 1.0e-7 * size
+                        && (-1.0e-9..=1.0 + 1.0e-9).contains(&w)
+                })
+        })
+    };
+    [span, -span]
+        .into_iter()
+        .map(|s| revolved_span(&profile, origin, axis, s))
+        .find(fits)
+}
+
+pub(crate) fn rational(solid: Solid, span: f64) -> Solid {
+    let copy = builder::clone(&solid);
+    for face in copy.boundaries().iter().flat_map(|shell| shell.face_iter()) {
+        let surface = face.surface();
+        if !matches!(surface, Surface::RevolutionSurface(_)) {
+            continue;
+        }
+        let Some(mut nurbs) = span_surface(&surface, face, span) else {
+            continue;
+        };
+        let Some(point) = face.vertex_iter().next().map(|v| v.point()) else {
+            continue;
+        };
+        let agree = surface
+            .search_nearest_parameter(point, None, 100)
+            .zip(nurbs.search_nearest_parameter(point, None, 100))
+            .is_none_or(|((u0, v0), (u1, v1))| {
+                surface.normal(u0, v0).dot(nurbs.normal(u1, v1)) > 0.0
+            });
+        if !agree {
+            nurbs.invert();
+        }
+        face.set_surface(Surface::NurbsSurface(nurbs));
+    }
+    copy
 }
 
 pub(crate) fn oriented(mut solid: Solid) -> Solid {
@@ -159,6 +256,18 @@ impl Model {
         groups
             .into_iter()
             .for_each(|(group, surface)| self.groups.record(label, group, surface));
+    }
+
+    pub(crate) fn record_for(
+        &mut self,
+        label: &str,
+        groups: Vec<(&str, Surface)>,
+        combine: super::Combine,
+    ) {
+        match combine {
+            super::Combine::Remove => self.record_inverted(label, groups),
+            _ => self.record(label, groups),
+        }
     }
 
     pub(crate) fn record_inverted(&mut self, label: &str, groups: Vec<(&str, Surface)>) {

@@ -125,3 +125,12 @@ pub(crate) fn axis(text: &str) -> Result<Vector3> {
 pub(crate) fn describe_point(point: Point3) -> String {
     format!("{:.3},{:.3},{:.3}", point.x, point.y, point.z)
 }
+
+pub(crate) fn combine_mode(args: &Args<'_>) -> Result<super::Combine> {
+    match args.values.get("mode").copied() {
+        None | Some("add") => Ok(super::Combine::Add),
+        Some("cut") => Ok(super::Combine::Remove),
+        Some("intersect") => Ok(super::Combine::Common),
+        Some(other) => bail!("mode must be add, cut or intersect, got `{other}`"),
+    }
+}

@@ -151,7 +151,6 @@ fn push_face() {
 }
 
 #[test]
-#[ignore = "missing: revolve mode=cut"]
 fn revolve_cut() {
     let model = build(
         "rect 40 40\nbase: extrude 10\nplane XZ\nrect 4 4 at=10,10\nrevolve 360 axis=y mode=cut",
@@ -160,7 +159,6 @@ fn revolve_cut() {
 }
 
 #[test]
-#[ignore = "missing: sweep mode=cut"]
 fn sweep_cut() {
     let model =
         build("rect 40 40\nbase: extrude 10\ncircle 4\npath -30,0,10 30,0,10\nsweep mode=cut");
@@ -168,7 +166,6 @@ fn sweep_cut() {
 }
 
 #[test]
-#[ignore = "missing: loft mode=cut"]
 fn loft_cut() {
     let model = build(
         "rect 40 40\nbase: extrude 10\nplane base.end offset=1\nrect 22 22\nsection\nplane base.end offset=-5\nrect 10 10\nsection\nloft mode=cut",

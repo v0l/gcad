@@ -222,7 +222,8 @@ fn closed_polyline(points: &[Point3]) -> Wire {
 
 fn circle_wire(frame: &Frame, center: (f64, f64), radius: f64) -> Wire {
     let origin = frame.at(center.0, center.1);
-    primitive::circle(origin + frame.x * radius, origin, frame.normal, 4)
+    let seam = (frame.x + frame.y) * std::f64::consts::FRAC_1_SQRT_2;
+    primitive::circle(origin + seam * radius, origin, frame.normal, 4)
 }
 
 fn rounded_rect(frame: &Frame, center: (f64, f64), width: f64, height: f64, radius: f64) -> Wire {

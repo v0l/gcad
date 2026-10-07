@@ -1,5 +1,5 @@
-use super::args::{Args, label_of, positive};
-use super::solids::{classify, loft_wires, loops, oriented, prism, regions};
+use super::args::{Args, combine_mode, label_of, positive};
+use super::solids::{classify, loft_wires, loops, oriented, prism, rational, regions};
 use super::{Combine, Model, Prism};
 use crate::geometry::{self, Frame, Profile};
 use crate::parse::Line;
@@ -260,7 +260,8 @@ impl Model {
     }
 
     pub(crate) fn op_revolve(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["angle"], &["axis"], false)?;
+        let args = Args::new(line, &["angle"], &["axis", "mode"], false)?;
+        let combine = combine_mode(&args)?;
         let angle = args.number("angle", &self.scope)?;
         if angle == 0.0 || angle.abs() > 360.0 {
             bail!("revolve angle must be within -360..360 and not zero, got {angle}");
@@ -284,7 +285,10 @@ impl Model {
             let wires: Vec<Wire> = region.iter().map(|&i| shapes[i].wire.clone()).collect();
             let face: Face = profile::attach_plane_normalized(wires)
                 .map_err(|error| anyhow!("cannot face the sketch: {error}"))?;
-            let tool = oriented(builder::revolve(&face, frame.origin, axis, sweep, division));
+            let tool = oriented(rational(
+                builder::revolve(&face, frame.origin, axis, sweep, division),
+                angle.abs().to_radians() / division as f64,
+            ));
             let groups = select::faces(&tool)
                 .iter()
                 .map(|face| {
@@ -299,14 +303,15 @@ impl Model {
                     )
                 })
                 .collect();
-            self.record(&label, groups);
-            self.merge(&label, tool, Combine::Add)?;
+            self.record_for(&label, groups, combine);
+            self.merge(&label, tool, combine)?;
         }
         self.describe_solid()
     }
 
     pub(crate) fn op_loft(&mut self, line: &Line) -> Result<String> {
-        Args::new(line, &[], &[], false)?;
+        let args = Args::new(line, &[], &["mode"], false)?;
+        let combine = combine_mode(&args)?;
         if self.sections.len() < 2 {
             bail!(
                 "`loft` needs at least two `section` lines, it has {}",
@@ -355,8 +360,8 @@ impl Model {
                 )
             })
             .collect();
-        self.record(&label, groups);
-        self.merge(&label, tool, Combine::Add)?;
+        self.record_for(&label, groups, combine);
+        self.merge(&label, tool, combine)?;
         self.describe_solid()
     }
 

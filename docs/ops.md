@@ -73,9 +73,9 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | shell | supported | `shell 2 open=base.end` | `features::shell` |
 | face draft | supported | `draft 5 base.side neutral=base.start` | `features::face_draft` |
 | push or pull a face | supported | `push base.end 2` | `features::push_face` |
-| revolve cut | missing | `revolve 360 mode=cut` | `features::revolve_cut` |
-| sweep cut | missing | `sweep mode=cut` | `features::sweep_cut` |
-| loft cut | missing | `loft mode=cut` | `features::loft_cut` |
+| revolve cut | supported | `revolve 360 mode=cut` | `features::revolve_cut` |
+| sweep cut | supported | `sweep mode=cut` | `features::sweep_cut` |
+| loft cut | supported | `loft mode=cut` | `features::loft_cut` |
 | thin extrude | missing | `extrude 10 thin=2` | `features::thin_extrude` |
 | extrude to an offset from a face | missing | `extrude upto=face offset=-2` | `features::extrude_up_to_offset_face` |
 | extrude to the next face | missing | `extrude next` | `features::extrude_to_next_face` |
