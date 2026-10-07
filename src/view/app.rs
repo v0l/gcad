@@ -760,9 +760,9 @@ impl App {
                     };
                     let driver = rig.driver_of(&joint.name).map(|c| c.driver.clone());
                     let nudged = |delta: f64| {
-                        let mut values = self.joint_values.clone();
-                        values[i] = (values[i] + delta).clamp(low, high);
-                        (values[i] != self.joint_values[i]).then(|| rig.settle(&values).err())
+                        let to = (self.joint_values[i] + delta).clamp(low, high);
+                        (to != self.joint_values[i])
+                            .then(|| rig.drive(&self.joint_values, i, to).err())
                     };
                     let stuck = match (nudged(step), nudged(-step)) {
                         (Some(Some(why)), Some(Some(_)))
@@ -782,12 +782,10 @@ impl App {
                             .suffix(joint.unit())
                             .clamping(egui::SliderClamping::Always),
                     );
-                    if value != self.joint_values[i] {
-                        let mut values = self.joint_values.clone();
-                        values[i] = value;
-                        if let Ok((settled, _)) = rig.settle(&values) {
-                            self.joint_values = settled;
-                        }
+                    if value != self.joint_values[i]
+                        && let Ok((settled, _)) = rig.drive(&self.joint_values, i, value)
+                    {
+                        self.joint_values = settled;
                     }
                     if let Some(driver) = driver {
                         note(ui, format!("driven by {driver}"), LEGEND);

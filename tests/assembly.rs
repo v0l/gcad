@@ -513,3 +513,70 @@ fn exploded_views_move_parts_apart() {
     assert!(near(top(0.0, screw), 13.5) && near(top(1.0, screw), 43.5));
     assert!(near(top(0.5, screw), 28.5));
 }
+
+const BAR: &str = "let L=40\nrect L+8 8 r=3.9 at=L/2,0\nbar: extrude 3\nplane bar.end\na: hole 3 0,0\nb: hole 3 L,0\n";
+
+const FOUR_BAR: &str = "let ground=40 crank=15 coupler=40 rocker=30
+let d=hypot(ground,crank) along=(coupler*coupler-rocker*rocker+d*d)/(2*d)
+let h=sqrt(coupler*coupler-along*along)
+let cx=along*ground/d+h*crank/d cy=crank-along*crank/d+h*ground/d
+part base plate.lcad
+part crankbar bar.lcad L=crank
+part couplerbar bar.lcad L=coupler
+part rockerbar bar.lcad L=rocker
+rotate crankbar 90 axis=z
+move couplerbar 0,crank,3
+rotate couplerbar atan2(cy-crank,cx) axis=z about=0,crank,0
+move rockerbar ground,0,0
+rotate rockerbar atan2(cy,cx-ground) axis=z about=ground,0,0
+axis a 0,0,0 0,0,1
+axis knee 0,crank,0 0,crank,1
+axis pivot ground,0,0 ground,0,1
+joint drive crankbar base turn about=a
+joint bend couplerbar crankbar turn about=knee
+joint rock rockerbar base turn about=pivot
+concentric couplerbar:b.side rockerbar:b.side
+";
+
+fn rocker_angle(crank_degrees: f64) -> f64 {
+    let (ground, crank, coupler, rocker) = (40.0f64, 15.0f64, 40.0f64, 30.0f64);
+    let b = (
+        crank * crank_degrees.to_radians().cos(),
+        crank * crank_degrees.to_radians().sin(),
+    );
+    let (dx, dy) = (ground - b.0, -b.1);
+    let d = dx.hypot(dy);
+    let along = (coupler * coupler - rocker * rocker + d * d) / (2.0 * d);
+    let h = (coupler * coupler - along * along).sqrt();
+    let c = (
+        b.0 + along * dx / d - h * dy / d,
+        b.1 + along * dy / d + h * dx / d,
+    );
+    (c.1).atan2(c.0 - ground).to_degrees()
+}
+
+#[test]
+fn a_four_bar_linkage_follows_its_crank() {
+    let parts = [("plate.lcad", SLAB), ("bar.lcad", BAR)];
+    let (model, text) = built("four_bar", &format!("{FOUR_BAR}pose drive 60\n"), &parts);
+    let value = |name: &str| {
+        model
+            .joints
+            .iter()
+            .find(|j| j.name == name)
+            .expect("joint")
+            .value
+    };
+    let turned = rocker_angle(150.0) - rocker_angle(90.0);
+    assert!(
+        (value("rock") - turned).abs() < 1.0e-3,
+        "{text}: rock {} want {turned}",
+        value("rock")
+    );
+    assert!(
+        model
+            .mates
+            .iter()
+            .all(|m| m.holds([monstertruck::modeling::Matrix4::from_scale(1.0); 2]))
+    );
+}

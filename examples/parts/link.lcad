@@ -1,0 +1,8 @@
+let L=40 w=8 t=3 pin=3
+rect L+w w r=w/2-0.05 at=L/2,0
+bar: extrude t
+plane bar.end
+a: hole pin 0,0
+b: hole pin L,0
+color #d08a2c
+material aluminium

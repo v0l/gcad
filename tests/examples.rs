@@ -50,3 +50,23 @@ fn enclosure_assembly() {
         format!("{:#}", last.as_ref().expect_err("screws hold the lid")).contains("pull apart")
     );
 }
+
+#[test]
+fn linkage() {
+    let path = std::path::PathBuf::from(format!(
+        "{}/examples/assemblies/linkage.lasm",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    for turn in [0.0, 90.0, 180.0, 270.0] {
+        let run =
+            linecad::model::run_path(&path, &[("turn".to_string(), turn)], None).expect("runs");
+        let (line, last) = run.steps.last().expect("steps");
+        assert!(last.is_ok(), "turn {turn}: line {}: {last:?}", line.number);
+        assert!(
+            run.model
+                .mates
+                .iter()
+                .all(|m| m.holds([monstertruck::modeling::Matrix4::from_scale(1.0); 2]))
+        );
+    }
+}

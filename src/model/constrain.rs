@@ -116,6 +116,68 @@ fn rank(rows: &[Vec<f64>], tolerance: f64) -> usize {
     rank
 }
 
+pub fn least_squares(start: &[f64], step: f64, residuals: impl Fn(&[f64]) -> Vec<f64>) -> Vec<f64> {
+    let cost = |x: &[f64]| residuals(x).iter().map(|r| r * r).sum::<f64>();
+    let jacobian = |x: &[f64]| -> Vec<Vec<f64>> {
+        let columns: Vec<Vec<f64>> = (0..x.len())
+            .map(|j| {
+                let (mut up, mut down) = (x.to_vec(), x.to_vec());
+                up[j] += step;
+                down[j] -= step;
+                residuals(&up)
+                    .iter()
+                    .zip(&residuals(&down))
+                    .map(|(u, d)| (u - d) / (2.0 * step))
+                    .collect()
+            })
+            .collect();
+        let rows = columns.first().map_or(0, Vec::len);
+        (0..rows)
+            .map(|i| columns.iter().map(|c| c[i]).collect())
+            .collect()
+    };
+    let mut x = start.to_vec();
+    let mut lambda = 1.0e-3;
+    for _ in 0..200 {
+        let current = cost(&x);
+        if current < 1.0e-24 || x.is_empty() {
+            break;
+        }
+        let j = jacobian(&x);
+        let r = residuals(&x);
+        let n = x.len();
+        let jtj: Vec<Vec<f64>> = (0..n)
+            .map(|a| {
+                (0..n)
+                    .map(|b| j.iter().map(|row| row[a] * row[b]).sum::<f64>())
+                    .collect()
+            })
+            .collect();
+        let jtr: Vec<f64> = (0..n)
+            .map(|a| -j.iter().zip(&r).map(|(row, ri)| row[a] * ri).sum::<f64>())
+            .collect();
+        let mut improved = false;
+        for _ in 0..30 {
+            let mut damped = jtj.clone();
+            (0..n).for_each(|a| damped[a][a] += lambda * (1.0 + jtj[a][a]));
+            if let Some(step) = solve_linear(damped, jtr.clone()) {
+                let trial: Vec<f64> = x.iter().zip(&step).map(|(a, b)| a + b).collect();
+                if cost(&trial) < current {
+                    x = trial;
+                    lambda = (lambda / 3.0).max(1.0e-12);
+                    improved = true;
+                    break;
+                }
+            }
+            lambda *= 4.0;
+        }
+        if !improved {
+            break;
+        }
+    }
+    x
+}
+
 pub fn solve(
     points: &[SketchPoint],
     constraints: &[Constraint],

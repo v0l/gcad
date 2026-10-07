@@ -24,7 +24,9 @@ chamfer 0.3 mounts.side&base.end
   anything you will refer to.
 - Plain arguments fill the operation's parameters in order. Any parameter can also be
   given as `name=value`.
-- Numbers are expressions: `+ - * /`, parentheses, `pi`, and names set by `let`.
+- Numbers are expressions: `+ - * /`, parentheses, `pi`, names set by `let`, and the
+  functions `sqrt abs sin cos tan asin acos atan atan2 hypot min max floor ceil round`,
+  like `atan2(y,x)`. Angles are in degrees.
   Expressions cannot contain spaces.
 - A 2D point is `x,y`, a 3D point is `x,y,z`, each part an expression.
 - Lengths are millimetres, angles are degrees.
@@ -201,6 +203,15 @@ axis shaft 0,0,0 0,0,1
 joint spin rod frame turn about=shaft
 joint push rod frame slide along=0,0,1 min=0 max=20
 ```
+
+A `turn` joint without `min=` or `max=` turns all the way round: posing it to 270
+leaves it at -90.
+
+When a mate joins two parts that already hang off different joints, it closes a
+loop, like the coupler and rocker of a four-bar linkage. Moving one joint in the loop
+moves the others with it so the mate keeps holding, if they can; otherwise the move
+fails as before. `pose` says which joints followed. See
+`examples/assemblies/linkage.lasm`.
 
 A mate holds the parts together, the way a joint does. The first mate of a part
 places it and fixes it to the other part, so it moves when that part moves. Later

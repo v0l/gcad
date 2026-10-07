@@ -1,0 +1,5 @@
+let span=40
+rect span+30 30 r=3 at=span/2,5
+frame: extrude 4
+color #555a60
+material steel

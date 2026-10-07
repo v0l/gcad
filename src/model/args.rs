@@ -103,7 +103,7 @@ pub(crate) fn positive(value: f64, what: &str) -> Result<f64> {
 }
 
 pub(crate) fn point3(text: &str, scope: &Scope) -> Result<Point3> {
-    match text.split(',').collect::<Vec<_>>().as_slice() {
+    match crate::parse::split_top_level(text, ',').as_slice() {
         [x, y, z] => Ok(Point3::new(
             eval(x, scope)?,
             eval(y, scope)?,

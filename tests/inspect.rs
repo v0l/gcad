@@ -133,3 +133,15 @@ fn material_mass() {
     );
     assert!(failure("rect 10 10\nextrude 10\nmaterial unobtainium").contains("density="));
 }
+
+#[test]
+fn functions() {
+    let text = summary(
+        "let a=atan2(3,4) b=sqrt(16)+hypot(3,4) c=max(1,cos(60),2) d=round(2.6)-min(4,abs(-3))",
+    );
+    assert!(text.contains("b=9 c=2 d=0"), "{text}");
+    assert!(text.starts_with("a=36.86989"), "{text}");
+    assert!(failure("let a=sqrt(-1)").contains("not a number"));
+    assert!(failure("let a=nope(1)").contains("functions are"));
+    assert!(failure("let a=atan2(1)").contains("takes two numbers"));
+}

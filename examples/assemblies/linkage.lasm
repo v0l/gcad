@@ -1,0 +1,23 @@
+let ground=40 crank=15 coupler=40 rocker=30 turn=0
+let d=hypot(ground,crank) along=(coupler*coupler-rocker*rocker+d*d)/(2*d)
+let h=sqrt(coupler*coupler-along*along)
+let cx=along*ground/d+h*crank/d cy=crank-along*crank/d+h*ground/d
+part frame ../parts/frame.lcad span=ground
+part crank ../parts/link.lcad L=crank
+part coupler ../parts/link.lcad L=coupler
+part rocker ../parts/link.lcad L=rocker
+move crank 0,0,4
+rotate crank 90 axis=z
+move coupler 0,crank,7
+rotate coupler atan2(cy-crank,cx) axis=z about=0,crank,0
+move rocker ground,0,4
+rotate rocker atan2(cy,cx-ground) axis=z about=ground,0,0
+color crank #c0392b
+axis a 0,0,0 0,0,1
+axis knee 0,crank,0 0,crank,1
+axis pivot ground,0,0 ground,0,1
+joint drive crank frame turn about=a
+joint bend coupler crank turn about=knee
+joint rock rocker frame turn about=pivot
+concentric coupler:b.side rocker:b.side
+pose drive turn

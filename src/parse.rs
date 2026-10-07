@@ -123,7 +123,7 @@ pub fn eval_point(text: &str, scope: &Scope) -> Result<(f64, f64)> {
     }
 }
 
-fn split_top_level(text: &str, separator: char) -> Vec<&str> {
+pub fn split_top_level(text: &str, separator: char) -> Vec<&str> {
     let mut depth = 0i32;
     let mut start = 0;
     let mut parts = Vec::new();
@@ -195,7 +195,7 @@ fn tokenize(text: &str) -> Result<Vec<Token>> {
                 i += 1;
             }
             tokens.push(Token::Name(chars[start..i].iter().collect()));
-        } else if "+-*/()".contains(c) {
+        } else if "+-*/(),".contains(c) {
             tokens.push(Token::Symbol(c));
             i += 1;
         } else if "<>=!".contains(c) {
@@ -215,6 +215,49 @@ fn tokenize(text: &str) -> Result<Vec<Token>> {
         }
     }
     Ok(tokens)
+}
+
+const FUNCTIONS: &str =
+    "sqrt, abs, sin, cos, tan, asin, acos, atan, atan2, hypot, min, max, floor, ceil, round";
+
+fn call(name: &str, args: &[f64]) -> Result<f64> {
+    let one = |f: fn(f64) -> f64| match args {
+        [x] => Ok(f(*x)),
+        _ => bail!("`{name}` takes one number, got {}", args.len()),
+    };
+    let two = |f: fn(f64, f64) -> f64| match args {
+        [a, b] => Ok(f(*a, *b)),
+        _ => bail!("`{name}` takes two numbers, got {}", args.len()),
+    };
+    let value = match name {
+        "sqrt" => one(f64::sqrt),
+        "abs" => one(f64::abs),
+        "sin" => one(|d| d.to_radians().sin()),
+        "cos" => one(|d| d.to_radians().cos()),
+        "tan" => one(|d| d.to_radians().tan()),
+        "asin" => one(|x| x.asin().to_degrees()),
+        "acos" => one(|x| x.acos().to_degrees()),
+        "atan" => one(|x| x.atan().to_degrees()),
+        "atan2" => two(|y, x| y.atan2(x).to_degrees()),
+        "hypot" => two(f64::hypot),
+        "floor" => one(f64::floor),
+        "ceil" => one(f64::ceil),
+        "round" => one(f64::round),
+        "min" | "max" if !args.is_empty() => Ok(args.iter().copied().fold(
+            if name == "min" {
+                f64::INFINITY
+            } else {
+                f64::NEG_INFINITY
+            },
+            if name == "min" { f64::min } else { f64::max },
+        )),
+        "min" | "max" => bail!("`{name}` needs at least one number"),
+        _ => bail!("no function `{name}`; functions are {FUNCTIONS}"),
+    }?;
+    if !value.is_finite() {
+        bail!("`{name}` of {args:?} is not a number");
+    }
+    Ok(value)
 }
 
 struct ExprParser<'a> {
@@ -288,6 +331,24 @@ impl ExprParser<'_> {
         self.position += 1;
         match token {
             Token::Number(n) => Ok(n),
+            Token::Name(name) if self.peek() == Some(&Token::Symbol('(')) => {
+                self.position += 1;
+                let mut args = Vec::new();
+                if self.peek() != Some(&Token::Symbol(')')) {
+                    loop {
+                        args.push(self.comparison()?);
+                        match self.peek() {
+                            Some(Token::Symbol(',')) => self.position += 1,
+                            _ => break,
+                        }
+                    }
+                }
+                match self.peek() {
+                    Some(Token::Symbol(')')) => self.position += 1,
+                    _ => bail!("missing `)` after the arguments of `{name}`"),
+                }
+                call(&name, &args)
+            }
             Token::Name(name) => match name.as_str() {
                 "pi" => Ok(std::f64::consts::PI),
                 _ => self.scope.get(&name).copied().ok_or_else(|| {

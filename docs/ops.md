@@ -176,6 +176,7 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | turning joint | supported | `joint open box.lid box.main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
 | sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
 | cylindrical joint | supported | a `turn` and a `slide` on one axis | `assembly::a_rod_turns_and_slides_on_one_axis` |
+| closed loops of joints | supported | a four-bar linkage follows its crank | `assembly::a_four_bar_linkage_follows_its_crank` |
 | gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
@@ -204,6 +205,7 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | operation | status | syntax | tests |
 |---|---|---|---|
 | variables and expressions | supported | `let w=40 h=w*3/4` | `inspect::variables` |
+| math functions | supported | `let a=atan2(3,4) r=sqrt(x)` | `inspect::functions` |
 | face and edge selectors | supported | `label.group`, `>Z`, `+X`, `all`, `a,b`, `a&b`, `x\|y` | `inspect::groups_and_edges`, `inspect::directional_faces` |
 | groups survive later edits | supported | | `inspect::groups_survive_later_cuts` |
 | errors that say what to do | supported | | `inspect::errors` |

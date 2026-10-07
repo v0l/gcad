@@ -91,6 +91,50 @@ pub(crate) fn distance_between(a: Feature, b: Feature) -> Option<f64> {
 }
 
 impl Mate {
+    pub fn residuals(&self, moves: [Matrix4; 2]) -> Vec<f64> {
+        let [a, b] = [
+            self.features[0].moved(moves[0]),
+            self.features[1].moved(moves[1]),
+        ];
+        let (da, db) = (a.direction(), b.direction());
+        let gap = b.point() - a.point();
+        let across = |v: Vector3| [v.x, v.y, v.z];
+        let along_zero = |d: Vector3, v: Vector3| v - d * v.dot(d);
+        match (self.condition, a, b) {
+            (Condition::Concentric, ..) => {
+                [across(da.cross(db)), across(along_zero(da, gap))].concat()
+            }
+            (Condition::Flush(offset), ..) => {
+                let mut r = across(da + db).to_vec();
+                r.push((a.point() - b.point()).dot(db) - offset);
+                r
+            }
+            (Condition::Parallel, Feature::Plane(..), Feature::Plane(..))
+            | (Condition::Parallel, Feature::Axis(..), Feature::Axis(..)) => {
+                across(da.cross(db)).to_vec()
+            }
+            (Condition::Parallel, ..) => vec![da.dot(db)],
+            (Condition::Angle(want), ..) => vec![(angle_between(a, b) - want).to_radians()],
+            (Condition::Distance(want), Feature::Axis(..), Feature::Axis(..)) => {
+                let mut r = across(da.cross(db)).to_vec();
+                r.push(along_zero(da, gap).magnitude() - want);
+                r
+            }
+            (Condition::Distance(want), Feature::Plane(..), Feature::Plane(..)) => {
+                let mut r = across(da.cross(db)).to_vec();
+                r.push(gap.dot(db).abs() - want);
+                r
+            }
+            (Condition::Distance(want), ..) => {
+                let normal = match a {
+                    Feature::Plane(..) => da,
+                    Feature::Axis(..) => db,
+                };
+                vec![da.dot(db), gap.dot(normal).abs() - want]
+            }
+        }
+    }
+
     pub fn holds(&self, moves: [Matrix4; 2]) -> bool {
         let [a, b] = [
             self.features[0].moved(moves[0]),
@@ -138,6 +182,9 @@ pub struct Couple {
     pub offset: f64,
 }
 
+pub type Settled =
+    std::result::Result<(Vec<f64>, std::collections::HashMap<String, Matrix4>), String>;
+
 #[derive(Clone, Debug, Default)]
 pub struct Rig {
     pub joints: Vec<Joint>,
@@ -154,10 +201,7 @@ impl Rig {
         self.joints.iter().map(|j| j.value).collect()
     }
 
-    pub fn settle(
-        &self,
-        values: &[f64],
-    ) -> std::result::Result<(Vec<f64>, std::collections::HashMap<String, Matrix4>), String> {
+    fn coupled(&self, values: &[f64]) -> Vec<f64> {
         let mut values = values.to_vec();
         let index = |name: &str| self.joints.iter().position(|j| j.name == name);
         for _ in 0..self.couples.len() {
@@ -168,6 +212,75 @@ impl Rig {
                 }
             }
         }
+        for (value, joint) in values.iter_mut().zip(&self.joints) {
+            if joint.wraps {
+                *value = (*value + 180.0).rem_euclid(360.0) - 180.0;
+            }
+        }
+        values
+    }
+
+    fn drives(&self, joint: usize, target: usize) -> bool {
+        let mut chain = self.joints[target].name.clone();
+        while let Some(couple) = self.driver_of(&chain) {
+            if couple.driver == self.joints[joint].name {
+                return true;
+            }
+            chain = couple.driver.clone();
+        }
+        false
+    }
+
+    pub fn drive(&self, current: &[f64], index: usize, value: f64) -> Settled {
+        let mut values = current.to_vec();
+        values[index] = value;
+        let first = match self.settle(&values) {
+            Ok(done) => return Ok(done),
+            Err(why) => why,
+        };
+        let free: Vec<usize> = (0..self.joints.len())
+            .filter(|&k| {
+                k != index
+                    && self.joints[k].movable()
+                    && self.driver_of(&self.joints[k].name).is_none()
+                    && !self.drives(k, index)
+            })
+            .collect();
+        if free.is_empty() || self.mates.is_empty() {
+            return Err(first);
+        }
+        let step = match self.joints[index].kind {
+            JointKind::Turn { .. } => 5.0,
+            _ => 2.0,
+        };
+        let from = current[index];
+        let count = ((value - from).abs() / step).ceil().max(1.0) as usize;
+        let mut x: Vec<f64> = free.iter().map(|&k| current[k]).collect();
+        let place = |x: &[f64], at: f64| {
+            let mut values = current.to_vec();
+            values[index] = at;
+            free.iter().zip(x).for_each(|(&k, &v)| values[k] = v);
+            self.coupled(&values)
+        };
+        for k in 1..=count {
+            let at = from + (value - from) * k as f64 / count as f64;
+            x = super::constrain::least_squares(&x, 1.0e-6, |x| {
+                let moves = posed(&self.joints, &place(x, at));
+                let at = |name: &str| moves.get(name).copied().unwrap_or_else(Matrix4::identity);
+                self.mates
+                    .iter()
+                    .flat_map(|m| m.residuals([at(&m.parts[0]), at(&m.parts[1])]))
+                    .collect()
+            });
+            if let Err(why) = self.settle(&place(&x, at)) {
+                return Err(why);
+            }
+        }
+        self.settle(&place(&x, value))
+    }
+
+    pub fn settle(&self, values: &[f64]) -> Settled {
+        let values = self.coupled(values);
         for (joint, &value) in self.joints.iter().zip(&values) {
             let (low, high) = joint.range;
             if value < low - 1.0e-9 || value > high + 1.0e-9 {
@@ -217,6 +330,7 @@ pub struct Joint {
     pub kind: JointKind,
     pub value: f64,
     pub range: (f64, f64),
+    pub wraps: bool,
 }
 
 impl Joint {
@@ -317,6 +431,7 @@ impl Model {
                         kind: JointKind::Fixed,
                         value: 0.0,
                         range: (0.0, 0.0),
+                        wraps: false,
                     });
                 }
                 let held = broken(&self.mates, &std::collections::HashMap::new());
@@ -721,9 +836,7 @@ impl Model {
                 couple.driver
             );
         }
-        let mut values = rig.values();
-        values[index] = value;
-        let (values, _) = rig.settle(&values).map_err(|why| {
+        let (values, _) = rig.drive(&rig.values(), index, value).map_err(|why| {
             anyhow!(
                 "`{}` cannot move to {value}{}: {why}",
                 joint.name,
@@ -858,6 +971,7 @@ impl Model {
                 other.name
             );
         }
+        let wraps = matches!(kind, JointKind::Turn { .. }) && !args.has("min") && !args.has("max");
         let (default_low, default_high) = match kind {
             JointKind::Turn { .. } => (-180.0, 180.0),
             _ => (-100.0, 100.0),
@@ -881,6 +995,7 @@ impl Model {
             kind,
             value: 0.0_f64.clamp(low, high),
             range: (low, high),
+            wraps,
         });
         let index = self.joints.len() - 1;
         self.set_joint(index, at)?;
@@ -908,8 +1023,22 @@ impl Model {
             .position(|j| j.name == name)
             .ok_or_else(|| anyhow!("no joint called `{name}`"))?;
         let value = args.number("value", &self.scope)?;
+        let before: Vec<f64> = self.joints.iter().map(|j| j.value).collect();
         self.set_joint(index, value)?;
-        Ok(format!("{name} at {value}{}", self.joints[index].unit()))
+        let followed: Vec<String> = self
+            .joints
+            .iter()
+            .zip(&before)
+            .enumerate()
+            .filter(|(k, (joint, old))| *k != index && (joint.value - *old).abs() > 1.0e-9)
+            .map(|(_, (joint, _))| format!("{} {:.3}{}", joint.name, joint.value, joint.unit()))
+            .collect();
+        let unit = self.joints[index].unit();
+        Ok(if followed.is_empty() {
+            format!("{name} at {value}{unit}")
+        } else {
+            format!("{name} at {value}{unit}; {} follow", followed.join(", "))
+        })
     }
 
     fn overlaps(&self) -> Vec<(String, String, f64)> {
