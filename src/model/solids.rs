@@ -3,6 +3,7 @@ use crate::geometry::{self, Frame, Profile};
 use crate::select;
 use anyhow::{Result, anyhow, bail};
 use monstertruck::geometry::prelude::TryIntoHomogeneousBsplineCurve;
+use monstertruck::meshing::prelude::PolygonMesh;
 use monstertruck::modeling::*;
 
 pub(crate) struct Loop {
@@ -48,6 +49,100 @@ fn contains(polygon: &[(f64, f64)], (x, y): (f64, f64)) -> bool {
             inside
         }
     })
+}
+
+fn clip_band(polygon: Vec<(f64, f64, f64)>, low: f64, high: f64) -> Vec<(f64, f64, f64)> {
+    let cut = |polygon: Vec<(f64, f64, f64)>, depth: &dyn Fn(f64) -> f64| {
+        let n = polygon.len();
+        (0..n)
+            .flat_map(|i| {
+                let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+                let (da, db) = (depth(a.2), depth(b.2));
+                let crossing = (da >= 0.0) != (db >= 0.0);
+                let t = da / (da - db);
+                let between = (
+                    a.0 + (b.0 - a.0) * t,
+                    a.1 + (b.1 - a.1) * t,
+                    a.2 + (b.2 - a.2) * t,
+                );
+                [(da >= 0.0).then_some(a), crossing.then_some(between)]
+            })
+            .flatten()
+            .collect::<Vec<_>>()
+    };
+    let above = cut(polygon, &|h| h - low);
+    cut(above, &|h| high - h)
+}
+
+fn segments_cross(a: (f64, f64), b: (f64, f64), c: (f64, f64), d: (f64, f64)) -> bool {
+    let side = |p: (f64, f64), q: (f64, f64), r: (f64, f64)| {
+        (q.0 - p.0) * (r.1 - p.1) - (q.1 - p.1) * (r.0 - p.0)
+    };
+    side(a, b, c) * side(a, b, d) <= 0.0 && side(c, d, a) * side(c, d, b) <= 0.0
+}
+
+fn edges(polygon: &[(f64, f64)]) -> impl Iterator<Item = ((f64, f64), (f64, f64))> + '_ {
+    (0..polygon.len()).map(|i| (polygon[i], polygon[(i + 1) % polygon.len()]))
+}
+
+pub(crate) fn clear_above(solid: &Solid, frame: &Frame, shapes: &[Loop], height: f64) -> bool {
+    let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+    let outlines: Vec<Vec<(f64, f64)>> = shapes.iter().map(|s| s.outline.clone()).collect();
+    band_is_empty(&mesh, frame, &outlines, height)
+}
+
+fn band_is_empty(
+    mesh: &PolygonMesh,
+    frame: &Frame,
+    outlines: &[Vec<(f64, f64)>],
+    height: f64,
+) -> bool {
+    let positions = mesh.positions();
+    let local = |p: Point3| {
+        let (u, v) = frame.local(p);
+        (u, v, (p - frame.origin).dot(frame.normal))
+    };
+    let covered = |point: (f64, f64)| {
+        outlines
+            .iter()
+            .filter(|outline| contains(outline, point))
+            .count()
+            % 2
+            == 1
+    };
+    let touches = |piece: &[(f64, f64)]| {
+        piece.iter().any(|&p| covered(p))
+            || outlines
+                .iter()
+                .any(|outline| outline.iter().any(|&p| contains(piece, p)))
+            || edges(piece).any(|(a, b)| {
+                outlines
+                    .iter()
+                    .any(|outline| edges(outline).any(|(c, d)| segments_cross(a, b, c, d)))
+            })
+    };
+    let crossed = mesh.faces().triangle_iter().any(|triangle| {
+        let corners: Vec<_> = triangle.iter().map(|v| local(positions[v.pos])).collect();
+        let piece: Vec<(f64, f64)> = clip_band(corners, height * 1.0e-3, height)
+            .into_iter()
+            .map(|(u, v, _)| (u, v))
+            .collect();
+        !piece.is_empty() && touches(&piece)
+    });
+    if crossed {
+        return false;
+    }
+    let Some(&(u, v)) = outlines.first().and_then(|outline| outline.first()) else {
+        return true;
+    };
+    let direction = Vector3::new(0.5773, 0.5774, 0.5775).normalize();
+    let probe = frame.at(u, v) + frame.normal * (height * 0.5);
+    geometry::ray_hits(mesh, probe, direction)
+        .iter()
+        .filter(|(t, _)| *t > 0.0)
+        .count()
+        % 2
+        == 0
 }
 
 pub(crate) fn regions(loops: &[Loop]) -> Vec<Vec<usize>> {
@@ -331,13 +426,26 @@ pub(crate) fn clear_flush(tool: &Solid, solid: &Solid) -> Solid {
         })
         .collect();
     let copy = builder::clone(tool);
+    let mesh = std::cell::OnceCell::new();
+    let room_beyond = |face: &Face, own: &Plane| {
+        let frame = Frame::from_normal(own.origin(), own.normal());
+        let outlines: Vec<Vec<(f64, f64)>> = face
+            .boundaries()
+            .iter()
+            .map(|wire| outline(wire, &frame))
+            .collect();
+        let mesh = mesh.get_or_init(|| geometry::mesh(solid, geometry::mesh_tolerance(solid)));
+        band_is_empty(mesh, &frame, &outlines, margin)
+    };
     let flush: Vec<Face> = select::faces(&copy)
         .into_iter()
         .filter(|face| match face.oriented_surface() {
-            Surface::Plane(own) => planes.iter().any(|p| {
-                p.normal().dot(own.normal()) > 1.0 - 1.0e-9
-                    && (p.origin() - own.origin()).dot(own.normal()).abs() < close
-            }),
+            Surface::Plane(own) => {
+                planes.iter().any(|p| {
+                    p.normal().dot(own.normal()) > 1.0 - 1.0e-9
+                        && (p.origin() - own.origin()).dot(own.normal()).abs() < close
+                }) && room_beyond(face, &own)
+            }
             _ => false,
         })
         .collect();

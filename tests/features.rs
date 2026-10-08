@@ -62,6 +62,27 @@ fn cut_blind() {
 }
 
 #[test]
+fn cut_from_inside_a_cylinder() {
+    let model = build(
+        "plane YZ\ncircle 24\nb: extrude 65\nplane XY offset=-10\nrect 70 30 at=32.5,0\ncut 2",
+    );
+    let segment = 144.0 * (10.0_f64 / 12.0).acos() - 10.0 * 44.0_f64.sqrt();
+    assert_bounds(&model, [0.0, -12.0, -10.0], [65.0, 12.0, 12.0]);
+    assert_volume(&model, (PI * 144.0 - segment) * 65.0, 1.0e-4);
+}
+
+#[test]
+fn cut_beside_a_taller_block() {
+    assert_volume(
+        &build(
+            "rect 40 30\nbase: extrude 10\nrect 10 30 at=15,0\nextrude 20\nplane base.end\nrect 20 10 at=10,0\ncut 4",
+        ),
+        14200.0,
+        1.0e-6,
+    );
+}
+
+#[test]
 fn cut_through() {
     assert_volume(
         &build("rect 40 30\nbase: extrude 10\nplane base.end\nrect 10 10\ncut thru"),

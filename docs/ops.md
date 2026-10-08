@@ -70,6 +70,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | extrude up to a face | supported | `extrude upto=base.end` | `features::extrude_up_to_face` |
 | cut | supported | `cut 4`, `cut thru` | `features::cut_blind`, `features::cut_through` |
 | cut with draft | supported | `cut 4 draft=3` | `features::cut_draft` |
+| cut from a sketch inside the solid | supported | sketch plane below the top, or beside a taller block | `features::cut_from_inside_a_cylinder`, `features::cut_beside_a_taller_block` |
 | revolve | supported | `revolve 360 axis=y`, `revolve 90` | `features::revolve_full`, `features::revolve_partial` |
 | sweep along a path | supported | `path x,y,z ... r=8` then `sweep` | `features::sweep_bent_path`, `features::sweep_straight_path` |
 | sweep along a helix | supported | `helix r=10 pitch=5 turns=3` then `sweep` | `features::sweep_helix` |

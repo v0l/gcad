@@ -1,5 +1,7 @@
 use super::args::{Args, combine_mode, label_of, positive};
-use super::solids::{classify, loft_wires, loops, oriented, prism, rational, regions, tapered};
+use super::solids::{
+    classify, clear_above, loft_wires, loops, oriented, prism, rational, regions, tapered,
+};
 use super::{Combine, Model, Prism};
 use crate::geometry::{self, Frame, Profile, Segment};
 use crate::parse::Line;
@@ -462,12 +464,18 @@ impl Model {
                 farthest_along(&existing, removal.frame.origin, -removal.frame.normal) + clearance
             }
         };
-        let start = removal.frame.offset(clearance);
-        let direction = -removal.frame.normal * (distance + clearance);
+        let outlines = loops(&removal.frame, &removal.profiles)?;
+        let lead = if clear_above(&existing, &removal.frame, &outlines, clearance) {
+            clearance
+        } else {
+            0.0
+        };
+        let start = removal.frame.offset(lead);
+        let direction = -removal.frame.normal * (distance + lead);
         let shapes = loops(&start, &removal.profiles)?;
         let mut tools = Vec::new();
         for region in regions(&shapes) {
-            let insets = (-clearance * removal.taper, distance * removal.taper);
+            let insets = (-lead * removal.taper, distance * removal.taper);
             let tool = prism(
                 &start,
                 &shapes,
