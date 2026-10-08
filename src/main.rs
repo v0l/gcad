@@ -124,6 +124,14 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         let total: std::time::Duration = run.took.iter().sum();
         println!("{:.2} s in all", total.as_secs_f64());
     }
+    let bodies = run.model.body_names();
+    if !run.model.assembly && bodies.len() > 1 {
+        println!(
+            "note: {} separate bodies ({}). Give each part its own .gcad and place them in a .gasm assembly; `combine` the bodies that make one part",
+            bodies.len(),
+            bodies.join(", ")
+        );
+    }
     match run.steps.last() {
         Some((line, Err(_))) => bail!("stopped at line {}", line.number),
         _ => finished(&run),

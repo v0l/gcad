@@ -1,6 +1,6 @@
 ---
 name: gcad
-description: Model mechanical parts and assemblies with gcad, a parametric CAD where every line of a `.gcad` part file or `.gasm` assembly file is one operation, like G-code, checked by the `gcad` CLI. Use when writing or editing `*.gcad` or `*.gasm` files, sketching and extruding parts, adding holes, fillets, shells, gears or text, picking faces with selectors, placing parts with mates, joints, couples and patterns, checking interference, posing an assembly, or exporting STEP, STL, 3MF, SVG drawings and a bill of materials.
+description: Model mechanical parts and assemblies with gcad, a parametric CAD where every line of a `.gcad` part file or `.gasm` assembly file is one operation, like G-code, checked by the `gcad` CLI. Any design with more than one part is a `.gasm` assembly of one `.gcad` file per part. Use when writing or editing `*.gcad` or `*.gasm` files, sketching and extruding parts, adding holes, fillets, shells, gears or text, picking faces with selectors, placing parts with mates, joints, couples and patterns, checking interference, posing an assembly, or exporting STEP, STL, 3MF, SVG drawings and a bill of materials.
 ---
 
 # gcad
@@ -19,10 +19,12 @@ mounts: hole 3.2 15,10 -15,10 -15,-10 15,-10
 fillet 0.8 base.end&base.side
 ```
 
-Part files (`.gcad`) build one or more solid bodies. Assembly files (`.gasm`) bring parts in,
-place them with mates, join them with joints and check that nothing overlaps. Neither has any
-geometry the other can make: sketch and solid operations are errors in a `.gasm`, joints are
-errors in a `.gcad`.
+A `.gcad` file is one part. Anything made of more than one part is an assembly: one `.gcad`
+file per part and a `.gasm` file that brings them in, places them with mates, joins them with
+joints and checks that nothing overlaps. That holds for two parts as much as for thirty: a box
+and its lid, a bracket and its bolts, a shaft and its gear. Start a multi-part design with the
+`.gasm` and its file layout, not with a second body in a part file. Sketch and solid operations
+are errors in a `.gasm`, joints are errors in a `.gcad`.
 
 ## Installing
 
@@ -48,6 +50,8 @@ groups each operation records, and the assembly lines. Read the table for the op
 about to write before writing it. This skill covers how to work, not every parameter.
 
 ## The loop
+
+For an assembly, run the loop on each part file alone, then on the `.gasm`.
 
 1. Add or change a few lines.
 2. `gcad check part.gcad`. It runs every line and prints what each did: the profile count after
@@ -79,8 +83,9 @@ watching; you work from `check` and `render`.
   face stay world coordinates projected onto it.
 - `extrude` adds, `cut` removes going into the solid, `hole` drills at a list of points.
   `mode=cut` and `mode=intersect` work on `revolve`, `sweep` and `loft`.
-- `body name` starts a second solid in the same file; an assembly brings it in as
-  `part.name`.
+- `body name` starts a second solid in the same file. It is for building one part out of
+  pieces that you then `combine`, not for a second part. When a part file ends with two bodies,
+  `check` says so: move each into its own file and place them in a `.gasm`.
 - `color` and `material` on a body feed the STEP colours, the viewer and the mass in `bom`.
 
 Selectors pick faces: `label`, `label.end`, `label.side`, `label.start`, `>Z` (flat faces
@@ -91,17 +96,34 @@ records.
 
 ## Assemblies
 
+Lay a design out as a folder of part files and one assembly:
+
 ```
-part case ../parts/enclosure.gcad w=80
+box/
+  parts/case.gcad
+  parts/lid.gcad
+  parts/screw.gcad
+  box.gasm
+```
+
+Give each part file `let` defaults for the sizes it shares with others, so it checks on its own,
+and set those sizes once in the `.gasm`, passing them on every `part` line
+(`part lid parts/lid.gcad w=w d=d`), so the parts stay in step. A part can be drawn where it sits
+in the assembly, as the enclosure lid is, or at its own origin and placed with `move`, `rotate`
+and mates. Reuse one part file for every copy, with different variables or `pattern`.
+
+```
+part case ../parts/enclosure-case.gcad w=80
+part lid ../parts/enclosure-lid.gcad w=80
 part s1 ../parts/screw.gcad
-concentric s1:shank.side case.lid:screws.side near=32,17,30
-flush s1:head.start case.lid:top.end
-pattern s1 holes=case.lid:screws.side
+concentric s1:shank.side lid:screws.side near=32,17,30
+flush s1:head.start lid:top.end
+pattern s1 holes=lid:screws.side
 axis hinge -40,25,30 40,25,30
-joint lid case.lid case.main turn about=hinge min=-110 max=0
-pose lid -30
+joint lid lid case turn about=hinge min=-110 max=0
 interference none
-explode case.lid 0,0,30
+interference joint=lid steps=12
+explode lid 0,0,30
 ```
 
 - `part:faces` selects faces of a part with that part file's own labels.
@@ -166,9 +188,9 @@ gcad bom asm.gasm --csv
 ## Worked examples
 
 - `examples/parts`: single parts with analytic-volume tests (`plate`, `bracket`, `pipe`,
-  `ring`, `enclosure`).
-- `examples/assemblies/enclosure.gasm`: a hinged box with screws mated into the lid and
-  patterned into every hole; the screws stop the hinge.
+  `ring`, `enclosure-case`, `enclosure-lid`).
+- `examples/assemblies/enclosure.gasm`: a hinged box from two part files sized from one place,
+  with screws mated into the lid and patterned into every hole; the screws stop the hinge.
 - `examples/assemblies/linkage.gasm`: a four-bar linkage, a closed loop of joints.
 - `examples/robot/arm.gasm`: a 34-part robot arm. Every joint is a motor on its axis driving a
   planetary reducer whose ring is cut into the housing; suns and planets are coupled at their

@@ -143,3 +143,29 @@ fn interference() {
     );
     assert!(text.contains("1600.000"), "{text}");
 }
+
+#[test]
+fn check_sends_separate_parts_to_an_assembly() {
+    let check = |name: &str, source: &str| {
+        let path = scratch(name);
+        std::fs::write(&path, source).expect("written");
+        let output = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+            .args(["check", &path])
+            .output()
+            .expect("gcad runs");
+        String::from_utf8_lossy(&output.stdout).into_owned()
+    };
+    let two = check(
+        "two-parts.gcad",
+        "rect 10 10\nextrude 5\nbody lid\nplane XY offset=5\nrect 10 10\nextrude 1\n",
+    );
+    assert!(
+        two.contains("2 separate bodies (main, lid)") && two.contains(".gasm"),
+        "{two}"
+    );
+    let one = check(
+        "one-part.gcad",
+        "rect 10 10\nextrude 5\nbody b\nrect 4 4 at=10,0\nextrude 8\ncombine main b\n",
+    );
+    assert!(!one.contains("separate bodies"), "{one}");
+}

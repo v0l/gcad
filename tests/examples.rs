@@ -25,10 +25,13 @@ fn pipe() {
 }
 
 #[test]
-fn enclosure() {
-    let model = build(&part("enclosure"));
-    assert_eq!(model.solids().len(), 2);
-    assert_volume(&model, 25240.6 + 8831.2, 0.002);
+fn enclosure_case() {
+    assert_volume(&build(&part("enclosure-case")), 25240.3, 0.001);
+}
+
+#[test]
+fn enclosure_lid() {
+    assert_volume(&build(&part("enclosure-lid")), 8841.8, 0.001);
 }
 
 #[test]
@@ -41,10 +44,9 @@ fn enclosure_assembly() {
     assert!(run.steps.iter().all(|(_, r)| r.is_ok()));
     assert_eq!(
         run.model.body_names(),
-        ["case.main", "case.lid", "s1", "s1_2", "s1_3", "s1_4"]
+        ["case", "lid", "s1", "s1_2", "s1_3", "s1_4"]
     );
-    let opened =
-        gcad::model::run_path(&path, &[("open".to_string(), -75.0)], None).expect("runs");
+    let opened = gcad::model::run_path(&path, &[("open".to_string(), -75.0)], None).expect("runs");
     let (_, last) = opened.steps.last().expect("steps");
     assert!(
         format!("{:#}", last.as_ref().expect_err("screws hold the lid")).contains("pull apart")
@@ -58,8 +60,7 @@ fn linkage() {
         env!("CARGO_MANIFEST_DIR")
     ));
     for turn in [0.0, 90.0, 180.0, 270.0] {
-        let run =
-            gcad::model::run_path(&path, &[("turn".to_string(), turn)], None).expect("runs");
+        let run = gcad::model::run_path(&path, &[("turn".to_string(), turn)], None).expect("runs");
         let (line, last) = run.steps.last().expect("steps");
         assert!(last.is_ok(), "turn {turn}: line {}: {last:?}", line.number);
         assert!(

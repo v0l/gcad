@@ -1,0 +1,15 @@
+let w=80 d=50 h=30 t=2 r=6 screw=2.5
+let bx=w/2-r-2 by=d/2-r-2
+plane XY offset=h
+rect w d r=r
+top: extrude t
+rect w-2*t-0.4 d-2*t-0.4 r=r-t
+offset -1.5
+lip: extrude -3
+plane top.end
+text GCAD size=8 at=-10.4,-2.8
+logo: cut 0.6
+screws: hole 3.2 bx,by -bx,by -bx,-by bx,-by
+fillet 1 top.end&top.side
+color #e8e8e8
+material petg

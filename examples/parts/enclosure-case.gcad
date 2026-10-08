@@ -19,17 +19,3 @@ array count=3 step=0,-5
 vents: cut 4
 color #3a6ea5
 material petg
-body lid
-plane XY offset=h
-rect w d r=r
-top: extrude t
-rect w-2*t-0.4 d-2*t-0.4 r=r-t
-offset -1.5
-lip: extrude -3
-plane top.end
-text GCAD size=8 at=-10.4,-2.8
-logo: cut 0.6
-screws: hole 3.2 bx,by -bx,by -bx,-by bx,-by
-fillet 1 top.end&top.side
-color #e8e8e8
-material petg

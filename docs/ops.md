@@ -154,6 +154,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | split | supported | `split XY offset=5 keep=below` | `bodies::split` |
 | separate bodies | supported | `body second` | `bodies::separate_bodies` |
 | booleans between bodies | supported | `combine main b mode=cut` | `bodies::combine_bodies` |
+| point separate parts at an assembly | supported | `gcad check` on a `.gcad` left with two bodies | `bodies::check_sends_separate_parts_to_an_assembly` |
 | mirror one feature | supported | `mirror YZ of=boss` | `bodies::mirror_feature` |
 | pattern along a path | supported | `repeat h along=path count=4` | `bodies::pattern_along_path` |
 | move or rotate a copy | supported | `move 20,0,0 copy` | `bodies::transform_copy` |

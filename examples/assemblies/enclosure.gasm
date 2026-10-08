@@ -1,15 +1,16 @@
 let w=80 d=50 h=30 r=6 open=0 screwed=1
 let bx=w/2-r-2 by=d/2-r-2
-part case ../parts/enclosure.gcad w=w d=d h=h r=r
+part case ../parts/enclosure-case.gcad w=w d=d h=h r=r
+part lid ../parts/enclosure-lid.gcad w=w d=d h=h r=r
 axis hinge -w/2,d/2,h w/2,d/2,h
-joint lid case.lid case.main turn about=hinge min=-110 max=0
-aligned case.lid:screws.side case.main:pilot.side
+joint lid lid case turn about=hinge min=-110 max=0
+aligned lid:screws.side case:pilot.side
 if screwed part s1 ../parts/screw.gcad
-if screwed concentric s1:shank.side case.lid:screws.side near=bx,by,h
-if screwed flush s1:head.start case.lid:top.end
-if screwed concentric s1:shank.side case.main:pilot.side
+if screwed concentric s1:shank.side lid:screws.side near=bx,by,h
+if screwed flush s1:head.start lid:top.end
+if screwed concentric s1:shank.side case:pilot.side
 if screwed explode s1 0,0,25
-if screwed pattern s1 holes=case.lid:screws.side
+if screwed pattern s1 holes=lid:screws.side
 pose lid open
-explode case.lid 0,0,30
+explode lid 0,0,30
 interference none

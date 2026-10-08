@@ -138,7 +138,15 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass(), gap)
             "slot 30 10\nextrude 3\nplane XY offset=3\nellipse 10 6\nextrude 2",
         ),
     ];
-    let named = ["plate", "bracket", "pipe", "ring", "enclosure"].map(|name| (name, part(name)));
+    let named = [
+        "plate",
+        "bracket",
+        "pipe",
+        "ring",
+        "enclosure-case",
+        "enclosure-lid",
+    ]
+    .map(|name| (name, part(name)));
     for (name, source) in named.iter().map(|(n, s)| (*n, s.as_str())).chain(inline) {
         let model = build(source);
         let path = scratch(&format!("{name}.step"));
