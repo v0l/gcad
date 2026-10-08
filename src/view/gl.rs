@@ -281,7 +281,6 @@ pub fn view(scene: &Scene, cam: &Camera, size: Vec2) -> View {
 }
 
 struct Shaded {
-    colour: Vec3,
     eye: Vec3,
     key: Vec3,
     fill: Vec3,
@@ -299,7 +298,6 @@ impl Material for Shaded {
         format!(
             "const float AMBIENT = {AMBIENT:.4};\nconst float KEY = {KEY:.4};\nconst float FILL = {FILL:.4};\n{}",
             r#"
-uniform vec3 surfaceColour;
 uniform vec3 eye;
 uniform vec3 keyDir;
 uniform vec3 fillDir;
@@ -308,6 +306,7 @@ uniform float clipping;
 uniform float capped;
 in vec3 pos;
 in vec3 nor;
+in vec4 col;
 layout (location = 0) out vec4 outColor;
 
 vec3 to_linear(vec3 c) {
@@ -321,7 +320,7 @@ vec3 to_srgb(vec3 c) {
 
 void main() {
     if (clipping > 0.5 && dot(pos, clipPlane.xyz) > clipPlane.w) discard;
-    vec3 albedo = to_linear(surfaceColour);
+    vec3 albedo = col.rgb;
     vec3 n = normalize(nor);
     vec3 v = normalize(eye - pos);
     if (clipping > 0.5 && capped > 0.5 && !gl_FrontFacing) {
@@ -341,7 +340,6 @@ void main() {
     }
 
     fn use_uniforms(&self, program: &Program, _viewer: &dyn Viewer, _lights: &[&dyn Light]) {
-        program.use_uniform_if_required("surfaceColour", self.colour);
         program.use_uniform_if_required("eye", self.eye);
         program.use_uniform_if_required("keyDir", self.key);
         program.use_uniform_if_required("fillDir", self.fill);
@@ -552,26 +550,51 @@ struct Gpu {
 impl Gpu {
     fn upload(&mut self, scene: &Scene) {
         let v3 = |v: &[f32; 3]| vec3(v[0], v[1], v[2]);
-        self.objects = scene
-            .surfaces
-            .iter()
-            .filter(|s| !s.positions.is_empty())
-            .map(|s| {
-                let cpu = CpuMesh {
-                    positions: Positions::F32(s.positions.iter().map(v3).collect()),
-                    normals: Some(s.normals.iter().map(v3).collect()),
-                    ..Default::default()
-                };
+        let mut batches: Vec<((usize, bool), CpuMesh)> = Vec::new();
+        for s in scene.surfaces.iter().filter(|s| !s.positions.is_empty()) {
+            let key = (s.body, s.face.is_some());
+            let at = match batches.iter().position(|(k, _)| *k == key) {
+                Some(at) => at,
+                None => {
+                    batches.push((
+                        key,
+                        CpuMesh {
+                            positions: Positions::F32(Vec::new()),
+                            normals: Some(Vec::new()),
+                            colors: Some(Vec::new()),
+                            ..Default::default()
+                        },
+                    ));
+                    batches.len() - 1
+                }
+            };
+            let cpu = &mut batches[at].1;
+            if let Positions::F32(positions) = &mut cpu.positions {
+                positions.extend(s.positions.iter().map(v3));
+            }
+            if let Some(normals) = &mut cpu.normals {
+                normals.extend(s.normals.iter().map(v3));
+            }
+            let [r, g, b] = s.colour.map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8);
+            if let Some(colors) = &mut cpu.colors {
+                colors.extend(std::iter::repeat_n(
+                    Srgba::new(r, g, b, 255),
+                    s.positions.len(),
+                ));
+            }
+        }
+        self.objects = batches
+            .into_iter()
+            .map(|((body, capped), cpu)| {
                 let material = Shaded {
-                    colour: v3(&s.colour),
                     eye: vec3(0.0, 0.0, 1.0),
                     key: vec3(0.0, 0.0, 1.0),
                     fill: vec3(0.0, 0.0, 1.0),
                     clip: vec4(0.0, 0.0, 1.0, 0.0),
                     clipping: 0.0,
-                    capped: if s.face.is_some() { 1.0 } else { 0.0 },
+                    capped: if capped { 1.0 } else { 0.0 },
                 };
-                (s.body, Gm::new(Mesh::new(&self.context, &cpu), material))
+                (body, Gm::new(Mesh::new(&self.context, &cpu), material))
             })
             .collect();
         self.lines = scene
@@ -597,6 +620,12 @@ thread_local! {
 
 pub type Placement = [f32; 16];
 
+static DRAW_MICROS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+pub fn draw_time() -> std::time::Duration {
+    std::time::Duration::from_micros(DRAW_MICROS.load(std::sync::atomic::Ordering::Relaxed))
+}
+
 pub fn paint(
     ui: &Ui,
     rect: Rect,
@@ -606,6 +635,7 @@ pub fn paint(
     cut: Option<Cut>,
 ) {
     let callback = egui_glow::CallbackFn::new(move |info, painter| {
+        let started = std::time::Instant::now();
         GPU.with(|cell| {
             let mut slot = cell.borrow_mut();
             if slot.is_none() {
@@ -730,6 +760,10 @@ pub fn paint(
             target.render_partially(scissor, &camera, shown, &[]);
             let _ = target.into_framebuffer();
         });
+        DRAW_MICROS.store(
+            started.elapsed().as_micros() as u64,
+            std::sync::atomic::Ordering::Relaxed,
+        );
     });
     ui.painter_at(rect).add(egui::PaintCallback {
         rect,

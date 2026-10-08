@@ -107,21 +107,24 @@ fn describe(surface: &monstertruck::modeling::Surface) -> String {
     }
 }
 
+type Meshed = monstertruck::topology::Solid<Point3, PolylineCurve<Point3>, Option<PolygonMesh>>;
+
 fn faces(
     solid: &Solid,
+    meshed: &Meshed,
     body: usize,
     base: V3,
     highlights: &[Highlight<'_>],
     out: &mut Vec<Surface>,
     info: &mut Vec<FaceInfo>,
-) {
-    let meshed = solid.robust_triangulation(geometry::mesh_tolerance(solid) * 0.5);
+) -> f64 {
     let originals: Vec<Face> = crate::select::faces(solid);
     let faces = meshed
         .boundaries()
         .iter()
         .flat_map(|shell| shell.face_iter().cloned())
         .collect::<Vec<_>>();
+    let mut volume = 0.0;
     for (index, face) in faces.iter().enumerate() {
         let Some(mesh) = face.surface() else { continue };
         let mut surface = Surface {
@@ -143,6 +146,7 @@ fn faces(
             let corners = triangle.map(|v| v3(positions[v.pos]));
             let [a, b, c] = triangle.map(|v| positions[v.pos]);
             area += (b - a).cross(c - a).magnitude() / 2.0;
+            volume += a.to_vec().dot(b.to_vec().cross(c.to_vec())) / 6.0;
             let flat = norm(cross(
                 sub(corners[1], corners[0]),
                 sub(corners[2], corners[0]),
@@ -165,6 +169,7 @@ fn faces(
         });
         out.push(surface);
     }
+    volume
 }
 
 fn polyline(edge: &Edge) -> Vec<V3> {
@@ -181,6 +186,84 @@ fn segments(points: &[V3], out: &mut Vec<[V3; 2]>) {
             .filter(|pair| sub(pair[1], pair[0]).iter().any(|c| c.abs() > 1.0e-9))
             .map(|pair| [pair[0], pair[1]]),
     );
+}
+
+fn bend(
+    surface: &monstertruck::modeling::Surface,
+    at: Point3,
+    across: Vector3,
+) -> Option<(Vector3, f64)> {
+    let (u, v) = surface.search_nearest_parameter(at, None, 100)?;
+    let (su, sv) = (surface.uder(u, v), surface.vder(u, v));
+    let n = surface.normal(u, v);
+    let (e, f, g) = (su.dot(su), su.dot(sv), sv.dot(sv));
+    let det = e * g - f * f;
+    if det.abs() < 1.0e-18 {
+        return None;
+    }
+    let (p, q) = (across.dot(su), across.dot(sv));
+    let (a, b) = ((g * p - f * q) / det, (e * q - f * p) / det);
+    let first = su * a + sv * b;
+    let second = surface.uuder(u, v) * (a * a)
+        + surface.uvder(u, v) * (2.0 * a * b)
+        + surface.vvder(u, v) * (b * b);
+    Some((n, second.dot(n) / first.magnitude2().max(1.0e-18)))
+}
+
+fn smooth(edge: &Edge, a: &Face, b: &Face) -> bool {
+    let (sa, sb) = (a.oriented_surface(), b.oriented_surface());
+    let curve = edge.curve();
+    let (t0, t1) = curve.range_tuple();
+    let h = (t1 - t0) * 1.0e-4;
+    [0.25, 0.5, 0.75].iter().all(|&s| {
+        let t = t0 + (t1 - t0) * s;
+        let at = curve.subs(t);
+        let tangent = curve.subs(t + h) - curve.subs(t - h);
+        if tangent.magnitude2() < 1.0e-30 {
+            return false;
+        }
+        let Some((na, _)) = bend(&sa, at, tangent) else {
+            return false;
+        };
+        let across = na.cross(tangent).normalize();
+        match (bend(&sa, at, across), bend(&sb, at, across)) {
+            (Some((na, ka)), Some((nb, kb))) => {
+                na.dot(nb) > 1.0 - 1.0e-6
+                    && (ka - kb).abs() <= 1.0e-3 * (ka.abs() + kb.abs()) + 1.0e-9
+            }
+            _ => false,
+        }
+    })
+}
+
+fn edge_lines(
+    solid: &Solid,
+    meshed: &Meshed,
+    skip: &std::collections::HashSet<EdgeId>,
+    out: &mut Vec<[V3; 2]>,
+) {
+    for (shell, drawn) in solid.boundaries().iter().zip(meshed.boundaries()) {
+        let mut owners: std::collections::HashMap<EdgeId, Vec<Face>> = Default::default();
+        for face in shell.face_iter() {
+            for edge in face.edge_iter() {
+                owners.entry(edge.id()).or_default().push(face.clone());
+            }
+        }
+        let mut seen = std::collections::HashSet::new();
+        for (edge, polyline) in shell.edge_iter().zip(drawn.edge_iter()) {
+            if !seen.insert(edge.id()) || skip.contains(&edge.id()) {
+                continue;
+            }
+            if let Some([a, b]) = owners.get(&edge.id()).map(Vec::as_slice)
+                && a.id() != b.id()
+                && smooth(&edge, a, b)
+            {
+                continue;
+            }
+            let points: Vec<V3> = polyline.curve().iter().map(|p| v3(*p)).collect();
+            segments(&points, out);
+        }
+    }
 }
 
 pub fn build(
@@ -218,20 +301,15 @@ pub fn build(
             .get(name)
             .map_or(BODY, |c| c.map(|v| v as f32));
         let own: &[Highlight<'_>] = if is_current { highlights } else { &[] };
-        faces(solid, body, colour, own, &mut surfaces, &mut info);
+        let meshed = solid.robust_triangulation(geometry::mesh_tolerance(solid) * 0.5);
+        let volume = faces(solid, &meshed, body, colour, own, &mut surfaces, &mut info);
         let mut edges = Lines {
             colour: EDGE,
             body,
             width: EDGE_WIDTH,
             ..Default::default()
         };
-        let mut seen = std::collections::HashSet::new();
-        solid
-            .boundaries()
-            .iter()
-            .flat_map(|shell| shell.edge_iter())
-            .filter(|edge| seen.insert(edge.id()) && !skip.contains(&edge.id()))
-            .for_each(|edge| segments(&polyline(&edge), &mut edges.segments));
+        edge_lines(solid, &meshed, &skip, &mut edges.segments);
         lines.push(edges);
         let mut seen = std::collections::HashSet::new();
         vertices.extend(
@@ -245,7 +323,7 @@ pub fn build(
         parts.push(Part {
             name: name.clone(),
             colour,
-            volume: geometry::volume(solid),
+            volume,
             current: is_current,
         });
     }

@@ -54,6 +54,7 @@ struct Shown {
     explode: Vec<(String, monstertruck::modeling::Vector3)>,
     solids: Vec<(String, Solid)>,
     assembly: bool,
+    built: Duration,
 }
 
 enum Status {
@@ -102,6 +103,7 @@ pub struct App {
     clashes: Option<Result<Vec<String>, ()>>,
     clash_job: Option<Receiver<Vec<String>>>,
     browser: Option<Browser>,
+    frames: std::collections::VecDeque<Instant>,
 }
 
 fn changes_content(kind: &notify::EventKind) -> bool {
@@ -234,6 +236,7 @@ impl App {
             clashes: None,
             clash_job: None,
             browser: None,
+            frames: std::collections::VecDeque::new(),
         };
         match path {
             Some(path) => app.open(path, &cc.egui_ctx),
@@ -413,7 +416,9 @@ impl App {
         let ctx = ctx.clone();
         std::thread::spawn(move || {
             let snapshot = &program.snapshots[index];
-            if let Some(shown) = build_shown(snapshot, job_key) {
+            let started = Instant::now();
+            if let Some(mut shown) = build_shown(snapshot, job_key) {
+                shown.built = started.elapsed();
                 let _ = tx.send(shown);
             }
             ctx.request_repaint();
@@ -1141,6 +1146,34 @@ impl App {
         resp.hovered() || resp.clicked()
     }
 
+    fn fps(&self) -> Option<f32> {
+        let last = *self.frames.back()?;
+        let recent: Vec<Instant> = self
+            .frames
+            .iter()
+            .copied()
+            .filter(|t| last.duration_since(*t) < Duration::from_secs(1))
+            .collect();
+        let span = last.duration_since(*recent.first()?).as_secs_f32();
+        (recent.len() > 2 && span > 0.0).then(|| (recent.len() - 1) as f32 / span)
+    }
+
+    fn timings(&self, scene: &Scene, built: Duration) -> String {
+        let triangles: usize = scene.surfaces.iter().map(|s| s.positions.len() / 3).sum();
+        let segments: usize = scene.lines.iter().map(|l| l.segments.len()).sum();
+        let fps = self
+            .fps()
+            .map_or_else(|| "idle".to_string(), |fps| format!("{fps:.0} fps"));
+        format!(
+            "{fps}  draw {:.1} ms  scene {:.0} ms  build {:.2} s  {:.1}k tris  {:.1}k edges",
+            gl::draw_time().as_secs_f32() * 1000.0,
+            built.as_secs_f32() * 1000.0,
+            self.took.as_secs_f32(),
+            triangles as f32 / 1000.0,
+            segments as f32 / 1000.0,
+        )
+    }
+
     fn viewport(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
         let resp = ui.allocate_rect(rect, Sense::click_and_drag());
@@ -1165,6 +1198,7 @@ impl App {
             return;
         };
         let scene = shown.scene.clone();
+        let built = shown.built;
         let placements = Arc::new(self.placements());
         gl::paint(
             ui,
@@ -1260,9 +1294,21 @@ impl App {
             egui::FontId::proportional(11.0),
             Color32::from_gray(130),
         );
+        let stats = p.layout_no_wrap(
+            self.timings(&scene, built),
+            egui::FontId::monospace(11.0),
+            Color32::from_gray(170),
+        );
+        let corner = rect.left_top() + Vec2::new(10.0, 10.0);
+        p.rect_filled(
+            Rect::from_min_size(corner, stats.size()).expand(4.0),
+            3.0,
+            BACKGROUND.gamma_multiply(0.85),
+        );
+        p.galley(corner, stats, Color32::from_gray(170));
         if self.loading.is_some() || self.building.is_some() {
             p.text(
-                rect.left_top() + Vec2::new(10.0, 10.0),
+                rect.left_top() + Vec2::new(10.0, 30.0),
                 egui::Align2::LEFT_TOP,
                 "rebuilding",
                 egui::FontId::proportional(11.0),
@@ -1505,12 +1551,22 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
         explode: model.explode.clone(),
         solids,
         assembly: model.assembly,
+        built: Duration::ZERO,
     })
 }
 
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        let now = Instant::now();
+        self.frames.push_back(now);
+        while self
+            .frames
+            .front()
+            .is_some_and(|t| now.duration_since(*t) > Duration::from_secs(2))
+        {
+            self.frames.pop_front();
+        }
         self.poll(&ctx);
         self.keys(&ctx);
         self.refresh_scene(&ctx);
