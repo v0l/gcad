@@ -332,6 +332,7 @@ gcad export part.gcad part.step       # or .stl, .obj, .3mf, .svg (a four-view d
 gcad export part.gcad part.svg --section y=0   # adds a hatched section across y=0
 gcad check part.gcad --set w=50       # override a `let` variable
 gcad check part.gcad --time           # also show how long each line took
+gcad docs                             # print this reference
 gcad part.gcad                        # open the viewer; plain `gcad` starts with a file picker
 gcad view part.gcad [--line N] [--select 'base.end&base.side']
 ```

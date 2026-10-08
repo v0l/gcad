@@ -15,13 +15,25 @@ fillet 0.8 base.end&base.side
 chamfer 0.3 mounts.side&base.end
 ```
 
+## Install
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/v0l/gcad/master/install.sh | sh
 ```
-cargo run --release -- check examples/parts/plate.gcad
-cargo run --release -- render examples/parts/plate.gcad plate.png
-cargo run --release -- export examples/parts/plate.gcad plate.step
-cargo run --release -- bom examples/assemblies/enclosure.gasm
-cargo run --release -- examples/assemblies/enclosure.gasm
-cargo run --release -- examples/robot/arm.gasm
+
+That puts the latest release in `~/.local/bin` on Linux and macOS. Windows builds are zips
+on the [releases page](https://github.com/v0l/gcad/releases).
+
+## Use
+
+```
+gcad check examples/parts/plate.gcad
+gcad render examples/parts/plate.gcad plate.png
+gcad export examples/parts/plate.gcad plate.step
+gcad bom examples/assemblies/enclosure.gasm
+gcad examples/assemblies/enclosure.gasm
+gcad examples/robot/arm.gasm
+gcad docs
 ```
 
 Part files (`.gcad`) build one or more bodies. Assembly files (`.gasm`) bring parts in
@@ -42,9 +54,33 @@ explode slider and the section tool show the gears inside.
 With no command, `gcad` opens the viewer: a live view of the file that rebuilds on
 save, with a view cube, measuring, and sliders for an assembly's joints.
 
-The format, operations and selectors are in [docs/format.md](docs/format.md). Which CAD
+The format, operations and selectors are in [docs/format.md](docs/format.md), which
+`gcad docs` prints. Which CAD
 operations exist, which are still missing and the tests behind each are in
 [docs/ops.md](docs/ops.md).
 
-The kernel is a fork with fillet and boolean fixes, checked out next to this repo at
-`../monstertruck` (branch `cad-regressions`) and wired in through `[patch.crates-io]`.
+## Agent skill
+
+[skills/gcad/SKILL.md](skills/gcad/SKILL.md) teaches an agent the write, check, render loop,
+the selectors, assemblies and the traps. It ships in every release archive; link the
+`skills/gcad` directory into your agent's skills folder.
+
+## Building
+
+The kernel is a fork of [monstertruck](https://github.com/v0l/monstertruck) with fillet and
+boolean fixes. Check out its `cad-regressions` branch next to this repo; `Cargo.toml` wires
+it in through `[patch.crates-io]` by path.
+
+```sh
+git clone https://github.com/v0l/gcad
+git clone -b cad-regressions https://github.com/v0l/monstertruck
+cd gcad && cargo build --release
+```
+
+Releases build the fork at the commit pinned in `.github/workflows/release.yml`
+(`MONSTERTRUCK_REV`). Push a `v*` tag to build Linux, macOS and Windows archives and publish
+them as a GitHub release.
+
+## License
+
+GPL-3.0-or-later.

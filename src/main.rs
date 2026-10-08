@@ -5,7 +5,8 @@ use gcad::{export, render, select};
 
 #[derive(Parser)]
 #[command(
-    about = "Line-per-operation parametric CAD",
+    about = "Parametric CAD written like G-code: one operation per line",
+    version,
     args_conflicts_with_subcommands = true
 )]
 struct Cli {
@@ -65,6 +66,8 @@ enum Command {
         #[arg(long)]
         explode: bool,
     },
+    /// Print the format reference: every operation, selector and assembly line
+    Docs,
     /// Open the file in a window that rebuilds whenever it is saved
     View {
         file: Option<String>,
@@ -175,6 +178,10 @@ fn main() -> Result<()> {
     });
     match command {
         Command::Check { file, time } => check(&file, &vars, time),
+        Command::Docs => {
+            print!("{}", include_str!("../docs/format.md"));
+            Ok(())
+        }
         Command::Query {
             file,
             selector,
