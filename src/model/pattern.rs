@@ -84,6 +84,38 @@ impl Model {
         Ok(done)
     }
 
+    fn replay_joints(&mut self, part: &str, name: &str, transform: Matrix4) -> Result<usize> {
+        let joints: Vec<super::assembly::Joint> = self
+            .joints
+            .iter()
+            .filter(|j| j.child == part && j.movable())
+            .cloned()
+            .collect();
+        for joint in &joints {
+            let copy = format!("{}{}", joint.name, &name[part.len()..]);
+            if self.joints.iter().any(|j| j.name == copy) {
+                bail!("there is already a joint called `{copy}`");
+            }
+            self.joints.push(super::assembly::Joint {
+                name: copy.clone(),
+                child: name.to_string(),
+                ..joint.moved(transform)
+            });
+            let couples: Vec<super::assembly::Couple> = self
+                .couples
+                .iter()
+                .filter(|c| c.driven == joint.name)
+                .cloned()
+                .collect();
+            self.couples
+                .extend(couples.into_iter().map(|c| super::assembly::Couple {
+                    driven: copy.clone(),
+                    ..c
+                }));
+        }
+        Ok(joints.len())
+    }
+
     pub(crate) fn op_pattern(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(
             line,
@@ -174,24 +206,23 @@ impl Model {
             }
         };
         let mut made = Vec::new();
-        let mut mated = 0;
+        let (mut mated, mut jointed) = (0, 0);
         for (k, transform) in moves.iter().enumerate() {
             let name = format!("{part}_{}", k + 2);
             self.copy_part(&part, &name, *transform)?;
             mated += self.replay_mates(&part, &name, *transform)?;
+            jointed += self.replay_joints(&part, &name, *transform)?;
             made.push(name);
         }
+        let each = |n: usize, what: &str| match n {
+            0 => String::new(),
+            n => format!(", each with {} {what} of `{part}`", n / made.len().max(1)),
+        };
         Ok(format!(
-            "{}{}",
+            "{}{}{}",
             made.join(", "),
-            if mated > 0 {
-                format!(
-                    ", each with {} mate(s) of `{part}`",
-                    mated / made.len().max(1)
-                )
-            } else {
-                String::new()
-            }
+            each(mated, "mate(s)"),
+            each(jointed, "joint(s)")
         ))
     }
 }

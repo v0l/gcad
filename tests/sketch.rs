@@ -70,13 +70,17 @@ fn regular_polygon() {
 }
 
 fn involute_gear_area(teeth: f64, module: f64) -> f64 {
+    involute_outline_area(teeth, module, (1.25, 1.0))
+}
+
+fn involute_outline_area(teeth: f64, module: f64, (inner, outer): (f64, f64)) -> f64 {
     let pressure = 20.0_f64.to_radians();
     let pitch = module * teeth / 2.0;
     let base = pitch * pressure.cos();
     let involute = |a: f64| a.tan() - a;
     let half =
         |r: f64| PI / (2.0 * teeth) + involute(pressure) - involute((base / r.max(base)).acos());
-    let (root, tip) = (pitch - 1.25 * module, pitch + module);
+    let (root, tip) = (pitch - inner * module, pitch + outer * module);
     let steps = 20000;
     let tooth: f64 = (0..steps)
         .map(|i| {
@@ -97,6 +101,15 @@ fn involute_gear() {
     assert_volume(
         &build("gear 9 2\nextrude 6"),
         involute_gear_area(9.0, 2.0) * 6.0,
+        2.0e-4,
+    );
+}
+
+#[test]
+fn internal_gear() {
+    assert_volume(
+        &build("circle 80\ngear 54 1 internal\nextrude 6"),
+        (PI * 1600.0 - involute_outline_area(54.0, 1.0, (1.0, 1.25))) * 6.0,
         2.0e-4,
     );
 }

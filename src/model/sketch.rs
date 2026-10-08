@@ -427,8 +427,13 @@ impl Model {
             line,
             &["teeth", "module"],
             &["at", "angle", "pressure", "backlash"],
-            false,
+            true,
         )?;
+        let internal = match args.rest.as_slice() {
+            [] => false,
+            ["internal"] => true,
+            _ => bail!("`gear` takes `internal` after its teeth and module, nothing else"),
+        };
         let teeth = args.number("teeth", &self.scope)?;
         if teeth < 6.0 || teeth.fract() != 0.0 {
             bail!("teeth must be a whole number of at least 6, got {teeth}");
@@ -443,22 +448,34 @@ impl Model {
         let backlash = args
             .optional_number("backlash", &self.scope)?
             .unwrap_or(0.0);
-        let shape = GearShape::new(teeth as usize, module, pressure.to_radians(), backlash)?;
+        let shape = GearShape::new(
+            teeth as usize,
+            module,
+            pressure.to_radians(),
+            backlash,
+            internal,
+        )?;
         let (cx, cy) = args.point("at", &self.scope)?;
         let start = args
             .optional_number("angle", &self.scope)?
             .unwrap_or(0.0)
-            .to_radians();
+            .to_radians()
+            + if internal { shape.gap() } else { 0.0 };
         let (first, segments) = shape.outline(start, (cx, cy));
         let message = self.add_profile(Profile::Path {
             start: first,
             segments,
         })?;
+        let (tip, root) = match internal {
+            true => (shape.root, shape.tip),
+            false => (shape.tip, shape.root),
+        };
         Ok(format!(
-            "{message}; pitch diameter {:.3}, tip {:.3}, root {:.3}",
+            "{message}; {}pitch diameter {:.3}, tip {:.3}, root {:.3}",
+            if internal { "internal, " } else { "" },
             shape.pitch * 2.0,
-            shape.tip * 2.0,
-            shape.root * 2.0
+            tip * 2.0,
+            root * 2.0
         ))
     }
 
@@ -826,15 +843,25 @@ fn involute(angle: f64) -> f64 {
 }
 
 impl GearShape {
-    fn new(teeth: usize, module: f64, pressure: f64, backlash: f64) -> Result<Self> {
+    fn new(
+        teeth: usize,
+        module: f64,
+        pressure: f64,
+        backlash: f64,
+        internal: bool,
+    ) -> Result<Self> {
         let pitch = module * teeth as f64 / 2.0;
+        let (outer, inner, thinned) = match internal {
+            true => (1.25 * module, module, -backlash),
+            false => (module, 1.25 * module, backlash),
+        };
         let shape = Self {
             teeth,
             pitch,
             base: pitch * pressure.cos(),
-            tip: pitch + module,
-            root: pitch - 1.25 * module,
-            half_at_pitch: (std::f64::consts::PI * module / 2.0 - backlash) / (2.0 * pitch),
+            tip: pitch + outer,
+            root: pitch - inner,
+            half_at_pitch: (std::f64::consts::PI * module / 2.0 - thinned) / (2.0 * pitch),
             pressure,
         };
         if shape.half(shape.tip) <= 0.0 {
@@ -844,6 +871,10 @@ impl GearShape {
             bail!("the teeth meet at the root; use more teeth or less pressure");
         }
         Ok(shape)
+    }
+
+    fn gap(&self) -> f64 {
+        std::f64::consts::PI / self.teeth as f64
     }
 
     fn half(&self, radius: f64) -> f64 {

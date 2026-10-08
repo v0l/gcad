@@ -26,6 +26,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | regular polygon | supported | `ngon 20 6` | `sketch::regular_polygon` |
 | slot | supported | `slot 30 10` | `sketch::slot` |
 | involute spur gear | supported | `gear 20 2 at=x,y` | `sketch::involute_gear` |
+| internal gear | supported | `circle 80` then `gear 54 1 internal` | `sketch::internal_gear` |
 | ellipse | supported | `ellipse 20 10` | `sketch::ellipse` |
 | lines and arcs | supported | `pen`, `line`, `arc via=`, `close` | `sketch::lines_and_arcs` |
 | spline | supported | `spline x,y ... closed` | `sketch::spline` |
@@ -178,7 +179,7 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
 | cylindrical joint | supported | a `turn` and a `slide` on one axis | `assembly::a_rod_turns_and_slides_on_one_axis` |
 | closed loops of joints | supported | a four-bar linkage follows its crank | `assembly::a_four_bar_linkage_follows_its_crank` |
-| gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together`, `assembly::gears_in_mesh_turn_without_touching` |
+| gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together`, `assembly::gears_in_mesh_turn_without_touching`, `assembly::planetary_gears_turn_without_touching` |
 | motors driving joints through gears | supported | `examples/robot/arm.lasm` | `assembly::robot_arm_example` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |

@@ -690,5 +690,63 @@ fn robot_arm_example() {
     let (da, db) = (a1 - a0, b1 - b0);
     let length = |v: [f64; 3]| v.iter().map(|x| x * x).sum::<f64>().sqrt();
     assert!((length([da.x, da.y, da.z]) - 5.0).abs() < 1.0e-6, "{da:?}");
-    assert!(length([da.x + db.x, da.y + db.y, da.z + db.z]) < 1.0e-6, "{da:?} {db:?}");
+    assert!(
+        length([da.x + db.x, da.y + db.y, da.z + db.z]) < 1.0e-6,
+        "{da:?} {db:?}"
+    );
+}
+
+#[test]
+fn planetary_gears_turn_without_touching() {
+    let assembly = [
+        "part ring ring.lcad",
+        "part sun gear.lcad",
+        "part planet gear.lcad a=190",
+        "move planet 18,0,0",
+        "part carrier carrier.lcad",
+        "axis centre 0,0,0 0,0,1",
+        "axis pin 18,0,0 18,0,1",
+        "joint drive carrier ring turn about=centre",
+        "joint input sun ring turn about=centre",
+        "couple input drive ratio=1+54/18",
+        "joint spin planet carrier turn about=pin",
+        "couple spin drive ratio=-54/18",
+        "pattern planet count=3 angle=360 axis=centre",
+        "pose drive 25",
+        "interference none",
+    ]
+    .join("\n");
+    let parts = [
+        (
+            "ring.lcad",
+            "circle 70\ngear 54 1 internal\nteeth: extrude 6\n",
+        ),
+        (
+            "gear.lcad",
+            "let a=0\ngear 18 1 angle=a\ncircle 6\nteeth: extrude 6\n",
+        ),
+        (
+            "carrier.lcad",
+            "plane XY offset=7\ncircle 50\nplate: extrude 2\n",
+        ),
+    ];
+    let (model, _) = built("planetary", &assembly, &parts);
+    let names = model.body_names();
+    assert!(names.contains(&"planet_3".to_string()), "{names:?}");
+    let value = |name: &str| {
+        model
+            .joints
+            .iter()
+            .find(|j| j.name == name)
+            .map(|j| j.value)
+            .expect(name)
+    };
+    assert!((value("input") - 100.0).abs() < 1.0e-9);
+    assert!((value("spin_3") + 75.0).abs() < 1.0e-9);
+    let (_, out_of_phase) = steps(
+        "planetary_clash",
+        &assembly.replace("a=190", "a=180"),
+        &parts,
+    );
+    assert!(out_of_phase.last().is_some_and(Result::is_err));
 }

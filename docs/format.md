@@ -71,7 +71,7 @@ Sketch:
 | `ellipse` | `dx dy` `at=x,y` | adds an ellipse of those diameters |
 | `poly` | `x,y x,y x,y ...` `r=` or `c=` | adds a closed polygon, corners rounded by `r` or cut by `c` |
 | `ngon` | `d n` `at=x,y` `angle=` | adds a regular polygon of `n` sides with corners on a circle of diameter `d` |
-| `gear` | `teeth module` `at=x,y` `angle=` `pressure=` `backlash=` | adds an involute spur gear with a tooth on `angle` (0 by default, along x), teeth of `module` (pitch diameter `teeth*module`), a `pressure` angle of 20 degrees unless given, and teeth thinned by `backlash` at the pitch circle. Two gears mesh at centres `module*(teeth_a+teeth_b)/2` apart, with a tooth of one pointing at a gap of the other |
+| `gear` | `teeth module` `internal` `at=x,y` `angle=` `pressure=` `backlash=` | adds an involute spur gear with a tooth on `angle` (0 by default, along x), teeth of `module` (pitch diameter `teeth*module`), a `pressure` angle of 20 degrees unless given, and teeth thinned by `backlash` at the pitch circle. `internal` draws the toothed hole of a ring gear instead, to go inside a larger profile, with its tooth on `angle` pointing in. Two gears mesh at centres `module*(teeth_a+teeth_b)/2` apart, a gear inside a ring at `module*(ring-gear)/2`, with a tooth of one pointing at a gap of the other |
 | `slot` | `l w` `at=x,y` `angle=` | adds a slot `l` long overall and `w` wide, turned by `angle` degrees |
 | `spline` | `x,y x,y ... closed` | adds a smooth closed curve through the points |
 | `text` | `"words"` `size=` `at=x,y` | adds the outlines of the words, `size` tall, starting at `at` |
@@ -186,7 +186,7 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 | `distance` | `moving:faces fixed:faces length` | makes two faces, two axes, or an axis and a face parallel and `length` apart, keeping the moving part on the side it is on |
 | `tangent` | `moving:faces fixed:faces` | lays a round face on a flat one, or against another round face, with its axis parallel |
 | `aligned` | `a:faces b:faces` `tol=` | checks that every hole in `a` has a parallel hole in `b` on the same axis, within `tol` (0.05 by default), and fails the line if not |
-| `pattern` | `part holes=part:faces`, or `count=` with `step=x,y,z` or `angle=` `axis=` | copies a part. `holes=` puts a copy in each other hole of a set the part is `concentric` with, and gives each copy the part's mates; `step=` and `angle=` space `count` copies out from the part. Copies are called `part_2`, `part_3` and so on |
+| `pattern` | `part holes=part:faces`, or `count=` with `step=x,y,z` or `angle=` `axis=` | copies a part. `holes=` puts a copy in each other hole of a set the part is `concentric` with, and gives each copy the part's mates; `step=` and `angle=` space `count` copies out from the part. Each copy also gets the part's joints, named `joint_2` and so on, with their couples, so the planets of a planetary gear are one part and a pattern. Copies are called `part_2`, `part_3` and so on |
 | `explode` | `part x,y,z` | moves a part and the parts held by it by that much in exploded views only: `render --explode` and the viewer's explode slider. It does not change where the part is for mates, joints, interference or export |
 | `color` | `part colour` | colours a part, over the colour its file gave it |
 | `material` | `part name` `density=` | sets a part's material, over the one its file gave it |
