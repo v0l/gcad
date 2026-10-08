@@ -35,6 +35,98 @@ fn into_face(edge: Vector3, own: Vector3, other: Vector3) -> Vector3 {
     if u.dot(other) < 0.0 { u } else { -u }
 }
 
+fn by_corner(edges: &[Edge]) -> (Vec<Edge>, Vec<Edge>) {
+    let mut group: Vec<usize> = (0..edges.len()).collect();
+    fn root(group: &mut [usize], i: usize) -> usize {
+        let mut i = i;
+        while group[i] != i {
+            group[i] = group[group[i]];
+            i = group[i];
+        }
+        i
+    }
+    let ends = |e: &Edge| [e.front().id(), e.back().id()];
+    for i in 0..edges.len() {
+        for j in i + 1..edges.len() {
+            if ends(&edges[i]).iter().any(|v| ends(&edges[j]).contains(v)) {
+                let (a, b) = (root(&mut group, i), root(&mut group, j));
+                group[a] = b;
+            }
+        }
+    }
+    let busy: Vec<bool> = edges
+        .iter()
+        .map(|edge| {
+            ends(edge)
+                .iter()
+                .any(|v| edges.iter().filter(|other| ends(other).contains(v)).count() >= 3)
+        })
+        .collect();
+    let cornered_roots: Vec<usize> = (0..edges.len())
+        .filter(|&i| busy[i])
+        .map(|i| root(&mut group, i))
+        .collect();
+    let (cornered, chained): (Vec<usize>, Vec<usize>) =
+        (0..edges.len()).partition(|&i| cornered_roots.contains(&root(&mut group, i)));
+    (
+        cornered.into_iter().map(|i| edges[i].clone()).collect(),
+        chained.into_iter().map(|i| edges[i].clone()).collect(),
+    )
+}
+
+fn turning(edge: &Edge) -> f64 {
+    let curve = edge.curve();
+    let (t0, t1) = curve.range_tuple();
+    let tangents: Vec<Vector3> = (0..=16)
+        .map(|i| curve.der(t0 + (t1 - t0) * i as f64 / 16.0))
+        .filter(|d| d.magnitude() > 1.0e-12)
+        .map(|d| d.normalize())
+        .collect();
+    tangents
+        .windows(2)
+        .map(|pair| pair[0].dot(pair[1]).clamp(-1.0, 1.0).acos())
+        .sum()
+}
+
+fn divisions(edges: &[Edge]) -> std::num::NonZeroUsize {
+    let most = edges.iter().map(turning).fold(0.0, f64::max);
+    let count = (most / 3.0_f64.to_radians()).ceil().clamp(5.0, 48.0) as usize;
+    std::num::NonZeroUsize::new(count).expect("at least five")
+}
+
+fn kernel_blend(
+    solid: &Solid,
+    edges: &[Edge],
+    options: &FilletOptions,
+    op: &str,
+    selector: &str,
+) -> Result<Solid> {
+    let count = select::faces(solid).len();
+    let shells = solid
+        .boundaries()
+        .iter()
+        .map(|shell| {
+            let mut shell = shell.clone();
+            let owned: Vec<Edge> = edges
+                .iter()
+                .filter(|edge| shell.edge_iter().any(|own| own.is_same(edge)))
+                .cloned()
+                .collect();
+            if !owned.is_empty() {
+                fillet_edges(&mut shell, &owned, Some(options))
+                    .map_err(|error| anyhow!("{op} of {} edge(s) failed: {error}", owned.len()))?;
+            }
+            Ok(shell)
+        })
+        .collect::<Result<Vec<_>>>()?;
+    let result =
+        Solid::try_new(shells).map_err(|error| anyhow!("{op} left an invalid solid: {error}"))?;
+    if select::faces(&result).len() <= count {
+        bail!("{op} could not change `{selector}`, the solid is unchanged");
+    }
+    Ok(result)
+}
+
 impl Model {
     pub(crate) fn op_blend(&mut self, line: &Line, profile: FilletProfile) -> Result<String> {
         let args = Args::new(line, &["size", "edges"], &["to", "d2"], false)?;
@@ -78,41 +170,12 @@ impl Model {
                 positive(second, "d2")?,
             );
         }
-        let three_at_a_corner = solid
-            .boundaries()
-            .iter()
-            .flat_map(|shell| shell.vertex_iter())
-            .any(|vertex| {
-                edges
-                    .iter()
-                    .filter(|edge| edge.front() == &vertex || edge.back() == &vertex)
-                    .count()
-                    >= 3
-            });
-        if !args.has("to") && three_at_a_corner {
-            let flat = matches!(profile, FilletProfile::Chamfer);
-            let before: Vec<Surface> = select::faces(&solid)
-                .iter()
-                .map(|face| face.oriented_surface())
-                .collect();
-            let result = super::round::round_edges(&solid, &edges, size, flat)
-                .map_err(|error| anyhow!("rounding a corner where three edges meet: {error}"))?;
-            let label = label_of(line);
-            select::faces(&result)
-                .iter()
-                .filter(|face| {
-                    !before
-                        .iter()
-                        .any(|surface| select::face_on(face, surface, tolerance))
-                })
-                .for_each(|face| self.groups.record(&label, "faces", face.oriented_surface()));
-            self.solid = Some(result);
-            return Ok(format!(
-                "{} edge(s); {}",
-                edges.len(),
-                self.describe_solid()?
-            ));
-        }
+        let flat = matches!(profile, FilletProfile::Chamfer);
+        let (cornered, chained) = if args.has("to") {
+            (Vec::new(), edges.clone())
+        } else {
+            by_corner(&edges)
+        };
         let options = match args.optional_number("to", &self.scope)? {
             Some(end) => {
                 let end = positive(end, "to")?;
@@ -135,36 +198,19 @@ impl Model {
             }
             None => FilletOptions::constant(size),
         }
-        .with_profile(profile);
+        .with_profile(profile)
+        .with_division(divisions(&chained));
         let before: Vec<Surface> = select::faces(&solid)
             .iter()
             .map(|face| face.oriented_surface())
             .collect();
-        let shells = solid
-            .boundaries()
-            .iter()
-            .map(|shell| {
-                let mut shell = shell.clone();
-                let owned: Vec<Edge> = edges
-                    .iter()
-                    .filter(|edge| shell.edge_iter().any(|own| own.is_same(edge)))
-                    .cloned()
-                    .collect();
-                if !owned.is_empty() {
-                    fillet_edges(&mut shell, &owned, Some(&options)).map_err(|error| {
-                        anyhow!("{} of {} edge(s) failed: {error}", line.op, owned.len())
-                    })?;
-                }
-                Ok(shell)
-            })
-            .collect::<Result<Vec<_>>>()?;
-        let result = Solid::try_new(shells)
-            .map_err(|error| anyhow!("{} left an invalid solid: {error}", line.op))?;
-        if select::faces(&result).len() <= before.len() {
-            bail!(
-                "{} could not change `{selector}`, the solid is unchanged",
-                line.op
-            );
+        let mut result = solid.clone();
+        if !cornered.is_empty() {
+            result = super::round::round_edges(&result, &cornered, size, flat)
+                .map_err(|error| anyhow!("rounding a corner where three edges meet: {error}"))?;
+        }
+        if !chained.is_empty() {
+            result = kernel_blend(&result, &chained, &options, &line.op, selector)?;
         }
         let label = label_of(line);
         select::faces(&result)

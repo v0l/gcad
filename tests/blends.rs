@@ -54,7 +54,19 @@ fn fillet_cylinder_rim() {
     assert_volume(
         &model,
         PI * 250.0 - 2.0 * PI * (5.0 - SPANDREL_CENTROID) * SPANDREL,
-        0.002,
+        1.0e-4,
+    );
+}
+
+#[test]
+fn fillet_every_edge_of_a_plate_with_holes() {
+    let (a, b, h) = (38.0, 28.0, 3.0);
+    let plate = a * b * h + 2.0 * (a * b + b * h + a * h) + PI * (a + b + h) + 4.0 / 3.0 * PI;
+    let rims = 4.0 * 2.0 * PI * (2.0 + SPANDREL_CENTROID) * SPANDREL;
+    assert_volume(
+        &build("rect 40 30\nbase: extrude 5\nplane base.end\nhole 4 10,0 -10,0\nfillet 1 all"),
+        plate - 2.0 * PI * 4.0 * 5.0 - rims,
+        1.0e-4,
     );
 }
 
