@@ -327,6 +327,30 @@ impl Ids {
     }
 }
 
+const SMOOTH_LEADER_SPANS: usize = 32;
+
+fn smooth_through(points: &[Point3], (t0, t1): (f64, f64)) -> Option<BsplineCurve<Point3>> {
+    let count = points.len();
+    if count < 4 {
+        return None;
+    }
+    let lengths: Vec<f64> = points.windows(2).map(|w| w[0].distance(w[1])).collect();
+    let total: f64 = lengths.iter().sum();
+    let parameters: Vec<f64> = std::iter::once(0.0)
+        .chain(lengths.iter().scan(0.0, |run, length| {
+            *run += length / total;
+            Some(*run)
+        }))
+        .map(|u| t0 + (t1 - t0) * u)
+        .collect();
+    let knots: Vec<f64> = std::iter::repeat_n(t0, 4)
+        .chain((1..count - 3).map(|j| parameters[j..j + 3].iter().sum::<f64>() / 3.0))
+        .chain(std::iter::repeat_n(t1, 4))
+        .collect();
+    let pairs: Vec<(f64, Point3)> = parameters.into_iter().zip(points.iter().copied()).collect();
+    BsplineCurve::try_interpolate(KnotVector::from(knots), pairs).ok()
+}
+
 fn even_leader(curve: &Curve) -> Curve {
     let Curve::IntersectionCurve(intersection) = curve else {
         return curve.clone();
@@ -351,14 +375,15 @@ fn even_leader(curve: &Curve) -> Curve {
     let (t0, t1) = leader.range_tuple();
     let knots = leader.knot_vector();
     let pole_parameter = |i: usize| knots[i + 1];
-    let count = poles.len() - 1;
+    let last = poles.len() - 1;
+    let count = last.min(SMOOTH_LEADER_SPANS);
     let points: Vec<Point3> = (0..=count)
         .map(|k| {
             if k == 0 || k == count {
-                return poles[if k == 0 { 0 } else { count }];
+                return poles[if k == 0 { 0 } else { last }];
             }
             let want = total * k as f64 / count as f64;
-            let i = lengths.partition_point(|&l| l <= want).clamp(1, count) - 1;
+            let i = lengths.partition_point(|&l| l <= want).clamp(1, last) - 1;
             let span = lengths[i + 1] - lengths[i];
             let f = if span > 0.0 {
                 (want - lengths[i]) / span
@@ -369,10 +394,13 @@ fn even_leader(curve: &Curve) -> Curve {
             curve.subs(t)
         })
         .collect();
-    let mut knots = KnotVector::uniform_knot(1, count);
-    knots.transform(t1 - t0, t0);
     let mut even = intersection.clone();
-    **even.leader_mut() = Curve::BsplineCurve(BsplineCurve::new(knots, points));
+    **even.leader_mut() =
+        Curve::BsplineCurve(smooth_through(&points, (t0, t1)).unwrap_or_else(|| {
+            let mut knots = KnotVector::uniform_knot(1, count);
+            knots.transform(t1 - t0, t0);
+            BsplineCurve::new(knots, points.clone())
+        }));
     Curve::IntersectionCurve(even)
 }
 

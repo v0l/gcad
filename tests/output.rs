@@ -19,20 +19,48 @@ fn step_opens_in_opencascade() {
     let python = std::env::var("GCAD_OCP_PYTHON").expect("GCAD_OCP_PYTHON");
     let script = r#"
 import sys
+from OCP.Interface import Interface_Static
 from OCP.STEPControl import STEPControl_Reader
 from OCP.BRepCheck import BRepCheck_Analyzer
 from OCP.BRepGProp import BRepGProp
 from OCP.GProp import GProp_GProps
+from OCP.TopExp import TopExp_Explorer
+from OCP.TopAbs import TopAbs_FACE, TopAbs_EDGE
+from OCP.TopoDS import TopoDS
+from OCP.BRep import BRep_Tool
+from OCP.BRepAdaptor import BRepAdaptor_Curve
+from OCP.GeomAPI import GeomAPI_ProjectPointOnSurf
+STEPControl_Reader()
+Interface_Static.SetCVal_s("read.step.sequence", "")
 r = STEPControl_Reader()
 r.ReadFile(sys.argv[1])
 r.TransferRoots()
 shape = r.OneShape()
 props = GProp_GProps()
 BRepGProp.VolumeProperties_s(shape, props, 1e-7)
-print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
+gap = 0.0
+faces = TopExp_Explorer(shape, TopAbs_FACE)
+while faces.More():
+    face = TopoDS.Face_s(faces.Current())
+    surface = BRep_Tool.Surface_s(face)
+    edges = TopExp_Explorer(face, TopAbs_EDGE)
+    while edges.More():
+        curve = BRepAdaptor_Curve(TopoDS.Edge_s(edges.Current()))
+        a, b = curve.FirstParameter(), curve.LastParameter()
+        for i in range(23):
+            projection = GeomAPI_ProjectPointOnSurf(curve.Value(a + (b - a) * i / 22), surface)
+            if projection.NbPoints():
+                gap = max(gap, projection.LowerDistance())
+        edges.Next()
+    faces.Next()
+print(BRepCheck_Analyzer(shape).IsValid(), props.Mass(), gap)
 "#;
     let inline = [
         ("rounded-box", "rect 30 20\nbase: extrude 10\nfillet 2 all"),
+        (
+            "rim-chain",
+            "rect 40 30\nbase: extrude 3\nfillet 1 base.end&base.side",
+        ),
         (
             "chamfered-box",
             "rect 30 20\nbase: extrude 10\nchamfer 2 all",
@@ -128,10 +156,20 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
             String::from_utf8_lossy(&output.stderr)
         );
         let occt: f64 = words.next().and_then(|w| w.parse().ok()).expect("a volume");
+        let gap: f64 = words.next().and_then(|w| w.parse().ok()).expect("a gap");
         let ours = volume(&model);
         assert!(
             (occt - ours).abs() < ours * 0.001,
             "{name}: OpenCascade volume {occt}, ours {ours}"
+        );
+        let size = model
+            .solids()
+            .iter()
+            .map(|solid| gcad::geometry::bounds(solid).diameter())
+            .fold(0.0, f64::max);
+        assert!(
+            gap < size * 1.0e-6,
+            "{name}: an edge strays {gap} from its face, over a millionth of the part's {size}"
         );
     }
 }
