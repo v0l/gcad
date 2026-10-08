@@ -85,6 +85,7 @@ pub struct App {
     shown: Option<Shown>,
     building: Option<(SceneKey, Receiver<Shown>)>,
     cam: Camera,
+    pivot: Option<V3>,
     events: Option<Receiver<()>>,
     _watcher: Option<notify::RecommendedWatcher>,
     dirty: Option<Instant>,
@@ -216,6 +217,7 @@ impl App {
             shown: None,
             building: None,
             cam: Camera::default(),
+            pivot: None,
             events: None,
             _watcher: None,
             dirty: None,
@@ -1128,7 +1130,7 @@ impl App {
                 self.cam.pitch = pitch;
                 if name == "iso" {
                     self.cam.zoom = 1.0;
-                    self.cam.pan = Vec2::ZERO;
+                    self.cam.shift = [0.0; 3];
                 }
             }
             buttons_at.x += 42.0;
@@ -1175,16 +1177,39 @@ impl App {
         let projector = Projector::new(&scene, &self.cam, rect);
         let on_cube = self.view_cube(ui, rect, &projector);
         if !on_cube {
-            if resp.dragged_by(egui::PointerButton::Primary) && !ui.input(|i| i.modifiers.shift) {
-                let d = resp.drag_delta();
-                self.cam.yaw -= d.x * 0.01;
-                self.cam.pitch = (self.cam.pitch + d.y * 0.01).clamp(-1.5699, 1.5699);
-            } else if resp.dragged() {
-                self.cam.pan += resp.drag_delta();
+            let panning = ui.input(|i| i.modifiers.shift);
+            if resp.drag_started_by(egui::PointerButton::Primary) && !panning {
+                self.pivot = resp
+                    .interact_pointer_pos()
+                    .and_then(|at| self.pick(&projector, at, &placements))
+                    .map(|pick| pick.point);
             }
-            if resp.hovered() {
+            if resp.dragged_by(egui::PointerButton::Primary) && !panning {
+                let d = resp.drag_delta();
+                let pivot = self
+                    .pivot
+                    .unwrap_or_else(|| gl::view(&scene, &self.cam, rect.size()).target);
+                self.cam = self
+                    .cam
+                    .orbited(&scene, rect.size(), -d.x * 0.01, d.y * 0.01, pivot);
+            } else if resp.dragged() {
+                self.cam = self.cam.panned(&scene, rect.size(), resp.drag_delta());
+            }
+            if resp.hovered()
+                && let Some(at) = resp.hover_pos()
+            {
                 let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-                self.cam.zoom = (self.cam.zoom * (1.0 + scroll * 0.002)).clamp(0.1, 40.0);
+                if scroll != 0.0 {
+                    let anchor = if self.cam.ortho {
+                        None
+                    } else {
+                        self.pick(&projector, at, &placements)
+                            .map(|pick| pick.point)
+                    };
+                    self.cam = self
+                        .cam
+                        .zoomed(&scene, rect, at, 1.0 + scroll * 0.002, anchor);
+                }
             }
             if resp.double_clicked() {
                 self.cam = Camera {

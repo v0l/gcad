@@ -1,4 +1,4 @@
-use super::scene::{Scene, V3};
+use super::scene::{Lines, Scene, V3};
 use eframe::egui_glow;
 use egui::{Color32, Pos2, Rect, Ui, Vec2};
 use std::cell::RefCell;
@@ -15,7 +15,7 @@ pub struct Camera {
     pub yaw: f32,
     pub pitch: f32,
     pub zoom: f32,
-    pub pan: Vec2,
+    pub shift: V3,
     pub ortho: bool,
 }
 
@@ -25,7 +25,7 @@ impl Default for Camera {
             yaw: 0.6,
             pitch: 0.55,
             zoom: 1.0,
-            pan: Vec2::ZERO,
+            shift: [0.0; 3],
             ortho: true,
         }
     }
@@ -78,6 +78,98 @@ fn dot(a: V3, b: V3) -> f32 {
 
 fn norm(a: V3) -> V3 {
     scale(a, 1.0 / dot(a, a).sqrt().max(1.0e-12))
+}
+
+struct Frame {
+    right: V3,
+    up: V3,
+    forward: V3,
+    eye: V3,
+    target: V3,
+    dist: f32,
+    focal: f32,
+}
+
+fn frame(scene: &Scene, cam: &Camera, size: Vec2) -> Frame {
+    let vw = view(scene, cam, size);
+    let forward = norm(sub(vw.target, vw.eye));
+    Frame {
+        right: norm(cross(forward, vw.up)),
+        up: vw.up,
+        forward,
+        eye: vw.eye,
+        target: vw.target,
+        dist: vw.dist,
+        focal: vw.focal,
+    }
+}
+
+impl Camera {
+    pub fn panned(self, scene: &Scene, size: Vec2, delta: Vec2) -> Camera {
+        let f = frame(scene, &self, size);
+        let per_pixel = f.dist / f.focal;
+        let moved = add(
+            scale(f.right, -delta.x * per_pixel),
+            scale(f.up, delta.y * per_pixel),
+        );
+        Camera {
+            shift: add(self.shift, moved),
+            ..self
+        }
+    }
+
+    pub fn zoomed(
+        self,
+        scene: &Scene,
+        rect: Rect,
+        at: Pos2,
+        factor: f32,
+        anchor: Option<V3>,
+    ) -> Camera {
+        let zoom = (self.zoom * factor).clamp(0.1, 400.0);
+        let before = frame(scene, &self, rect.size());
+        let after = Camera { zoom, ..self };
+        let focal_after = frame(scene, &after, rect.size()).focal;
+        let depth = match (self.ortho, anchor) {
+            (false, Some(p)) => dot(sub(p, before.eye), before.forward).max(before.dist * 0.02),
+            _ => before.dist,
+        };
+        let change = depth / before.focal - depth / focal_after;
+        let (dx, dy) = (at.x - rect.center().x, at.y - rect.center().y);
+        let moved = add(
+            scale(before.right, dx * change),
+            scale(before.up, -dy * change),
+        );
+        Camera {
+            shift: add(self.shift, moved),
+            ..after
+        }
+    }
+
+    pub fn orbited(self, scene: &Scene, size: Vec2, yaw: f32, pitch: f32, pivot: V3) -> Camera {
+        let before = frame(scene, &self, size);
+        let turned = Camera {
+            yaw: self.yaw + yaw,
+            pitch: (self.pitch + pitch).clamp(-1.5699, 1.5699),
+            ..self
+        };
+        let after = frame(scene, &turned, size);
+        let offset = sub(before.target, pivot);
+        let local = [
+            dot(offset, before.right),
+            dot(offset, before.up),
+            dot(offset, before.forward),
+        ];
+        let rotated = add(
+            add(scale(after.right, local[0]), scale(after.up, local[1])),
+            scale(after.forward, local[2]),
+        );
+        let target = add(pivot, rotated);
+        Camera {
+            shift: add(turned.shift, sub(target, after.target)),
+            ..turned
+        }
+    }
 }
 
 pub struct Projector {
@@ -165,11 +257,7 @@ pub fn view(scene: &Scene, cam: &Camera, size: Vec2) -> View {
     };
     let up = cross(right, forward);
     let focal = size.x.min(size.y) * 1.25 * cam.zoom;
-    let shift = add(
-        scale(right, -cam.pan.x * dist / focal),
-        scale(up, cam.pan.y * dist / focal),
-    );
-    let target = add(scene.centre, shift);
+    let target = add(scene.centre, cam.shift);
     let eye = add(target, scale(eye_dir, dist));
     let back = scale(forward, -1.0);
     View {
@@ -274,10 +362,191 @@ void main() {
     }
 }
 
+const LINE_VERTEX: &str = r#"
+uniform mat4 viewProjection;
+uniform mat4 modelMatrix;
+uniform vec2 viewportSize;
+uniform float lineWidth;
+in vec3 start;
+in vec3 end;
+in vec2 corner;
+out vec3 pos;
+
+void main() {
+    vec4 a = viewProjection * modelMatrix * vec4(start, 1.0);
+    vec4 b = viewProjection * modelMatrix * vec4(end, 1.0);
+    bool first = corner.x < 0.5;
+    vec4 here = first ? a : b;
+    vec2 along = (b.xy / b.w - a.xy / a.w) * viewportSize;
+    float length_px = length(along);
+    vec2 dir = length_px > 1.0e-6 ? along / length_px : vec2(1.0, 0.0);
+    vec2 across = vec2(-dir.y, dir.x);
+    vec2 offset = (across * corner.y + dir * (first ? -0.5 : 0.5)) * lineWidth / viewportSize;
+    gl_Position = here + vec4(offset * here.w, -4.0e-4 * here.w, 0.0);
+    vec4 world = modelMatrix * vec4(first ? start : end, 1.0);
+    pos = world.xyz / world.w;
+}
+"#;
+
+struct EdgeLines {
+    context: Context,
+    start: VertexBuffer<Vec3>,
+    end: VertexBuffer<Vec3>,
+    corner: VertexBuffer<three_d::Vec2>,
+    count: u32,
+    width: f32,
+    pixels: f32,
+    transformation: Mat4,
+    aabb: AxisAlignedBoundingBox,
+}
+
+impl EdgeLines {
+    fn new(context: &Context, lines: &Lines) -> EdgeLines {
+        let v3 = |v: &[f32; 3]| vec3(v[0], v[1], v[2]);
+        let corners = [
+            (0.0, -1.0),
+            (0.0, 1.0),
+            (1.0, 1.0),
+            (0.0, -1.0),
+            (1.0, 1.0),
+            (1.0, -1.0),
+        ];
+        let mut start = Vec::with_capacity(lines.segments.len() * 6);
+        let mut end = Vec::with_capacity(lines.segments.len() * 6);
+        let mut corner = Vec::with_capacity(lines.segments.len() * 6);
+        for [a, b] in &lines.segments {
+            for (t, side) in corners {
+                start.push(v3(a));
+                end.push(v3(b));
+                corner.push(vec2(t, side));
+            }
+        }
+        let aabb = AxisAlignedBoundingBox::new_with_positions(&start);
+        EdgeLines {
+            context: context.clone(),
+            start: VertexBuffer::new_with_data(context, &start),
+            end: VertexBuffer::new_with_data(context, &end),
+            corner: VertexBuffer::new_with_data(context, &corner),
+            count: start.len() as u32,
+            width: lines.width,
+            pixels: lines.width,
+            transformation: Mat4::identity(),
+            aabb,
+        }
+    }
+}
+
+impl Geometry for EdgeLines {
+    fn draw(&self, viewer: &dyn Viewer, program: &Program, render_states: RenderStates) {
+        let viewport = viewer.viewport();
+        program.use_uniform("viewProjection", viewer.projection() * viewer.view());
+        program.use_uniform("modelMatrix", self.transformation);
+        program.use_uniform(
+            "viewportSize",
+            vec2(viewport.width as f32, viewport.height as f32),
+        );
+        program.use_uniform("lineWidth", self.pixels);
+        program.use_vertex_attribute("start", &self.start);
+        program.use_vertex_attribute("end", &self.end);
+        program.use_vertex_attribute("corner", &self.corner);
+        program.draw_arrays(render_states, viewport, self.count);
+    }
+
+    fn vertex_shader_source(&self) -> String {
+        LINE_VERTEX.to_string()
+    }
+
+    fn id(&self) -> GeometryId {
+        GeometryId(0x7d01)
+    }
+
+    fn render_with_material(
+        &self,
+        material: &dyn Material,
+        viewer: &dyn Viewer,
+        lights: &[&dyn Light],
+    ) {
+        if let Err(error) = render_with_material(&self.context, viewer, self, material, lights) {
+            panic!("{error}");
+        }
+    }
+
+    fn render_with_effect(
+        &self,
+        effect: &dyn Effect,
+        viewer: &dyn Viewer,
+        lights: &[&dyn Light],
+        color_texture: Option<ColorTexture>,
+        depth_texture: Option<DepthTexture>,
+    ) {
+        if let Err(error) = render_with_effect(
+            &self.context,
+            viewer,
+            self,
+            effect,
+            lights,
+            color_texture,
+            depth_texture,
+        ) {
+            panic!("{error}");
+        }
+    }
+
+    fn aabb(&self) -> AxisAlignedBoundingBox {
+        self.aabb.transformed(self.transformation)
+    }
+}
+
+struct Flat {
+    colour: Vec3,
+    clip: Vec4,
+    clipping: f32,
+}
+
+impl Material for Flat {
+    fn id(&self) -> EffectMaterialId {
+        EffectMaterialId(0x7c02)
+    }
+
+    fn fragment_shader_source(&self, _lights: &[&dyn Light]) -> String {
+        r#"
+uniform vec3 lineColour;
+uniform vec4 clipPlane;
+uniform float clipping;
+in vec3 pos;
+layout (location = 0) out vec4 outColor;
+
+void main() {
+    if (clipping > 0.5 && dot(pos, clipPlane.xyz) > clipPlane.w) discard;
+    outColor = vec4(lineColour, 1.0);
+}
+"#
+        .to_string()
+    }
+
+    fn use_uniforms(&self, program: &Program, _viewer: &dyn Viewer, _lights: &[&dyn Light]) {
+        program.use_uniform_if_required("lineColour", self.colour);
+        program.use_uniform_if_required("clipPlane", self.clip);
+        program.use_uniform_if_required("clipping", self.clipping);
+    }
+
+    fn render_states(&self) -> RenderStates {
+        RenderStates {
+            cull: Cull::None,
+            ..Default::default()
+        }
+    }
+
+    fn material_type(&self) -> MaterialType {
+        MaterialType::Opaque
+    }
+}
+
 struct Gpu {
     context: Context,
     scene: u64,
     objects: Vec<(usize, Gm<Mesh, Shaded>)>,
+    lines: Vec<(usize, Gm<EdgeLines, Flat>)>,
 }
 
 impl Gpu {
@@ -303,6 +572,19 @@ impl Gpu {
                     capped: if s.face.is_some() { 1.0 } else { 0.0 },
                 };
                 (s.body, Gm::new(Mesh::new(&self.context, &cpu), material))
+            })
+            .collect();
+        self.lines = scene
+            .lines
+            .iter()
+            .filter(|l| !l.segments.is_empty())
+            .map(|l| {
+                let material = Flat {
+                    colour: v3(&l.colour),
+                    clip: vec4(0.0, 0.0, 1.0, 0.0),
+                    clipping: 0.0,
+                };
+                (l.body, Gm::new(EdgeLines::new(&self.context, l), material))
             })
             .collect();
         self.scene = scene.id;
@@ -334,6 +616,7 @@ pub fn paint(
                     context,
                     scene: 0,
                     objects: Vec::new(),
+                    lines: Vec::new(),
                 });
             }
             let Some(gpu) = slot.as_mut() else { return };
@@ -393,6 +676,21 @@ pub fn paint(
                     ));
                 }
             });
+            let clip_plane = cut.map(|c| vec4(c.normal[0], c.normal[1], c.normal[2], c.offset));
+            let ppp = info.pixels_per_point;
+            gpu.lines.iter_mut().for_each(|(body, gm)| {
+                gm.material.clipping = if clip_plane.is_some() { 1.0 } else { 0.0 };
+                if let Some(plane) = clip_plane {
+                    gm.material.clip = plane;
+                }
+                gm.geometry.pixels = gm.geometry.width * ppp;
+                if let Some((m, _)) = placements.get(*body) {
+                    gm.geometry.transformation = Mat4::new(
+                        m[0], m[1], m[2], m[3], m[4], m[5], m[6], m[7], m[8], m[9], m[10], m[11],
+                        m[12], m[13], m[14], m[15],
+                    );
+                }
+            });
             let x0 = clip.left_px.max(vp.left_px);
             let y0 = clip.from_bottom_px.max(vp.from_bottom_px);
             let x1 = (clip.left_px + clip.width_px).min(vp.left_px + vp.width_px);
@@ -416,11 +714,19 @@ pub fn paint(
                 scissor,
                 ClearState::color_and_depth(bg[0], bg[1], bg[2], 1.0, 1.0),
             );
-            let shown = gpu
+            let visible = |body: &usize| placements.get(*body).is_none_or(|(_, visible)| *visible);
+            let shown: Vec<&dyn Object> = gpu
                 .objects
                 .iter()
-                .filter(|(body, _)| placements.get(*body).is_none_or(|(_, visible)| *visible))
-                .map(|(_, gm)| gm);
+                .filter(|(body, _)| visible(body))
+                .map(|(_, gm)| gm as &dyn Object)
+                .chain(
+                    gpu.lines
+                        .iter()
+                        .filter(|(body, _)| visible(body))
+                        .map(|(_, gm)| gm as &dyn Object),
+                )
+                .collect();
             target.render_partially(scissor, &camera, shown, &[]);
             let _ = target.into_framebuffer();
         });
@@ -458,6 +764,73 @@ mod tests {
             let back = projector.project(point).expect("in front");
             assert!(back.distance(at) < 1.0e-2, "ortho {ortho}: {back:?}");
         }
+    }
+
+    fn rect() -> Rect {
+        Rect::from_min_size(Pos2::new(0.0, 0.0), Vec2::new(800.0, 600.0))
+    }
+
+    #[test]
+    fn zoom_keeps_the_point_under_the_cursor() {
+        for ortho in [false, true] {
+            let cam = Camera {
+                ortho,
+                ..Camera::default()
+            };
+            let point = [4.0, -3.0, 6.0];
+            let at = Projector::new(&scene(), &cam, rect())
+                .project(point)
+                .expect("in front");
+            for factor in [1.8, 0.6] {
+                let zoomed = cam.zoomed(&scene(), rect(), at, factor, Some(point));
+                let after = Projector::new(&scene(), &zoomed, rect())
+                    .project(point)
+                    .expect("in front");
+                assert!(
+                    after.distance(at) < 1.0e-2,
+                    "ortho {ortho}: {at:?} -> {after:?}"
+                );
+                assert!((zoomed.zoom - factor).abs() < 1.0e-6);
+            }
+        }
+    }
+
+    #[test]
+    fn orbit_keeps_the_pivot_in_place() {
+        for ortho in [false, true] {
+            let cam = Camera {
+                ortho,
+                ..Camera::default()
+            };
+            let pivot = [6.0, 1.0, -2.0];
+            let at = Projector::new(&scene(), &cam, rect())
+                .project(pivot)
+                .expect("in front");
+            let turned = cam.orbited(&scene(), rect().size(), 0.4, -0.3, pivot);
+            let after = Projector::new(&scene(), &turned, rect())
+                .project(pivot)
+                .expect("in front");
+            assert!(
+                after.distance(at) < 1.0e-2,
+                "ortho {ortho}: {at:?} -> {after:?}"
+            );
+            assert!((turned.yaw - cam.yaw - 0.4).abs() < 1.0e-6);
+        }
+    }
+
+    #[test]
+    fn pan_moves_the_model_with_the_pointer() {
+        let cam = Camera::default();
+        let point = scene().centre;
+        let at = Projector::new(&scene(), &cam, rect())
+            .project(point)
+            .expect("in front");
+        let delta = Vec2::new(30.0, -12.0);
+        let panned = cam.panned(&scene(), rect().size(), delta);
+        let after = Projector::new(&scene(), &panned, rect())
+            .project(point)
+            .expect("in front");
+        assert!(after.distance(at + delta) < 1.0e-2, "{after:?}");
     }
 
     #[test]

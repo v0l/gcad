@@ -15,6 +15,14 @@ pub struct Surface {
     pub face: Option<usize>,
 }
 
+#[derive(Clone, Default)]
+pub struct Lines {
+    pub segments: Vec<[V3; 2]>,
+    pub colour: V3,
+    pub body: usize,
+    pub width: f32,
+}
+
 #[derive(Clone)]
 pub struct Part {
     pub name: String,
@@ -34,6 +42,7 @@ pub struct FaceInfo {
 pub struct Scene {
     pub id: u64,
     pub surfaces: Vec<Surface>,
+    pub lines: Vec<Lines>,
     pub centre: V3,
     pub radius: f32,
     pub parts: Vec<Part>,
@@ -48,6 +57,8 @@ pub struct Highlight<'a> {
 
 pub const BODY: V3 = [0.62, 0.66, 0.72];
 pub const EDGE: V3 = [0.05, 0.06, 0.07];
+pub const EDGE_WIDTH: f32 = 1.5;
+pub const MARKED_WIDTH: f32 = 3.5;
 
 fn v3(p: Point3) -> V3 {
     [p.x as f32, p.y as f32, p.z as f32]
@@ -163,47 +174,13 @@ fn polyline(edge: &Edge) -> Vec<V3> {
         .collect()
 }
 
-fn tube(points: &[V3], radius: f32, out: &mut Surface) {
-    for pair in points.windows(2) {
-        let (a, b) = (pair[0], pair[1]);
-        let along = sub(b, a);
-        if along.iter().all(|c| c.abs() < 1.0e-9) {
-            continue;
-        }
-        let along = norm(along);
-        let helper = if along[2].abs() < 0.9 {
-            [0.0, 0.0, 1.0]
-        } else {
-            [1.0, 0.0, 0.0]
-        };
-        let u = norm(cross(along, helper));
-        let w = cross(along, u);
-        let ring: Vec<V3> = (0..4)
-            .map(|k| {
-                let angle = k as f32 * std::f32::consts::FRAC_PI_2;
-                let (c, s) = (angle.cos(), angle.sin());
-                [
-                    u[0] * c + w[0] * s,
-                    u[1] * c + w[1] * s,
-                    u[2] * c + w[2] * s,
-                ]
-            })
-            .collect();
-        for k in 0..4 {
-            let (n0, n1) = (ring[k], ring[(k + 1) % 4]);
-            let at = |p: V3, n: V3| {
-                [
-                    p[0] + n[0] * radius,
-                    p[1] + n[1] * radius,
-                    p[2] + n[2] * radius,
-                ]
-            };
-            for (p, n) in [(a, n0), (b, n0), (b, n1), (a, n0), (b, n1), (a, n1)] {
-                out.positions.push(at(p, n));
-                out.normals.push(n);
-            }
-        }
-    }
+fn segments(points: &[V3], out: &mut Vec<[V3; 2]>) {
+    out.extend(
+        points
+            .windows(2)
+            .filter(|pair| sub(pair[1], pair[0]).iter().any(|c| c.abs() > 1.0e-9))
+            .map(|pair| [pair[0], pair[1]]),
+    );
 }
 
 pub fn build(
@@ -229,6 +206,7 @@ pub fn build(
         .collect();
     let radius = (bounds.diameter() / 2.0).max(1.0e-3) as f32;
     let mut surfaces = Vec::new();
+    let mut lines = Vec::new();
     let mut info = Vec::new();
     let mut parts = Vec::new();
     let mut vertices = Vec::new();
@@ -241,9 +219,10 @@ pub fn build(
             .map_or(BODY, |c| c.map(|v| v as f32));
         let own: &[Highlight<'_>] = if is_current { highlights } else { &[] };
         faces(solid, body, colour, own, &mut surfaces, &mut info);
-        let mut edges = Surface {
+        let mut edges = Lines {
             colour: EDGE,
             body,
+            width: EDGE_WIDTH,
             ..Default::default()
         };
         let mut seen = std::collections::HashSet::new();
@@ -252,8 +231,8 @@ pub fn build(
             .iter()
             .flat_map(|shell| shell.edge_iter())
             .filter(|edge| seen.insert(edge.id()) && !skip.contains(&edge.id()))
-            .for_each(|edge| tube(&polyline(&edge), radius * 0.0018, &mut edges));
-        surfaces.push(edges);
+            .for_each(|edge| segments(&polyline(&edge), &mut edges.segments));
+        lines.push(edges);
         let mut seen = std::collections::HashSet::new();
         vertices.extend(
             solid
@@ -271,18 +250,20 @@ pub fn build(
         });
     }
     let current_index = parts.iter().position(|p| p.current).unwrap_or(0);
-    let mut highlighted = Surface {
+    let mut highlighted = Lines {
         colour: marked_colour,
         body: current_index,
+        width: MARKED_WIDTH,
         ..Default::default()
     };
     marked
         .iter()
-        .for_each(|edge| tube(&polyline(edge), radius * 0.005, &mut highlighted));
-    surfaces.push(highlighted);
+        .for_each(|edge| segments(&polyline(edge), &mut highlighted.segments));
+    lines.push(highlighted);
     Scene {
         id: NEXT.fetch_add(1, Ordering::Relaxed),
         surfaces,
+        lines,
         centre: v3(bounds.center()),
         radius,
         parts,
