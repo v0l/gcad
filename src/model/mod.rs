@@ -15,6 +15,7 @@ mod round;
 mod sketch;
 mod skin;
 mod solids;
+mod thread;
 mod weld;
 mod wrap;
 
@@ -166,6 +167,7 @@ pub const OPERATIONS: &[&str] = &[
     "helix",
     "sweep",
     "hole",
+    "thread",
     "fillet",
     "chamfer",
     "shell",
@@ -305,6 +307,7 @@ impl Model {
             "helix" => self.op_helix(line),
             "sweep" => self.op_sweep(line),
             "hole" => self.op_hole(line),
+            "thread" => self.op_thread(line),
             "fillet" => self.op_blend(line, FilletProfile::Round),
             "chamfer" => self.op_blend(line, FilletProfile::Chamfer),
             "shell" => self.op_shell(line),

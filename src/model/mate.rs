@@ -26,7 +26,7 @@ impl Cylinder {
     }
 }
 
-fn fit_circle(points: &[(f64, f64)]) -> Option<((f64, f64), f64, f64)> {
+pub(crate) fn fit_circle(points: &[(f64, f64)]) -> Option<((f64, f64), f64, f64)> {
     let mut m = [[0.0f64; 3]; 3];
     let mut rhs = [0.0f64; 3];
     for &(x, y) in points {
@@ -107,7 +107,10 @@ fn face_cylinder(points: &[Point3], normals: &[Vector3]) -> Option<Cylinder> {
     })
 }
 
-fn fit_face(face: &Face, tolerance: f64) -> Option<(Cylinder, Vec<Point3>, Vec<Vector3>)> {
+pub(crate) fn fit_face(
+    face: &Face,
+    tolerance: f64,
+) -> Option<(Cylinder, Vec<Point3>, Vec<Vector3>)> {
     let single: Shell = vec![face.clone()].into();
     let meshed = single.robust_triangulation(tolerance);
     let meshed_face = meshed.face_iter().next()?;

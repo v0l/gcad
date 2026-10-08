@@ -8,18 +8,6 @@ use crate::parse::{Line, eval_point};
 use anyhow::{Result, bail};
 use monstertruck::modeling::*;
 
-const THREADS: &[(&str, f64, f64)] = &[
-    ("M2", 2.0, 1.6),
-    ("M2.5", 2.5, 2.05),
-    ("M3", 3.0, 2.5),
-    ("M4", 4.0, 3.3),
-    ("M5", 5.0, 4.2),
-    ("M6", 6.0, 5.0),
-    ("M8", 8.0, 6.8),
-    ("M10", 10.0, 8.5),
-    ("M12", 12.0, 10.2),
-];
-
 struct Piece {
     top: (f64, f64),
     bottom: (f64, f64),
@@ -82,16 +70,8 @@ impl Model {
         let thread = match args.values.get("thread") {
             None => None,
             Some(name) => {
-                let (_, major, tap) = THREADS
-                    .iter()
-                    .find(|(known, _, _)| known.eq_ignore_ascii_case(name))
-                    .ok_or_else(|| {
-                        anyhow::anyhow!(
-                            "unknown thread `{name}`; known: {}",
-                            THREADS.iter().map(|t| t.0).collect::<Vec<_>>().join(", ")
-                        )
-                    })?;
-                if diameter > *major || diameter < tap * 0.9 {
+                let (major, tap, _) = super::thread::thread_named(name)?;
+                if diameter > major || diameter < tap * 0.9 {
                     bail!("a {name} thread needs a {tap} mm tap drill, the hole is {diameter}");
                 }
                 Some(name.to_uppercase())

@@ -248,12 +248,118 @@ fn sweep_scale() {
     );
 }
 
+fn threaded_section(pitch: f64, radius: f64, external: bool) -> f64 {
+    let crest = 3.0;
+    let root = crest - 5.0 / 8.0 * 3.0_f64.sqrt() / 2.0 * pitch;
+    let profile = |s: f64| {
+        let s = s / pitch;
+        let r = if s < 1.0 / 8.0 {
+            crest
+        } else if s < 7.0 / 16.0 {
+            crest + (root - crest) * (s - 1.0 / 8.0) / (5.0 / 16.0)
+        } else if s < 11.0 / 16.0 {
+            root
+        } else {
+            root + (crest - root) * (s - 11.0 / 16.0) / (5.0 / 16.0)
+        };
+        if external {
+            r.min(radius)
+        } else {
+            r.max(radius)
+        }
+    };
+    let steps = 200_000;
+    let mean = (0..steps)
+        .map(|i| profile(pitch * (i as f64 + 0.5) / steps as f64).powi(2))
+        .sum::<f64>()
+        / steps as f64;
+    PI * mean
+}
+
+fn thread_turns(model: &gcad::model::Model) -> Vec<f64> {
+    use monstertruck::modeling::*;
+    let solid = &model.solids()[0];
+    let mut turns = Vec::new();
+    for edge in solid.boundaries()[0].edge_iter() {
+        let (front, back) = (edge.front().point(), edge.back().point());
+        if (back.z - front.z).abs() < 1.0 {
+            continue;
+        }
+        let curve = edge.oriented_curve();
+        let (t0, t1) = curve.range_tuple();
+        let (p, q) = (curve.subs(t0), curve.subs(t0 + (t1 - t0) * 0.01));
+        let swept = (p.x * q.y - p.y * q.x) * (q.z - p.z).signum();
+        turns.push(swept);
+    }
+    turns
+}
+
 #[test]
-#[ignore = "missing: thread"]
 fn modelled_thread() {
-    let model = build("circle 6\nrod: extrude 10\nthread M6 on=rod.side");
-    let v = volume(&model);
-    assert!(v < PI * 9.0 * 10.0 && v > PI * 2.4 * 2.4 * 10.0, "{v}");
+    assert_volume(
+        &build("circle 6\nrod: extrude 3\nthread M6 on=rod.side"),
+        3.0 * threaded_section(1.0, 3.0, true),
+        2.0e-4,
+    );
+}
+
+#[test]
+fn thread_turns_right_handed() {
+    let turns = thread_turns(&build("circle 6\nrod: extrude 3\nthread M6 on=rod.side"));
+    assert!(
+        !turns.is_empty() && turns.iter().all(|t| *t > 0.0),
+        "{turns:?}"
+    );
+    let turns = thread_turns(&build(
+        "circle 6\nrod: extrude 3\nthread M6 on=rod.side left",
+    ));
+    assert!(
+        !turns.is_empty() && turns.iter().all(|t| *t < 0.0),
+        "{turns:?}"
+    );
+}
+
+#[test]
+fn thread_on_an_undersized_rod_with_a_fine_pitch() {
+    assert_volume(
+        &build("circle 5.9\nrod: extrude 3\nthread M6 on=rod.side pitch=0.75"),
+        3.0 * threaded_section(0.75, 2.95, true),
+        2.0e-4,
+    );
+}
+
+#[test]
+fn tapped_thread() {
+    assert_volume(
+        &build(
+            "rect 20 20\nbase: extrude 4\nplane base.end\nh: hole 5 0,0 thread=M6\nthread M6 on=h.side",
+        ),
+        1600.0 - 4.0 * threaded_section(1.0, 2.5, false),
+        2.0e-5,
+    );
+}
+
+#[test]
+fn thread_up_to_a_bolt_head() {
+    let head = 3.0 * 3.0_f64.sqrt() / 2.0 * 25.0 * 4.0;
+    assert_volume(
+        &build(
+            "ngon 10 6\nhead: extrude 4\nplane head.end\ncircle 6\nshank: extrude 4\nthread M6 on=shank.side",
+        ),
+        head + 4.0 * threaded_section(1.0, 3.0, true),
+        2.0e-4,
+    );
+}
+
+#[test]
+fn thread_needs_a_round_face_that_fits() {
+    assert!(failure("circle 8\nrod: extrude 3\nthread M6 on=rod.side").contains("rod between"));
+    assert!(failure("rect 6 6\nbox: extrude 3\nthread M6 on=box.side").contains("round face"));
+    assert!(failure("circle 6\nrod: extrude 3\nthread M7 on=rod.side").contains("unknown thread"));
+    assert!(
+        failure("circle 6\nrod: extrude 3\nthread M6 on=rod.side\nchamfer 0.5 rod.end")
+            .contains("unchanged")
+    );
 }
 
 #[test]

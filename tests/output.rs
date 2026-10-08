@@ -82,6 +82,22 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
             "circle 40\nbase: extrude 20\nplane XZ\ntext HELLO size=8 at=-14,6\nwrap base.side depth=0.6",
         ),
         (
+            "threaded",
+            "circle 6\nrod: extrude 3\nthread M6 on=rod.side",
+        ),
+        (
+            "tapped",
+            "rect 20 20\nbase: extrude 4\nplane base.end\nh: hole 5 0,0 thread=M6\nthread M6 on=h.side",
+        ),
+        (
+            "l-rounded",
+            "poly 0,0 20,0 20,10 10,10 10,20 0,20\nextrude 10\nfillet 1 all",
+        ),
+        (
+            "pocket-rounded",
+            "rect 40 40\nbase: extrude 10\nplane base.end\nrect 20 20\ncut 5\nfillet 1 all",
+        ),
+        (
             "sloted",
             "slot 30 10\nextrude 3\nplane XY offset=3\nellipse 10 6\nextrude 2",
         ),

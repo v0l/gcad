@@ -89,7 +89,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | sweep along a smooth path | supported | `path ... smooth` | `features::sweep_smooth_path` |
 | sweep with twist | supported | `sweep twist=90` | `features::sweep_twist` |
 | sweep with scale | supported | `sweep scale=0.5` | `features::sweep_scale` |
-| modelled thread | missing | `thread M6 on=rod.side` | `features::modelled_thread` |
+| modelled thread | supported | `thread M6 on=rod.side`, `thread M6 on=h.side` in a hole, `left`, `pitch=` | `features::modelled_thread`, `features::tapped_thread`, `features::thread_up_to_a_bolt_head`, `features::thread_on_an_undersized_rod_with_a_fine_pitch`, `features::thread_turns_right_handed`, `features::thread_needs_a_round_face_that_fits` |
 | shell with several openings | supported | `shell 2 open=a.end,a.start` | `features::shell_two_openings` |
 | shell of any solid | supported | `shell 1` on a revolve | `features::shell_revolved` |
 | draft curved faces | supported | `draft 5 base.side` on a cylinder | `features::draft_curved` |

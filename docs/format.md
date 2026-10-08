@@ -119,6 +119,7 @@ Features:
 | `section` | | stores the sketch as one cross-section for `loft` |
 | `loft` | `smooth` `mode=` | joins the stored sections with ruled faces, or one smooth surface through them all with `smooth`; sections with different edge counts are matched up by splitting edges |
 | `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` `on=label.side` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it; with `on=` the points are angle,height on the side of an extruded circle and the holes go in square to it |
+| `thread` | `size` `on=faces` `pitch=` `left` | cuts an ISO metric thread (`M2` to `M12`) into a round face that runs between two flat ends square to it: a rod gets an outside thread with its crest on the rod, a hole an inside one with its crest on the drill; `pitch` overrides the coarse pitch and `left` makes it left-hand. The ends cannot be chamfered or filleted, before or after |
 | `shell` | `t` `open=faces,...` | hollows an extrusion (open `label.end`, `label.start` or both) or a full revolve (open its flat `label.caps`) to walls `t` thick |
 | `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face; `label.side` of an extrusion that is the whole solid tapers curved sides too |
 | `push` | `faces d` | moves flat faces `d` along their normal, out (positive) or in (negative); an extrusion's `label.end` or `label.start` moves in even with curved sides |
@@ -303,7 +304,7 @@ Groups each operation records:
 | `push` | `start`, `end`, `side` |
 | `shell` | `inside`, `floor` |
 | `split` | `cut` |
-| `fillet`, `chamfer`, `draft`, `import` | `faces` |
+| `fillet`, `chamfer`, `draft`, `thread`, `import` | `faces` |
 | `mirror` | a copy of every group, under the mirror line's label |
 
 A face belongs to a group while it still lies on the surface the operation made, so
