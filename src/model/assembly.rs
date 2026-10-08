@@ -301,11 +301,15 @@ impl Rig {
 pub fn explode_offsets(
     joints: &[Joint],
     explode: &[(String, Vector3)],
+    moved: &std::collections::HashMap<String, Matrix4>,
 ) -> std::collections::HashMap<String, Vector3> {
     let mut offsets: std::collections::HashMap<String, Vector3> = Default::default();
     for (part, by) in explode {
+        let by = moved
+            .get(part)
+            .map_or(*by, |turn| turn.transform_vector(*by));
         for body in subtree(joints, part) {
-            *offsets.entry(body).or_insert_with(Vector3::zero) += *by;
+            *offsets.entry(body).or_insert_with(Vector3::zero) += by;
         }
     }
     offsets

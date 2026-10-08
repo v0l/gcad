@@ -512,6 +512,17 @@ fn exploded_views_move_parts_apart() {
     assert!(near(top(0.0, lid), 12.0) && near(top(1.0, lid), 32.0));
     assert!(near(top(0.0, screw), 13.5) && near(top(1.0, screw), 43.5));
     assert!(near(top(0.5, screw), 28.5));
+    let open: Vec<f64> = model
+        .joints
+        .iter()
+        .map(|j| if j.name == "open" { -90.0 } else { j.value })
+        .collect();
+    let moved = linecad::model::posed(&model.joints, &open);
+    let offsets = linecad::model::explode_offsets(&model.joints, &model.explode, &moved);
+    let lid = offsets["box.lid"];
+    assert!(near(lid.x, 0.0) && near(lid.y, 20.0) && near(lid.z, 0.0), "{lid:?}");
+    let screw = offsets["screw"];
+    assert!(near(screw.y, 30.0) && near(screw.z, 0.0), "{screw:?}");
 }
 
 const BAR: &str = "let L=40\nrect L+8 8 r=3.9 at=L/2,0\nbar: extrude 3\nplane bar.end\na: hole 3 0,0\nb: hole 3 L,0\n";

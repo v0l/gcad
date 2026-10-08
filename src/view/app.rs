@@ -51,7 +51,7 @@ struct Shown {
     query: Option<Result<(usize, usize), String>>,
     joints: Vec<Joint>,
     rig: Rig,
-    exploded: std::collections::HashMap<String, monstertruck::modeling::Vector3>,
+    explode: Vec<(String, monstertruck::modeling::Vector3)>,
     solids: Vec<(String, Solid)>,
     assembly: bool,
 }
@@ -429,6 +429,7 @@ impl App {
             shown.joints.iter().map(|j| j.value).collect()
         };
         let moved = posed(&shown.joints, &values);
+        let offsets = explode_offsets(&shown.joints, &shown.explode, &moved);
         shown
             .scene
             .parts
@@ -439,7 +440,7 @@ impl App {
                     .get(&part.name)
                     .copied()
                     .unwrap_or_else(Matrix4::identity);
-                let m = exploded(m, shown.exploded.get(&part.name), self.explode);
+                let m = exploded(m, offsets.get(&part.name), self.explode);
                 (flat(m), !self.hidden.get(i).copied().unwrap_or(false))
             })
             .collect()
@@ -696,7 +697,7 @@ impl App {
         let scene = shown.scene.clone();
         let joints = shown.joints.clone();
         let rig = shown.rig.clone();
-        let exploded = shown.exploded.clone();
+        let exploded = !shown.explode.is_empty();
         let solids = shown.solids.clone();
         let (min, max) = shown.bounds;
         let faces = shown.faces;
@@ -737,7 +738,7 @@ impl App {
                     ))
                     .size(11.0)
                     .show(ui);
-                if !exploded.is_empty() {
+                if exploded {
                     ui.horizontal(|ui| {
                         Line::new().legend("explode").size(11.0).show(ui);
                         ui.add(egui::Slider::new(&mut self.explode, 0.0..=1.0).show_value(false));
@@ -1476,7 +1477,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
         query,
         joints: model.joints.clone(),
         rig: model.rig(),
-        exploded: explode_offsets(&model.joints, &model.explode),
+        explode: model.explode.clone(),
         solids,
         assembly: model.assembly,
     })

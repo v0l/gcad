@@ -232,7 +232,7 @@ impl Model {
     }
 
     pub fn exploded_parts(&self, scale: f64) -> Vec<(Solid, Option<[f64; 3]>)> {
-        let offsets = assembly::explode_offsets(&self.joints, &self.explode);
+        let offsets = assembly::explode_offsets(&self.joints, &self.explode, &Default::default());
         self.named_solids()
             .into_iter()
             .map(|(name, solid)| {
