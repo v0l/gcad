@@ -6,6 +6,7 @@ use crate::geometry;
 use crate::parse::Line;
 use crate::select;
 use anyhow::{Result, anyhow, bail};
+use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
 use std::collections::HashSet;
 use std::f64::consts::TAU;
@@ -108,6 +109,10 @@ impl Helix {
         self.origin
             + (self.x * theta.cos() + self.y * theta.sin()) * r
             + self.along * (s + self.pitch * theta / TAU)
+    }
+
+    fn point(&self, angle: f64, r: f64, height: f64) -> Point3 {
+        self.origin + (self.x * angle.cos() + self.y * angle.sin()) * r + self.along * height
     }
 
     fn radial(&self, p: Point3) -> Vector3 {
@@ -250,7 +255,7 @@ fn capped(cap: &Face, end: &HashSet<EdgeId>, new_loop: &Wire, helix: &Helix) -> 
         })
         .collect::<Vec<Wire>>();
     if !replaced {
-        bail!("a thread's flat end must meet the round face along a whole loop");
+        bail!("a thread's end face must meet the thread along a whole loop");
     }
     let mut face = Face::try_new(wires, cap.surface())
         .map_err(|error| anyhow!("threaded end face: {error}"))?;
@@ -312,6 +317,362 @@ pub(crate) struct Threaded {
     pub(crate) length: f64,
 }
 
+enum Kind {
+    Flat {
+        cap: usize,
+    },
+    Cone {
+        faces: Vec<usize>,
+        cap: usize,
+        far_edges: Vec<Edge>,
+        far_radius: f64,
+        far_height: f64,
+    },
+}
+
+struct End {
+    near: f64,
+    kind: Kind,
+}
+
+impl End {
+    fn height_at(&self, r: f64, radius: f64) -> f64 {
+        match &self.kind {
+            Kind::Flat { .. } => self.near,
+            Kind::Cone {
+                far_radius,
+                far_height,
+                ..
+            } => self.near + (far_height - self.near) * (radius - r) / (radius - far_radius),
+        }
+    }
+}
+
+fn push_new<T: PartialEq>(list: &mut Vec<T>, item: T) {
+    if !list.contains(&item) {
+        list.push(item);
+    }
+}
+
+struct Around<'a> {
+    faces: &'a [Face],
+    owners: &'a std::collections::HashMap<EdgeId, Vec<usize>>,
+    mine: &'a HashSet<usize>,
+    helix: &'a Helix,
+    radius: f64,
+    slack: f64,
+}
+
+fn end_of(around: &Around, edges: &[Edge], near: f64) -> Result<End> {
+    let Around {
+        faces,
+        owners,
+        mine,
+        helix,
+        radius,
+        slack,
+    } = *around;
+    let mut neighbours = Vec::new();
+    for edge in edges {
+        for &f in &owners[&edge.id()] {
+            if !mine.contains(&f) {
+                push_new(&mut neighbours, f);
+            }
+        }
+    }
+    let plane = |f: usize| match faces[f].oriented_surface() {
+        Surface::Plane(plane) => Some(plane.normal().cross(helix.along).magnitude() < 1.0e-6),
+        _ => None,
+    };
+    if let [cap] = neighbours[..]
+        && plane(cap) == Some(true)
+    {
+        return Ok(End {
+            near,
+            kind: Kind::Flat { cap },
+        });
+    }
+    if neighbours.iter().any(|&f| plane(f).is_some()) {
+        bail!("a thread's ends must be flat faces square to its axis, or a chamfer");
+    }
+    let mut far_edges: Vec<Edge> = Vec::new();
+    let mut caps = Vec::new();
+    for &f in &neighbours {
+        for edge in faces[f].edge_iter() {
+            let owned = &owners[&edge.id()];
+            if owned.iter().any(|o| mine.contains(o)) {
+                continue;
+            }
+            let others: Vec<usize> = owned
+                .iter()
+                .copied()
+                .filter(|o| !neighbours.contains(o))
+                .collect();
+            if others.is_empty() {
+                continue;
+            }
+            if !far_edges.iter().any(|e| e.is_same(&edge)) {
+                far_edges.push(edge.clone());
+            }
+            others.into_iter().for_each(|o| push_new(&mut caps, o));
+        }
+    }
+    let [cap] = caps[..] else {
+        bail!("a chamfer at a thread's end must lead to a single face");
+    };
+    let height = |p: Point3| helix.along.dot(p - helix.origin);
+    let corners: Vec<Point3> = far_edges
+        .iter()
+        .flat_map(|e| [e.front().point(), e.back().point()])
+        .collect();
+    let far_radius = corners
+        .iter()
+        .map(|p| helix.radial(*p).magnitude())
+        .sum::<f64>()
+        / corners.len() as f64;
+    let far_height = corners.iter().map(|p| height(*p)).sum::<f64>() / corners.len() as f64;
+    let rough = radius * 0.02 + (far_radius - radius).abs() * 0.05 + slack;
+    let far: Vec<Point3> = far_edges.iter().flat_map(edge_points).collect();
+    let on_circle = corners.iter().all(|p| {
+        (helix.radial(*p).magnitude() - far_radius).abs() < slack
+            && (height(*p) - far_height).abs() < slack
+    }) && far.iter().all(|p| {
+        (helix.radial(*p).magnitude() - far_radius).abs() < rough
+            && (height(*p) - far_height).abs() < rough
+    });
+    if !on_circle || (far_height - near).abs() < slack || (far_radius - radius).abs() < slack {
+        bail!("a thread's end must be flat or a chamfer around its axis");
+    }
+    let mut seams: Vec<Edge> = Vec::new();
+    for &f in &neighbours {
+        for edge in faces[f].edge_iter() {
+            let shared = owners[&edge.id()]
+                .iter()
+                .filter(|o| neighbours.contains(o))
+                .count()
+                == 2;
+            if shared && !seams.iter().any(|e| e.is_same(&edge)) {
+                seams.push(edge.clone());
+            }
+        }
+    }
+    let straight = seams.iter().all(|edge| {
+        let points = edge_points(edge);
+        let (a, b) = (points[0], points[points.len() - 1]);
+        let chord = (b - a).normalize();
+        points
+            .iter()
+            .all(|p| (*p - a).cross(chord).magnitude() < slack * 10.0)
+    });
+    if !straight {
+        bail!("a thread's end must be flat or a chamfer around its axis, not a round");
+    }
+    let mesh_tolerance = (radius * 1.0e-3).max(1.0e-4);
+    for &f in &neighbours {
+        let single: Shell = vec![faces[f].clone()].into();
+        let mesh = single.robust_triangulation(mesh_tolerance).to_polygon();
+        let conical = mesh.positions().iter().all(|p| {
+            let expected =
+                radius + (far_radius - radius) * (height(*p) - near) / (far_height - near);
+            (helix.radial(*p).magnitude() - expected).abs() < rough
+        });
+        if !conical {
+            bail!("a thread's end must be flat or a chamfer around its axis, not a round");
+        }
+    }
+    Ok(End {
+        near,
+        kind: Kind::Cone {
+            faces: neighbours,
+            cap,
+            far_edges,
+            far_radius,
+            far_height,
+        },
+    })
+}
+
+fn seam_angles(segments: &[(f64, f64)]) -> Result<Vec<f64>> {
+    let samples = 720;
+    let wrap = |a: f64| a.rem_euclid(TAU);
+    let gap = |a: f64, b: f64| {
+        let d = wrap(a - b);
+        d.min(TAU - d)
+    };
+    let margin = 2.0_f64.to_radians();
+    let single: Vec<bool> = (0..samples)
+        .map(|i| {
+            let phi = TAU * i as f64 / samples as f64;
+            let count: usize = segments
+                .iter()
+                .map(|&(a, b)| {
+                    let (lo, hi) = (a.min(b), a.max(b));
+                    let first = ((lo - phi) / TAU).ceil() as i64;
+                    let last = ((hi - phi) / TAU).floor() as i64;
+                    (last - first + 1).max(0) as usize
+                })
+                .sum();
+            count == 1
+                && segments
+                    .iter()
+                    .all(|&(a, b)| gap(phi, a) > margin && gap(phi, b) > margin)
+        })
+        .collect();
+    let at = |i: usize| TAU * i as f64 / samples as f64;
+    let Some(anchor) = (0..samples).max_by_key(|&i| {
+        (0..samples)
+            .take_while(|&d| single[(i + d) % samples] && single[(i + samples - d) % samples])
+            .count()
+    }) else {
+        bail!("no room for a seam");
+    };
+    if !single[anchor] {
+        bail!("a chamfer this steep folds the thread's end over itself everywhere");
+    }
+    let mut seams: Vec<f64> = vec![at(anchor)];
+    for k in 1..4 {
+        let target = at(anchor) + TAU * k as f64 / 4.0;
+        let best = (0..samples)
+            .filter(|&i| single[i])
+            .min_by(|&a, &b| gap(at(a), target).total_cmp(&gap(at(b), target)));
+        if let Some(i) = best
+            && gap(at(i), target) < 40.0_f64.to_radians()
+            && seams.iter().all(|&s| gap(s, at(i)) > 30.0_f64.to_radians())
+        {
+            seams.push(at(i));
+        }
+    }
+    if seams.len() < 2 {
+        bail!("a chamfer this steep folds the thread's end over itself too far round");
+    }
+    seams.sort_by(f64::total_cmp);
+    Ok(seams)
+}
+
+fn cone_patch(
+    helix: &Helix,
+    near: (f64, f64),
+    far: (f64, f64),
+    from: f64,
+    to: f64,
+) -> (NurbsSurface<Vector4>, NurbsCurve<Vector4>) {
+    let spans = ((to - from) / (TAU / 4.0)).ceil().max(1.0) as usize;
+    let span = (to - from) / spans as f64;
+    let half = (span / 2.0).cos();
+    let mut values = vec![0.0; 3];
+    for i in 1..spans {
+        values.extend([i as f64, i as f64]);
+    }
+    values.extend([spans as f64; 3]);
+    let row = |angle: f64, scale: f64, weight: f64| -> Vec<Vector4> {
+        [near, far]
+            .iter()
+            .map(|&(r, h)| (helix.point(angle, r * scale, h).to_vec() * weight).extend(weight))
+            .collect()
+    };
+    let mut rows = vec![row(from, 1.0, 1.0)];
+    for i in 0..spans {
+        let a = from + span * i as f64;
+        rows.push(row(a + span / 2.0, 1.0 / half, half));
+        rows.push(row(a + span, 1.0, 1.0));
+    }
+    let knots = KnotVector::from(values);
+    let arc = NurbsCurve::new(BsplineCurve::new(
+        knots.clone(),
+        rows.iter().map(|r| r[1]).collect(),
+    ));
+    let surface = NurbsSurface::new(BsplineSurface::new(
+        (knots, KnotVector::bezier_knot(1)),
+        rows,
+    ));
+    (surface, arc)
+}
+
+struct Crossing {
+    angle: f64,
+    vertex: Vertex,
+}
+
+fn chamfer_faces(
+    end: &End,
+    loop_edges: &[Edge],
+    crossings: &[Crossing],
+    helix: &Helix,
+    radius: f64,
+    external: bool,
+) -> Result<(Vec<Face>, Wire)> {
+    let Kind::Cone {
+        far_radius,
+        far_height,
+        ..
+    } = end.kind
+    else {
+        unreachable!("chamfered ends only")
+    };
+    let place = |vertex: &Vertex| {
+        loop_edges
+            .iter()
+            .position(|e| e.front() == vertex)
+            .expect("a crossing on the end loop")
+    };
+    let m = crossings.len();
+    let far_vertices: Vec<Vertex> = crossings
+        .iter()
+        .map(|c| builder::vertex(helix.point(c.angle, far_radius, far_height)))
+        .collect();
+    let rulings: Vec<Edge> = crossings
+        .iter()
+        .zip(&far_vertices)
+        .map(|(c, far)| {
+            Edge::new(
+                &c.vertex,
+                far,
+                Curve::Line(Line(c.vertex.point(), far.point())),
+            )
+        })
+        .collect();
+    let mut pieces = Vec::new();
+    let mut arcs = Vec::new();
+    for i in 0..m {
+        let next = (i + 1) % m;
+        let from = crossings[i].angle;
+        let to = crossings[next].angle + if next == 0 { TAU } else { 0.0 };
+        let (surface, arc) = cone_patch(
+            helix,
+            (radius, end.near),
+            (far_radius, far_height),
+            from,
+            to,
+        );
+        let arc = Edge::new(
+            &far_vertices[i],
+            &far_vertices[next],
+            Curve::NurbsCurve(arc),
+        );
+        let (a, b) = (place(&crossings[next].vertex), place(&crossings[i].vertex));
+        let count = (b + loop_edges.len() - a) % loop_edges.len();
+        let mut wire: Vec<Edge> = (0..count)
+            .rev()
+            .map(|d| loop_edges[(a + d) % loop_edges.len()].inverse())
+            .collect();
+        wire.push(rulings[next].clone());
+        wire.push(arc.inverse());
+        wire.push(rulings[i].inverse());
+        let surface = Surface::NurbsSurface(surface);
+        let (u0, u1) = surface.try_range_tuple().0.expect("bounded");
+        let middle = (u0 + u1) / 2.0;
+        let normal = surface.normal(middle, 0.5);
+        let mut face = Face::try_new(vec![wire.into()], surface.clone())
+            .map_err(|error| anyhow!("chamfered thread end: {error}"))?;
+        if (normal.dot(helix.radial(surface.subs(middle, 0.5))) > 0.0) != external {
+            face.invert();
+        }
+        pieces.push(face);
+        arcs.push(arc);
+    }
+    Ok((pieces, arcs.into()))
+}
+
 pub(crate) fn thread_faces(
     solid: &Solid,
     picked: &[usize],
@@ -348,24 +709,11 @@ pub(crate) fn thread_faces(
     let external = outward > 0.0;
     let mine: HashSet<usize> = picked.iter().copied().collect();
     let mut end_edges: Vec<Edge> = Vec::new();
-    let mut caps: Vec<usize> = Vec::new();
     for &i in picked {
         for edge in faces[i].edge_iter() {
-            let others: Vec<usize> = owners[&edge.id()]
-                .iter()
-                .copied()
-                .filter(|f| !mine.contains(f))
-                .collect();
-            if others.is_empty() {
-                continue;
-            }
-            if !end_edges.iter().any(|e| e.is_same(&edge)) {
+            let outside = owners[&edge.id()].iter().any(|f| !mine.contains(f));
+            if outside && !end_edges.iter().any(|e| e.is_same(&edge)) {
                 end_edges.push(edge.clone());
-            }
-            for other in others {
-                if !caps.contains(&other) {
-                    caps.push(other);
-                }
             }
         }
     }
@@ -416,22 +764,51 @@ pub(crate) fn thread_faces(
         pitch,
     };
     let length = ends.top - ends.bottom;
-    for &cap in &caps {
-        let flat = match faces[cap].oriented_surface() {
-            Surface::Plane(plane) => plane.normal().cross(ends.axis).magnitude() < 1.0e-6,
-            _ => false,
-        };
-        if !flat {
-            bail!("a thread's ends must be flat faces square to its axis");
+    let (low_edges, high_edges): (Vec<Edge>, Vec<Edge>) =
+        end_edges.iter().cloned().partition(|edge| {
+            let points = edge_points(edge);
+            let p = points[points.len() / 2];
+            helix.along.dot(p - helix.origin) < length / 2.0
+        });
+    let end_slack = tolerance * 100.0 + radius * 1.0e-5;
+    let around = Around {
+        faces: &faces,
+        owners: &owners,
+        mine: &mine,
+        helix: &helix,
+        radius,
+        slack: end_slack,
+    };
+    let bottom = end_of(&around, &low_edges, 0.0)?;
+    let top = end_of(&around, &high_edges, length)?;
+    let (lowest_r, highest_r) = profile
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| {
+            (a.min(p.1), b.max(p.1))
+        });
+    for end in [&bottom, &top] {
+        if let Kind::Cone { far_radius, .. } = end.kind {
+            let reaches = if external {
+                far_radius < lowest_r - end_slack
+            } else {
+                far_radius > highest_r + end_slack
+            };
+            if !reaches {
+                bail!(
+                    "a chamfer at a thread's end must go past the thread's root, to {} {:.3} across; this one reaches {:.3}",
+                    if external { "under" } else { "over" },
+                    if external { lowest_r } else { highest_r } * 2.0,
+                    far_radius * 2.0
+                );
+            }
         }
     }
-    if caps.len() != 2 {
-        bail!("a thread goes on a round face with one flat face at each end");
-    }
+    let raw_low = |j: usize| TAU * (bottom.height_at(profile[j].1, radius) - profile[j].0) / pitch;
+    let raw_high = |j: usize| TAU * (top.height_at(profile[j].1, radius) - profile[j].0) / pitch;
 
     let step = TAU / SPANS_PER_TURN as f64;
-    let lowest = -TAU * profile[n].0 / pitch - TAU;
-    let highest = TAU * (length - profile[0].0) / pitch + TAU;
+    let lowest = (0..=n).map(raw_low).fold(f64::INFINITY, f64::min) - TAU;
+    let highest = (0..=n).map(raw_high).fold(f64::NEG_INFINITY, f64::max) + TAU;
     let start = (lowest / step).floor() * step;
     let spans = ((highest - start) / step).ceil() as usize;
     let end = start + spans as f64 * step;
@@ -470,11 +847,13 @@ pub(crate) fn thread_faces(
             theta
         }
     };
-    let low_at = |j: usize| snap(-TAU * profile[j].0 / pitch);
-    let high_at = |j: usize| snap(TAU * (length - profile[j].0) / pitch);
+    let low_at = |j: usize| snap(raw_low(j));
+    let high_at = |j: usize| snap(raw_high(j));
+    let first_cut = (0..=n).map(low_at).fold(f64::NEG_INFINITY, f64::max);
+    let last_cut = (0..=n).map(high_at).fold(f64::INFINITY, f64::min) - step;
     let cuts: Vec<f64> = (1..)
-        .map(|m| snap(low_at(0) + TAU * m as f64))
-        .take_while(|&theta| theta < high_at(n) - step)
+        .map(|m| snap(first_cut + TAU * m as f64))
+        .take_while(|&theta| theta < last_cut)
         .collect();
     let shift = |k: usize| if k + 1 == n { TAU } else { 0.0 };
     let rail_runs: Vec<Rail> = (0..n)
@@ -508,6 +887,61 @@ pub(crate) fn thread_faces(
         let control = interpolate(&points, &params, &knots)?;
         Ok(Curve::BsplineCurve(BsplineCurve::new(knots, control)))
     };
+    let crossings_of =
+        |end: &End, at: &dyn Fn(usize) -> f64| -> Result<Vec<(Crossing, usize, f64, f64)>> {
+            if matches!(end.kind, Kind::Flat { .. }) {
+                return Ok(Vec::new());
+            }
+            let segments: Vec<(f64, f64)> = (0..n).map(|k| (at(k), at(k + 1))).collect();
+            seam_angles(&segments)?
+                .into_iter()
+                .map(|angle| {
+                    segments
+                        .iter()
+                        .enumerate()
+                        .find_map(|(k, &(a, b))| {
+                            let (lo, hi) = (a.min(b), a.max(b));
+                            let theta = angle + TAU * ((lo - angle) / TAU).ceil();
+                            (theta < hi).then(|| {
+                                let t = (theta - a) / (b - a);
+                                let vertex = builder::vertex(surfaces[k].subs(theta, t));
+                                (Crossing { angle, vertex }, k, theta, t)
+                            })
+                        })
+                        .ok_or_else(|| anyhow!("a seam missed the thread's end"))
+                })
+                .collect()
+        };
+    let bottom_crossings = crossings_of(&bottom, &low_at)?;
+    let top_crossings = crossings_of(&top, &high_at)?;
+    let chain = |piece: &BsplineSurface<Point3>,
+                 k: usize,
+                 at: &dyn Fn(usize) -> f64,
+                 crossings: &[(Crossing, usize, f64, f64)],
+                 from: &Vertex,
+                 to: &Vertex|
+     -> Result<Vec<Edge>> {
+        let mut stops: Vec<(Point2, Vertex)> = vec![(Point2::new(at(k), 0.0), from.clone())];
+        let mut inside: Vec<&(Crossing, usize, f64, f64)> =
+            crossings.iter().filter(|c| c.1 == k).collect();
+        inside.sort_by(|a, b| a.3.total_cmp(&b.3));
+        stops.extend(
+            inside
+                .into_iter()
+                .map(|(c, _, theta, t)| (Point2::new(*theta, *t), c.vertex.clone())),
+        );
+        stops.push((Point2::new(at(k + 1), 1.0), to.clone()));
+        stops
+            .windows(2)
+            .map(|pair| {
+                Ok(Edge::new(
+                    &pair[0].1,
+                    &pair[1].1,
+                    pcurve(piece, pair[0].0, pair[1].0)?,
+                ))
+            })
+            .collect()
+    };
     let mut bottom_edges = Vec::new();
     let mut top_edges = Vec::new();
     let mut strips = Vec::new();
@@ -515,9 +949,9 @@ pub(crate) fn thread_faces(
         let upper = &rail_runs[(k + 1) % n];
         let lower = &rail_runs[k];
         let lifted = shift(k);
-        let mut bounds = vec![low_at(k + 1)];
+        let mut bounds = vec![low_at(k).min(low_at(k + 1))];
         bounds.extend(cuts.iter().copied());
-        bounds.push(high_at(k));
+        bounds.push(high_at(k).max(high_at(k + 1)));
         let columns: Vec<Edge> = cuts
             .iter()
             .map(|&theta| {
@@ -535,17 +969,16 @@ pub(crate) fn thread_faces(
             piece.cut_u(b);
             let mut edges = lower.run(a.max(low_at(k)), b.min(high_at(k)));
             if f == last {
-                let top = Edge::new(
+                let top = chain(
+                    &piece,
+                    k,
+                    &high_at,
+                    &top_crossings,
                     lower.vertex(high_at(k)),
                     upper.vertex(high_at(k + 1) + lifted),
-                    pcurve(
-                        &piece,
-                        Point2::new(high_at(k), 0.0),
-                        Point2::new(high_at(k + 1), 1.0),
-                    )?,
-                );
-                edges.push(top.clone());
-                top_edges.push(top);
+                )?;
+                edges.extend(top.iter().cloned());
+                top_edges.extend(top);
             } else {
                 edges.push(columns[f].clone());
             }
@@ -560,17 +993,16 @@ pub(crate) fn thread_faces(
                     .map(|e| e.inverse()),
             );
             if f == 0 {
-                let bottom = Edge::new(
+                let bottom = chain(
+                    &piece,
+                    k,
+                    &low_at,
+                    &bottom_crossings,
                     lower.vertex(low_at(k)),
                     upper.vertex(low_at(k + 1) + lifted),
-                    pcurve(
-                        &piece,
-                        Point2::new(low_at(k), 0.0),
-                        Point2::new(low_at(k + 1), 1.0),
-                    )?,
-                );
-                edges.push(bottom.inverse());
-                bottom_edges.push(bottom);
+                )?;
+                edges.extend(bottom.iter().rev().map(|e| e.inverse()));
+                bottom_edges.extend(bottom);
             } else {
                 edges.push(columns[f - 1].inverse());
             }
@@ -585,39 +1017,56 @@ pub(crate) fn thread_faces(
             strips.push(face);
         }
     }
-    let bottom_loop: Wire = bottom_edges.into();
-    let top_loop: Wire = top_edges.into();
-    let end_ids: HashSet<EdgeId> = end_edges.iter().map(|e| e.id()).collect();
-    let height = |face: &Face| {
-        let p = face
-            .vertex_iter()
-            .next()
-            .expect("a face has vertices")
-            .point();
-        helix.along.dot(p - helix.origin)
-    };
-    let picked_ids: HashSet<FaceId> = picked.iter().map(|&i| faces[i].id()).collect();
-    let cap_ids: Vec<FaceId> = caps.iter().map(|&i| faces[i].id()).collect();
+    let mut removed: HashSet<FaceId> = picked.iter().map(|&i| faces[i].id()).collect();
+    let mut replaced: Vec<(FaceId, Face)> = Vec::new();
+    let mut added: Vec<Face> = strips.clone();
+    for (end, loop_edges, crossings, side_edges) in [
+        (&bottom, bottom_edges, bottom_crossings, &low_edges),
+        (&top, top_edges, top_crossings, &high_edges),
+    ] {
+        match &end.kind {
+            Kind::Flat { cap } => {
+                let ids: HashSet<EdgeId> = side_edges.iter().map(|e| e.id()).collect();
+                let wire: Wire = loop_edges.into();
+                replaced.push((faces[*cap].id(), capped(&faces[*cap], &ids, &wire, &helix)?));
+            }
+            Kind::Cone {
+                faces: cone,
+                cap,
+                far_edges,
+                ..
+            } => {
+                let mut crossings: Vec<Crossing> = crossings.into_iter().map(|(c, ..)| c).collect();
+                crossings.sort_by(|a, b| a.angle.total_cmp(&b.angle));
+                let (pieces, far_loop) =
+                    chamfer_faces(end, &loop_edges, &crossings, &helix, radius, external)?;
+                cone.iter().for_each(|&f| {
+                    removed.insert(faces[f].id());
+                });
+                let ids: HashSet<EdgeId> = far_edges.iter().map(|e| e.id()).collect();
+                replaced.push((
+                    faces[*cap].id(),
+                    capped(&faces[*cap], &ids, &far_loop, &helix)?,
+                ));
+                added.extend(pieces);
+            }
+        }
+    }
     let mut shells = Vec::new();
     for shell in solid.boundaries() {
         let mut kept: Vec<Face> = Vec::new();
         let mut touched = false;
         for face in shell.face_iter() {
-            if picked_ids.contains(&face.id()) {
+            if removed.contains(&face.id()) {
                 touched = true;
-            } else if cap_ids.contains(&face.id()) {
-                let new_loop = if height(face).abs() < (length / 2.0).abs() {
-                    &bottom_loop
-                } else {
-                    &top_loop
-                };
-                kept.push(capped(face, &end_ids, new_loop, &helix)?);
+            } else if let Some((_, new)) = replaced.iter().find(|(id, _)| *id == face.id()) {
+                kept.push(new.clone());
             } else {
                 kept.push(face.clone());
             }
         }
         if touched {
-            kept.extend(strips.iter().cloned());
+            kept.extend(added.iter().cloned());
         }
         shells.push(Shell::from(kept));
     }

@@ -154,9 +154,10 @@ gcad bom asm.gasm --csv
   whose third edge stays sharp. `shell` hollows the extrusion that owns the open face,
   so shell before adding other features.
 - Hole edges made by booleans are fine polylines, not exact circles.
-- `thread M6 on=rod.side` needs the round face to run between two flat ends square to it, and
-  its ends cannot be chamfered or filleted afterwards. Holes take `thread M6 on=h.side` after
-  `h: hole 5 0,0 thread=M6`.
+- `thread M6 on=rod.side` needs each end of the round face to be flat and square to it, or a
+  chamfer deeper than the thread (`chamfer 1 rod.end&rod.side` on an M6). Chamfer first and
+  thread last. Holes take `thread M6 on=h.side` after `h: hole 5 0,0 thread=M6`, with or
+  without `csink=`.
 - Assembly parts are built in parallel and cached per file and variables, so many copies of
   one part cost one build.
 

@@ -249,6 +249,22 @@ fn sweep_scale() {
 }
 
 fn threaded_section(pitch: f64, radius: f64, external: bool) -> f64 {
+    threaded_slice(pitch, radius, external, 2_000)
+}
+
+fn threaded_volume(pitch: f64, length: f64, external: bool, reach: impl Fn(f64) -> f64) -> f64 {
+    let slices = 2_000;
+    (0..slices)
+        .map(|i| {
+            let z = length * (i as f64 + 0.5) / slices as f64;
+            threaded_slice(pitch, reach(z), external, 4_000)
+        })
+        .sum::<f64>()
+        * length
+        / slices as f64
+}
+
+fn threaded_slice(pitch: f64, radius: f64, external: bool, steps: usize) -> f64 {
     let crest = 3.0;
     let root = crest - 5.0 / 8.0 * 3.0_f64.sqrt() / 2.0 * pitch;
     let profile = |s: f64| {
@@ -268,7 +284,6 @@ fn threaded_section(pitch: f64, radius: f64, external: bool) -> f64 {
             r.max(radius)
         }
     };
-    let steps = 200_000;
     let mean = (0..steps)
         .map(|i| profile(pitch * (i as f64 + 0.5) / steps as f64).powi(2))
         .sum::<f64>()
@@ -352,7 +367,48 @@ fn thread_up_to_a_bolt_head() {
 }
 
 #[test]
+fn thread_runs_out_into_chamfers() {
+    assert_volume(
+        &build(
+            "circle 6\nrod: extrude 6\nchamfer 1 rod.end&rod.side|rod.start&rod.side\nthread M6 on=rod.side",
+        ),
+        threaded_volume(1.0, 6.0, true, |z| 3.0_f64.min(2.0 + z).min(8.0 - z)),
+        2.0e-4,
+    );
+}
+
+#[test]
+fn left_hand_thread_runs_out_into_a_chamfer() {
+    assert_volume(
+        &build(
+            "circle 5.9\nrod: extrude 6\nchamfer 0.8 rod.end&rod.side\nthread M6 on=rod.side left pitch=0.75",
+        ),
+        threaded_volume(0.75, 6.0, true, |z| 2.95_f64.min(8.15 - z)),
+        2.0e-4,
+    );
+}
+
+#[test]
+fn tapped_thread_under_a_countersink() {
+    assert_volume(
+        &build(
+            "rect 20 20\nbase: extrude 4\nplane base.end\nh: hole 5 0,0 csink=7,90 thread=M6\nthread M6 on=h.side",
+        ),
+        1600.0 - threaded_volume(1.0, 4.0, false, |z| 2.5_f64.max(z - 0.5)),
+        2.0e-5,
+    );
+}
+
+#[test]
 fn thread_needs_a_round_face_that_fits() {
+    assert!(
+        failure("circle 6\nrod: extrude 3\nchamfer 0.3 rod.end&rod.side\nthread M6 on=rod.side")
+            .contains("past the thread's root")
+    );
+    assert!(
+        failure("circle 6\nrod: extrude 3\nfillet 1 rod.end&rod.side\nthread M6 on=rod.side")
+            .contains("not a round")
+    );
     assert!(failure("circle 8\nrod: extrude 3\nthread M6 on=rod.side").contains("rod between"));
     assert!(failure("rect 6 6\nbox: extrude 3\nthread M6 on=box.side").contains("round face"));
     assert!(failure("circle 6\nrod: extrude 3\nthread M7 on=rod.side").contains("unknown thread"));

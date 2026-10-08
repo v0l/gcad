@@ -86,6 +86,14 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass())
             "circle 6\nrod: extrude 3\nthread M6 on=rod.side",
         ),
         (
+            "thread-tip",
+            "circle 6\nrod: extrude 6\nchamfer 1 rod.end&rod.side|rod.start&rod.side\nthread M6 on=rod.side",
+        ),
+        (
+            "countersunk-tapped",
+            "rect 20 20\nbase: extrude 4\nplane base.end\nh: hole 5 0,0 csink=7,90 thread=M6\nthread M6 on=h.side",
+        ),
+        (
             "tapped",
             "rect 20 20\nbase: extrude 4\nplane base.end\nh: hole 5 0,0 thread=M6\nthread M6 on=h.side",
         ),
