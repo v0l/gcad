@@ -143,7 +143,7 @@ Bodies:
 | `rotate` | `angle` `axis=x\|y\|z\|name` `about=x,y,z` `copy` | turns the solid, or adds a turned copy |
 | `scale` | `factor` or `x,y,z` `about=x,y,z` | scales the solid, evenly or per axis |
 | `split` | `on` `offset=` `keep=below\|above` | cuts the solid with a plane and keeps one side |
-| `body` | `name` | sets the current solid aside and starts a new one, to build one part from pieces you `combine`; the first body is `main`. A second part goes in its own file, and `check` notes bodies left separate |
+| `body` | `name` | sets the current solid aside and starts a new one: another part sharing this file's sizes, which an assembly brings in as `part.name`, or a piece to `combine` into one part; the first body is `main` |
 | `combine` | `into from` `mode=add\|cut\|intersect` | joins body `from` into body `into`, or cuts it out, and drops `from` |
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
 | `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file |
@@ -166,11 +166,10 @@ path point (or the start of the helix) and turns it to face along the path.
 
 ## Assemblies
 
-A `.gcad` file is one part. A design with more than one part is a `.gasm` file, an
-assembly: it brings the parts in from their part files, places them and joins them,
-and makes no geometry of its own. Give each part file `let` defaults for the sizes it
-shares, and set them once in the `.gasm` on every `part` line so the parts stay in
-step. Its lines have the same shape and use `let`, `if` and `include` the same way.
+A design with more than one part is a `.gasm` file, an assembly: it brings the parts
+in from part files, places them and joins them, and makes no geometry of its own. A
+`.gcad` part file holds one part, or several parts as bodies when they share sizes.
+Its lines have the same shape and use `let`, `if` and `include` the same way.
 
 | operation | parameters | does |
 |---|---|---|
@@ -235,24 +234,23 @@ box's pilot hole keeps a hinged lid shut. `aligned` only checks holes; it holds
 nothing.
 
 `part:faces` names faces on one part with the selectors of its own file, so
-`case:pilot.side` is the side of the `pilot` holes in the part `case`. They
+`case.main:pilot.side` is the side of the `pilot` holes in the part `case.main`. They
 follow the part as it moves.
 
 ```
 let open=0 screwed=1 bx=32 by=17 h=30
-part case ../parts/enclosure-case.gcad
-part lid ../parts/enclosure-lid.gcad
+part case ../parts/enclosure.gcad
 axis hinge -40,25,30 40,25,30
-joint lid lid case turn about=hinge min=-110 max=0 at=open
-aligned lid:screws.side case:pilot.side
+joint lid case.lid case.main turn about=hinge min=-110 max=0 at=open
+aligned case.lid:screws.side case.main:pilot.side
 if screwed part s1 ../parts/screw.gcad
-if screwed concentric s1:shank.side lid:screws.side near=bx,by,h
-if screwed flush s1:head.start lid:top.end
-if screwed concentric s1:shank.side case:pilot.side
+if screwed concentric s1:shank.side case.lid:screws.side near=bx,by,h
+if screwed flush s1:head.start case.lid:top.end
+if screwed concentric s1:shank.side case.main:pilot.side
 if screwed explode s1 0,0,25
-if screwed pattern s1 holes=lid:screws.side
+if screwed pattern s1 holes=case.lid:screws.side
 pose lid open
-explode lid 0,0,30
+explode case.lid 0,0,30
 interference none
 ```
 

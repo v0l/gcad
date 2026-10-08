@@ -127,7 +127,7 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
     let bodies = run.model.body_names();
     if !run.model.assembly && bodies.len() > 1 {
         println!(
-            "note: {} separate bodies ({}). Give each part its own .gcad and place them in a .gasm assembly; `combine` the bodies that make one part",
+            "note: {} separate bodies ({}). If they are separate parts, bring this file into a .gasm with `part` to place, join and check them; if they are one part, `combine` them",
             bodies.len(),
             bodies.join(", ")
         );

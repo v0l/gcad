@@ -25,13 +25,10 @@ fn pipe() {
 }
 
 #[test]
-fn enclosure_case() {
-    assert_volume(&build(&part("enclosure-case")), 25240.3, 0.001);
-}
-
-#[test]
-fn enclosure_lid() {
-    assert_volume(&build(&part("enclosure-lid")), 8841.8, 0.001);
+fn enclosure() {
+    let model = build(&part("enclosure"));
+    assert_eq!(model.body_names(), ["main", "lid"]);
+    assert_volume(&model, 25240.3 + 8841.8, 0.001);
 }
 
 #[test]
@@ -44,7 +41,7 @@ fn enclosure_assembly() {
     assert!(run.steps.iter().all(|(_, r)| r.is_ok()));
     assert_eq!(
         run.model.body_names(),
-        ["case", "lid", "s1", "s1_2", "s1_3", "s1_4"]
+        ["case.main", "case.lid", "s1", "s1_2", "s1_3", "s1_4"]
     );
     let opened = gcad::model::run_path(&path, &[("open".to_string(), -75.0)], None).expect("runs");
     let (_, last) = opened.steps.last().expect("steps");

@@ -36,9 +36,10 @@ gcad examples/robot/arm.gasm
 gcad docs
 ```
 
-A part file (`.gcad`) is one part. Anything with more than one part is an assembly
-(`.gasm`): it brings each part in from its own part file, places them, joins them with
-turning and sliding joints and checks that they do not overlap.
+Anything with more than one part is an assembly (`.gasm`): it brings the parts in
+from part files, places them, joins them with turning and sliding joints and checks
+that they do not overlap. A part file (`.gcad`) holds one part, or several parts as
+bodies when they share sizes.
 
 `examples/robot/arm.gasm` is a robot arm built the way industrial arms are: each
 joint has a motor on its axis under a round cover, driving a planetary reducer
