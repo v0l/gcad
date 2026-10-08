@@ -1,23 +1,24 @@
-let H=190 C=50 bolts=31
-plane XY offset=76
-circle 120
+let H=200 C=27 m=1.5 ring=54 bolts=31 w=50 r=55
+plane XY offset=89
+circle 150
 table: extrude 14
-plane XY offset=76
-circle 24
-spindle: extrude -16
-plane XY offset=60
-circle 12
-stub: extrude -8
+plane XY offset=89
+circle 8 at=C,0
+circle 8 at=-C/2,C*sin(120)
+circle 8 at=-C/2,-C*sin(120)
+pins: extrude -17
 plane XZ offset=24
-pen -45,90
-line 45,90
-line 46,H
-arc -46,H via=0,H+46
+pen -w,103
+line w,103
+line r,H
+arc -r,H via=0,H+r
 close
-upright: extrude 12
+upright: extrude 28
+plane upright.start
+gear ring m internal at=0,H
+ring: cut 18
 plane upright.end
-axle: hole 21 0,H
-pilot: hole 23 0,H-C
-mounts: hole 3.4 bolts/2,H-C+bolts/2 -bolts/2,H-C+bolts/2 -bolts/2,H-C-bolts/2 bolts/2,H-C-bolts/2
+pilot: hole 23 0,H
+mounts: hole 3.4 bolts/2,H+bolts/2 -bolts/2,H+bolts/2 -bolts/2,H-bolts/2 bolts/2,H-bolts/2
 color #f39c12
 material aluminium

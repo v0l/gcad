@@ -1,119 +1,133 @@
 let yaw=0 shoulder=55 elbow=-70 wrist=-70 jaw=0
+let H=200 L1=220 L2=200 grip=65 suns=18 rings=54 drive=1+rings/suns idle=-rings/suns
 part base base.lcad
-part cover cover.lcad
-move cover 0,0,70
-part motor_y motor.lcad
-move motor_y -40,0,4
-part pinion_y gear.lcad z=16 m=1 bore=5.2
-move pinion_y -40,0,52
-part turret turret.lcad
-part gear_y gear.lcad z=64 m=1 bore=12.2 a=180+180/64
-move gear_y 0,0,52
-concentric gear_y:bore.side turret:stub.side
-flush gear_y:teeth.end turret:spindle.end
-part motor_s motor.lcad shaft=22
+part motor_y motor.lcad shaft=19
+move motor_y 0,0,25
+part sun_y gear.lcad z=suns m=1.5 w=14 bore=5.2
+move sun_y 0,0,72
+part turret turret.lcad H=H
+part planet_y gear.lcad z=18 m=1.5 w=14 bore=8.2 a=190
+move planet_y 27,0,72
+part motor_s motor.lcad shaft=26
 rotate motor_s -90 axis=x
-move motor_s 0,-76,140
+move motor_s 0,-92,H
 flush motor_s:can.end turret:upright.end
 concentric motor_s:boss.side turret:pilot.side
 part cap_s cap.lcad d=76
 rotate cap_s 90 axis=x
-move cap_s 0,-36,140
+move cap_s 0,-52,H
 flush cap_s:can.start turret:upright.end
-part pinion_s gear.lcad z=16 m=1.25 bore=5.2 a=-90
-rotate pinion_s -90 axis=x
-move pinion_s 0,-20,140
-part upper upper.lcad
-move upper 0,0,190
-part gear_s gear.lcad z=64 m=1.25 bore=20.2 a=90+180/64
-rotate gear_s -90 axis=x
-move gear_s 0,-20,190
-concentric gear_s:bore.side upper:axle.side
-flush gear_s:teeth.end upper:beam.start
-part motor_e motor.lcad size=35 length=34 shaft=46 bolts=26
+part sun_s gear.lcad z=suns m=1.5 w=14 bore=5.2
+rotate sun_s -90 axis=x
+move sun_s 0,-41,H
+part upper upper.lcad L=L1
+move upper 0,0,H
+part planet_s gear.lcad z=18 m=1.5 w=14 bore=8.2 a=190
+rotate planet_s -90 axis=x
+move planet_s 27,-41,H
+part motor_e motor.lcad size=35 length=34 shaft=40 bolts=26
 rotate motor_e -90 axis=x
-move motor_e 165,-46,190
+move motor_e L1,-56,H
 flush motor_e:can.end upper:beam.start
 concentric motor_e:boss.side upper:pilot.side
 part cap_e cap.lcad d=58 depth=40
 rotate cap_e 90 axis=x
-move cap_e 165,-12,190
+move cap_e L1,-22,H
 flush cap_e:can.start upper:beam.start
-part pinion_e gear.lcad z=14 m=1 bore=5.2
-rotate pinion_e -90 axis=x
-move pinion_e 165,28,190
-part fore forearm.lcad
-move fore 200,0,190
-part gear_e gear.lcad z=56 m=1 bore=20.2 a=180+180/56
-rotate gear_e -90 axis=x
-move gear_e 200,28,190
-concentric gear_e:bore.side fore:axle.side
-flush gear_e:teeth.end fore:beam.start
-part motor_w motor.lcad size=28 length=32 shaft=34 bolts=23 screw=2.6
-rotate motor_w 90 axis=x
-move motor_w 357.2,92,190
-flush motor_w:can.end fore:beam.end
+part sun_e gear.lcad z=suns m=1.25 w=14 bore=5.2
+rotate sun_e -90 axis=x
+move sun_e L1,6,H
+part fore forearm.lcad L=L2
+move fore L1,0,H
+part planet_e gear.lcad z=18 m=1.25 w=14 bore=7.2 a=190
+rotate planet_e -90 axis=x
+move planet_e L1+22.5,6,H
+part motor_w motor.lcad size=28 length=32 shaft=28 bolts=23 screw=2.6
+rotate motor_w -90 axis=x
+move motor_w L1+L2,-8,H
+flush motor_w:can.end fore:beam.start
 concentric motor_w:boss.side fore:pilot.side
 part cap_w cap.lcad d=44 depth=38
-rotate cap_w -90 axis=x
-move cap_w 357.2,60,190
-flush cap_w:can.start fore:beam.end
-part pinion_w gear.lcad z=17 m=0.8 bore=5.2
-rotate pinion_w 90 axis=x
-move pinion_w 357.2,32,190
-part hand wrist.lcad
-move hand 380,0,190
-part gear_w gear.lcad z=40 m=0.8 bore=12.2 a=180+180/40
-rotate gear_w -90 axis=x
-move gear_w 380,24,190
-concentric gear_w:bore.side hand:axle.side
-flush gear_w:teeth.start hand:block.end
-part motor_g motor.lcad size=20 length=30 shaft=30 shaftd=4 pilot=16 bolts=16 screw=2.4
-rotate motor_g -90 axis=x
-move motor_g 445,-30,190
-flush motor_g:can.end hand:housing.start
-concentric motor_g:boss.side hand:pilot.side
+rotate cap_w 90 axis=x
+move cap_w L1+L2,24,H
+flush cap_w:can.start fore:beam.start
+part sun_w gear.lcad z=suns m=1 w=14 bore=5.2
+rotate sun_w -90 axis=x
+move sun_w L1+L2,40,H
+part hand wrist.lcad grip=grip
+move hand L1+L2,0,H
+part planet_w gear.lcad z=18 m=1 w=14 bore=6.2 a=190
+rotate planet_w -90 axis=x
+move planet_w L1+L2+18,40,H
+part hood hood.lcad grip=grip
+move hood L1+L2,0,H
+flush hood:plate.start hand:housing.end
+part motor_g motor.lcad size=20 length=30 shaft=12 shaftd=4 pilot=16 bolts=16 screw=2.4
+rotate motor_g 90 axis=x
+move motor_g L1+L2+grip,116,H
+flush motor_g:can.end hood:plate.end
+concentric motor_g:boss.side hood:pilot.side
+part cap_g cap.lcad d=34 depth=34 t=2
+rotate cap_g -90 axis=x
+move cap_g L1+L2+grip,86,H
+flush cap_g:can.start hood:plate.end
 part pinion_g gear.lcad z=17 m=1 bore=4.2
 rotate pinion_g -90 axis=x
-move pinion_g 445,24,190
-part finger_a finger.lcad s=1 shift=0
-move finger_a 380,0,190
-part finger_b finger.lcad s=-1 shift=0.5
-move finger_b 380,0,190
+move pinion_g L1+L2+grip,73,H
+part finger_a finger.lcad s=1 shift=0 grip=grip
+move finger_a L1+L2,0,H
+part finger_b finger.lcad s=-1 shift=0.5 grip=grip
+move finger_b L1+L2,0,H
 axis yaw 0,0,0 0,0,1
-axis yaw_motor -40,0,0 -40,0,1
-axis shoulder 0,1,190 0,0,190
-axis shoulder_motor 0,1,140 0,0,140
-axis elbow 200,1,190 200,0,190
-axis elbow_motor 165,1,190 165,0,190
-axis wrist 380,1,190 380,0,190
-axis wrist_motor 357.2,1,190 357.2,0,190
-axis grip_motor 445,1,190 445,0,190
+axis yaw_pin 27,0,0 27,0,1
+axis shoulder 0,1,H 0,0,H
+axis shoulder_pin 27,1,H 27,0,H
+axis elbow L1,1,H L1,0,H
+axis elbow_pin L1+22.5,1,H L1+22.5,0,H
+axis wrist L1+L2,1,H L1+L2,0,H
+axis wrist_pin L1+L2+18,1,H L1+L2+18,0,H
+axis grip L1+L2+grip,1,H L1+L2+grip,0,H
 joint yaw turret base turn about=yaw
 joint shoulder upper turret turn about=shoulder min=-10 max=120
 joint elbow fore upper turn about=elbow min=-135 max=150
 joint wrist hand fore turn about=wrist min=-120 max=120
-joint jaw finger_a hand slide along=0,0,1 min=-4 max=8
-joint jaw_b finger_b hand slide along=0,0,-1 min=-4 max=8
-joint spin_y pinion_y motor_y turn about=yaw_motor
-joint spin_s pinion_s motor_s turn about=shoulder_motor
-joint spin_e pinion_e motor_e turn about=elbow_motor
-joint spin_w pinion_w motor_w turn about=wrist_motor
-joint spin_g pinion_g motor_g turn about=grip_motor
-couple spin_y yaw ratio=-64/16
-couple spin_s shoulder ratio=-64/16
-couple spin_e elbow ratio=-56/14
-couple spin_w wrist ratio=-40/17
-couple spin_g jaw ratio=-360/(pi*17)
+joint jaw finger_a hand slide along=0,0,1 min=-1 max=8
+joint jaw_b finger_b hand slide along=0,0,-1 min=-1 max=8
+joint sun_y_turn sun_y motor_y turn about=yaw
+joint sun_s_turn sun_s motor_s turn about=shoulder
+joint sun_e_turn sun_e motor_e turn about=elbow
+joint sun_w_turn sun_w motor_w turn about=wrist
+joint pinion_g_turn pinion_g motor_g turn about=grip
+joint planet_y_turn planet_y turret turn about=yaw_pin
+joint planet_s_turn planet_s upper turn about=shoulder_pin
+joint planet_e_turn planet_e fore turn about=elbow_pin
+joint planet_w_turn planet_w hand turn about=wrist_pin
+couple sun_y_turn yaw ratio=drive
+couple sun_s_turn shoulder ratio=drive
+couple sun_e_turn elbow ratio=drive
+couple sun_w_turn wrist ratio=drive
+couple planet_y_turn yaw ratio=idle
+couple planet_s_turn shoulder ratio=idle
+couple planet_e_turn elbow ratio=idle
+couple planet_w_turn wrist ratio=idle
+couple pinion_g_turn jaw ratio=-360/(pi*17)
 couple jaw_b jaw ratio=1
+pattern planet_y count=3 angle=360 axis=yaw
+pattern planet_s count=3 angle=360 axis=shoulder
+pattern planet_e count=3 angle=360 axis=elbow
+pattern planet_w count=3 angle=360 axis=wrist
+interference none
 pose yaw yaw
 pose shoulder shoulder
 pose elbow elbow
 pose wrist wrist
 pose jaw jaw
 interference none
-explode cover 0,0,30
-explode turret 0,0,70
+explode turret 0,0,90
 explode cap_s 0,-70,0
+explode upper 0,60,0
 explode cap_e 0,-60,0
-explode cap_w 0,60,0
+explode fore 0,60,0
+explode cap_w 0,-60,0
+explode hand 0,60,0
+explode hood 0,50,0

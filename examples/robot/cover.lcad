@@ -1,7 +1,0 @@
-let d=150 t=5 bore=30
-circle d
-circle bore
-plate: extrude t
-chamfer 1 plate.end&plate.side
-color #1c1d20
-material aluminium

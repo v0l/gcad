@@ -1,13 +1,19 @@
-let d=150 h=70 t=4 flange=180 bolt=82 motor=-40
+let d=150 h=70 t=5 flange=180 bolt=82 m=1.5 ring=54 bolts=31
 circle d
 drum: extrude h
-shell t open=drum.end
+shell t open=drum.start
 circle flange
 circle d-2
-ring: extrude 10
-plane ring.end
+foot: extrude 10
+plane foot.end
 bolts: hole 9 bolt,0 bolt*cos(60),bolt*sin(60) -bolt*cos(60),bolt*sin(60) -bolt,0 -bolt*cos(60),-bolt*sin(60) bolt*cos(60),-bolt*sin(60)
-plane drum.start
-mounts: hole 3.4 motor+15.5,15.5 motor-15.5,15.5 motor-15.5,-15.5 motor+15.5,-15.5
+plane XY offset=h
+circle 110
+boss: extrude 18
+plane boss.end
+gear ring m internal
+ring: cut 18
+pilot: hole 23 0,0
+mounts: hole 3.4 bolts/2,bolts/2 -bolts/2,bolts/2 -bolts/2,-bolts/2 bolts/2,-bolts/2
 color #1c1d20
 material aluminium

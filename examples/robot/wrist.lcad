@@ -1,20 +1,25 @@
-let reach=50 grip=65 bolts=16
-plane XZ
-pen 0,18
-line reach,18
-line reach,-18
-line 0,-18
-arc 0,18 via=-18,0
+let r=34 reach=45 grip=65 C=18
+plane XZ offset=-58
+pen 0,r
+line reach,r
+line reach,-r
+line 0,-r
+arc 0,r via=-r,0
 close
 block: extrude -24
-plane XZ
-rect 30 70 at=grip,0 r=4
+plane XZ offset=-58
+rect 40 92 at=grip,0 r=6
 housing: extrude -24
-plane XZ offset=-24
-circle 12
-axle: extrude -36
-plane XZ
-pilot: hole 17 grip,0
-mounts: hole 2.4 grip+bolts/2,bolts/2 grip-bolts/2,bolts/2 grip-bolts/2,-bolts/2 grip+bolts/2,-bolts/2
+plane XZ offset=-58
+circle 6 at=C,0
+circle 6 at=-C/2,C*sin(120)
+circle 6 at=-C/2,-C*sin(120)
+pins: extrude 19
+plane housing.end
+rect 32 80 at=-grip,0
+pocket: cut 10
+rect 5 22 at=-(grip+18.5),27
+rect 5 22 at=-(grip+18.5),-27
+slots: cut 10
 color #f39c12
 material aluminium

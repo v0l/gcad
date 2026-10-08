@@ -27,13 +27,16 @@ Part files (`.lcad`) build one or more bodies. Assembly files (`.lasm`) bring pa
 from part files, place them, join them with turning and sliding joints and check
 that they do not overlap.
 
-`examples/robot/arm.lasm` is a five-axis arm built this way. A stepper motor drives
-each joint through a pair of involute spur gears, and a rack and pinion opens the
-gripper. Open it in the viewer and drag the joint sliders: the motor pinions turn with
-the joints, and the explode slider lifts the covers off the motors and the turret off
-the base so the gears inside show.
+`examples/robot/arm.lasm` is a robot arm built the way industrial arms are: each
+joint has a motor on its axis under a round cover, driving a planetary reducer
+enclosed in the joint housing. The ring gear is cut into the housing, the sun sits on
+the motor shaft, and the three planets turn on pins of the next link, which is the
+reducer's output. The gripper's fingers are racks on one pinion inside its housing.
+Drag the joint sliders in the viewer and every sun and planet turns at its ratio; the
+explode slider and the section tool show the gears inside.
 
 ![The robot arm example in the viewer](docs/robot-arm.png)
+![A section through the shoulder reducer](docs/robot-arm-section.png)
 
 With no command, `linecad` opens the viewer: a live view of the file that rebuilds on
 save, with a view cube, measuring, and sliders for an assembly's joints.

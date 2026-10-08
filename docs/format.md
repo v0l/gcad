@@ -196,10 +196,12 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 `faces` in `parallel`, `angle`, `distance` and `tangent` is either flat faces on one
 plane or the round faces of one cylinder, which stands for its axis.
 
-`examples/robot/arm.lasm` puts these together: every motor is mated to the link that
-carries it, its pinion turns on it with a `turn` joint, and a `couple` makes the pinion
-follow the joint it drives at the gear ratio. The gripper's fingers are racks on one
-pinion, so one `slide` drives both. The arm's own variables pose it:
+`examples/robot/arm.lasm` puts these together. Each joint is a planetary reducer: the
+motor is mated to the housing, its sun turns on it with a `turn` joint coupled to the
+arm joint at `1+ring/sun`, and one planet turns on the output link coupled at
+`-ring/planet`; `pattern planet count=3 angle=360 axis=...` adds the other two with
+their joints and couples. The gripper's fingers are racks on one pinion, so one `slide`
+drives both. The arm's own variables pose it:
 `linecad check examples/robot/arm.lasm --set shoulder=30 --set jaw=6`.
 
 A part can have several joints to the same parent, and their motions add up. They

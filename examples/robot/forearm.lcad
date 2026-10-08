@@ -1,18 +1,22 @@
-let L=180 r0=28 r1=22 C=22.8 bolts=23
-plane XZ offset=-36
+let L=200 r0=44 r1=34 C=22.5 m=1 ring=54 bolts=23
+plane XZ offset=-24
 pen 0,r0
 line L,r1
 arc L,-r1 via=L+r1,0
 line 0,-r0
 arc 0,r0 via=-r0,0
 close
-beam: extrude -24
-plane XZ offset=-36
-circle 20
-axle: extrude 48
+beam: extrude -32
+plane XZ offset=-24
+circle 7 at=C,0
+circle 7 at=-C/2,C*sin(120)
+circle 7 at=-C/2,-C*sin(120)
+pins: extrude 19
+plane beam.end
+gear ring m internal at=-L,0
+ring: cut 18
 plane beam.start
-wrist: hole 13 L,0
-pilot: hole 23 L-C,0
-mounts: hole 2.6 L-C+bolts/2,bolts/2 L-C-bolts/2,bolts/2 L-C-bolts/2,-bolts/2 L-C+bolts/2,-bolts/2
+pilot: hole 23 L,0
+mounts: hole 2.6 L+bolts/2,bolts/2 L-bolts/2,bolts/2 L-bolts/2,-bolts/2 L+bolts/2,-bolts/2
 color #f39c12
 material aluminium

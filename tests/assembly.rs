@@ -680,7 +680,7 @@ fn robot_arm_example() {
             .filter_map(|(line, r)| r.as_ref().err().map(|e| format!("{}: {e:#}", line.number)))
             .collect();
         assert!(failed.is_empty(), "{failed:?}");
-        assert_eq!(run.model.body_names().len(), 25);
+        assert_eq!(run.model.body_names().len(), 34);
         ["finger_a", "finger_b"].map(|name| {
             linecad::geometry::bounds(&run.model.named_body(name).expect("finger")).center()
         })

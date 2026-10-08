@@ -1,0 +1,9 @@
+let grip=65 bolts=16
+plane XZ offset=-82
+rect 40 92 at=grip,0 r=6
+plate: extrude -4
+plane plate.start
+pilot: hole 17 grip,0
+mounts: hole 2.4 grip+bolts/2,bolts/2 grip-bolts/2,bolts/2 grip-bolts/2,-bolts/2 grip+bolts/2,-bolts/2
+color #f39c12
+material aluminium
