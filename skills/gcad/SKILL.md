@@ -149,8 +149,9 @@ gcad bom asm.gasm --csv
 - Booleans are the slow and fragile part of the kernel. Unions of faces lying in one plane work,
   but when one fails ("not oriented and closed"), draw the shape as one profile instead of
   adding overlapping pieces one at a time.
-- Fillets where three rounded edges meet need flat faces and straight outside edges; inside
-  corners mixed with outside ones fail. `shell` hollows the extrusion that owns the open face,
+- Fillets where three rounded edges meet need flat faces and straight edges. Inside and
+  outside edges can meet there (pocket rims, boss feet, L shapes), but not at a corner
+  whose third edge stays sharp. `shell` hollows the extrusion that owns the open face,
   so shell before adding other features.
 - Hole edges made by booleans are fine polylines, not exact circles.
 - Assembly parts are built in parallel and cached per file and variables, so many copies of

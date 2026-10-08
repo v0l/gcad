@@ -1,24 +1,75 @@
 use anyhow::{Result, anyhow, bail};
 use monstertruck::modeling::*;
 
+type Weighted = (Point3, f64);
+
+fn homogeneous((point, weight): Weighted) -> Vector4 {
+    (point.to_vec() * weight).extend(weight)
+}
+
+fn arc_points(
+    from: Point3,
+    to: Point3,
+    centre: Point3,
+    middle_dir: Vector3,
+    cos: f64,
+) -> [Weighted; 3] {
+    [
+        (from, 1.0),
+        (centre + middle_dir, ((1.0 + cos) / 2.0).sqrt()),
+        (to, 1.0),
+    ]
+}
+
 fn arc_curve(from: Point3, to: Point3, centre: Point3, middle_dir: Vector3, cos: f64) -> Curve {
-    let weight = ((1.0 + cos) / 2.0).sqrt();
-    let middle = centre + middle_dir;
-    let points = vec![
-        from.to_homogeneous(),
-        (middle.to_vec() * weight).extend(weight),
-        to.to_homogeneous(),
-    ];
     Curve::NurbsCurve(NurbsCurve::new(BsplineCurve::new(
         KnotVector::bezier_knot(2),
-        points,
+        arc_points(from, to, centre, middle_dir, cos)
+            .map(homogeneous)
+            .to_vec(),
     )))
+}
+
+fn circular_points(from: Point3, to: Point3, centre: Point3) -> [Weighted; 3] {
+    let (a, b) = (from - centre, to - centre);
+    let cos = a.normalize().dot(b.normalize()).clamp(-1.0, 1.0);
+    arc_points(from, to, centre, (a + b) / (1.0 + cos), cos)
 }
 
 fn circular_arc(from: Point3, to: Point3, centre: Point3) -> Curve {
     let (a, b) = (from - centre, to - centre);
     let cos = a.normalize().dot(b.normalize()).clamp(-1.0, 1.0);
     arc_curve(from, to, centre, (a + b) / (1.0 + cos), cos)
+}
+
+fn revolved(
+    profile: [Weighted; 3],
+    origin: Point3,
+    axis: Vector3,
+    from: Vector3,
+    to: Vector3,
+) -> NurbsSurface<Vector4> {
+    let cos = from.dot(to).clamp(-1.0, 1.0);
+    let sin = from.cross(to).magnitude();
+    let turn = from.cross(to).normalize();
+    let half = ((1.0 + cos) / 2.0).sqrt();
+    let rows = profile
+        .into_iter()
+        .map(|(point, weight)| {
+            let centre = origin + axis * axis.dot(point - origin);
+            let start = point - centre;
+            let end = start * cos + turn.cross(start) * sin;
+            vec![
+                homogeneous((point, weight)),
+                homogeneous((centre + (start + end) / (1.0 + cos), weight * half)),
+                homogeneous((centre + end, weight)),
+            ]
+        })
+        .collect();
+    NurbsSurface::new(BsplineSurface::new(
+        (KnotVector::bezier_knot(2), KnotVector::bezier_knot(2)),
+        rows,
+    ))
 }
 
 fn elliptic_quarter(centre: Point3, w: Vector3, u: Vector3) -> Curve {
@@ -121,15 +172,24 @@ enum Corner {
     Ball {
         centre: Point3,
         faces: [usize; 3],
+        sign: f64,
     },
     Miter {
         common: usize,
         centre: Point3,
         meet: Point3,
+        sign: f64,
     },
     End {
         selected: [usize; 2],
         centre: Point3,
+        sign: f64,
+    },
+    Torus {
+        top: usize,
+        sides: [usize; 2],
+        centre: Point3,
+        sign: f64,
     },
 }
 
@@ -166,6 +226,36 @@ impl Polyhedron {
             .map(|(n, d)| (n, d - by))
             .ok_or_else(|| anyhow!("rounding meets a curved face"))
     }
+
+    fn sign(&self, index: usize) -> Result<f64> {
+        let (edge, a, b, _) = &self.edges[index];
+        let (na, nb) = (self.normal(*a)?, self.normal(*b)?);
+        let oriented = self.faces[*b]
+            .boundaries()
+            .iter()
+            .flat_map(|wire| wire.edge_iter().cloned().collect::<Vec<_>>())
+            .find(|e| e.is_same(edge))
+            .expect("edge of its face");
+        let along = oriented.back().point() - oriented.front().point();
+        let into_b = nb.cross(along);
+        Ok(if na.dot(into_b) < 0.0 { 1.0 } else { -1.0 })
+    }
+}
+
+fn straight(edge: &Edge) -> bool {
+    let curve = edge.curve();
+    if matches!(curve, Curve::Line(_)) {
+        return true;
+    }
+    let (t0, t1) = curve.range_tuple();
+    let (p, q) = (curve.subs(t0), curve.subs(t1));
+    let chord = q - p;
+    let length = chord.magnitude();
+    length > 0.0
+        && (1..16).all(|i| {
+            let x = curve.subs(t0 + (t1 - t0) * i as f64 / 16.0) - p;
+            x.cross(chord).magnitude() / length < 1.0e-7 * length.max(1.0)
+        })
 }
 
 fn square(a: Vector3, b: Vector3) -> bool {
@@ -228,26 +318,19 @@ pub(crate) fn round_edges(
     if poly
         .edges
         .iter()
-        .any(|(e, _, _, chosen)| *chosen && !matches!(e.curve(), Curve::Line(_)))
+        .any(|(e, _, _, chosen)| *chosen && !straight(e))
     {
         bail!("rounding corners where three edges meet needs straight edges");
     }
-    for (edge, a, b, chosen) in &poly.edges {
-        if !chosen {
-            continue;
-        }
-        let (na, da) = poly.offset(*a, 0.0)?;
-        poly.offset(*b, 0.0)?;
-        let convex = poly.faces[*b]
-            .vertex_iter()
-            .filter(|v| v != edge.front() && v != edge.back())
-            .all(|v| na.dot(v.point().to_vec()) < da + 1.0e-9 * (1.0 + da.abs()));
-        if !convex {
-            bail!(
-                "rounding corners where three edges meet works on outside edges, and one selected edge is an inside corner"
-            );
-        }
-    }
+    let signs = (0..poly.edges.len())
+        .map(|i| {
+            if poly.edges[i].3 {
+                poly.sign(i)
+            } else {
+                Ok(1.0)
+            }
+        })
+        .collect::<Result<Vec<f64>>>()?;
 
     let corners = (0..poly.vertices.len())
         .map(|v| {
@@ -269,24 +352,61 @@ pub(crate) fn round_edges(
             };
             if at
                 .iter()
-                .any(|&i| !matches!(poly.edges[i].0.curve(), Curve::Line(_)))
+                .any(|&i| !straight(&poly.edges[i].0))
             {
                 bail!("a rounded corner must have straight edges");
             }
             let normals = [poly.normal(a)?, poly.normal(b)?, poly.normal(c)?];
+            let sign = signs[chosen[0]];
+            let mixed = chosen.iter().any(|&i| signs[i] != sign);
             let ball = solve([
-                poly.offset(a, radius)?,
-                poly.offset(b, radius)?,
-                poly.offset(c, radius)?,
+                poly.offset(a, sign * radius)?,
+                poly.offset(b, sign * radius)?,
+                poly.offset(c, sign * radius)?,
             ])
             .ok_or_else(|| anyhow!("a corner is degenerate"))?;
             let orthogonal = square(normals[0], normals[1])
                 && square(normals[1], normals[2])
                 && square(normals[0], normals[2]);
+            if mixed && chosen.len() < 3 {
+                bail!("an inside and an outside rounded edge meet at a corner with a sharp edge");
+            }
             match chosen.len() {
+                3 if mixed => {
+                    let lone = chosen
+                        .iter()
+                        .copied()
+                        .find(|&i| chosen.iter().filter(|&&j| signs[j] == signs[i]).count() == 1)
+                        .expect("one edge differs");
+                    let (_, la, lb, _) = poly.edges[lone];
+                    let top = [a, b, c]
+                        .into_iter()
+                        .find(|f| *f != la && *f != lb)
+                        .expect("three faces");
+                    let (nt, na, nb) = (poly.normal(top)?, poly.normal(la)?, poly.normal(lb)?);
+                    if !square(nt, na) || !square(nt, nb) {
+                        bail!(
+                            "an inside rounded edge meeting two outside ones needs the face across it square to its sides"
+                        );
+                    }
+                    let pair = -signs[lone];
+                    let centre = solve([
+                        poly.offset(la, -pair * radius)?,
+                        poly.offset(lb, -pair * radius)?,
+                        poly.offset(top, pair * radius)?,
+                    ])
+                    .ok_or_else(|| anyhow!("a corner is degenerate"))?;
+                    Ok(Corner::Torus {
+                        top,
+                        sides: [la, lb],
+                        centre,
+                        sign: pair,
+                    })
+                }
                 3 => Ok(Corner::Ball {
                     centre: ball,
                     faces: [a, b, c],
+                    sign,
                 }),
                 2 => {
                     if !orthogonal {
@@ -300,11 +420,13 @@ pub(crate) fn round_edges(
                         .ok_or_else(|| anyhow!("rounded edges at a corner share no face"))?;
                     let others: Vec<usize> =
                         [a, b, c].into_iter().filter(|f| *f != common).collect();
-                    let meet = ball + (poly.normal(others[0])? + poly.normal(others[1])?) * radius;
+                    let meet = ball
+                        + (poly.normal(others[0])? + poly.normal(others[1])?) * (sign * radius);
                     Ok(Corner::Miter {
                         common,
                         centre: ball,
                         meet,
+                        sign,
                     })
                 }
                 _ => {
@@ -317,14 +439,15 @@ pub(crate) fn round_edges(
                         .find(|f| *f != ea && *f != eb)
                         .expect("three faces");
                     let centre = solve([
-                        poly.offset(ea, radius)?,
-                        poly.offset(eb, radius)?,
+                        poly.offset(ea, sign * radius)?,
+                        poly.offset(eb, sign * radius)?,
                         poly.offset(end_face, 0.0)?,
                     ])
                     .ok_or_else(|| anyhow!("a corner is degenerate"))?;
                     Ok(Corner::End {
                         selected: [ea, eb],
                         centre,
+                        sign,
                     })
                 }
             }
@@ -336,28 +459,56 @@ pub(crate) fn round_edges(
         let (_, ea, eb, chosen) = poly.edges[edge];
         match &corners[v] {
             Corner::Untouched => poly.vertices[v].point(),
-            Corner::Ball { centre, .. } => *centre + normal(face) * radius,
+            Corner::Ball { centre, sign, .. } => *centre + normal(face) * (sign * radius),
             Corner::Miter {
                 common,
                 centre,
                 meet,
+                sign,
             } => {
                 if chosen && face == *common {
-                    *centre + normal(face) * radius
+                    *centre + normal(face) * (sign * radius)
                 } else {
                     *meet
                 }
             }
             Corner::End {
-                selected, centre, ..
+                selected,
+                centre,
+                sign,
             } => {
                 if chosen {
-                    *centre + normal(face) * radius
+                    *centre + normal(face) * (sign * radius)
                 } else {
                     let side = if selected.contains(&ea) { ea } else { eb };
-                    *centre + normal(side) * radius
+                    *centre + normal(side) * (sign * radius)
                 }
             }
+            Corner::Torus {
+                top, centre, sign, ..
+            } => {
+                if face == *top {
+                    let side = if ea == *top { eb } else { ea };
+                    *centre - normal(side) * (2.0 * sign * radius) + normal(face) * (sign * radius)
+                } else {
+                    *centre - normal(face) * (sign * radius)
+                }
+            }
+        }
+    };
+    let torus_axis = |v: usize, edge: usize| -> Point3 {
+        let Corner::Torus {
+            top, centre, sign, ..
+        } = &corners[v]
+        else {
+            unreachable!("torus corners only")
+        };
+        let (_, ea, eb, _) = poly.edges[edge];
+        match [ea, eb].into_iter().find(|f| f != top) {
+            Some(side) if ea == *top || eb == *top => {
+                *centre - normal(side) * (2.0 * sign * radius)
+            }
+            _ => *centre,
         }
     };
 
@@ -428,12 +579,47 @@ pub(crate) fn round_edges(
                     ));
                 }
             }
+            Corner::Torus {
+                top, centre, sign, ..
+            } => {
+                let mut tops = Vec::new();
+                for i in (0..poly.edges.len()).filter(|&i| chosen_here(i)) {
+                    let (_, a, b, _) = poly.edges[i];
+                    let (p, q) = (endpoint(i, v, a), endpoint(i, v, b));
+                    if a == *top {
+                        tops.push(p);
+                    } else if b == *top {
+                        tops.push(q);
+                    }
+                    connectors.push((
+                        v,
+                        Edge::new(
+                            &vertex_at(p),
+                            &vertex_at(q),
+                            bend(p, q, circular_arc(p, q, torus_axis(v, i))),
+                        ),
+                    ));
+                }
+                let [p, q] = tops[..] else {
+                    bail!("a rounded inside corner must have two outside edges on one face")
+                };
+                let around = *centre + normal(*top) * (sign * radius);
+                connectors.push((
+                    v,
+                    Edge::new(
+                        &vertex_at(p),
+                        &vertex_at(q),
+                        bend(p, q, circular_arc(p, q, around)),
+                    ),
+                ));
+            }
             Corner::Miter {
                 common,
                 centre,
                 meet,
+                sign,
             } => {
-                let start = *centre + normal(*common) * radius;
+                let start = *centre + normal(*common) * (sign * radius);
                 let curve = bend(
                     start,
                     *meet,
@@ -442,11 +628,13 @@ pub(crate) fn round_edges(
                 connectors.push((v, Edge::new(&vertex_at(start), &vertex_at(*meet), curve)));
             }
             Corner::End {
-                selected, centre, ..
+                selected,
+                centre,
+                sign,
             } => {
                 let (p, q) = (
-                    *centre + normal(selected[0]) * radius,
-                    *centre + normal(selected[1]) * radius,
+                    *centre + normal(selected[0]) * (sign * radius),
+                    *centre + normal(selected[1]) * (sign * radius),
                 );
                 connectors.push((
                     v,
@@ -536,9 +724,10 @@ pub(crate) fn round_edges(
         ];
         let direction = (edge.absolute_back().point() - edge.absolute_front().point()).normalize();
         let level = direction.dot(edge.absolute_front().point().to_vec()) - 2.0 * radius;
+        let sign = signs[i];
         let start = solve([
-            poly.offset(*a, radius)?,
-            poly.offset(*b, radius)?,
+            poly.offset(*a, sign * radius)?,
+            poly.offset(*b, sign * radius)?,
             (direction, level),
         ])
         .ok_or_else(|| anyhow!("an edge is degenerate"))?;
@@ -557,11 +746,17 @@ pub(crate) fn round_edges(
             new_faces.push(face_from(loop_edges, Surface::Plane(plane), outward, true)?);
             continue;
         }
-        let surface = cylinder(start, [normal(*a), normal(*b)], radius, direction * length);
-        let faces_out = surface
+        let surface = cylinder(
+            start,
+            [normal(*a) * sign, normal(*b) * sign],
+            radius,
+            direction * length,
+        );
+        let faces_out = (surface
             .normal(0.5, 0.5)
             .dot(surface.subs(0.5, 0.5) - start - direction * (length / 2.0))
-            > 0.0;
+            > 0.0)
+            == (sign > 0.0);
         new_faces.push(face_from(
             loop_edges,
             Surface::NurbsSurface(surface),
@@ -571,24 +766,65 @@ pub(crate) fn round_edges(
     }
 
     for (v, corner) in corners.iter().enumerate() {
-        let Corner::Ball { centre, faces } = corner else {
-            continue;
+        let arcs = || -> Result<Vec<Edge>> {
+            order_loop(
+                connectors
+                    .iter()
+                    .filter(|(at, _)| *at == v)
+                    .map(|(_, e)| e.clone())
+                    .collect(),
+            )
         };
-        let arcs: Vec<Edge> = connectors
-            .iter()
-            .filter(|(at, _)| *at == v)
-            .map(|(_, e)| e.clone())
-            .collect();
-        let normals = faces.map(normal);
-        let outward = (normals[0] + normals[1] + normals[2]).normalize();
-        let ordered = order_loop(arcs)?;
-        let surface = if flat {
-            let corners: Vec<Point3> = ordered.iter().map(|e| e.front().point()).collect();
-            Surface::Plane(flat_through([corners[0], corners[1], corners[2]], outward))
-        } else {
-            sphere(*centre, radius, normals)
-        };
-        new_faces.push(face_from(ordered, surface, outward, true)?);
+        match corner {
+            Corner::Ball {
+                centre,
+                faces,
+                sign,
+            } => {
+                let normals = faces.map(normal);
+                let outward = (normals[0] + normals[1] + normals[2]).normalize();
+                let ordered = arcs()?;
+                if flat {
+                    let surface = flat_patch(&ordered, outward, tolerance)?;
+                    new_faces.push(face_from(ordered, surface, outward, true)?);
+                } else {
+                    let surface = sphere(*centre, radius, normals.map(|n| n * *sign));
+                    new_faces.push(face_from(ordered, surface, outward, *sign > 0.0)?);
+                }
+            }
+            Corner::Torus {
+                top,
+                sides,
+                centre,
+                sign,
+            } => {
+                let axis = normal(*top);
+                let outward = (axis + normal(sides[0]) + normal(sides[1])).normalize();
+                let ordered = arcs()?;
+                if flat {
+                    let surface = flat_patch(&ordered, outward, tolerance)?;
+                    new_faces.push(face_from(ordered, surface, outward, true)?);
+                    continue;
+                }
+                let [from, to] = sides.map(|side| -normal(side) * *sign);
+                let tube = *centre + from * (2.0 * radius);
+                let profile =
+                    circular_points(tube + axis * (sign * radius), tube - from * radius, tube);
+                let surface = revolved(profile, *centre, axis, from, to);
+                let middle = surface.subs(0.5, 0.5);
+                let level = middle - axis * axis.dot(middle - *centre);
+                let ring = *centre + (level - *centre).normalize() * (2.0 * radius);
+                let faces_out =
+                    (surface.normal(0.5, 0.5).dot(middle - ring) > 0.0) == (*sign > 0.0);
+                new_faces.push(face_from(
+                    ordered,
+                    Surface::NurbsSurface(surface),
+                    outward,
+                    faces_out,
+                )?);
+            }
+            _ => {}
+        }
     }
 
     let shell: Shell = new_faces.into();
@@ -602,6 +838,19 @@ fn flat_through(points: [Point3; 3], outward: Vector3) -> Plane {
     } else {
         Plane::new(points[0], points[2], points[1])
     }
+}
+
+fn flat_patch(ordered: &[Edge], outward: Vector3, tolerance: f64) -> Result<Surface> {
+    let corners: Vec<Point3> = ordered.iter().map(|e| e.front().point()).collect();
+    let plane = flat_through([corners[0], corners[1], corners[2]], outward);
+    let normal = plane.normal();
+    if corners
+        .iter()
+        .any(|p| normal.dot(*p - corners[0]).abs() > tolerance * 1.0e3)
+    {
+        bail!("the flat corner of this chamfer would not be flat");
+    }
+    Ok(Surface::Plane(plane))
 }
 
 fn order_loop(mut edges: Vec<Edge>) -> Result<Vec<Edge>> {

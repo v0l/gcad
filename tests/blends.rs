@@ -141,12 +141,79 @@ fn fillet_every_edge_of_a_rounded_prism() {
     assert!(v < (400.0 - (4.0 - PI) * 25.0) * 10.0 && v > 3500.0, "{v}");
 }
 
+const L_SHAPE: &str = "poly 0,0 20,0 20,10 10,10 10,20 0,20\nbase: extrude 10\n";
+const L_ROUNDED_AREA: f64 = 300.0 - 4.0 * SPANDREL;
+const L_ROUNDED_PERIMETER: f64 = 80.0 + 6.0 * (PI / 2.0 - 2.0);
+const BAND_INSET: f64 = SPANDREL;
+const BAND_INSET_SQUARED: f64 = 5.0 / 3.0 - PI / 2.0;
+
+fn rounded_box(a: f64, b: f64, c: f64) -> f64 {
+    let (a, b, c) = (a - 2.0, b - 2.0, c - 2.0);
+    a * b * c + 2.0 * (a * b + b * c + a * c) + PI * (a + b + c) + 4.0 / 3.0 * PI
+}
+
+fn rounded_square_prism(side: f64, depth: f64) -> f64 {
+    depth * (side * side - (4.0 - PI)) + 2.0 * PI * BAND_INSET_SQUARED
+}
+
 #[test]
-#[ignore = "missing: rounding inside corners where three edges meet"]
 fn fillet_every_edge_of_an_l_shape() {
-    let model = build("poly 0,0 20,0 20,10 10,10 10,20 0,20\nextrude 10\nfillet 1 all");
-    let v = volume(&model);
-    assert!(v < 3000.0 && v > 2850.0, "{v}");
+    assert_volume(
+        &build(&format!("{L_SHAPE}fillet 1 all")),
+        L_ROUNDED_AREA * 10.0 - 2.0 * L_ROUNDED_PERIMETER * BAND_INSET
+            + 2.0 * PI * BAND_INSET_SQUARED,
+        0.0002,
+    );
+}
+
+#[test]
+fn fillet_inside_edge_ending_at_a_sharp_corner() {
+    assert_volume(
+        &build(&format!(
+            "{L_SHAPE}fillet 1 base.end&base.side|base.side&base.side"
+        )),
+        L_ROUNDED_AREA * 10.0 - L_ROUNDED_PERIMETER * BAND_INSET + PI * BAND_INSET_SQUARED,
+        0.0002,
+    );
+}
+
+#[test]
+fn chamfer_every_edge_of_an_l_shape() {
+    let band = 300.0 - 40.0 + 4.0 / 3.0 - 2.5 / 3.0 + 3.5 / 3.0;
+    assert_volume(
+        &build(&format!("{L_SHAPE}chamfer 1 all")),
+        8.0 * 298.0 + 2.0 * band,
+        1.0e-5,
+    );
+}
+
+#[test]
+fn fillet_every_edge_of_a_pocket() {
+    assert_volume(
+        &build("rect 40 40\nbase: extrude 10\nplane base.end\nrect 20 20\ncut 5\nfillet 1 all"),
+        rounded_box(40.0, 40.0, 10.0) - rounded_square_prism(20.0, 5.0),
+        0.0002,
+    );
+}
+
+#[test]
+fn fillet_pocket_floor_with_sharp_walls() {
+    assert_volume(
+        &build(
+            "rect 40 40\nbase: extrude 10\nplane base.end\nrect 20 20\npocket: cut 5\nfillet 1 base.side&base.side|base.end&base.side|base.start&base.side|pocket.end&pocket.side",
+        ),
+        rounded_box(40.0, 40.0, 10.0) - 2000.0 + 80.0 * SPANDREL - 4.0 * ROUND_CORNER_OVERLAP,
+        0.0002,
+    );
+}
+
+#[test]
+fn fillet_every_edge_of_a_boss() {
+    assert_volume(
+        &build("rect 40 40\nbase: extrude 5\nplane base.end\nrect 20 20\nextrude 5\nfillet 1 all"),
+        rounded_box(40.0, 40.0, 5.0) + rounded_square_prism(20.0, 5.0),
+        0.0002,
+    );
 }
 
 #[test]

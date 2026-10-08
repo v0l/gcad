@@ -374,9 +374,11 @@ Y green, Z blue.
 ## Limits
 
 - Where three rounded edges meet, the corner is a sphere (or a flat triangle for a
-  chamfer). Rounding at such corners
-  needs flat faces, straight outside edges, and square faces wherever a rounded edge
-  meets one that is not rounded.
+  chamfer). Where an inside edge meets two outside ones, or an outside edge two inside
+  ones, as at the rim of a pocket or the foot of a boss, it is a torus patch (or a flat
+  quad). Rounding at such corners needs flat faces, straight edges, the face across the
+  odd edge square to its sides, and square faces wherever a rounded edge meets one that
+  is not rounded. An inside and an outside rounded edge cannot meet at a sharp one.
 - `draft` and pushing a face inward work on flat-sided parts, where every moved corner
   is where three flat faces meet.
 - `shell` hollows the extrusion or revolve that owns the open face, so do it before

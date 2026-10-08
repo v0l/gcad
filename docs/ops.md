@@ -129,7 +129,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | chamfer with two distances | supported | `chamfer 1 edges d2=2` | `blends::chamfer_two_distances` |
 | chamfer where three edges meet | supported | `chamfer 2 all` | `blends::chamfer_every_edge_of_a_box` |
 | round corners on curved faces | supported | `fillet 1 all` on a rounded rect | `blends::fillet_every_edge_of_a_rounded_prism` |
-| round inside corners where three edges meet | missing | `fillet 1 all` on an L shape | `blends::fillet_every_edge_of_an_l_shape` |
+| round inside corners where three edges meet | supported | `fillet 1 all` on an L shape, a pocket or a boss | `blends::fillet_every_edge_of_an_l_shape`, `blends::fillet_every_edge_of_a_pocket`, `blends::fillet_every_edge_of_a_boss`, `blends::fillet_inside_edge_ending_at_a_sharp_corner`, `blends::fillet_pocket_floor_with_sharp_walls`, `blends::chamfer_every_edge_of_an_l_shape` |
 | variable radius along a chain | supported | `fillet 1 chain to=2` | `blends::fillet_variable_chain` |
 | full round | supported | `fillet full base.end` | `blends::full_round` |
 
