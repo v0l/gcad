@@ -67,3 +67,29 @@ fn on_a_curved_face() {
     let model = build("circle 20\nrod: extrude 20\nhole 4 0,10 on=rod.side");
     assert_volume(&model, PI * 100.0 * 20.0 - PI * 4.0 * 20.0, 0.002);
 }
+
+#[test]
+fn hole_rims_are_exact_circles() {
+    use monstertruck::modeling::*;
+    let model = build(&format!("{BLOCK}hole 4 10,0 -10,0"));
+    let solid = &model.solids()[0];
+    let mut rims = 0;
+    for edge in solid.boundaries()[0].edge_iter() {
+        if matches!(edge.curve(), Curve::Line(_)) {
+            continue;
+        }
+        let curve = edge.curve();
+        let (t0, t1) = curve.range_tuple();
+        let centre_x = 10.0 * edge.front().point().x.signum();
+        let worst = (0..=40)
+            .map(|i| {
+                let p = curve.subs(t0 + (t1 - t0) * i as f64 / 40.0);
+                ((p.x - centre_x).hypot(p.y) - 2.0).abs()
+            })
+            .fold(0.0, f64::max);
+        assert!(worst < 1.0e-9, "rim strays {worst} from its circle");
+        assert!(matches!(curve, Curve::NurbsCurve(_)));
+        rims += 1;
+    }
+    assert!(rims >= 8 * 2, "{rims}");
+}

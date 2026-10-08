@@ -153,7 +153,8 @@ gcad bom asm.gasm --csv
   outside edges can meet there (pocket rims, boss feet, L shapes), but not at a corner
   whose third edge stays sharp. `shell` hollows the extrusion that owns the open face,
   so shell before adding other features.
-- Hole edges made by booleans are fine polylines, not exact circles.
+- Boolean edges that are lines or circles (hole rims) are exact; other intersections, such as
+  two crossing cylinders, are fine polylines.
 - `thread M6 on=rod.side` needs each end of the round face to be flat and square to it, or a
   chamfer deeper than the thread (`chamfer 1 rod.end&rod.side` on an M6). Chamfer first and
   thread last. Holes take `thread M6 on=h.side` after `h: hole 5 0,0 thread=M6`, with or

@@ -385,5 +385,6 @@ Y green, Z blue.
 - `shell` hollows the extrusion or revolve that owns the open face, so do it before
   adding other features to it. A revolve that touches its axis can only be shelled
   while it is the whole solid.
-- Hole and cut edges made by booleans are fine polylines, not exact circles.
+- Edges a boolean makes are exact lines and circles where they are flat and round, as at
+  the rim of a hole; other intersections, such as two crossing cylinders, are fine polylines.
 - `draft` works on profiles without holes.

@@ -3,6 +3,7 @@ mod assembly;
 mod blends;
 mod bodies;
 mod constrain;
+mod exact;
 mod features;
 mod holes;
 mod import;
@@ -406,7 +407,7 @@ impl Model {
                     .map_err(|e| anyhow!("intersection failed: {e}"))?
             }
         };
-        self.solid = Some(result);
+        self.solid = Some(exact::exact_edges(&result));
         self.tools
             .entry(label.to_string())
             .or_default()

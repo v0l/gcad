@@ -113,6 +113,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | tapped hole | supported | `hole 3.3 0,0 thread=M4` | `holes::threaded` |
 | angled hole | supported | `plane >Z rx=30` then `hole` | `holes::angled` |
 | hole on a curved face | supported | `hole 4 0,10 on=rod.side` | `holes::on_a_curved_face` |
+| exact circles on hole rims | supported | any `hole` or round `cut` | `holes::hole_rims_are_exact_circles` |
 
 
 ## Fillets and chamfers
