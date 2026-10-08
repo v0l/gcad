@@ -9,7 +9,7 @@ permissions:
   contents: write
 
 env:
-  MONSTERTRUCK_REV: 104d70cee3731e0b3ca114837770fca7f2f14704
+  MONSTERTRUCK_REV: 42135ef2dcb4f5c684443358773aa849dcdd7013
 
 jobs:
   build:
