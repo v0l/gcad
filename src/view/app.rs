@@ -439,10 +439,7 @@ impl App {
                     .get(&part.name)
                     .copied()
                     .unwrap_or_else(Matrix4::identity);
-                let m = match shown.exploded.get(&part.name) {
-                    Some(by) => m * Matrix4::from_translation(by * self.explode),
-                    None => m,
-                };
+                let m = exploded(m, shown.exploded.get(&part.name), self.explode);
                 (flat(m), !self.hidden.get(i).copied().unwrap_or(false))
             })
             .collect()
@@ -1552,4 +1549,31 @@ pub fn run(
         options,
         Box::new(move |cc| Ok(Box::new(App::new(cc, path, query, line, vars)))),
     )
+}
+
+fn exploded(
+    moved: Matrix4,
+    offset: Option<&monstertruck::modeling::Vector3>,
+    scale: f64,
+) -> Matrix4 {
+    match offset {
+        Some(by) => Matrix4::from_translation(by * scale) * moved,
+        None => moved,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use monstertruck::modeling::*;
+
+    #[test]
+    fn explode_offsets_do_not_turn_with_the_part() {
+        let turned = Matrix4::from_angle_z(Deg(90.0));
+        let at = super::exploded(turned, Some(&Vector3::new(10.0, 0.0, 0.0)), 1.0)
+            .transform_point(Point3::origin());
+        assert!(
+            (at - Point3::new(10.0, 0.0, 0.0)).magnitude() < 1.0e-9,
+            "{at:?}"
+        );
+    }
 }
