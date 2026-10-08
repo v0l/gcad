@@ -160,6 +160,12 @@ impl Model {
             .collect::<Result<Vec<_>>>()?;
         let result = Solid::try_new(shells)
             .map_err(|error| anyhow!("{} left an invalid solid: {error}", line.op))?;
+        if select::faces(&result).len() <= before.len() {
+            bail!(
+                "{} could not change `{selector}`, the solid is unchanged",
+                line.op
+            );
+        }
         let label = label_of(line);
         select::faces(&result)
             .iter()
