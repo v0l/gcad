@@ -370,7 +370,7 @@ pub(crate) fn dxf_profiles(text: &str) -> Result<Vec<Profile>> {
             }
             "TEXT" | "MTEXT" | "DIMENSION" | "POINT" | "INSERT" | "HATCH" => {}
             other => bail!(
-                "the DXF has a {other}; linecad reads LINE, ARC, CIRCLE, LWPOLYLINE and POLYLINE"
+                "the DXF has a {other}; gcad reads LINE, ARC, CIRCLE, LWPOLYLINE and POLYLINE"
             ),
         }
     }
@@ -448,7 +448,7 @@ fn svg_transform(text: &str) -> Result<Affine> {
                 let (cx, cy) = (get(1), get(2));
                 Affine([c, -s, s, c, cx - c * cx + s * cy, cy - s * cx - c * cy])
             }
-            other => bail!("linecad does not read the SVG transform `{other}`"),
+            other => bail!("gcad does not read the SVG transform `{other}`"),
         };
         result = result.then(step);
     }

@@ -51,7 +51,7 @@ pub fn export_coloured(parts: &[(&Solid, Option<Colour>)], path: &str) -> Result
 
 fn step_text(parts: &[(&Solid, Option<Colour>)]) -> String {
     let header = StepHeaderDescriptor {
-        organization_system: "linecad".to_string(),
+        organization_system: "gcad".to_string(),
         ..Default::default()
     };
     let tidied: Vec<Solid> = parts.iter().map(|(solid, _)| even_leaders(solid)).collect();

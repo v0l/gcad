@@ -1,6 +1,6 @@
-# The linecad format
+# The gcad format
 
-A `.lcad` file is a list of operations, one per line, run from top to bottom. Every
+A `.gcad` file is a list of operations, one per line, run from top to bottom. Every
 line is an operation; there are no comments and no blocks. Blank lines are skipped.
 
 ```
@@ -55,7 +55,7 @@ Variables, conditions and other files:
 |---|---|---|
 | `let` | `name=expr ...` | sets variables, in order, so later pairs can use earlier ones; a variable given with `--set` keeps its outside value |
 | `if` | `condition operation ...` | runs the rest of the line only when the condition is not zero; `< > <= >= == !=` give 1 or 0 |
-| `include` | `file.lcad` `name=value ...` | runs another file's lines here, with those variables fixed; the file is relative to this one |
+| `include` | `file.gcad` `name=value ...` | runs another file's lines here, with those variables fixed; the file is relative to this one |
 
 Sketch:
 
@@ -145,7 +145,7 @@ Bodies:
 | `body` | `name` | sets the current solid aside and starts a new one; the first body is `main` |
 | `combine` | `into from` `mode=add\|cut\|intersect` | joins body `from` into body `into`, or cuts it out, and drops `from` |
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
-| `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.lcad` file |
+| `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
 | `material` | `name` `density=` | sets what the current body is made of, for its mass. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood. `density=` in g/cm³ gives any other |
 
@@ -165,14 +165,14 @@ path point (or the start of the helix) and turns it to face along the path.
 
 ## Assemblies
 
-A `.lcad` file is a part file: it builds one or more bodies. A `.lasm` file is an
+A `.gcad` file is a part file: it builds one or more bodies. A `.gasm` file is an
 assembly: it brings bodies in from part files, places them and joins them, and makes
 no geometry of its own. Its lines have the same shape and use `let`, `if` and
 `include` the same way.
 
 | operation | parameters | does |
 |---|---|---|
-| `part` | `name file.lcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.lasm` file brings in its parts and joints too |
+| `part` | `name file.gcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.gasm` file brings in its parts and joints too |
 | `move` | `part x,y,z` | moves a part and everything jointed to it |
 | `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it |
 | `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
@@ -196,13 +196,13 @@ no geometry of its own. Its lines have the same shape and use `let`, `if` and
 `faces` in `parallel`, `angle`, `distance` and `tangent` is either flat faces on one
 plane or the round faces of one cylinder, which stands for its axis.
 
-`examples/robot/arm.lasm` puts these together. Each joint is a planetary reducer: the
+`examples/robot/arm.gasm` puts these together. Each joint is a planetary reducer: the
 motor is mated to the housing, its sun turns on it with a `turn` joint coupled to the
 arm joint at `1+ring/sun`, and one planet turns on the output link coupled at
 `-ring/planet`; `pattern planet count=3 angle=360 axis=...` adds the other two with
 their joints and couples. The gripper's fingers are racks on one pinion, so one `slide`
 drives both. The arm's own variables pose it:
-`linecad check examples/robot/arm.lasm --set shoulder=30 --set jaw=6`.
+`gcad check examples/robot/arm.gasm --set shoulder=30 --set jaw=6`.
 
 A part can have several joints to the same parent, and their motions add up. They
 must not depend on the order they are applied in, so they are slides in any
@@ -222,7 +222,7 @@ When a mate joins two parts that already hang off different joints, it closes a
 loop, like the coupler and rocker of a four-bar linkage. Moving one joint in the loop
 moves the others with it so the mate keeps holding, if they can; otherwise the move
 fails as before. `pose` says which joints followed. See
-`examples/assemblies/linkage.lasm`.
+`examples/assemblies/linkage.gasm`.
 
 A mate holds the parts together, the way a joint does. The first mate of a part
 places it and fixes it to the other part, so it moves when that part moves. Later
@@ -238,11 +238,11 @@ follow the part as it moves.
 
 ```
 let open=0 screwed=1 bx=32 by=17 h=30
-part case ../parts/enclosure.lcad
+part case ../parts/enclosure.gcad
 axis hinge -40,25,30 40,25,30
 joint lid case.lid case.main turn about=hinge min=-110 max=0 at=open
 aligned case.lid:screws.side case.main:pilot.side
-if screwed part s1 ../parts/screw.lcad
+if screwed part s1 ../parts/screw.gcad
 if screwed concentric s1:shank.side case.lid:screws.side near=bx,by,h
 if screwed flush s1:head.start case.lid:top.end
 if screwed concentric s1:shank.side case.main:pilot.side
@@ -253,7 +253,7 @@ explode case.lid 0,0,30
 interference none
 ```
 
-`linecad bom file` lists what a file is made of: one row per body of each part file
+`gcad bom file` lists what a file is made of: one row per body of each part file
 and set of variables, with how many there are, the material, and the volume and mass
 of each. `--csv` writes the same as CSV, with the part names in the last column.
 
@@ -325,15 +325,15 @@ lines where a rounded corner of a `rect r=` joins its flat sides.
 ## Checking a file
 
 ```
-linecad check part.lcad                  # run every line, print what each did
-linecad query part.lcad 'base.end&base.side' [--line N]
-linecad render part.lcad part.png        # iso, top, front and right views
-linecad export part.lcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing)
-linecad export part.lcad part.svg --section y=0   # adds a hatched section across y=0
-linecad check part.lcad --set w=50       # override a `let` variable
-linecad check part.lcad --time           # also show how long each line took
-linecad part.lcad                        # open the viewer; plain `linecad` starts with a file picker
-linecad view part.lcad [--line N] [--select 'base.end&base.side']
+gcad check part.gcad                  # run every line, print what each did
+gcad query part.gcad 'base.end&base.side' [--line N]
+gcad render part.gcad part.png        # iso, top, front and right views
+gcad export part.gcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing)
+gcad export part.gcad part.svg --section y=0   # adds a hatched section across y=0
+gcad check part.gcad --set w=50       # override a `let` variable
+gcad check part.gcad --time           # also show how long each line took
+gcad part.gcad                        # open the viewer; plain `gcad` starts with a file picker
+gcad view part.gcad [--line N] [--select 'base.end&base.side']
 ```
 
 An `.svg` drawing shows the top, front, right and iso views with the overall width,
@@ -364,7 +364,7 @@ The viewer also has:
 - a joints card with a slider for every `joint`, which moves the parts without
   rebuilding, follows couples and closed loops, locks joints that mates hold, and
   checks for parts that overlap at the slider positions;
-- open (or ctrl-O) to switch to another `.lcad` file.
+- open (or ctrl-O) to switch to another `.gcad` file.
 
 `render` lays the views out as iso (top left), top (top right), front from -Y
 (bottom left) and right from +X (bottom right), each with an axis marker: X red,

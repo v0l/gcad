@@ -8,5 +8,5 @@ difference() {
     translate([0, 0, -1]) cylinder(d = 3.2, h = wall + 2);
     translate([0, 0, -0.01]) cylinder(d1 = 6.4, d2 = 3.2, h = 1.6);
   }
-  translate([-14, -3, wall - 0.6]) linear_extrude(1) text("LINECAD", size = 6);
+  translate([-7.8, -2.1, wall - 0.6]) linear_extrude(1) text("GCAD", size = 6);
 }

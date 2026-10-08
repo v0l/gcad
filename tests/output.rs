@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use linecad::{export, render};
+use gcad::{export, render};
 
 #[test]
 fn step() {
@@ -14,9 +14,9 @@ fn step() {
 }
 
 #[test]
-#[ignore = "needs OpenCascade: set LINECAD_OCP_PYTHON to a python with OCP and run with --ignored"]
+#[ignore = "needs OpenCascade: set GCAD_OCP_PYTHON to a python with OCP and run with --ignored"]
 fn step_opens_in_opencascade() {
-    let python = std::env::var("LINECAD_OCP_PYTHON").expect("LINECAD_OCP_PYTHON");
+    let python = std::env::var("GCAD_OCP_PYTHON").expect("GCAD_OCP_PYTHON");
     let script = r#"
 import sys
 from OCP.STEPControl import STEPControl_Reader
@@ -210,19 +210,19 @@ fn screwed_plate(name: &str) -> std::path::PathBuf {
     let dir = std::path::PathBuf::from(scratch(name));
     std::fs::create_dir_all(&dir).expect("dir");
     std::fs::write(
-        dir.join("plate.lcad"),
+        dir.join("plate.gcad"),
         "rect 40 20\nbase: extrude 5\nplane base.end\nholes: hole 3 -10,0 10,0\ncolor #3a6ea5\n",
     )
     .expect("plate");
     std::fs::write(
-        dir.join("pin.lcad"),
+        dir.join("pin.gcad"),
         "circle 5\nhead: extrude 1\ncircle 3\npin: extrude -5\ncolor red\n",
     )
     .expect("pin");
-    let path = dir.join("kit.lasm");
+    let path = dir.join("kit.gasm");
     std::fs::write(
         &path,
-        "part plate plate.lcad\npart a pin.lcad\npart b pin.lcad\nconcentric a:pin.side plate:holes.side near=-10,0,5\nflush a:head.start plate:base.end\nconcentric b:pin.side plate:holes.side near=10,0,5\nflush b:head.start plate:base.end\n",
+        "part plate plate.gcad\npart a pin.gcad\npart b pin.gcad\nconcentric a:pin.side plate:holes.side near=-10,0,5\nflush a:head.start plate:base.end\nconcentric b:pin.side plate:holes.side near=10,0,5\nflush b:head.start plate:base.end\n",
     )
     .expect("assembly");
     path
@@ -231,7 +231,7 @@ fn screwed_plate(name: &str) -> std::path::PathBuf {
 #[test]
 fn step_assembly() {
     let path = screwed_plate("step_assembly");
-    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit.step");
     export::export_model(&run.model, &path, &out).expect("exports");
     let text = std::fs::read_to_string(&out).expect("written");
@@ -241,11 +241,11 @@ fn step_assembly() {
 }
 
 #[test]
-#[ignore = "needs OpenCascade: set LINECAD_OCP_PYTHON to a python with OCP and run with --ignored"]
+#[ignore = "needs OpenCascade: set GCAD_OCP_PYTHON to a python with OCP and run with --ignored"]
 fn step_assembly_opens_in_opencascade() {
-    let python = std::env::var("LINECAD_OCP_PYTHON").expect("LINECAD_OCP_PYTHON");
+    let python = std::env::var("GCAD_OCP_PYTHON").expect("GCAD_OCP_PYTHON");
     let path = screwed_plate("step_assembly_occt");
-    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit_occt.step");
     export::export_model(&run.model, &path, &out).expect("exports");
     let script = r#"
@@ -307,16 +307,16 @@ for i in range(1, parts.Length() + 1):
 fn drawing_dimensions_and_section() {
     let model =
         build("rect 20 10\nbase: extrude 10\nplane base.end\nholes: hole 4 0,0 6,0\nhole 2 -6,0");
-    let svg = linecad::drawing::drawing_with(
+    let svg = gcad::drawing::drawing_with(
         &model.parts(),
-        Some(linecad::drawing::Section { axis: 1, at: 0.0 }),
+        Some(gcad::drawing::Section { axis: 1, at: 0.0 }),
     );
     assert!(svg.contains(">20</text>") && svg.contains(">10</text>"));
     assert!(svg.contains(">2× ⌀4</text>") && svg.contains(">⌀2</text>"));
     assert!(svg.contains("section y=0") && svg.contains("class=\"cut\""));
     let solid = model.solid.as_ref().expect("solid");
     let outlines =
-        linecad::drawing::section_outlines(solid, linecad::drawing::Section { axis: 1, at: 0.0 });
+        gcad::drawing::section_outlines(solid, gcad::drawing::Section { axis: 1, at: 0.0 });
     let area: f64 = outlines
         .iter()
         .map(|outline| {
@@ -335,15 +335,15 @@ fn drawing_dimensions_and_section() {
     );
     assert_eq!(
         "y=0".parse(),
-        Ok(linecad::drawing::Section { axis: 1, at: 0.0 })
+        Ok(gcad::drawing::Section { axis: 1, at: 0.0 })
     );
-    assert!("w=1".parse::<linecad::drawing::Section>().is_err());
+    assert!("w=1".parse::<gcad::drawing::Section>().is_err());
 }
 
 #[test]
 fn assembly_drawing_lists_parts() {
     let path = screwed_plate("assembly_drawing");
-    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
     let out = scratch("kit.svg");
     export::export_model(&run.model, &path, &out).expect("exports");
     let svg = std::fs::read_to_string(&out).expect("written");

@@ -1,7 +1,7 @@
 mod common;
 
 use common::*;
-use linecad::select::{select_edges, select_faces};
+use gcad::select::{select_edges, select_faces};
 use std::f64::consts::PI;
 
 #[test]
@@ -93,14 +93,14 @@ fn draft_analysis() {
 
 #[test]
 fn outside_variables() {
-    let lines = linecad::parse::parse_program("let w=10\nrect w w\nextrude 1").expect("parses");
-    let model = linecad::model::run_with(&[("w".to_string(), 20.0)], &lines).model;
+    let lines = gcad::parse::parse_program("let w=10\nrect w w\nextrude 1").expect("parses");
+    let model = gcad::model::run_with(&[("w".to_string(), 20.0)], &lines).model;
     assert_volume(&model, 400.0, 1.0e-6);
 }
 
 #[test]
 fn include_file() {
-    let path = scratch("boss.lcad");
+    let path = scratch("boss.gcad");
     std::fs::write(&path, "circle d\nextrude 5").expect("writes");
     assert_volume(
         &build(&format!("include {path} d=10")),

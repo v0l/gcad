@@ -337,7 +337,7 @@ impl Model {
             "joint" | "pose" | "couple" | "explode" | "interference" | "part" | "concentric"
             | "flush" | "aligned" | "distance" | "tangent" => {
                 bail!(
-                    "`{}` belongs in an assembly (.lasm) file, which brings parts in with `part name file.lcad`",
+                    "`{}` belongs in an assembly (.gasm) file, which brings parts in with `part name file.gcad`",
                     line.op
                 )
             }
@@ -518,7 +518,7 @@ fn start(dir: Option<PathBuf>) -> Model {
 
 pub fn is_assembly(path: &std::path::Path) -> bool {
     path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("lasm"))
+        .is_some_and(|e| e.eq_ignore_ascii_case("gasm"))
 }
 
 fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Model {

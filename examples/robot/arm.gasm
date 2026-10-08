@@ -1,82 +1,82 @@
 let yaw=0 shoulder=55 elbow=-70 wrist=-70 jaw=0
 let H=200 L1=220 L2=200 grip=65 suns=18 rings=54 drive=1+rings/suns idle=-rings/suns
-part base base.lcad
-part motor_y motor.lcad shaft=19
+part base base.gcad
+part motor_y motor.gcad shaft=19
 move motor_y 0,0,25
-part sun_y gear.lcad z=suns m=1.5 w=14 bore=5.2
+part sun_y gear.gcad z=suns m=1.5 w=14 bore=5.2
 move sun_y 0,0,72
-part turret turret.lcad H=H
-part planet_y gear.lcad z=18 m=1.5 w=14 bore=8.2 a=190
+part turret turret.gcad H=H
+part planet_y gear.gcad z=18 m=1.5 w=14 bore=8.2 a=190
 move planet_y 27,0,72
-part motor_s motor.lcad shaft=26
+part motor_s motor.gcad shaft=26
 rotate motor_s -90 axis=x
 move motor_s 0,-92,H
 flush motor_s:can.end turret:upright.end
 concentric motor_s:boss.side turret:pilot.side
-part cap_s cap.lcad d=76
+part cap_s cap.gcad d=76
 rotate cap_s 90 axis=x
 move cap_s 0,-52,H
 flush cap_s:can.start turret:upright.end
-part sun_s gear.lcad z=suns m=1.5 w=14 bore=5.2
+part sun_s gear.gcad z=suns m=1.5 w=14 bore=5.2
 rotate sun_s -90 axis=x
 move sun_s 0,-41,H
-part upper upper.lcad L=L1
+part upper upper.gcad L=L1
 move upper 0,0,H
-part planet_s gear.lcad z=18 m=1.5 w=14 bore=8.2 a=190
+part planet_s gear.gcad z=18 m=1.5 w=14 bore=8.2 a=190
 rotate planet_s -90 axis=x
 move planet_s 27,-41,H
-part motor_e motor.lcad size=35 length=34 shaft=40 bolts=26
+part motor_e motor.gcad size=35 length=34 shaft=40 bolts=26
 rotate motor_e -90 axis=x
 move motor_e L1,-56,H
 flush motor_e:can.end upper:beam.start
 concentric motor_e:boss.side upper:pilot.side
-part cap_e cap.lcad d=58 depth=40
+part cap_e cap.gcad d=58 depth=40
 rotate cap_e 90 axis=x
 move cap_e L1,-22,H
 flush cap_e:can.start upper:beam.start
-part sun_e gear.lcad z=suns m=1.25 w=14 bore=5.2
+part sun_e gear.gcad z=suns m=1.25 w=14 bore=5.2
 rotate sun_e -90 axis=x
 move sun_e L1,6,H
-part fore forearm.lcad L=L2
+part fore forearm.gcad L=L2
 move fore L1,0,H
-part planet_e gear.lcad z=18 m=1.25 w=14 bore=7.2 a=190
+part planet_e gear.gcad z=18 m=1.25 w=14 bore=7.2 a=190
 rotate planet_e -90 axis=x
 move planet_e L1+22.5,6,H
-part motor_w motor.lcad size=28 length=32 shaft=28 bolts=23 screw=2.6
+part motor_w motor.gcad size=28 length=32 shaft=28 bolts=23 screw=2.6
 rotate motor_w -90 axis=x
 move motor_w L1+L2,-8,H
 flush motor_w:can.end fore:beam.start
 concentric motor_w:boss.side fore:pilot.side
-part cap_w cap.lcad d=44 depth=38
+part cap_w cap.gcad d=44 depth=38
 rotate cap_w 90 axis=x
 move cap_w L1+L2,24,H
 flush cap_w:can.start fore:beam.start
-part sun_w gear.lcad z=suns m=1 w=14 bore=5.2
+part sun_w gear.gcad z=suns m=1 w=14 bore=5.2
 rotate sun_w -90 axis=x
 move sun_w L1+L2,40,H
-part hand wrist.lcad grip=grip
+part hand wrist.gcad grip=grip
 move hand L1+L2,0,H
-part planet_w gear.lcad z=18 m=1 w=14 bore=6.2 a=190
+part planet_w gear.gcad z=18 m=1 w=14 bore=6.2 a=190
 rotate planet_w -90 axis=x
 move planet_w L1+L2+18,40,H
-part hood hood.lcad grip=grip
+part hood hood.gcad grip=grip
 move hood L1+L2,0,H
 flush hood:plate.start hand:housing.end
-part motor_g motor.lcad size=20 length=30 shaft=12 shaftd=4 pilot=16 bolts=16 screw=2.4
+part motor_g motor.gcad size=20 length=30 shaft=12 shaftd=4 pilot=16 bolts=16 screw=2.4
 rotate motor_g 90 axis=x
 move motor_g L1+L2+grip,116,H
 flush motor_g:can.end hood:plate.end
 concentric motor_g:boss.side hood:pilot.side
-part cap_g cap.lcad d=34 depth=34 t=2
+part cap_g cap.gcad d=34 depth=34 t=2
 rotate cap_g -90 axis=x
 move cap_g L1+L2+grip,86,H
 flush cap_g:can.start hood:plate.end
-part pinion_g gear.lcad z=17 m=1 bore=4.2
+part pinion_g gear.gcad z=17 m=1 bore=4.2
 rotate pinion_g -90 axis=x
 move pinion_g L1+L2+grip,73,H
-part finger_a finger.lcad s=1 shift=0 grip=grip
+part finger_a finger.gcad s=1 shift=0 grip=grip
 move finger_a L1+L2,0,H
-part finger_b finger.lcad s=-1 shift=0.5 grip=grip
+part finger_b finger.gcad s=-1 shift=0.5 grip=grip
 move finger_b L1+L2,0,H
 axis yaw 0,0,0 0,0,1
 axis yaw_pin 27,0,0 27,0,1

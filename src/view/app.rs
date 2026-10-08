@@ -243,7 +243,7 @@ impl App {
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
         let path = std::fs::canonicalize(&path).unwrap_or(path);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
-            "linecad - {}",
+            "gcad - {}",
             path.display()
         )));
         self.path = Some(path);
@@ -273,7 +273,7 @@ impl App {
                 && event.paths.iter().any(|p| {
                     p == &watched
                         || p.parent() == watched.parent()
-                            && p.extension().is_some_and(|e| e == "lcad" || e == "lasm")
+                            && p.extension().is_some_and(|e| e == "gcad" || e == "gasm")
                 })
             {
                 let _ = tx.send(());
@@ -449,7 +449,7 @@ impl App {
     fn header(&mut self, ui: &mut Ui, ctx: &egui::Context) {
         ui.horizontal(|ui| {
             Line::new()
-                .legend("linecad")
+                .legend("gcad")
                 .value(
                     self.path
                         .as_ref()
@@ -1149,7 +1149,7 @@ impl App {
                 &self.path,
                 self.loading.is_some() || self.building.is_some(),
             ) {
-                (None, _) => "open a .lcad part or .lasm assembly",
+                (None, _) => "open a .gcad part or .gasm assembly",
                 (_, true) => "building",
                 _ => "no solid at this line",
             };
@@ -1300,7 +1300,7 @@ impl App {
                                     .and_then(|n| n.to_str())
                                     .is_some_and(|n| n.starts_with('.'));
                                 !hidden
-                                    && (p.is_dir() || p.extension().is_some_and(|e| e == "lcad"))
+                                    && (p.is_dir() || p.extension().is_some_and(|e| e == "gcad"))
                             })
                             .map(|p| (p.is_dir(), p))
                             .collect()
@@ -1344,7 +1344,7 @@ impl App {
                             }
                         }
                         if entries.is_empty() {
-                            hint(ui, "no folders, .lcad or .lasm files here");
+                            hint(ui, "no folders, .gcad or .gasm files here");
                         }
                     });
                 ui.add_space(6.0);
@@ -1534,8 +1534,8 @@ pub fn run(
     vars: Vec<(String, f64)>,
 ) -> eframe::Result<()> {
     let title = match &path {
-        Some(path) => format!("linecad - {}", path.display()),
-        None => "linecad".to_string(),
+        Some(path) => format!("gcad - {}", path.display()),
+        None => "gcad".to_string(),
     };
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()

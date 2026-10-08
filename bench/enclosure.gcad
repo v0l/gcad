@@ -5,5 +5,5 @@ shell wall open=body.end
 plane body.start
 hole 3.2 22,12 -22,12 -22,-12 22,-12 csink=6.4,90
 plane >Z offset=-h+wall
-text "LINECAD" size=6 at=-14,-3
+text "GCAD" size=6 at=-7.8,-2.1
 cut 0.6

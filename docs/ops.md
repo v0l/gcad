@@ -1,6 +1,6 @@
 # Operations and their tests
 
-Every operation a parametric CAD program is expected to have, whether linecad has it,
+Every operation a parametric CAD program is expected to have, whether gcad has it,
 the line that does it, and the tests that prove it. Each test builds a part and checks
 it against a volume or bounding box worked out by hand.
 
@@ -11,7 +11,7 @@ and the tests disagree: a test not listed here, a listed test that does not exis
 `supported` row whose test is ignored as missing, or a `missing` row whose test runs.
 
 Run everything with `cargo test --release`. The OpenCascade check needs a Python with
-OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ignored step_opens`.
+OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ignored step_opens`.
 
 ## Sketch
 
@@ -30,7 +30,7 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 | ellipse | supported | `ellipse 20 10` | `sketch::ellipse` |
 | lines and arcs | supported | `pen`, `line`, `arc via=`, `close` | `sketch::lines_and_arcs` |
 | spline | supported | `spline x,y ... closed` | `sketch::spline` |
-| text | supported | `text LINECAD size=10` | `sketch::text` |
+| text | supported | `text GCAD size=10` | `sketch::text` |
 | polygon with rounded corners | supported | `poly ... r=4` | `sketch::rounded_polygon` |
 | polygon with chamfered corners | supported | `poly ... c=2` | `sketch::chamfered_polygon` |
 | offset outline | supported | `offset 2` | `sketch::offset_outline` |
@@ -159,13 +159,13 @@ OCP: `LINECAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- -
 
 ## Assemblies
 
-Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and join them.
+Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and join them.
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| bring in a part file | supported | `part box box.lcad body=lid` | `assembly::parts_from_files` |
-| set a part's variables | supported | `part plate plate.lcad w=size` | `assembly::part_variables` |
-| geometry stays in part files | supported | `rect` in a `.lasm` fails | `assembly::geometry_stays_in_parts`, `assembly::part_errors_name_the_file` |
+| bring in a part file | supported | `part box box.gcad body=lid` | `assembly::parts_from_files` |
+| set a part's variables | supported | `part plate plate.gcad w=size` | `assembly::part_variables` |
+| geometry stays in part files | supported | `rect` in a `.gasm` fails | `assembly::geometry_stays_in_parts`, `assembly::part_errors_name_the_file` |
 | concentric mate | supported | `concentric pin:pin.side plate:hole.side near=x,y,z` | `assembly::concentric_pin_in_a_hole`, `assembly::concentric_picks_the_hole_near_a_point` |
 | flush mate | supported | `flush pin:pin.start plate:base.end offset=1` | `assembly::concentric_pin_in_a_hole` |
 | parallel mate | supported | `parallel b:rod.end a:rod.end` | `assembly::parallel_and_angle_turn_parts`, `assembly::a_parallel_mate_stops_a_joint` |
@@ -173,38 +173,38 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | distance mate | supported | `distance b:rod.side a:rod.side 50` | `assembly::distance_between_axes` |
 | tangent mate | supported | `tangent rod:rod.side plate:plate.end` | `assembly::tangent_lays_a_rod_on_a_plate` |
 | mates hold parts together | supported | a screw mated to lid and box stops the hinge | `assembly::a_screw_locks_the_hinge` |
-| sub-assemblies | supported | `part kit boxed.lasm` keeps its joints and mates | `assembly::a_sub_assembly_keeps_its_mates` |
+| sub-assemblies | supported | `part kit boxed.gasm` keeps its joints and mates | `assembly::a_sub_assembly_keeps_its_mates` |
 | check holes line up | supported | `aligned lid:screws.side box:pilot.side tol=0.05` | `assembly::holes_line_up` |
 | turning joint | supported | `joint open box.lid box.main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
 | sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
 | cylindrical joint | supported | a `turn` and a `slide` on one axis | `assembly::a_rod_turns_and_slides_on_one_axis` |
 | closed loops of joints | supported | a four-bar linkage follows its crank | `assembly::a_four_bar_linkage_follows_its_crank` |
 | gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together`, `assembly::gears_in_mesh_turn_without_touching`, `assembly::planetary_gears_turn_without_touching` |
-| motors driving joints through gears | supported | `examples/robot/arm.lasm` | `assembly::robot_arm_example` |
+| motors driving joints through gears | supported | `examples/robot/arm.gasm` | `assembly::robot_arm_example` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
 | pattern parts | supported | `pattern s1 holes=case.lid:screws.side`, `count=` `step=`/`angle=` | `assembly::pattern_copies_a_part_and_its_mates` |
 | exploded view | supported | `explode lid 0,0,30`, `render --explode` | `assembly::exploded_views_move_parts_apart` |
-| assembly drawing with parts list | supported | `linecad export top.lasm top.svg` | `output::assembly_drawing_lists_parts` |
-| bill of materials | supported | `linecad bom top.lasm [--csv]` | `assembly::bill_of_materials_counts_parts` |
+| assembly drawing with parts list | supported | `gcad export top.gasm top.svg` | `output::assembly_drawing_lists_parts` |
+| bill of materials | supported | `gcad bom top.gasm [--csv]` | `assembly::bill_of_materials_counts_parts` |
 | sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash` |
 
 ## Output
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| STEP export | supported | `linecad export part.lcad part.step` | `output::step`, `output::step_opens_in_opencascade` |
-| STL export | supported | `linecad export part.lcad part.stl` | `output::stl` |
-| PNG views | supported | `linecad render part.lcad part.png` | `output::png` |
+| STEP export | supported | `gcad export part.gcad part.step` | `output::step`, `output::step_opens_in_opencascade` |
+| STL export | supported | `gcad export part.gcad part.stl` | `output::stl` |
+| PNG views | supported | `gcad render part.gcad part.png` | `output::png` |
 | STEP import | supported | `import part.step` | `output::step_import` |
-| OBJ export | supported | `linecad export part.lcad part.obj` | `output::obj` |
-| 3MF export | supported | `linecad export part.lcad part.3mf` | `output::three_mf` |
-| SVG drawing | supported | `linecad export part.lcad part.svg` | `output::drawing` |
+| OBJ export | supported | `gcad export part.gcad part.obj` | `output::obj` |
+| 3MF export | supported | `gcad export part.gcad part.3mf` | `output::three_mf` |
+| SVG drawing | supported | `gcad export part.gcad part.svg` | `output::drawing` |
 | drawing dimensions and hole callouts | supported | overall sizes, `4× ⌀3.2` | `output::drawing_dimensions_and_section` |
-| section view | supported | `linecad export part.lcad part.svg --section y=0` | `output::drawing_dimensions_and_section` |
+| section view | supported | `gcad export part.gcad part.svg --section y=0` | `output::drawing_dimensions_and_section` |
 | STL import | supported | `import part.stl` | `output::stl_import` |
 | STEP colours | supported | `color red` | `output::step_colours` |
-| STEP assembly structure | supported | `linecad export top.lasm top.step` | `output::step_assembly`, `output::step_assembly_opens_in_opencascade` |
+| STEP assembly structure | supported | `gcad export top.gasm top.step` | `output::step_assembly`, `output::step_assembly_opens_in_opencascade` |
 
 
 ## Parameters and inspection
@@ -221,6 +221,6 @@ Assemblies are `.lasm` files. They bring in the bodies of `.lcad` part files and
 | materials and mass | supported | `material steel`, `material pla density=1.24` | `inspect::material_mass`, `assembly::materials_follow_parts` |
 | wall thickness | supported | `measure thickness` | `inspect::wall_thickness` |
 | draft analysis | supported | `measure draft pull=z` | `inspect::draft_analysis` |
-| variables from outside the file | supported | `linecad check part.lcad --set w=20` | `inspect::outside_variables` |
-| include another file | supported | `include part.lcad d=10` | `inspect::include_file` |
+| variables from outside the file | supported | `gcad check part.gcad --set w=20` | `inspect::outside_variables` |
+| include another file | supported | `include part.gcad d=10` | `inspect::include_file` |
 | conditional lines | supported | `if w>30 chamfer 1 edges` | `inspect::conditional` |

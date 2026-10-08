@@ -1,8 +1,8 @@
 #![allow(dead_code)]
 
-use linecad::geometry;
-use linecad::model::{Model, run};
-use linecad::parse::parse_program;
+use gcad::geometry;
+use gcad::model::{Model, run};
+use gcad::parse::parse_program;
 
 pub const SPANDREL: f64 = 1.0 - std::f64::consts::PI / 4.0;
 pub const SPANDREL_CENTROID: f64 =
@@ -74,7 +74,7 @@ pub fn assert_bounds(model: &Model, min: [f64; 3], max: [f64; 3]) {
 
 pub fn part(name: &str) -> String {
     std::fs::read_to_string(format!(
-        "{}/examples/parts/{name}.lcad",
+        "{}/examples/parts/{name}.gcad",
         env!("CARGO_MANIFEST_DIR")
     ))
     .expect("example exists")
@@ -91,7 +91,7 @@ pub fn summary(source: &str) -> String {
 }
 
 pub fn scratch(name: &str) -> String {
-    let dir = std::env::temp_dir().join("linecad-tests");
+    let dir = std::env::temp_dir().join("gcad-tests");
     std::fs::create_dir_all(&dir).expect("temp dir");
     dir.join(name).to_string_lossy().into_owned()
 }

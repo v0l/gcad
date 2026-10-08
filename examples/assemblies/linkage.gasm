@@ -2,10 +2,10 @@ let ground=40 crank=15 coupler=40 rocker=30 turn=0
 let d=hypot(ground,crank) along=(coupler*coupler-rocker*rocker+d*d)/(2*d)
 let h=sqrt(coupler*coupler-along*along)
 let cx=along*ground/d+h*crank/d cy=crank-along*crank/d+h*ground/d
-part frame ../parts/frame.lcad span=ground
-part crank ../parts/link.lcad L=crank
-part coupler ../parts/link.lcad L=coupler
-part rocker ../parts/link.lcad L=rocker
+part frame ../parts/frame.gcad span=ground
+part crank ../parts/link.gcad L=crank
+part coupler ../parts/link.gcad L=coupler
+part rocker ../parts/link.gcad L=rocker
 move crank 0,0,4
 rotate crank 90 axis=z
 move coupler 0,crank,7

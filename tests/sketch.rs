@@ -152,7 +152,7 @@ fn spline() {
 
 #[test]
 fn text() {
-    let model = build("text LINECAD size=10\nextrude 1");
+    let model = build("text GCAD size=10\nextrude 1");
     assert!(volume(&model) > 10.0);
 }
 

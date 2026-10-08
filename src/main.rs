@@ -1,7 +1,7 @@
 use anyhow::{Result, anyhow, bail};
 use clap::{Parser, Subcommand};
-use linecad::model::{Run, run_path};
-use linecad::{export, render, select};
+use gcad::model::{Run, run_path};
+use gcad::{export, render, select};
 
 #[derive(Parser)]
 #[command(
@@ -48,7 +48,7 @@ enum Command {
         output: String,
         /// For an .svg drawing, add a section view cut across this plane, like y=0
         #[arg(long)]
-        section: Option<linecad::drawing::Section>,
+        section: Option<gcad::drawing::Section>,
     },
     /// List the parts an assembly is made of, counted by file, body and variables
     Bom {
@@ -194,7 +194,7 @@ fn main() -> Result<()> {
                 let parts = run.model.parts();
                 std::fs::write(
                     &output,
-                    linecad::drawing::drawing_with(&parts, Some(section)),
+                    gcad::drawing::drawing_with(&parts, Some(section)),
                 )?;
                 return Ok(());
             }
@@ -203,11 +203,11 @@ fn main() -> Result<()> {
         Command::Bom { file, csv } => {
             let run = load(&file, None, &vars)?;
             finished(&run)?;
-            let items = linecad::bom::items(&run.model, std::path::Path::new(&file));
+            let items = gcad::bom::items(&run.model, std::path::Path::new(&file));
             if csv {
-                print!("{}", linecad::bom::csv(&items));
+                print!("{}", gcad::bom::csv(&items));
             } else {
-                println!("{}", linecad::bom::table(&items));
+                println!("{}", gcad::bom::table(&items));
             }
             Ok(())
         }
@@ -223,7 +223,7 @@ fn main() -> Result<()> {
             render::render_coloured(&parts, &output)
         }
         Command::View { file, select, line } => {
-            linecad::view::run(file.map(Into::into), select, line, vars)
+            gcad::view::run(file.map(Into::into), select, line, vars)
                 .map_err(|error| anyhow!("{error}"))
         }
     }

@@ -27,7 +27,7 @@ rect w-2*t-0.4 d-2*t-0.4 r=r-t
 offset -1.5
 lip: extrude -3
 plane top.end
-text LINECAD size=8 at=-17,-4
+text GCAD size=8 at=-10.4,-2.8
 logo: cut 0.6
 screws: hole 3.2 bx,by -bx,by -bx,-by bx,-by
 fillet 1 top.end&top.side

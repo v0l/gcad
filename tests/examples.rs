@@ -34,17 +34,17 @@ fn enclosure() {
 #[test]
 fn enclosure_assembly() {
     let path = std::path::PathBuf::from(format!(
-        "{}/examples/assemblies/enclosure.lasm",
+        "{}/examples/assemblies/enclosure.gasm",
         env!("CARGO_MANIFEST_DIR")
     ));
-    let run = linecad::model::run_path(&path, &[], None).expect("runs");
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
     assert!(run.steps.iter().all(|(_, r)| r.is_ok()));
     assert_eq!(
         run.model.body_names(),
         ["case.main", "case.lid", "s1", "s1_2", "s1_3", "s1_4"]
     );
     let opened =
-        linecad::model::run_path(&path, &[("open".to_string(), -75.0)], None).expect("runs");
+        gcad::model::run_path(&path, &[("open".to_string(), -75.0)], None).expect("runs");
     let (_, last) = opened.steps.last().expect("steps");
     assert!(
         format!("{:#}", last.as_ref().expect_err("screws hold the lid")).contains("pull apart")
@@ -54,12 +54,12 @@ fn enclosure_assembly() {
 #[test]
 fn linkage() {
     let path = std::path::PathBuf::from(format!(
-        "{}/examples/assemblies/linkage.lasm",
+        "{}/examples/assemblies/linkage.gasm",
         env!("CARGO_MANIFEST_DIR")
     ));
     for turn in [0.0, 90.0, 180.0, 270.0] {
         let run =
-            linecad::model::run_path(&path, &[("turn".to_string(), turn)], None).expect("runs");
+            gcad::model::run_path(&path, &[("turn".to_string(), turn)], None).expect("runs");
         let (line, last) = run.steps.last().expect("steps");
         assert!(last.is_ok(), "turn {turn}: line {}: {last:?}", line.number);
         assert!(

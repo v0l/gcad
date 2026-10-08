@@ -1,7 +1,7 @@
 mod common;
 
 use common::scratch;
-use linecad::model::{Model, run_path};
+use gcad::model::{Model, run_path};
 
 const BOX: &str = "rect 40 40\nextrude 10\nbody lid\nplane XY offset=10\nrect 40 40\nextrude 2\n";
 
@@ -11,7 +11,7 @@ fn files(test: &str, assembly: &str, parts: &[(&str, &str)]) -> std::path::PathB
     for (name, text) in parts {
         std::fs::write(dir.join(name), text).expect("part");
     }
-    let path = dir.join("top.lasm");
+    let path = dir.join("top.gasm");
     std::fs::write(&path, assembly).expect("assembly");
     path
 }
@@ -46,17 +46,17 @@ fn failed(test: &str, assembly: &str, parts: &[(&str, &str)]) -> String {
     }
 }
 
-const HINGE: &str = "part box box.lcad\naxis hinge -20,20,10 20,20,10\n";
+const HINGE: &str = "part box box.gcad\naxis hinge -20,20,10 20,20,10\n";
 
 #[test]
 fn parts_from_files() {
     let (model, _) = built(
         "parts_from_files",
-        "part box box.lcad\npart spare box.lcad body=lid\nmove spare 0,0,20",
-        &[("box.lcad", BOX)],
+        "part box box.gcad\npart spare box.gcad body=lid\nmove spare 0,0,20",
+        &[("box.gcad", BOX)],
     );
     assert_eq!(model.body_names(), ["box.main", "box.lid", "spare"]);
-    let spare = linecad::geometry::bounds(&model.named_body("spare").expect("spare"));
+    let spare = gcad::geometry::bounds(&model.named_body("spare").expect("spare"));
     assert!((spare.min().z - 30.0).abs() < 1.0e-6, "{spare:?}");
 }
 
@@ -64,10 +64,10 @@ fn parts_from_files() {
 fn part_variables() {
     let (model, _) = built(
         "part_variables",
-        "let size=20\npart plate plate.lcad w=size",
-        &[("plate.lcad", "let w=10\nrect w w\nextrude 1")],
+        "let size=20\npart plate plate.gcad w=size",
+        &[("plate.gcad", "let w=10\nrect w w\nextrude 1")],
     );
-    let plate = linecad::geometry::bounds(&model.named_body("plate").expect("plate"));
+    let plate = gcad::geometry::bounds(&model.named_body("plate").expect("plate"));
     assert!((plate.max().x - 10.0).abs() < 1.0e-6, "{plate:?}");
 }
 
@@ -76,9 +76,9 @@ fn hinge_opens_the_lid() {
     let (model, _) = built(
         "hinge_opens_the_lid",
         &format!("{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0 at=-90"),
-        &[("box.lcad", BOX)],
+        &[("box.gcad", BOX)],
     );
-    let b = linecad::geometry::bounds(&model.named_body("box.lid").expect("lid"));
+    let b = gcad::geometry::bounds(&model.named_body("box.lid").expect("lid"));
     assert!(
         (b.min().z - 10.0).abs() < 1.0e-6 && (b.max().z - 50.0).abs() < 1.0e-6,
         "{b:?}"
@@ -92,22 +92,22 @@ fn hinge_opens_the_lid() {
 #[test]
 fn slide_moves_a_drawer() {
     let parts = [(
-        "drawer.lcad",
+        "drawer.gcad",
         "rect 40 40\nextrude 10\nbody drawer\nplane XY offset=10\nrect 30 30\nextrude 5",
     )];
     let (model, _) = built(
         "slide_moves_a_drawer",
-        "part chest drawer.lcad\njoint pull chest.drawer chest.main slide along=0,-1,0 min=0 max=30 at=25",
+        "part chest drawer.gcad\njoint pull chest.drawer chest.main slide along=0,-1,0 min=0 max=30 at=25",
         &parts,
     );
-    let b = linecad::geometry::bounds(&model.named_body("chest.drawer").expect("drawer"));
+    let b = gcad::geometry::bounds(&model.named_body("chest.drawer").expect("drawer"));
     assert!(
         (b.min().y + 40.0).abs() < 1.0e-6 && (b.max().y + 10.0).abs() < 1.0e-6,
         "{b:?}"
     );
     let error = failed(
         "slide_out_of_range",
-        "part chest drawer.lcad\njoint pull chest.drawer chest.main slide along=0,-1,0 min=0 max=30 at=40",
+        "part chest drawer.gcad\njoint pull chest.drawer chest.main slide along=0,-1,0 min=0 max=30 at=40",
         &parts,
     );
     assert!(error.contains("goes from 0 to 30"), "{error}");
@@ -118,11 +118,11 @@ fn pose_moves_children() {
     let (model, _) = built(
         "pose_moves_children",
         &format!(
-            "{HINGE}part knob knob.lcad\nmove knob 0,-10,12\njoint open box.lid box.main turn about=hinge min=-120 max=0\njoint fix knob box.lid slide along=0,0,1 min=0 max=0\npose open -90"
+            "{HINGE}part knob knob.gcad\nmove knob 0,-10,12\njoint open box.lid box.main turn about=hinge min=-120 max=0\njoint fix knob box.lid slide along=0,0,1 min=0 max=0\npose open -90"
         ),
-        &[("box.lcad", BOX), ("knob.lcad", "circle 6\nextrude 4")],
+        &[("box.gcad", BOX), ("knob.gcad", "circle 6\nextrude 4")],
     );
-    let b = linecad::geometry::bounds(&model.named_body("knob").expect("knob"));
+    let b = gcad::geometry::bounds(&model.named_body("knob").expect("knob"));
     assert!(b.min().y > 21.9 && b.max().y < 26.1, "{b:?}");
 }
 
@@ -133,7 +133,7 @@ fn clear_assembly() {
         &format!(
             "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0 at=-90\ninterference none"
         ),
-        &[("box.lcad", BOX)],
+        &[("box.gcad", BOX)],
     );
     assert!(text.contains("no overlaps"), "{text}");
 }
@@ -145,7 +145,7 @@ fn sweep_finds_a_clash() {
         &format!(
             "{HINGE}joint open box.lid box.main turn about=hinge min=-60 max=60\ninterference joint=open steps=4"
         ),
-        &[("box.lcad", BOX)],
+        &[("box.gcad", BOX)],
     );
     assert!(
         text.contains("at 30.0°") && text.contains("box.main and box.lid"),
@@ -160,7 +160,7 @@ fn strict_interference_fails() {
         &format!(
             "{HINGE}joint open box.lid box.main turn about=hinge min=0 max=60 at=45\ninterference none"
         ),
-        &[("box.lcad", BOX)],
+        &[("box.gcad", BOX)],
     );
     assert!(error.contains("overlap"), "{error}");
 }
@@ -169,31 +169,31 @@ fn strict_interference_fails() {
 fn geometry_stays_in_parts() {
     let error = failed(
         "geometry_stays_in_parts",
-        "part box box.lcad\nrect 10 10",
-        &[("box.lcad", BOX)],
+        "part box box.gcad\nrect 10 10",
+        &[("box.gcad", BOX)],
     );
-    assert!(error.contains("part (.lcad) file"), "{error}");
+    assert!(error.contains("part (.gcad) file"), "{error}");
     let error = common::failure(
         "rect 10 10\nextrude 1\nbody b\nrect 5 5\nextrude 1\njoint j b main slide along=1,0,0",
     );
-    assert!(error.contains("assembly (.lasm) file"), "{error}");
+    assert!(error.contains("assembly (.gasm) file"), "{error}");
 }
 
 #[test]
 fn part_errors_name_the_file() {
     let error = failed(
         "part_errors_name_the_file",
-        "part bad bad.lcad",
-        &[("bad.lcad", "rect 10 10\nfillet 1 all")],
+        "part bad bad.gcad",
+        &[("bad.gcad", "rect 10 10\nfillet 1 all")],
     );
-    assert!(error.contains("bad.lcad:2"), "{error}");
+    assert!(error.contains("bad.gcad:2"), "{error}");
 }
 
 const PLATE: &str = "rect 40 30\nbase: extrude 5\nplane base.end\nhole: hole 4.2 10,5 -10,-5\n";
 const PIN: &str = "pin: circle 4\npin: extrude 20\n";
 
 fn centre(model: &Model, name: &str) -> [f64; 3] {
-    let b = linecad::geometry::bounds(&model.named_body(name).expect("part"));
+    let b = gcad::geometry::bounds(&model.named_body(name).expect("part"));
     let c = b.center();
     [c.x, c.y, c.z]
 }
@@ -202,8 +202,8 @@ fn centre(model: &Model, name: &str) -> [f64; 3] {
 fn concentric_pin_in_a_hole() {
     let (model, text) = built(
         "concentric_pin_in_a_hole",
-        "part plate plate.lcad\npart pin pin.lcad\nrotate pin 90 axis=y\nmove pin 8,4,30\nconcentric pin:pin.side plate:hole.side\nflush pin:pin.start plate:base.end",
-        &[("plate.lcad", PLATE), ("pin.lcad", PIN)],
+        "part plate plate.gcad\npart pin pin.gcad\nrotate pin 90 axis=y\nmove pin 8,4,30\nconcentric pin:pin.side plate:hole.side\nflush pin:pin.start plate:base.end",
+        &[("plate.gcad", PLATE), ("pin.gcad", PIN)],
     );
     let [x, y, z] = centre(&model, "pin");
     assert!(
@@ -217,8 +217,8 @@ fn concentric_pin_in_a_hole() {
 fn concentric_picks_the_hole_near_a_point() {
     let (model, _) = built(
         "concentric_picks_the_hole_near_a_point",
-        "part plate plate.lcad\npart pin pin.lcad\nconcentric pin:pin.side plate:hole.side near=-10,-5,0\nflush pin:pin.start plate:base.end offset=1",
-        &[("plate.lcad", PLATE), ("pin.lcad", PIN)],
+        "part plate plate.gcad\npart pin pin.gcad\nconcentric pin:pin.side plate:hole.side near=-10,-5,0\nflush pin:pin.start plate:base.end offset=1",
+        &[("plate.gcad", PLATE), ("pin.gcad", PIN)],
     );
     let [x, y, z] = centre(&model, "pin");
     assert!(
@@ -229,16 +229,16 @@ fn concentric_picks_the_hole_near_a_point() {
 
 #[test]
 fn holes_line_up() {
-    let parts = [("plate.lcad", PLATE)];
+    let parts = [("plate.gcad", PLATE)];
     let (_, text) = built(
         "holes_line_up",
-        "part a plate.lcad\npart b plate.lcad\nmove b 0,0,5\naligned b:hole.side a:hole.side",
+        "part a plate.gcad\npart b plate.gcad\nmove b 0,0,5\naligned b:hole.side a:hole.side",
         &parts,
     );
     assert!(text.contains("2 hole(s) line up"), "{text}");
     let error = failed(
         "holes_do_not_line_up",
-        "part a plate.lcad\npart b plate.lcad\nmove b 0.5,0,5\naligned b:hole.side a:hole.side",
+        "part a plate.gcad\npart b plate.gcad\nmove b 0.5,0,5\naligned b:hole.side a:hole.side",
         &parts,
     );
     assert!(error.contains("0.500 off"), "{error}");
@@ -249,13 +249,13 @@ const SCREW: &str = "circle 4\nhead: extrude 1.5\ncircle 2\nshank: extrude -10\n
 
 #[test]
 fn a_screw_locks_the_hinge() {
-    let parts = [("box.lcad", LID_WITH_HOLES), ("screw.lcad", SCREW)];
+    let parts = [("box.gcad", LID_WITH_HOLES), ("screw.gcad", SCREW)];
     let screwed = format!(
-        "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nconcentric screw:shank.side box.main:pilot.side\n"
+        "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.gcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nconcentric screw:shank.side box.main:pilot.side\n"
     );
     let (model, text) = built("a_screw_locks_the_hinge", &screwed, &parts);
     assert!(text.contains("ties it to `box.main`"), "{text}");
-    let b = linecad::geometry::bounds(&model.named_body("screw").expect("screw"));
+    let b = gcad::geometry::bounds(&model.named_body("screw").expect("screw"));
     assert!(
         (b.min().z - 2.0).abs() < 1.0e-6 && (b.max().z - 13.5).abs() < 1.0e-6,
         "{b:?}"
@@ -272,11 +272,11 @@ fn a_screw_locks_the_hinge() {
     let (model, _) = built(
         "an_unscrewed_lid_opens",
         &format!(
-            "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\npose open -90"
+            "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.gcad\nconcentric screw:shank.side box.lid:screws.side\npose open -90"
         ),
         &parts,
     );
-    let b = linecad::geometry::bounds(&model.named_body("screw").expect("screw"));
+    let b = gcad::geometry::bounds(&model.named_body("screw").expect("screw"));
     assert!(
         b.max().z - b.min().z < 4.1,
         "the screw turns with the lid: {b:?}"
@@ -286,16 +286,16 @@ fn a_screw_locks_the_hinge() {
 #[test]
 fn a_sub_assembly_keeps_its_mates() {
     let parts = [
-        ("box.lcad", LID_WITH_HOLES),
-        ("screw.lcad", SCREW),
+        ("box.gcad", LID_WITH_HOLES),
+        ("screw.gcad", SCREW),
         (
-            "boxed.lasm",
-            "part box box.lcad\naxis hinge -20,20,10 20,20,10\njoint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nconcentric screw:shank.side box.main:pilot.side\n",
+            "boxed.gasm",
+            "part box box.gcad\naxis hinge -20,20,10 20,20,10\njoint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.gcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nconcentric screw:shank.side box.main:pilot.side\n",
         ),
     ];
     let error = failed(
         "a_sub_assembly_keeps_its_mates",
-        "part kit boxed.lasm\npose kit.open -30\n",
+        "part kit boxed.gasm\npose kit.open -30\n",
         &parts,
     );
     assert!(error.contains("pull apart"), "{error}");
@@ -308,7 +308,7 @@ fn extent(
     model: &Model,
     part: &str,
 ) -> monstertruck::modeling::BoundingBox<monstertruck::modeling::Point3> {
-    linecad::geometry::bounds(&model.named_body(part).expect("part"))
+    gcad::geometry::bounds(&model.named_body(part).expect("part"))
 }
 
 fn near(a: f64, b: f64) -> bool {
@@ -317,10 +317,10 @@ fn near(a: f64, b: f64) -> bool {
 
 #[test]
 fn tangent_lays_a_rod_on_a_plate() {
-    let parts = [("plate.lcad", SLAB), ("rod.lcad", ROD)];
+    let parts = [("plate.gcad", SLAB), ("rod.gcad", ROD)];
     let (model, text) = built(
         "tangent_lays_a_rod_on_a_plate",
-        "part plate plate.lcad\npart rod rod.lcad\ntangent rod:rod.side plate:plate.end\n",
+        "part plate plate.gcad\npart rod rod.gcad\ntangent rod:rod.side plate:plate.end\n",
         &parts,
     );
     let b = extent(&model, "rod");
@@ -332,10 +332,10 @@ fn tangent_lays_a_rod_on_a_plate() {
 
 #[test]
 fn distance_between_axes() {
-    let parts = [("rod.lcad", ROD)];
+    let parts = [("rod.gcad", ROD)];
     let (model, _) = built(
         "distance_between_axes",
-        "part a rod.lcad\npart b rod.lcad\nmove b 30,0,0\ndistance b:rod.side a:rod.side 50\n",
+        "part a rod.gcad\npart b rod.gcad\nmove b 30,0,0\ndistance b:rod.side a:rod.side 50\n",
         &parts,
     );
     let b = extent(&model, "b");
@@ -344,17 +344,17 @@ fn distance_between_axes() {
 
 #[test]
 fn parallel_and_angle_turn_parts() {
-    let parts = [("plate.lcad", SLAB), ("rod.lcad", ROD)];
+    let parts = [("plate.gcad", SLAB), ("rod.gcad", ROD)];
     let (model, _) = built(
         "parallel_turns_a_rod",
-        "part a rod.lcad\npart b rod.lcad\nmove b 30,0,0\nrotate b 30 axis=x\nparallel b:rod.end a:rod.end\n",
+        "part a rod.gcad\npart b rod.gcad\nmove b 30,0,0\nrotate b 30 axis=x\nparallel b:rod.end a:rod.end\n",
         &parts,
     );
     let b = extent(&model, "b");
     assert!(near(b.max().z - b.min().z, 40.0), "{b:?}");
     let (model, text) = built(
         "angle_tilts_a_plate",
-        "part base plate.lcad\npart lid plate.lcad\nmove lid 0,0,50\nangle lid:plate.end base:plate.end 30\n",
+        "part base plate.gcad\npart lid plate.gcad\nmove lid 0,0,50\nangle lid:plate.end base:plate.end 30\n",
         &parts,
     );
     let b = extent(&model, "lid");
@@ -364,8 +364,8 @@ fn parallel_and_angle_turn_parts() {
 
 #[test]
 fn a_parallel_mate_stops_a_joint() {
-    let parts = [("rod.lcad", ROD)];
-    let assembly = "part a rod.lcad\npart b rod.lcad\npart c rod.lcad\nmove b 50,0,0\nmove c 0,30,0\naxis tilt 50,0,0 60,0,0\njoint t b a turn about=tilt\ndistance c:rod.side a:rod.side 20\nparallel c:rod.end b:rod.end\n";
+    let parts = [("rod.gcad", ROD)];
+    let assembly = "part a rod.gcad\npart b rod.gcad\npart c rod.gcad\nmove b 50,0,0\nmove c 0,30,0\naxis tilt 50,0,0 60,0,0\njoint t b a turn about=tilt\ndistance c:rod.side a:rod.side 20\nparallel c:rod.end b:rod.end\n";
     let (model, _) = built("a_parallel_mate_stops_a_joint", assembly, &parts);
     assert!(near(extent(&model, "c").min().y, 17.5));
     let error = failed(
@@ -379,7 +379,7 @@ fn a_parallel_mate_stops_a_joint() {
     );
     let error = failed(
         "a_second_mate_that_does_not_hold",
-        "part a rod.lcad\npart b rod.lcad\nmove b 50,0,0\nrotate b 10 axis=x\npart c rod.lcad\nmove c 0,30,0\ndistance c:rod.side a:rod.side 20\nparallel c:rod.end b:rod.end\n",
+        "part a rod.gcad\npart b rod.gcad\nmove b 50,0,0\nrotate b 10 axis=x\npart c rod.gcad\nmove c 0,30,0\ndistance c:rod.side a:rod.side 20\nparallel c:rod.end b:rod.end\n",
         &parts,
     );
     assert!(error.contains("already hangs off `a`"), "{error}");
@@ -387,14 +387,14 @@ fn a_parallel_mate_stops_a_joint() {
 
 #[test]
 fn a_rod_turns_and_slides_on_one_axis() {
-    let parts = [("rod.lcad", ROD), ("plate.lcad", SLAB)];
-    let assembly = "part plate plate.lcad\npart rod rod.lcad\naxis up 0,0,0 0,0,1\njoint spin rod plate turn about=up\njoint push rod plate slide along=0,0,1 min=0 max=20\npose push 10\npose spin 90\n";
+    let parts = [("rod.gcad", ROD), ("plate.gcad", SLAB)];
+    let assembly = "part plate plate.gcad\npart rod rod.gcad\naxis up 0,0,0 0,0,1\njoint spin rod plate turn about=up\njoint push rod plate slide along=0,0,1 min=0 max=20\npose push 10\npose spin 90\n";
     let (model, _) = built("a_rod_turns_and_slides", assembly, &parts);
     let b = extent(&model, "rod");
     assert!(near(b.min().z, 10.0) && near(b.max().z, 50.0), "{b:?}");
     let error = failed(
         "turns_and_slides_that_do_not_commute",
-        "part plate plate.lcad\npart rod rod.lcad\naxis up 0,0,0 0,0,1\njoint spin rod plate turn about=up\njoint push rod plate slide along=1,0,0\n",
+        "part plate plate.gcad\npart rod rod.gcad\naxis up 0,0,0 0,0,1\njoint spin rod plate turn about=up\njoint push rod plate slide along=1,0,0\n",
         &parts,
     );
     assert!(error.contains("depend on their order"), "{error}");
@@ -402,8 +402,8 @@ fn a_rod_turns_and_slides_on_one_axis() {
 
 #[test]
 fn coupled_joints_move_together() {
-    let parts = [("rod.lcad", ROD), ("plate.lcad", SLAB)];
-    let gears = "part frame plate.lcad\npart a rod.lcad\npart b rod.lcad\npart rack rod.lcad\nmove b 20,0,0\nmove rack 0,40,0\naxis ax 0,0,0 0,0,1\naxis bx 20,0,0 20,0,1\njoint ja a frame turn about=ax\njoint jb b frame turn about=bx min=-60 max=60\njoint slide rack frame slide along=1,0,0\ncouple jb ja ratio=-0.5\ncouple slide ja ratio=0.1\n";
+    let parts = [("rod.gcad", ROD), ("plate.gcad", SLAB)];
+    let gears = "part frame plate.gcad\npart a rod.gcad\npart b rod.gcad\npart rack rod.gcad\nmove b 20,0,0\nmove rack 0,40,0\naxis ax 0,0,0 0,0,1\naxis bx 20,0,0 20,0,1\njoint ja a frame turn about=ax\njoint jb b frame turn about=bx min=-60 max=60\njoint slide rack frame slide along=1,0,0\ncouple jb ja ratio=-0.5\ncouple slide ja ratio=0.1\n";
     let (model, _) = built("coupled_joints", &format!("{gears}pose ja 120\n"), &parts);
     let value = |name: &str| {
         model
@@ -431,10 +431,10 @@ fn coupled_joints_move_together() {
 
 #[test]
 fn materials_follow_parts() {
-    let parts = [("rod.lcad", "circle 10\nextrude 10\nmaterial aluminium\n")];
+    let parts = [("rod.gcad", "circle 10\nextrude 10\nmaterial aluminium\n")];
     let (_, text) = built(
         "materials_follow_parts",
-        "part a rod.lcad\npart b rod.lcad\nmove b 20,0,0\nmaterial b steel\nmeasure mass\n",
+        "part a rod.gcad\npart b rod.gcad\nmove b 20,0,0\nmaterial b steel\nmeasure mass\n",
         &parts,
     );
     let volume = std::f64::consts::PI * 25.0 * 10.0;
@@ -452,18 +452,18 @@ fn materials_follow_parts() {
 fn bill_of_materials_counts_parts() {
     let parts = [
         (
-            "rod.lcad",
+            "rod.gcad",
             "let d=10\ncircle d\nextrude 10\nmaterial steel\n",
         ),
-        ("plate.lcad", SLAB),
+        ("plate.gcad", SLAB),
     ];
     let path = files(
         "bill_of_materials_counts_parts",
-        "part base plate.lcad\npart a rod.lcad\npart b rod.lcad\npart c rod.lcad d=20\nmove b 20,0,0\nmove c 40,0,0\n",
+        "part base plate.gcad\npart a rod.gcad\npart b rod.gcad\npart c rod.gcad d=20\nmove b 20,0,0\nmove c 40,0,0\n",
         &parts,
     );
     let run = run_path(&path, &[], None).expect("runs");
-    let items = linecad::bom::items(&run.model, &path);
+    let items = gcad::bom::items(&run.model, &path);
     let summary: Vec<(usize, &str, &str)> = items
         .iter()
         .map(|i| (i.names.len(), i.file.as_str(), i.variant.as_str()))
@@ -471,38 +471,38 @@ fn bill_of_materials_counts_parts() {
     assert_eq!(
         summary,
         [
-            (1, "plate.lcad", ""),
-            (2, "rod.lcad", ""),
-            (1, "rod.lcad", "d=20")
+            (1, "plate.gcad", ""),
+            (2, "rod.gcad", ""),
+            (1, "rod.gcad", "d=20")
         ]
     );
     assert!(items[0].grams.is_none());
     let grams = std::f64::consts::PI * 25.0 * 10.0 * 7.85 / 1000.0;
     assert!((items[1].grams.expect("steel") - grams).abs() < grams * 2.0e-3);
-    let table = linecad::bom::table(&items);
+    let table = gcad::bom::table(&items);
     assert!(
         table.ends_with("4 parts, 36.98 g without the parts that have no material"),
         "{table}"
     );
     assert!(
-        linecad::bom::csv(&items)
+        gcad::bom::csv(&items)
             .lines()
             .nth(2)
             .expect("row")
-            .starts_with("2,rod.lcad,main,,steel,")
+            .starts_with("2,rod.gcad,main,,steel,")
     );
 }
 
 #[test]
 fn exploded_views_move_parts_apart() {
-    let parts = [("box.lcad", LID_WITH_HOLES), ("screw.lcad", SCREW)];
+    let parts = [("box.gcad", LID_WITH_HOLES), ("screw.gcad", SCREW)];
     let assembly = format!(
-        "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.lcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nexplode box.lid 0,0,20\nexplode screw 0,0,10\ninterference none\n"
+        "{HINGE}joint open box.lid box.main turn about=hinge min=-120 max=0\npart screw screw.gcad\nconcentric screw:shank.side box.lid:screws.side\nflush screw:head.start box.lid:top.end\nexplode box.lid 0,0,20\nexplode screw 0,0,10\ninterference none\n"
     );
     let (model, _) = built("exploded_views", &assembly, &parts);
     let top = |scale: f64, index: usize| {
         let parts = model.exploded_parts(scale);
-        linecad::geometry::bounds(&parts[index].0).max().z
+        gcad::geometry::bounds(&parts[index].0).max().z
     };
     let names = model.body_names();
     let (lid, screw) = (
@@ -517,8 +517,8 @@ fn exploded_views_move_parts_apart() {
         .iter()
         .map(|j| if j.name == "open" { -90.0 } else { j.value })
         .collect();
-    let moved = linecad::model::posed(&model.joints, &open);
-    let offsets = linecad::model::explode_offsets(&model.joints, &model.explode, &moved);
+    let moved = gcad::model::posed(&model.joints, &open);
+    let offsets = gcad::model::explode_offsets(&model.joints, &model.explode, &moved);
     let lid = offsets["box.lid"];
     assert!(near(lid.x, 0.0) && near(lid.y, 20.0) && near(lid.z, 0.0), "{lid:?}");
     let screw = offsets["screw"];
@@ -531,10 +531,10 @@ const FOUR_BAR: &str = "let ground=40 crank=15 coupler=40 rocker=30
 let d=hypot(ground,crank) along=(coupler*coupler-rocker*rocker+d*d)/(2*d)
 let h=sqrt(coupler*coupler-along*along)
 let cx=along*ground/d+h*crank/d cy=crank-along*crank/d+h*ground/d
-part base plate.lcad
-part crankbar bar.lcad L=crank
-part couplerbar bar.lcad L=coupler
-part rockerbar bar.lcad L=rocker
+part base plate.gcad
+part crankbar bar.gcad L=crank
+part couplerbar bar.gcad L=coupler
+part rockerbar bar.gcad L=rocker
 rotate crankbar 90 axis=z
 move couplerbar 0,crank,3
 rotate couplerbar atan2(cy-crank,cx) axis=z about=0,crank,0
@@ -568,7 +568,7 @@ fn rocker_angle(crank_degrees: f64) -> f64 {
 
 #[test]
 fn a_four_bar_linkage_follows_its_crank() {
-    let parts = [("plate.lcad", SLAB), ("bar.lcad", BAR)];
+    let parts = [("plate.gcad", SLAB), ("bar.gcad", BAR)];
     let (model, text) = built("four_bar", &format!("{FOUR_BAR}pose drive 60\n"), &parts);
     let value = |name: &str| {
         model
@@ -596,8 +596,8 @@ fn a_four_bar_linkage_follows_its_crank() {
 fn pattern_copies_a_part_and_its_mates() {
     let plate = "rect 60 20\nbase: extrude 5\nplane base.end\nholes: hole 3 -20,0 0,0 20,0\n";
     let pin = "circle 5\nhead: extrude 1\ncircle 3\npin: extrude -5\n";
-    let parts = [("plate.lcad", plate), ("pin.lcad", pin)];
-    let pinned = "part plate plate.lcad\npart p pin.lcad\nconcentric p:pin.side plate:holes.side near=-20,0,5\nflush p:head.start plate:base.end\npattern p holes=plate:holes.side\n";
+    let parts = [("plate.gcad", plate), ("pin.gcad", pin)];
+    let pinned = "part plate plate.gcad\npart p pin.gcad\nconcentric p:pin.side plate:holes.side near=-20,0,5\nflush p:head.start plate:base.end\npattern p holes=plate:holes.side\n";
     let (model, text) = built("pattern_holes", pinned, &parts);
     assert!(text.contains("p_2, p_3, each with 2 mate(s)"), "{text}");
     let mut centres: Vec<f64> = ["p", "p_2", "p_3"]
@@ -619,7 +619,7 @@ fn pattern_copies_a_part_and_its_mates() {
     );
     let (model, _) = built(
         "pattern_step",
-        "part plate plate.lcad\npart p pin.lcad\npattern p count=3 step=10,0,0\n",
+        "part plate plate.gcad\npart p pin.gcad\npattern p count=3 step=10,0,0\n",
         &parts,
     );
     assert!(near(
@@ -628,14 +628,14 @@ fn pattern_copies_a_part_and_its_mates() {
     ));
     let (model, _) = built(
         "pattern_turn",
-        "part plate plate.lcad\npart p pin.lcad\nmove p 20,0,0\naxis up 0,0,0 0,0,1\npattern p count=4 angle=360 axis=up\n",
+        "part plate plate.gcad\npart p pin.gcad\nmove p 20,0,0\naxis up 0,0,0 0,0,1\npattern p count=4 angle=360 axis=up\n",
         &parts,
     );
     let b = extent(&model, "p_2");
     assert!(near((b.min().y + b.max().y) / 2.0, 20.0), "{b:?}");
     let error = failed(
         "pattern_unmated",
-        "part plate plate.lcad\npart p pin.lcad\npattern p holes=plate:holes.side\n",
+        "part plate plate.gcad\npart p pin.gcad\npattern p holes=plate:holes.side\n",
         &parts,
     );
     assert!(error.contains("mate it into one first"), "{error}");
@@ -645,9 +645,9 @@ const GEAR: &str = "let z=20\ngear z 2\ncircle 6\nteeth: extrude 6\n";
 
 fn meshed(test: &str, phase: f64) -> Vec<Result<String, String>> {
     let assembly = [
-        "part frame frame.lcad",
-        "part a gear.lcad z=20",
-        "part b gear.lcad z=12",
+        "part frame frame.gcad",
+        "part a gear.gcad z=20",
+        "part b gear.gcad z=12",
         "move b 32,0,0",
         &format!("rotate b {phase} axis=z about=32,0,0"),
         "axis wheel 0,0,0 0,0,1",
@@ -663,7 +663,7 @@ fn meshed(test: &str, phase: f64) -> Vec<Result<String, String>> {
     steps(
         test,
         &assembly,
-        &[("gear.lcad", GEAR), ("frame.lcad", frame)],
+        &[("gear.gcad", GEAR), ("frame.gcad", frame)],
     )
     .1
 }
@@ -682,7 +682,7 @@ fn gears_in_mesh_turn_without_touching() {
 
 #[test]
 fn robot_arm_example() {
-    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/robot/arm.lasm");
+    let path = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/robot/arm.gasm");
     let fingers = |vars: &[(String, f64)]| {
         let run = run_path(&path, vars, None).expect("runs");
         let failed: Vec<String> = run
@@ -693,7 +693,7 @@ fn robot_arm_example() {
         assert!(failed.is_empty(), "{failed:?}");
         assert_eq!(run.model.body_names().len(), 34);
         ["finger_a", "finger_b"].map(|name| {
-            linecad::geometry::bounds(&run.model.named_body(name).expect("finger")).center()
+            gcad::geometry::bounds(&run.model.named_body(name).expect("finger")).center()
         })
     };
     let [a0, b0] = fingers(&[]);
@@ -710,11 +710,11 @@ fn robot_arm_example() {
 #[test]
 fn planetary_gears_turn_without_touching() {
     let assembly = [
-        "part ring ring.lcad",
-        "part sun gear.lcad",
-        "part planet gear.lcad a=190",
+        "part ring ring.gcad",
+        "part sun gear.gcad",
+        "part planet gear.gcad a=190",
         "move planet 18,0,0",
-        "part carrier carrier.lcad",
+        "part carrier carrier.gcad",
         "axis centre 0,0,0 0,0,1",
         "axis pin 18,0,0 18,0,1",
         "joint drive carrier ring turn about=centre",
@@ -729,15 +729,15 @@ fn planetary_gears_turn_without_touching() {
     .join("\n");
     let parts = [
         (
-            "ring.lcad",
+            "ring.gcad",
             "circle 70\ngear 54 1 internal\nteeth: extrude 6\n",
         ),
         (
-            "gear.lcad",
+            "gear.gcad",
             "let a=0\ngear 18 1 angle=a\ncircle 6\nteeth: extrude 6\n",
         ),
         (
-            "carrier.lcad",
+            "carrier.gcad",
             "plane XY offset=7\ncircle 50\nplate: extrude 2\n",
         ),
     ];

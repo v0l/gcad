@@ -624,7 +624,7 @@ impl Model {
             "parallel" | "angle" | "distance" | "tangent" => self.op_orient(line),
             "aligned" => self.op_aligned(line),
             other if super::OPERATIONS.contains(&other) => bail!(
-                "`{other}` makes geometry, which belongs in a part (.lcad) file; bring the part in with `part name file.lcad`"
+                "`{other}` makes geometry, which belongs in a part (.gcad) file; bring the part in with `part name file.gcad`"
             ),
             other => bail!(
                 "unknown assembly operation `{other}`; assemblies use {}",
@@ -635,7 +635,7 @@ impl Model {
 
     fn part_key(&self, line: &Line) -> Result<(String, std::path::PathBuf, Vec<(String, f64)>)> {
         let [_, file] = line.positional.as_slice() else {
-            bail!("write `part name file.lcad [body=b] [variable=value ...]`");
+            bail!("write `part name file.gcad [body=b] [variable=value ...]`");
         };
         let path = self.relative(file);
         let vars = line
@@ -678,7 +678,7 @@ impl Model {
 
     fn op_part(&mut self, line: &Line) -> Result<String> {
         let [name, _] = line.positional.as_slice() else {
-            bail!("write `part name file.lcad [body=b] [variable=value ...]`");
+            bail!("write `part name file.gcad [body=b] [variable=value ...]`");
         };
         if name.contains('.') {
             bail!("part names cannot contain `.`");
