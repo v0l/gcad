@@ -101,6 +101,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | thicken a face | supported | `thicken base.side 1` | `features::thicken_face` |
 | union with coplanar faces | supported | same-size box on a face | `features::stack_same_size` |
 | cut with coplanar faces | supported | notch flush with the sides | `features::notch_flush_with_sides` |
+| coplanar faces fused after a boolean | supported | a boss flush with a wall leaves one face | `inspect::flush_unions_leave_one_face_per_plane` |
 | union flush with some sides | supported | step on top, flush with three sides | `features::step_flush_with_sides` |
 
 

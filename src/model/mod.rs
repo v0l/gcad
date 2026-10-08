@@ -5,6 +5,7 @@ mod bodies;
 mod constrain;
 mod exact;
 mod features;
+mod fuse;
 mod holes;
 mod import;
 pub mod mate;
@@ -415,7 +416,7 @@ impl Model {
                     .map_err(|e| anyhow!("intersection failed: {e}"))?
             }
         };
-        self.solid = Some(exact::exact_edges(&result));
+        self.solid = Some(fuse::fuse_coplanar(&exact::exact_edges(&result)));
         self.tools
             .entry(label.to_string())
             .or_default()

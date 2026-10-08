@@ -46,6 +46,28 @@ fn directional_faces() {
 }
 
 #[test]
+fn flush_unions_leave_one_face_per_plane() {
+    let model = build(
+        "rect 40 30\nbase: extrude 10\nrect 10 30 at=15,0\nextrude 20\nplane XZ offset=15\nrect 7 8 at=0,14\nextrude -15",
+    );
+    let solid = model.solid.as_ref().expect("a solid");
+    let faces = |selector: &str| {
+        select_faces(selector, solid, &model.groups, model.tolerance())
+            .expect("selects")
+            .len()
+    };
+    let edges = |selector: &str| {
+        select_edges(selector, solid, &model.groups, model.tolerance())
+            .expect("selects")
+            .len()
+    };
+    assert_eq!(faces("all"), 12);
+    assert_eq!(faces("<Y"), 1);
+    assert_eq!(edges("<Y"), 10);
+    assert_volume(&model, 15000.0 + 7.0 * 8.0 * 15.0, 1.0e-6);
+}
+
+#[test]
 fn groups_survive_later_cuts() {
     let model = build(
         "rect 40 30\nbase: extrude 10\nplane base.end\nrect 10 10\ncut 3\nplane >X\nrect 4 4 at=0,5\ncut 2",
