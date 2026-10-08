@@ -23,7 +23,7 @@ pub(crate) const THREADS: &[(&str, f64, f64, f64)] = &[
     ("M12", 12.0, 10.2, 1.75),
 ];
 
-const SPANS_PER_TURN: usize = 32;
+const SPANS_PER_TURN: usize = 64;
 const END_SAMPLES: usize = 33;
 
 pub(crate) fn thread_named(name: &str) -> Result<(f64, f64, f64)> {
