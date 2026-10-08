@@ -1371,7 +1371,9 @@ impl App {
                                     .and_then(|n| n.to_str())
                                     .is_some_and(|n| n.starts_with('.'));
                                 !hidden
-                                    && (p.is_dir() || p.extension().is_some_and(|e| e == "gcad"))
+                                    && (p.is_dir()
+                                        || p.extension()
+                                            .is_some_and(|e| e == "gcad" || e == "gasm"))
                             })
                             .map(|p| (p.is_dir(), p))
                             .collect()
