@@ -93,6 +93,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | thread into a chamfer or countersink | supported | `chamfer 1 rod.end&rod.side` then `thread M6 on=rod.side` | `features::thread_runs_out_into_chamfers`, `features::left_hand_thread_runs_out_into_a_chamfer`, `features::tapped_thread_under_a_countersink` |
 | shell with several openings | supported | `shell 2 open=a.end,a.start` | `features::shell_two_openings` |
 | shell of any solid | supported | `shell 1` on a revolve | `features::shell_revolved` |
+| shell after rounding | supported | `fillet 3 all` then `shell 2 open=base.end` | `features::shell_follows_rounded_corners`, `features::shell_as_thick_as_the_rounding`, `features::shell_follows_a_rounded_floor` |
 | draft curved faces | supported | `draft 5 base.side` on a cylinder | `features::draft_curved` |
 | push in with curved sides | supported | `push base.end -2` on a cylinder | `features::push_curved` |
 | wrap a sketch onto a face | supported | `wrap base.side depth=0.5 [raise]` | `features::wrap_text`, `features::wrap_rectangle` |

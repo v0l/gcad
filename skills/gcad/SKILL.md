@@ -152,7 +152,8 @@ gcad bom asm.gasm --csv
 - Fillets where three rounded edges meet need flat faces and straight edges. Inside and
   outside edges can meet there (pocket rims, boss feet, L shapes), but not at a corner
   whose third edge stays sharp. `shell` hollows the extrusion that owns the open face,
-  so shell before adding other features.
+  so shell before adding other features; fillets on it can come first, and the inside
+  follows them at their radius less the wall.
 - Boolean edges that are lines or circles (hole rims) are exact; other intersections, such as
   two crossing cylinders, are fine polylines.
 - `thread M6 on=rod.side` needs each end of the round face to be flat and square to it, or a

@@ -706,6 +706,7 @@ impl Model {
                 along * (to - from),
                 (0.0, 0.0),
             )?;
+            let tool = rounded_inside(&self.rounded, tool, thickness);
             let groups = classify(&tool, along)
                 .into_iter()
                 .map(|(group, s)| (if group == "start" { "floor" } else { "inside" }, s))
@@ -1200,4 +1201,72 @@ fn replane(solid: &Solid, changes: &[(usize, Point3, Vector3)]) -> Result<()> {
         )))
     });
     Ok(())
+}
+
+fn rounded_inside(rounded: &[super::Rounded], tool: Solid, wall: f64) -> Solid {
+    let faces = select::faces(&tool);
+    let owners = select::edge_owners(&faces);
+    let size = geometry::bounds(&tool).diameter();
+    let close = size * 1.0e-7;
+    let off_line = |p: Point3, a: Point3, b: Point3| {
+        let along = (b - a).normalize();
+        ((p - a) - along * (p - a).dot(along)).magnitude()
+    };
+    let mut picked: Vec<(Edge, f64)> = Vec::new();
+    let mut seen: Vec<Edge> = Vec::new();
+    for edge in faces.iter().flat_map(|f| f.edge_iter()) {
+        if seen.iter().any(|e| e.is_same(&edge)) || !super::round::straight(&edge) {
+            continue;
+        }
+        seen.push(edge.clone());
+        let [a, b] = owners[&edge.id()][..] else {
+            continue;
+        };
+        let normal = |f: usize| match faces[f].oriented_surface() {
+            Surface::Plane(plane) => Some(plane.normal()),
+            _ => None,
+        };
+        let (Some(n1), Some(n2)) = (normal(a), normal(b)) else {
+            continue;
+        };
+        let c = n1.dot(n2);
+        if c > 1.0 - 1.0e-9 {
+            continue;
+        }
+        let shift = (n1 + n2) * (wall / (1.0 + c));
+        let (p, q) = (edge.front().point() + shift, edge.back().point() + shift);
+        let found = rounded.iter().find(|r| {
+            let span = r.to - r.from;
+            let length = span.magnitude();
+            let at = |x: Point3| (x - r.from).dot(span) / (length * length);
+            let (s, t) = (at(p).min(at(q)), at(p).max(at(q)));
+            off_line(p, r.from, r.to) < close
+                && off_line(q, r.from, r.to) < close
+                && t > 1.0e-9
+                && s < 1.0 - 1.0e-9
+        });
+        if let Some(r) = found {
+            let inner = r.radius - wall;
+            if inner > -close {
+                picked.push((edge, inner.max(wall * 1.0e-3)));
+            }
+        }
+    }
+    let Some(&(_, radius)) = picked.iter().max_by_key(|(_, r)| {
+        picked
+            .iter()
+            .filter(|(_, other)| (other - r).abs() < close)
+            .count()
+    }) else {
+        return tool;
+    };
+    let edges: Vec<Edge> = picked
+        .into_iter()
+        .filter(|(_, r)| (r - radius).abs() < close)
+        .map(|(e, _)| e)
+        .collect();
+    let options = FilletOptions::constant(radius).with_division(super::blends::divisions(&edges));
+    super::round::round_edges(&tool, &edges, radius, false)
+        .or_else(|_| super::blends::kernel_blend(&tool, &edges, &options, "shell", "inside"))
+        .unwrap_or(tool)
 }

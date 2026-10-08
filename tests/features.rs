@@ -526,3 +526,34 @@ fn step_flush_with_sides() {
         1.0e-6,
     );
 }
+
+#[test]
+fn shell_follows_rounded_corners() {
+    assert_volume(
+        &build("rect 40 30\nbase: extrude 20\nfillet 3 base.side&base.side\nshell 2 open=base.end"),
+        (1200.0 - (4.0 - PI) * 9.0) * 20.0 - (36.0 * 26.0 - (4.0 - PI)) * 18.0,
+        1.0e-4,
+    );
+}
+
+#[test]
+fn shell_as_thick_as_the_rounding() {
+    assert_volume(
+        &build("rect 40 30\nbase: extrude 20\nfillet 2 base.side&base.side\nshell 2 open=base.end"),
+        (1200.0 - (4.0 - PI) * 4.0) * 20.0 - 36.0 * 26.0 * 18.0,
+        1.0e-4,
+    );
+}
+
+#[test]
+fn shell_follows_a_rounded_floor() {
+    let outside = 24000.0 - 140.0 * SPANDREL * 4.0 + 4.0 * ROUND_CORNER_OVERLAP * 8.0;
+    let inside = 38.0 * 28.0 * 19.0 - 132.0 * SPANDREL + 4.0 * ROUND_CORNER_OVERLAP;
+    assert_volume(
+        &build(
+            "rect 40 30\nbase: extrude 20\nfillet 2 base.start&base.side\nshell 1 open=base.end",
+        ),
+        outside - inside,
+        1.0e-4,
+    );
+}

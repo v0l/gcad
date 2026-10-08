@@ -88,13 +88,13 @@ fn turning(edge: &Edge) -> f64 {
         .sum()
 }
 
-fn divisions(edges: &[Edge]) -> std::num::NonZeroUsize {
+pub(crate) fn divisions(edges: &[Edge]) -> std::num::NonZeroUsize {
     let most = edges.iter().map(turning).fold(0.0, f64::max);
     let count = (most / 3.0_f64.to_radians()).ceil().clamp(5.0, 48.0) as usize;
     std::num::NonZeroUsize::new(count).expect("at least five")
 }
 
-fn kernel_blend(
+pub(crate) fn kernel_blend(
     solid: &Solid,
     edges: &[Edge],
     options: &FilletOptions,
@@ -124,7 +124,7 @@ fn kernel_blend(
     if select::faces(&result).len() <= count {
         bail!("{op} could not change `{selector}`, the solid is unchanged");
     }
-    Ok(result)
+    Ok(super::exact::exact_edges(&result))
 }
 
 impl Model {
@@ -211,6 +211,18 @@ impl Model {
         }
         if !chained.is_empty() {
             result = kernel_blend(&result, &chained, &options, &line.op, selector)?;
+        }
+        if !flat && !args.has("to") {
+            self.rounded.extend(
+                edges
+                    .iter()
+                    .filter(|edge| super::round::straight(edge))
+                    .map(|edge| super::Rounded {
+                        from: edge.front().point(),
+                        to: edge.back().point(),
+                        radius: size,
+                    }),
+            );
         }
         let label = label_of(line);
         select::faces(&result)

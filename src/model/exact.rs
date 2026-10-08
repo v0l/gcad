@@ -6,6 +6,12 @@ use std::f64::consts::FRAC_PI_2;
 fn polyline(curve: &Curve) -> Option<Vec<Point3>> {
     match curve {
         Curve::BsplineCurve(b) if b.degree() == 1 => Some(b.control_points().clone()),
+        Curve::NurbsCurve(n) if n.degree() == 1 => Some(
+            n.control_points()
+                .iter()
+                .map(|p| Point3::from_homogeneous(*p))
+                .collect(),
+        ),
         Curve::IntersectionCurve(i) => polyline(i.leader()),
         _ => None,
     }

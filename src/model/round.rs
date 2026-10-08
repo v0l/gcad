@@ -242,7 +242,7 @@ impl Polyhedron {
     }
 }
 
-fn straight(edge: &Edge) -> bool {
+pub(crate) fn straight(edge: &Edge) -> bool {
     let curve = edge.curve();
     if matches!(curve, Curve::Line(_)) {
         return true;

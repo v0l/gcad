@@ -45,7 +45,7 @@ fn fillet_smooth_chain() {
 #[test]
 fn fillet_vertical_edges() {
     let model = build("rect 20 20\nbase: extrude 20\nfillet 3 base.side&base.side");
-    assert_volume(&model, 8000.0 - 4.0 * 20.0 * 9.0 * SPANDREL, 0.0005);
+    assert_volume(&model, 8000.0 - 4.0 * 20.0 * 9.0 * SPANDREL, 2.0e-5);
 }
 
 #[test]

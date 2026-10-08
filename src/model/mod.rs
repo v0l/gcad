@@ -59,6 +59,13 @@ pub struct Prism {
     pub alone: Option<Vec<monstertruck::topology::FaceId<Surface>>>,
 }
 
+#[derive(Clone)]
+pub struct Rounded {
+    pub from: Point3,
+    pub to: Point3,
+    pub radius: f64,
+}
+
 #[derive(Clone, Default)]
 pub struct Model {
     pub scope: Scope,
@@ -92,6 +99,7 @@ pub struct Model {
     pub mates: Vec<assembly::Mate>,
     pub couples: Vec<assembly::Couple>,
     pub cache: Cache,
+    pub rounded: Vec<Rounded>,
 }
 
 #[derive(Clone, Default)]
