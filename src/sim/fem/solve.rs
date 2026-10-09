@@ -4,6 +4,7 @@ pub type Block = [f64; 9];
 
 pub const IDENTITY: Block = [1.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 1.0];
 
+#[derive(Clone)]
 pub struct Blocks {
     pub starts: Vec<usize>,
     pub columns: Vec<u32>,

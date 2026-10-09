@@ -823,3 +823,32 @@ fn expansion_from_a_heat_result() {
         "{error}"
     );
 }
+
+#[test]
+fn contact_presses_but_lets_go() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
+    let holds = "slide a:<Z\nslide b:>Z\nslide a:<X\nslide a:<Y\nslide b:<X\nslide b:<Y\n";
+    let run = |name: &str, warm: &str| {
+        simulated(
+            name,
+            &[("block.gcad", SLAB), ("stack.gasm", stack)],
+            &format!(
+                "sim static\npart stack.gasm\n{holds}{warm}\ncontact a b\nlow: probe 0,0,5\nmesh 3"
+            ),
+        )
+    };
+    let squeezed = run("contact_squeezed", "warm 50");
+    close(
+        reading(&squeezed, "low.stress"),
+        200.0e3 * 12.0e-6 * 50.0,
+        0.005,
+    );
+    let pulled = run("contact_pulled", "warm -50");
+    assert!(reading(&pulled, "low.stress") < 0.5, "{}", pulled.table());
+    assert!(
+        pulled
+            .notes
+            .iter()
+            .any(|n| n.contains("frictionless contact"))
+    );
+}

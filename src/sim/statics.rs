@@ -145,7 +145,16 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
             })
             .expect("one mesh")
     } else {
-        super::fem::merge(meshes, size * 0.1)
+        let index = |name: &str| named.iter().position(|(n, _)| n == name);
+        let touching = spec
+            .contacts
+            .iter()
+            .map(|(a, b)| match (index(a), index(b)) {
+                (Some(i), Some(j)) => Ok((i.min(j), i.max(j))),
+                _ => bail!("`contact {a} {b}` names a part the simulation does not have"),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        super::fem::merge(meshes, size * 0.1, &touching)
     };
     Ok(Prepared { mesh, parts })
 }
@@ -303,6 +312,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     );
     if let Some(bonds) = prepared.bonds() {
         notes.push(bonds);
+    }
+    if let Some((touching, rounds)) = answer.contact {
+        notes.push(format!(
+            "frictionless contact: {touching} node pairs pressing after {rounds} solve(s)"
+        ));
     }
     if prepared.parts.iter().any(|p| p.mechanics.printed) {
         notes.push("printed-part stiffness and strength, along the layers".into());

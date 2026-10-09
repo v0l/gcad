@@ -169,7 +169,12 @@ map texture on the boundary triangles.
 stiffness; subspace iteration on K^-1 (-K_G) finds the largest positive eigenvalues, whose
 inverses are the load factors. A clamped column matches Euler's load within 0.05%.
 
-Still to build: contact that can open or slide, an iterative path for `modal` and `thermal`,
+`contact a b`: the tie pairs between those parts become normal-only penalty springs along the
+master face's normal, switched on where they press and off where they would pull, re-solving
+until the set settles. Checked with two blocks heated (they press, as if bonded) and cooled
+(they part, stress free).
+
+Still to build: friction, an iterative path for `modal` and `thermal`,
 and a better smoother for bonded assemblies.
 
 ## Tests

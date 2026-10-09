@@ -382,6 +382,7 @@ expect shoulder<15 sun_s_turn<4
 | `heat` | `faces watts` | puts that much heat into the faces, spread by area (thermal) |
 | `source` | `watts` | makes that much heat evenly through the part's volume (thermal) |
 | `modes` | `count` | how many natural frequencies `modal` finds, 6 unless given |
+| `contact` | `part part` | the two parts press on each other where they touch instead of being bonded: no friction, and they may part (static). Parts held only by contact can slide, so give them supports that stop that |
 | `mesh` | `size` | the target edge length of the tetrahedra in mm, for `static`, `thermal` and `modal`; a twentieth of the part's size unless given. The mesher makes elements smaller where walls are thin, gaps are narrow or edges run close together |
 | `expect` | `reading<limit ...` or `reading>limit` | a check on a reading, by name. `gcad sim` fails when one does not hold |
 
@@ -454,7 +455,9 @@ first buckled shape. Loads that only stretch the part are refused.
 own material, and parts whose faces touch (closer than a tenth of the mesh size) are bonded
 there, as if glued: no sliding, no gaps, heat passes freely. Pick faces as `part:faces`, like
 `fix base:<Z` or `load arm:tip.end force=0,0,-50`. A note lists which parts were bonded and over
-how many nodes. Stresses right at a bond between different materials are a corner singularity
+how many nodes. `contact a b` makes a pair press on each other instead, free to slide and to
+part, solved by repeating the solve until the touching nodes settle (static only; heat and
+frequencies still treat the pair as bonded). Stresses right at a bond between different materials are a corner singularity
 like a sharp inside corner.
 
 For any of the three, `gcad sim file.gsim --dry-run` meshes every body of the

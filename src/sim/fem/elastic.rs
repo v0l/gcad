@@ -83,6 +83,7 @@ pub struct Answer {
     pub von_mises: Vec<f64>,
     pub reactions: Vec<(String, Vector3, Vector3)>,
     pub scale: f64,
+    pub contact: Option<(usize, usize)>,
     pub iterations: usize,
     pub residual: f64,
     pub applied: Vector3,
@@ -156,7 +157,7 @@ pub fn assemble(mesh: &Quadratic, materials: &[(f64, f64)]) -> Result<Blocks> {
     if !mesh.ties.is_empty() {
         let stiffest = materials.iter().map(|m| m.0).fold(0.0, f64::max);
         let penalty = stiffest * spacing(mesh) * TIE;
-        for tie in &mesh.ties {
+        for tie in mesh.ties.iter().filter(|t| t.normal.is_none()) {
             let (nodes, c) = (tie.group(), tie.coefficients());
             for a in 0..7 {
                 for b in 0..7 {
@@ -171,6 +172,43 @@ pub fn assemble(mesh: &Quadratic, materials: &[(f64, f64)]) -> Result<Blocks> {
         }
     }
     Ok(blocks)
+}
+
+fn contact_penalty(mesh: &Quadratic, materials: &[(f64, f64)]) -> f64 {
+    materials.iter().map(|m| m.0).fold(0.0, f64::max) * spacing(mesh) * TIE
+}
+
+fn add_contacts(blocks: &mut Blocks, mesh: &Quadratic, penalty: f64, active: &[bool]) {
+    for (tie, on) in mesh.ties.iter().zip(active) {
+        let (Some(n), true) = (tie.normal, *on) else {
+            continue;
+        };
+        let (nodes, c) = (tie.group(), tie.coefficients());
+        for a in 0..7 {
+            for b in 0..7 {
+                let at = blocks.find(nodes[a], nodes[b]);
+                let v = penalty * c[a] * c[b];
+                let block = &mut blocks.values[at];
+                for i in 0..3 {
+                    for j in 0..3 {
+                        block[i * 3 + j] += v * n[i] * n[j];
+                    }
+                }
+            }
+        }
+    }
+}
+
+fn opening(tie: &super::Tie, u: &[f64]) -> f64 {
+    let Some(n) = tie.normal else { return 0.0 };
+    tie.group()
+        .iter()
+        .zip(tie.coefficients())
+        .map(|(&v, c)| {
+            let i = 3 * v as usize;
+            c * (u[i] * n.x + u[i + 1] * n.y + u[i + 2] * n.z)
+        })
+        .sum()
 }
 
 fn faces_of<'a>(mesh: &'a Quadratic, faces: &'a [usize]) -> impl Iterator<Item = [u32; 6]> + 'a {
@@ -406,17 +444,54 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     if loose(mesh, &projectors) {
         bail!("the supports leave the part free to move or turn; add one that holds it");
     }
-    let solution = if mesh.nodes.len() * 3 <= DIRECT_LIMIT {
-        direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
-    } else {
-        let iterative = two_level(&stiffness, &f, &projectors, &mesh.coarse(), 1.0e-10, 3000)
-            .map_err(|e| anyhow::anyhow!(e))?;
-        if iterative.residual > 1.0e-8 && mesh.nodes.len() * 3 <= DIRECT_FALLBACK {
+    let penalty = contact_penalty(mesh, problem.materials);
+    let mut active: Vec<bool> = mesh.ties.iter().map(|t| t.normal.is_some()).collect();
+    let contacts = active.iter().any(|a| *a);
+    let mut rounds = 0;
+    let (solution, stiffness) = loop {
+        rounds += 1;
+        let mut stiffness = stiffness.clone();
+        add_contacts(&mut stiffness, mesh, penalty, &active);
+        let solution = if mesh.nodes.len() * 3 <= DIRECT_LIMIT {
             direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
         } else {
-            iterative
+            let iterative = two_level(&stiffness, &f, &projectors, &mesh.coarse(), 1.0e-10, 3000)
+                .map_err(|e| anyhow::anyhow!(e))?;
+            if iterative.residual > 1.0e-8 && mesh.nodes.len() * 3 <= DIRECT_FALLBACK {
+                direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
+            } else {
+                iterative
+            }
+        };
+        if !contacts {
+            break (solution, stiffness);
+        }
+        let scale = solution
+            .x
+            .iter()
+            .fold(0.0f64, |a, b| a.max(b.abs()))
+            .max(1.0e-300);
+        let mut changed = 0;
+        for (tie, on) in mesh.ties.iter().zip(active.iter_mut()) {
+            if tie.normal.is_none() {
+                continue;
+            }
+            let gap = opening(tie, &solution.x);
+            let next = gap <= scale * 1.0e-9;
+            if next != *on {
+                *on = next;
+                changed += 1;
+            }
+        }
+        if changed == 0 || rounds >= 40 {
+            break (solution, stiffness);
         }
     };
+    let touching = active
+        .iter()
+        .zip(&mesh.ties)
+        .filter(|(on, t)| **on && t.normal.is_some())
+        .count();
     let u = solution.x;
     let mut ku = vec![0.0; u.len()];
     stiffness.multiply(&u, &mut ku);
@@ -469,6 +544,7 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
         scale,
         iterations: solution.iterations,
         residual: solution.residual,
+        contact: contacts.then_some((touching, rounds)),
         applied,
     })
 }

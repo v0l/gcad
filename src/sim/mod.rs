@@ -94,6 +94,7 @@ pub struct Spec {
     pub source: f64,
     pub modes: Option<usize>,
     pub warming: Option<Warm>,
+    pub contacts: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug)]

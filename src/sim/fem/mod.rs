@@ -16,6 +16,7 @@ pub struct Tie {
     pub slave: u32,
     pub masters: [u32; 6],
     pub weights: [f64; 6],
+    pub normal: Option<Vector3>,
 }
 
 impl Tie {
@@ -349,7 +350,7 @@ fn closest_on_triangle(p: Point3, [a, b, c]: [Point3; 3]) -> (f64, [f64; 3]) {
     ((p - (a + ab * v + ac * w)).magnitude(), [1.0 - v - w, v, w])
 }
 
-pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64) -> Quadratic {
+pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64, touching: &[(usize, usize)]) -> Quadratic {
     let mut out = Quadratic {
         nodes: Vec::new(),
         corners: 0,
@@ -433,10 +434,14 @@ pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64) -> Quadratic {
                         && d <= gap
                     {
                         let shape = triangle_shape(l);
+                        let m = skins[master][t];
+                        let [a, b, c] = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
+                        let contact = touching.contains(&(master.min(slave), master.max(slave)));
                         out.ties.push(Tie {
                             slave: v,
-                            masters: skins[master][t],
+                            masters: m,
                             weights: shape,
+                            normal: contact.then(|| (b - a).cross(c - a).normalize()),
                         });
                         tied += 1;
                     }

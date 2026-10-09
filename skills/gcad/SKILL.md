@@ -229,7 +229,8 @@ stress on the deformed part.
 `coolest`, heat through each labelled boundary, `probe.temperature`.
 
 Static, thermal and modal take a `.gasm` too: touching parts are bonded, each in its own
-material; pick faces as `part:faces` (`fix base:<Z`).
+material; pick faces as `part:faces` (`fix base:<Z`). `contact a b` makes a pair press without
+friction and let go instead of bonding (static).
 
 `sim modal` with `fix` lines and `modes 6`: readings `mode1`... in Hz, each with its effective
 mass share along x, y, z. No supports means free-free (rigid modes dropped).

@@ -199,6 +199,25 @@ impl Model {
                     ))
                 }
             }
+            "contact" => {
+                let args = Args::new(line, &["a", "b"], &[], false)?;
+                let (a, b) = (args.text("a")?.to_string(), args.text("b")?.to_string());
+                let names: Vec<String> = self
+                    .target_mut()?
+                    .named_solids()
+                    .into_iter()
+                    .map(|(n, _)| n)
+                    .collect();
+                for part in [&a, &b] {
+                    if !names.contains(part) {
+                        bail!("no part called `{part}`; parts are {names:?}");
+                    }
+                }
+                self.spec().contacts.push((a.clone(), b.clone()));
+                Ok(format!(
+                    "`{a}` and `{b}` press on each other where they touch but can slide and part"
+                ))
+            }
             "source" => {
                 let args = Args::new(line, &["watts"], &[], false)?;
                 let watts = args.number("watts", &self.scope)?;
