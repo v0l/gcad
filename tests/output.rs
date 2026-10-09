@@ -219,6 +219,34 @@ fn step_import() {
     assert_volume(&build(&format!("import {path}")), volume(&model), 0.0005);
 }
 
+fn fixture(name: &str) -> String {
+    format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"))
+}
+
+#[test]
+fn step_import_from_opencascade() {
+    let file = fixture("occt-two-solids.step");
+    assert_volume(
+        &build(&format!("import {file} solid=1")),
+        4000.0 - std::f64::consts::PI * 16.0 * 10.0,
+        5.0e-4,
+    );
+    assert_volume(
+        &build(&format!("import {file} solid=2")),
+        std::f64::consts::PI * 25.0 * 10.0,
+        5.0e-4,
+    );
+}
+
+#[test]
+fn step_import_asks_which_solid() {
+    let error = failure(&format!("import {}", fixture("occt-two-solids.step")));
+    assert!(
+        error.contains("holds 2 solids, pick one with `solid=`"),
+        "{error}"
+    );
+}
+
 #[test]
 fn obj() {
     let path = scratch("box.obj");

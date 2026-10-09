@@ -6,7 +6,6 @@ use crate::parse::Line;
 use crate::select::{self, GroupEntry};
 use anyhow::{Context, Result, anyhow, bail};
 use monstertruck::modeling::*;
-use monstertruck::topology::compress::{CompressedFace, CompressedShell, CompressedSolid};
 
 fn about(point: Point3, transform: Matrix4) -> Matrix4 {
     Matrix4::from_translation(point.to_vec())
@@ -569,7 +568,7 @@ impl Model {
     }
 
     pub(crate) fn op_import(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["file"], &[], false)?;
+        let args = Args::new(line, &["file"], &["solid"], false)?;
         let file = std::path::PathBuf::from(args.text("file")?);
         let path = match &self.dir {
             Some(dir) if file.is_relative() => dir.join(&file),
@@ -578,87 +577,90 @@ impl Model {
         let stl = path
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("stl"));
-        let solids = if stl {
-            vec![super::import::stl_solid(&path)?]
+        let pick = match args.optional_number("solid", &self.scope)? {
+            Some(n) if n.fract() == 0.0 && n >= 1.0 => Some(n as usize - 1),
+            Some(_) => bail!("`solid` must be a whole number from 1"),
+            None => None,
+        };
+        let found = if stl {
+            vec![(String::new(), super::import::stl_solid(&path)?)]
         } else {
-            read_step(&path).with_context(|| format!("importing {}", path.display()))?
+            read_step(&path, pick).with_context(|| format!("importing {}", path.display()))?
+        };
+        let listing = || {
+            found
+                .iter()
+                .enumerate()
+                .map(|(k, (name, solid))| {
+                    let b = geometry::bounds(solid);
+                    let (lo, hi) = (b.min(), b.max());
+                    format!(
+                        "{}: `{name}` {:.1} x {:.1} x {:.1}",
+                        k + 1,
+                        hi.x - lo.x,
+                        hi.y - lo.y,
+                        hi.z - lo.z
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("; ")
+        };
+        let solid = match (pick, found.as_slice()) {
+            (_, [(_, only)]) => only.clone(),
+            (Some(_), _) => bail!(
+                "`solid` must be 1 to {}; the file holds {}",
+                found.len(),
+                listing()
+            ),
+            (None, _) => bail!(
+                "the file holds {} solids, pick one with `solid=`: {}",
+                found.len(),
+                listing()
+            ),
         };
         let label = label_of(line);
-        for solid in solids {
-            let groups = select::faces(&solid)
-                .iter()
-                .map(|face| ("faces", face.oriented_surface()))
-                .collect();
-            self.record(&label, groups);
-            self.merge(&label, solid, Combine::Add)?;
-        }
+        let groups = select::faces(&solid)
+            .iter()
+            .map(|face| ("faces", face.oriented_surface()))
+            .collect();
+        self.record(&label, groups);
+        self.merge(&label, solid, Combine::Add)?;
         self.describe_solid()
     }
 }
 
-fn read_step(path: &std::path::Path) -> Result<Vec<Solid>> {
+fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<(String, Solid)>> {
     use monstertruck::step::load::Table;
+    use monstertruck::step::load::step_geometry::{Curve3D, Surface as StepSurface};
     let text = std::fs::read(path)?;
     let table = Table::from_step_bytes(&text).map_err(|error| anyhow!("{error}"))?;
-    let solids = table
-        .manifold_solid_brep
-        .values()
-        .map(|holder| {
-            let compressed = table
-                .to_compressed_solid(holder)
-                .map_err(|error| anyhow!("{error}"))?;
-            let boundaries = compressed
-                .boundaries
-                .into_iter()
-                .map(|shell| {
-                    let edges = shell
-                        .edges
-                        .into_iter()
-                        .map(|edge| {
-                            Curve::try_from(&edge.curve)
-                                .map(|curve| monstertruck::topology::compress::CompressedEdge {
-                                    vertices: edge.vertices,
-                                    curve,
-                                })
-                                .map_err(|error| anyhow!("unsupported curve: {error:?}"))
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-                    let faces = shell
-                        .faces
-                        .into_iter()
-                        .map(|face| {
-                            Surface::try_from(&face.surface)
-                                .map(|surface| CompressedFace {
-                                    boundaries: face.boundaries,
-                                    orientation: face.orientation,
-                                    surface,
-                                })
-                                .map_err(|error| anyhow!("unsupported surface: {error:?}"))
-                        })
-                        .collect::<Result<Vec<_>>>()?;
-                    Ok(CompressedShell {
-                        vertices: shell.vertices,
-                        edges,
-                        faces,
-                        vertex_stable_ids: None,
-                        edge_stable_ids: None,
-                        face_stable_ids: None,
-                    })
-                })
-                .collect::<Result<Vec<_>>>()?;
-            let solid = Solid::extract(CompressedSolid {
-                boundaries,
-                id_allocator: None,
-                attributes: None,
-            })
-            .map_err(|error| anyhow!("{error}"))?;
-            Ok(oriented(solid))
-        })
-        .collect::<Result<Vec<_>>>()?;
-    if solids.is_empty() {
+    let mut breps: Vec<_> = table.manifold_solid_brep.iter().collect();
+    if breps.is_empty() {
         bail!("the file has no solids");
     }
-    Ok(solids)
+    breps.sort_by_key(|(id, _)| **id);
+    let chosen: Vec<_> = match pick {
+        Some(index) if index < breps.len() => vec![breps[index]],
+        _ => breps,
+    };
+    chosen
+        .into_iter()
+        .map(|(_, holder)| {
+            let compressed = table
+                .to_compressed_trimmed_solid(holder)
+                .map_err(|error| anyhow!("{error}"))?;
+            let solid = monstertruck::healing::extract_healed_trimmed_solid(compressed, 1.0e-3)
+                .map_err(|error| anyhow!("{error}"))?
+                .erase_trims()
+                .try_mapped(
+                    |point| Some(*point),
+                    |curve: &Curve3D| Curve::try_from(curve).ok(),
+                    |surface: &StepSurface| Surface::try_from(surface).ok(),
+                )
+                .ok_or_else(|| anyhow!("the file uses a curve or surface gcad cannot read"))?;
+            Ok((holder.label.clone(), oriented(solid)))
+        })
+        .collect()
 }
 
 #[derive(Clone, Debug, PartialEq)]

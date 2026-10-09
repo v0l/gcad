@@ -204,7 +204,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | STEP export | supported | `gcad export part.gcad part.step` | `output::step`, `output::step_opens_in_opencascade` |
 | STL export | supported | `gcad export part.gcad part.stl` | `output::stl` |
 | PNG views | supported | `gcad render part.gcad part.png` | `output::png` |
-| STEP import | supported | `import part.step` | `output::step_import` |
+| STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid` |
 | OBJ export | supported | `gcad export part.gcad part.obj` | `output::obj` |
 | 3MF export | supported | `gcad export part.gcad part.3mf` | `output::three_mf` |
 | SVG drawing | supported | `gcad export part.gcad part.svg` | `output::drawing` |

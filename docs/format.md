@@ -146,7 +146,7 @@ Bodies:
 | `body` | `name` | sets the current solid aside and starts a new one: another part sharing this file's sizes, which an assembly brings in as `part.name`, or a piece to `combine` into one part; the first body is `main` |
 | `combine` | `into from` `mode=add\|cut\|intersect` | joins body `from` into body `into`, or cuts it out, and drops `from` |
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
-| `import` | `file.step` or `file.stl` | adds the solids in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file |
+| `import` | `file.step` or `file.stl`, `solid=` | adds the solid in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file. A STEP file with several solids needs `solid=n` to pick one; the error lists them with their names and sizes |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
 | `material` | `name` `density=` | sets what the current body is made of, for its mass. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood. `density=` in g/cm³ gives any other |
 
