@@ -196,7 +196,7 @@ impl Model {
             .iter()
             .map(|(frame, (x, y))| frame.at(*x, *y))
             .collect();
-        let sheet_frame = (args.values.get("on").is_none())
+        let sheet_frame = (!args.values.contains_key("on"))
             .then(|| placements.first().copied())
             .flatten();
         let sheet_spots: Vec<(f64, f64)> = placements.iter().map(|(_, c)| *c).collect();
