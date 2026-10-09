@@ -200,72 +200,128 @@ fn basis(p: &Block) -> Vec<[f64; 3]> {
     kept
 }
 
+pub struct Reduced {
+    pub bases: Vec<Vec<[f64; 3]>>,
+    pub first: Vec<usize>,
+    pub count: usize,
+}
+
+impl Reduced {
+    pub fn new(projectors: &[Block]) -> Reduced {
+        let bases: Vec<Vec<[f64; 3]>> = projectors.iter().map(basis).collect();
+        let mut first = Vec::with_capacity(bases.len());
+        let mut count = 0;
+        for basis in &bases {
+            first.push(count);
+            count += basis.len();
+        }
+        Reduced {
+            bases,
+            first,
+            count,
+        }
+    }
+
+    pub fn lower(
+        &self,
+        a: &Blocks,
+        extra: Option<(&Blocks, f64)>,
+    ) -> Vec<faer::sparse::Triplet<usize, usize, f64>> {
+        let part = |m: &Blocks, scale: f64| -> Vec<faer::sparse::Triplet<usize, usize, f64>> {
+            (0..m.nodes())
+                .into_par_iter()
+                .flat_map_iter(|row| {
+                    let mut out = Vec::new();
+                    let ti = &self.bases[row];
+                    for k in m.starts[row]..m.starts[row + 1] {
+                        let col = m.columns[k] as usize;
+                        if col > row {
+                            continue;
+                        }
+                        let tj = &self.bases[col];
+                        let block = &m.values[k];
+                        for (p, u) in ti.iter().enumerate() {
+                            for (q, w) in tj.iter().enumerate() {
+                                let r = self.first[row] + p;
+                                let c = self.first[col] + q;
+                                if c > r {
+                                    continue;
+                                }
+                                let mw = times(block, *w);
+                                let v = u[0] * mw[0] + u[1] * mw[1] + u[2] * mw[2];
+                                out.push(faer::sparse::Triplet::new(r, c, v * scale));
+                            }
+                        }
+                    }
+                    out
+                })
+                .collect()
+        };
+        let mut triplets = part(a, 1.0);
+        if let Some((m, scale)) = extra {
+            triplets.extend(part(m, scale));
+        }
+        triplets
+    }
+
+    pub fn restrict(&self, full: &[f64]) -> Vec<f64> {
+        let mut out = vec![0.0; self.count];
+        for (node, basis) in self.bases.iter().enumerate() {
+            for (p, u) in basis.iter().enumerate() {
+                out[self.first[node] + p] =
+                    u[0] * full[3 * node] + u[1] * full[3 * node + 1] + u[2] * full[3 * node + 2];
+            }
+        }
+        out
+    }
+
+    pub fn expand(&self, reduced: &[f64]) -> Vec<f64> {
+        let mut x = vec![0.0; self.bases.len() * 3];
+        for (node, basis) in self.bases.iter().enumerate() {
+            for (p, u) in basis.iter().enumerate() {
+                let v = reduced[self.first[node] + p];
+                for i in 0..3 {
+                    x[3 * node + i] += u[i] * v;
+                }
+            }
+        }
+        x
+    }
+
+    pub fn factor(
+        &self,
+        triplets: &[faer::sparse::Triplet<usize, usize, f64>],
+    ) -> Result<faer::sparse::linalg::solvers::Llt<usize, f64>, String> {
+        let matrix = faer::sparse::SparseColMat::<usize, f64>::try_new_from_triplets(
+            self.count, self.count, triplets,
+        )
+        .map_err(|e| format!("{e:?}"))?;
+        faer::set_global_parallelism(faer::Par::Seq);
+        matrix
+            .sp_cholesky(faer::Side::Lower)
+            .map_err(|_| "the part can still move or turn; add supports that hold it".to_string())
+    }
+}
+
 pub fn direct(a: &Blocks, b: &[f64], projectors: &[Block]) -> Result<Solution, String> {
     use faer::linalg::solvers::Solve;
-    let bases: Vec<Vec<[f64; 3]>> = projectors.iter().map(basis).collect();
-    let mut first = Vec::with_capacity(bases.len());
-    let mut count = 0;
-    for basis in &bases {
-        first.push(count);
-        count += basis.len();
-    }
-    if count == 0 {
+    let reduced = Reduced::new(projectors);
+    if reduced.count == 0 {
         return Ok(Solution {
             x: vec![0.0; b.len()],
             iterations: 0,
             residual: 0.0,
         });
     }
-    let triplets: Vec<faer::sparse::Triplet<usize, usize, f64>> = (0..a.nodes())
-        .into_par_iter()
-        .flat_map_iter(|row| {
-            let mut out = Vec::new();
-            let ti = &bases[row];
-            for k in a.starts[row]..a.starts[row + 1] {
-                let col = a.columns[k] as usize;
-                if col > row {
-                    continue;
-                }
-                let tj = &bases[col];
-                let m = &a.values[k];
-                for (p, u) in ti.iter().enumerate() {
-                    for (q, w) in tj.iter().enumerate() {
-                        let r = first[row] + p;
-                        let c = first[col] + q;
-                        if c > r {
-                            continue;
-                        }
-                        let mw = times(m, *w);
-                        let v = u[0] * mw[0] + u[1] * mw[1] + u[2] * mw[2];
-                        out.push(faer::sparse::Triplet::new(r, c, v));
-                    }
-                }
-            }
-            out
-        })
-        .collect();
-    let matrix =
-        faer::sparse::SparseColMat::<usize, f64>::try_new_from_triplets(count, count, &triplets)
-            .map_err(|e| format!("{e:?}"))?;
-    faer::set_global_parallelism(faer::Par::Seq);
-    let llt = matrix
-        .sp_cholesky(faer::Side::Lower)
-        .map_err(|_| "the part can still move or turn; add supports that hold it".to_string())?;
-    let rhs = faer::Mat::<f64>::from_fn(count, 1, |i, _| {
-        let node = first.partition_point(|&f| f <= i) - 1;
-        let u = bases[node][i - first[node]];
-        u[0] * b[3 * node] + u[1] * b[3 * node + 1] + u[2] * b[3 * node + 2]
-    });
-    let reduced = llt.solve(&rhs);
-    let mut x = vec![0.0; b.len()];
-    for (node, basis) in bases.iter().enumerate() {
-        for (p, u) in basis.iter().enumerate() {
-            let v = reduced[(first[node] + p, 0)];
-            for i in 0..3 {
-                x[3 * node + i] += u[i] * v;
-            }
-        }
-    }
+    let llt = reduced.factor(&reduced.lower(a, None))?;
+    let rhs = reduced.restrict(b);
+    let rhs = faer::Mat::<f64>::from_fn(reduced.count, 1, |i, _| rhs[i]);
+    let solved = llt.solve(&rhs);
+    let x = reduced.expand(
+        &(0..reduced.count)
+            .map(|i| solved[(i, 0)])
+            .collect::<Vec<_>>(),
+    );
     let mut ax = vec![0.0; b.len()];
     a.multiply(&x, &mut ax);
     let mut r: Vec<f64> = ax.iter().zip(b).map(|(p, q)| q - p).collect();

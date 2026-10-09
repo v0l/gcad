@@ -29,6 +29,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "heat",
     "convect",
     "source",
+    "modes",
 ];
 
 impl Model {
@@ -131,6 +132,17 @@ impl Model {
                 let faces = self.target_faces(args.text("faces")?)?;
                 self.spec().thermal.push(Boundary::Flux { faces, watts });
                 Ok(format!("{watts} W into the faces"))
+            }
+            "modes" => {
+                let args = Args::new(line, &["count"], &[], false)?;
+                let count = args.number("count", &self.scope)?;
+                if !(1.0..=50.0).contains(&count) || count.fract() != 0.0 {
+                    bail!("`modes` takes a whole number from 1 to 50");
+                }
+                self.spec().modes = Some(count as usize);
+                Ok(format!(
+                    "the lowest {count} modes; they read as `mode1`, `mode2`, ..."
+                ))
             }
             "source" => {
                 let args = Args::new(line, &["watts"], &[], false)?;

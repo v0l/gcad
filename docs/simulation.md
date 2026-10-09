@@ -139,8 +139,12 @@ the GPU port planned here is only worth it together with a better preconditioner
 material, temperatures eliminated, film convection as a boundary mass term, solved with the
 same sparse Cholesky. Checked against a wall (exact) and a convecting fin (0.5%).
 
-Still to build: `pin`, `torque` loads, several bodies, and `modal` (the lowest eigenpairs of
-the same stiffness against a consistent mass matrix).
+`modal` (phase 5, built): consistent mass with a 14-point degree-5 rule, subspace iteration on
+(K + sM)^-1 M with a tiny shift s so free parts factor too, Rayleigh-Ritz by Cholesky and
+Jacobi rotations. Checked against a clamped and a free beam (under 1% on the first mode) and the
+bending effective mass (61%).
+
+Still to build: `pin`, `torque` loads, and several bodies (phase 6, bonded assemblies).
 
 ## Tests
 
@@ -167,5 +171,5 @@ the closed form.
 3. `static` on the CPU, checked against the closed forms. Done; the GPU waits on a multigrid
    preconditioner.
 4. `thermal`. Done.
-5. `modal`.
+5. `modal`. Done.
 6. Bonded assemblies.

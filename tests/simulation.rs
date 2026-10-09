@@ -368,7 +368,6 @@ fn heat_needs_a_boundary() {
 }
 
 #[test]
-#[ignore = "missing: modal simulation"]
 fn cantilever_modes() {
     let outcome = simulated(
         "cantilever_modes",
@@ -379,7 +378,25 @@ fn cantilever_modes() {
     let line_mass = 7850.0 * 0.02 * 0.01;
     let first = 1.875_f64.powi(2) / (2.0 * std::f64::consts::PI)
         * (stiffness / (line_mass * 0.2_f64.powi(4))).sqrt();
-    close(reading(&outcome, "mode1"), first, 0.03);
+    close(reading(&outcome, "mode1"), first, 0.01);
+    close(reading(&outcome, "mode2"), first * 2.0, 0.02);
+    let at = &outcome.reading("mode1").expect("mode1").at;
+    assert!(at.contains("z 61%"), "{at}");
+}
+
+#[test]
+fn free_beam_modes() {
+    let outcome = simulated(
+        "free_beam_modes",
+        &[("beam.gcad", BEAM)],
+        "sim modal\npart beam.gcad\nmodes 2\nmesh 4",
+    );
+    let stiffness = 200.0e9 * 0.02 * 0.01_f64.powi(3) / 12.0;
+    let line_mass = 7850.0 * 0.02 * 0.01;
+    let first = 4.730_f64.powi(2) / (2.0 * std::f64::consts::PI)
+        * (stiffness / (line_mass * 0.2_f64.powi(4))).sqrt();
+    close(reading(&outcome, "mode1"), first, 0.02);
+    assert!(outcome.notes.iter().any(|n| n.contains("rigid")));
 }
 
 #[test]
@@ -572,8 +589,6 @@ fn mesh_dry_run() {
         plan.contains("mesh size 4") && plan.contains("tetrahedra"),
         "{plan}"
     );
-    let error = gcad::sim::simulate(spec).expect_err("not built");
-    assert!(format!("{error}").contains("not built yet"), "{error}");
     let picture = path.with_file_name("mesh.png");
     gcad::sim::mesh::render(
         &gcad::sim::mesh::bodies(spec).expect("meshes"),

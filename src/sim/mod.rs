@@ -5,6 +5,7 @@ mod result;
 mod statics;
 pub mod tet;
 mod torque;
+mod vibration;
 
 pub use result::{Curve, Field, Outcome, Reading, Series, inputs, stale, stamp};
 
@@ -87,6 +88,7 @@ pub struct Spec {
     pub probes: Vec<(String, Point3)>,
     pub thermal: Vec<fem::thermal::Boundary>,
     pub source: f64,
+    pub modes: Option<usize>,
 }
 
 impl Spec {
@@ -124,10 +126,7 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
         Some(Kind::Torque) => torque::run(spec)?,
         Some(Kind::Static) => statics::run(spec)?,
         Some(Kind::Thermal) => heat::run(spec)?,
-        Some(kind) => bail!(
-            "the {} solver is not built yet; `gcad sim --dry-run` meshes the part and `gcad render` draws the mesh",
-            kind.name()
-        ),
+        Some(Kind::Modal) => vibration::run(spec)?,
         None => bail!("the file has no `sim` line"),
     };
     outcome.check(&spec.expects);
@@ -140,7 +139,7 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
         .filter(|o| Some(o.kind.as_str()) == spec.kind.map(Kind::name));
     match (spec.kind, outcome) {
         (Some(Kind::Torque), Some(outcome)) => crate::plot::chart(&outcome, output),
-        (Some(Kind::Static | Kind::Thermal), Some(outcome)) => {
+        (Some(Kind::Static | Kind::Thermal | Kind::Modal), Some(outcome)) => {
             statics::render(spec, &outcome, output)
         }
         (Some(kind), _) if kind.meshed() => mesh::render(&mesh::bodies(spec)?, output),

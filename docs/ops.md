@@ -295,4 +295,4 @@ The plan for the rest is in `docs/simulation.md`.
 | stress plots | supported | `gcad render x.gsim x.png` | `simulation::stress_field_render` |
 | steady heat | supported | `sim thermal`, `cold: temperature faces 20`, `heat faces 5`, `source 5` | `simulation::conduction_through_a_wall`, `simulation::heat_needs_a_boundary` |
 | convection | supported | `air: convect faces h=20 ambient=20` | `simulation::fin_with_convection` |
-| natural frequencies | missing | `sim modal`, `modes 3` | `simulation::cantilever_modes` |
+| natural frequencies | supported | `sim modal`, `modes 3` | `simulation::cantilever_modes`, `simulation::free_beam_modes` |

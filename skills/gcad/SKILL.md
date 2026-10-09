@@ -185,8 +185,8 @@ sits on the path.
 ## Simulations
 
 A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`. It prints
-readings, writes `x.result.json`, and fails when an `expect` line does not hold. `torque`,
-`static` and `thermal` solve so far; the rest are planned in `docs/simulation.md`.
+readings, writes `x.result.json`, and fails when an `expect` line does not hold. Kinds:
+`torque`, `static`, `thermal`, `modal`; the plan and limits are in `docs/simulation.md`.
 
 ```
 sim torque
@@ -224,7 +224,10 @@ stress on the deformed part.
 
 `sim thermal`: `temperature faces 60`, `convect faces h=10 ambient=25` (W/m²·K; still air 5-10),
 `heat faces 3` (W in), `source 3` (W through the volume). Readings: `temperature` (hottest),
-`coolest`, heat through each labelled boundary, `probe.temperature`. `modal` only meshes so far.
+`coolest`, heat through each labelled boundary, `probe.temperature`.
+
+`sim modal` with `fix` lines and `modes 6`: readings `mode1`... in Hz, each with its effective
+mass share along x, y, z. No supports means free-free (rigid modes dropped).
 
 ## Output
 

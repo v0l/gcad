@@ -269,7 +269,9 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
         low + span,
         &field.unit,
     );
-    let caption = if scale > 0.0 {
+    let caption = if field.unit == "relative" {
+        format!("{}, shape", field.title)
+    } else if scale > 0.0 {
         format!(
             "{} ({}), deformation drawn {}x",
             field.title,

@@ -1,4 +1,5 @@
 pub mod elastic;
+pub mod modal;
 pub mod solve;
 pub mod thermal;
 
