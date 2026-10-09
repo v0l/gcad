@@ -293,5 +293,6 @@ The plan for the rest is in `docs/simulation.md`.
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | probes | supported | `top: probe 100,0,10` | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure` |
 | stress plots | supported | `gcad render x.gsim x.png` | `simulation::stress_field_render` |
-| steady heat | missing | `sim thermal`, `cold: temperature faces 20` | `simulation::conduction_through_a_wall` |
+| steady heat | supported | `sim thermal`, `cold: temperature faces 20`, `heat faces 5`, `source 5` | `simulation::conduction_through_a_wall`, `simulation::heat_needs_a_boundary` |
+| convection | supported | `air: convect faces h=20 ambient=20` | `simulation::fin_with_convection` |
 | natural frequencies | missing | `sim modal`, `modes 3` | `simulation::cantilever_modes` |

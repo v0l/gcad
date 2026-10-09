@@ -2,50 +2,45 @@ use super::fem::Quadratic;
 use super::fem::elastic::{Problem, locate, sample, solve};
 use super::result::short;
 use super::{Field, Outcome, Reading, Spec};
+use crate::model::Mechanics;
 use anyhow::{Result, bail};
 use monstertruck::modeling::*;
 
 pub struct Prepared {
     pub mesh: Quadratic,
-    pub young: f64,
-    pub poisson: f64,
-    pub strength: Option<f64>,
-    pub printed: bool,
+    pub mechanics: Mechanics,
+    pub name: String,
     pub density: f64,
 }
 
 pub fn prepare(spec: &Spec) -> Result<Prepared> {
     let model = spec.target()?;
     if model.assembly {
-        bail!("`sim static` works on a part (.gcad) file for now");
+        bail!(
+            "`sim {}` works on a part (.gcad) file for now",
+            spec.kind.map_or("", |k| k.name())
+        );
     }
     let Some(solid) = model.solid.as_ref() else {
         bail!("the part has no solid");
     };
     let body = model.current_body();
     let Some(material) = model.materials.get(&body) else {
-        bail!("give the part a material, like `material aluminium`, so it has a stiffness");
-    };
-    let m = material.mechanics;
-    let (Some(young), Some(poisson)) = (m.young, m.poisson) else {
         bail!(
-            "`{}` has no stiffness; give it `E=` (GPa) and `nu=` on its `material` line",
-            material.name
+            "give the part a material, like `material aluminium`, so it has a stiffness and conductivity"
         );
     };
     let size = super::mesh::size(spec)?;
     let tets = super::tet::mesh_solid(solid, size)?;
     Ok(Prepared {
         mesh: Quadratic::from(&tets),
-        young: young * 1000.0,
-        poisson,
-        strength: m.strength,
-        printed: m.printed,
+        mechanics: material.mechanics,
+        name: material.name.clone(),
         density: material.density,
     })
 }
 
-fn at(p: Point3) -> String {
+pub fn at(p: Point3) -> String {
     format!(
         "at {},{},{}",
         crate::plot::label((p.x * 100.0).round() / 100.0),
@@ -57,11 +52,19 @@ fn at(p: Point3) -> String {
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
     let mesh = &prepared.mesh;
+    let m = prepared.mechanics;
+    let (Some(young), Some(poisson)) = (m.young, m.poisson) else {
+        bail!(
+            "`{}` has no stiffness; give it `E=` (GPa) and `nu=` on its `material` line",
+            prepared.name
+        );
+    };
+    let young = young * 1000.0;
     let body_force = spec.gravity.map(|g| g * (prepared.density * 1.0e-6));
     let answer = solve(&Problem {
         mesh,
-        young: prepared.young,
-        poisson: prepared.poisson,
+        young,
+        poisson,
         supports: &spec.supports,
         loads: &spec.loads,
         body_force,
@@ -97,7 +100,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         unit: "mm".into(),
         at: at(mesh.nodes[where_moved]),
     });
-    if let Some(strength) = prepared.strength
+    if let Some(strength) = m.strength
         && peak > 0.0
     {
         readings.push(Reading {
@@ -156,7 +159,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     notes.push(
         "peak stresses at sharp inside corners and at the edges of fixed faces keep rising as the mesh gets finer; `probe` a point away from them to read the stress there".into(),
     );
-    if prepared.printed {
+    if m.printed {
         notes.push("printed-part stiffness and strength, along the layers".into());
     }
     let applied = answer.applied;
@@ -221,9 +224,14 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
         .values
         .iter()
         .copied()
-        .fold(0.0, f64::max)
-        .max(1.0e-12);
-    let colour = |v: u32| crate::plot::heat(field.values[v as usize] / high);
+        .fold(f64::NEG_INFINITY, f64::max);
+    let low = if field.unit == "°C" {
+        field.values.iter().copied().fold(f64::INFINITY, f64::min)
+    } else {
+        0.0
+    };
+    let span = (high - low).max(1.0e-12);
+    let colour = |v: u32| crate::plot::heat((field.values[v as usize] - low) / span);
     let mut triangles = Vec::new();
     let mut edges = Vec::new();
     for (f, _) in &mesh.boundary {
@@ -257,8 +265,8 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
             160.0,
             picture.height() as f64 - 60.0,
         ),
-        0.0,
-        high,
+        low,
+        low + span,
         &field.unit,
     );
     let caption = if scale > 0.0 {

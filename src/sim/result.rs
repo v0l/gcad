@@ -215,7 +215,7 @@ pub fn short(value: f64) -> String {
     if !value.is_finite() {
         return "none".to_string();
     }
-    if value == 0.0 {
+    if value.abs() < 1.0e-9 {
         return "0".to_string();
     }
     let magnitude = value.abs();

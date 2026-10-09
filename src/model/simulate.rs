@@ -2,13 +2,33 @@ use super::args::{Args, point3, positive};
 use super::{Model, load_model, posed};
 use crate::parse::Line;
 use crate::sim::fem::elastic::{Hold, Load, Push, Support};
+use crate::sim::fem::thermal::Boundary;
 use crate::sim::{Expect, Kind, Payload, Spec, Sweep};
 use anyhow::{Result, anyhow, bail};
 use monstertruck::modeling::*;
 
 pub const SIM_OPERATIONS: &[&str] = &[
-    "let", "if", "include", "sim", "part", "pose", "material", "gravity", "payload", "sweep",
-    "expect", "mesh", "fix", "slide", "load", "pressure", "probe",
+    "let",
+    "if",
+    "include",
+    "sim",
+    "part",
+    "pose",
+    "material",
+    "gravity",
+    "payload",
+    "sweep",
+    "expect",
+    "mesh",
+    "fix",
+    "slide",
+    "load",
+    "pressure",
+    "probe",
+    "temperature",
+    "heat",
+    "convect",
+    "source",
 ];
 
 impl Model {
@@ -69,7 +89,54 @@ impl Model {
                     .clone()
                     .ok_or_else(|| anyhow!("name the probe, like `top: probe 100,0,10`"))?;
                 self.spec().probes.push((name.clone(), at));
-                Ok(format!("reads `{name}.stress` and `{name}.displacement`"))
+                Ok(format!(
+                    "reads `{name}.stress` and `{name}.displacement`, or `{name}.temperature`"
+                ))
+            }
+            "temperature" => {
+                let args = Args::new(line, &["faces", "value"], &[], false)?;
+                let value = args.number("value", &self.scope)?;
+                let faces = self.target_faces(args.text("faces")?)?;
+                let label = self.boundary_label(line);
+                self.spec().thermal.push(Boundary::Temperature {
+                    label: label.clone(),
+                    faces,
+                    value,
+                });
+                Ok(format!(
+                    "held at {value} °C; the heat leaving reads as `{label}`"
+                ))
+            }
+            "convect" => {
+                let args = Args::new(line, &["faces"], &["h", "ambient"], false)?;
+                let film = positive(args.number("h", &self.scope)?, "the film coefficient")?;
+                let ambient = args
+                    .optional_number("ambient", &self.scope)?
+                    .unwrap_or(20.0);
+                let faces = self.target_faces(args.text("faces")?)?;
+                let label = self.boundary_label(line);
+                self.spec().thermal.push(Boundary::Convect {
+                    label: label.clone(),
+                    faces,
+                    film,
+                    ambient,
+                });
+                Ok(format!(
+                    "{film} W/m²·K to {ambient} °C air; the heat leaving reads as `{label}`"
+                ))
+            }
+            "heat" => {
+                let args = Args::new(line, &["faces", "watts"], &[], false)?;
+                let watts = args.number("watts", &self.scope)?;
+                let faces = self.target_faces(args.text("faces")?)?;
+                self.spec().thermal.push(Boundary::Flux { faces, watts });
+                Ok(format!("{watts} W into the faces"))
+            }
+            "source" => {
+                let args = Args::new(line, &["watts"], &[], false)?;
+                let watts = args.number("watts", &self.scope)?;
+                self.spec().source += watts;
+                Ok(format!("{watts} W made evenly through the part"))
             }
             "mesh" => {
                 let args = Args::new(line, &["size"], &[], false)?;
@@ -99,6 +166,13 @@ impl Model {
             bail!("`{selector}` picks no faces");
         }
         Ok(faces)
+    }
+
+    fn boundary_label(&mut self, line: &Line) -> String {
+        let count = self.spec().thermal.len() + 1;
+        line.label
+            .clone()
+            .unwrap_or_else(|| format!("{}{count}", line.op))
     }
 
     fn op_support(&mut self, line: &Line, hold: Hold) -> Result<String> {

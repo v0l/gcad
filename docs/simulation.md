@@ -135,9 +135,12 @@ Measured: the 200 mm cantilever at `mesh 2` (283,000 unknowns) solves in 7 s; at
 under a second. Conjugate gradients needed 7,000 iterations and 26 s on the same cantilever, so
 the GPU port planned here is only worth it together with a better preconditioner (multigrid).
 
-Still to build: `pin`, `torque` loads, several bodies, `thermal` (conduction, the same mesh and
-a scalar version of the same assembly) and `modal` (LOBPCG on the same stiffness plus a mass
-matrix).
+`thermal` (phase 4, built): the scalar version on the same quadratic mesh, conductivity from the
+material, temperatures eliminated, film convection as a boundary mass term, solved with the
+same sparse Cholesky. Checked against a wall (exact) and a convecting fin (0.5%).
+
+Still to build: `pin`, `torque` loads, several bodies, and `modal` (the lowest eigenpairs of
+the same stiffness against a consistent mass matrix).
 
 ## Tests
 
@@ -163,6 +166,6 @@ the closed form.
 2. The tetrahedral mesher, `--dry-run` and mesh renders. Done.
 3. `static` on the CPU, checked against the closed forms. Done; the GPU waits on a multigrid
    preconditioner.
-4. `thermal`.
+4. `thermal`. Done.
 5. `modal`.
 6. Bonded assemblies.

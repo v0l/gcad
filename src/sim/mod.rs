@@ -1,4 +1,5 @@
 pub mod fem;
+mod heat;
 pub mod mesh;
 mod result;
 mod statics;
@@ -84,6 +85,8 @@ pub struct Spec {
     pub supports: Vec<fem::elastic::Support>,
     pub loads: Vec<fem::elastic::Load>,
     pub probes: Vec<(String, Point3)>,
+    pub thermal: Vec<fem::thermal::Boundary>,
+    pub source: f64,
 }
 
 impl Spec {
@@ -120,6 +123,7 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
     let mut outcome = match spec.kind {
         Some(Kind::Torque) => torque::run(spec)?,
         Some(Kind::Static) => statics::run(spec)?,
+        Some(Kind::Thermal) => heat::run(spec)?,
         Some(kind) => bail!(
             "the {} solver is not built yet; `gcad sim --dry-run` meshes the part and `gcad render` draws the mesh",
             kind.name()
@@ -136,7 +140,9 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
         .filter(|o| Some(o.kind.as_str()) == spec.kind.map(Kind::name));
     match (spec.kind, outcome) {
         (Some(Kind::Torque), Some(outcome)) => crate::plot::chart(&outcome, output),
-        (Some(Kind::Static), Some(outcome)) => statics::render(spec, &outcome, output),
+        (Some(Kind::Static | Kind::Thermal), Some(outcome)) => {
+            statics::render(spec, &outcome, output)
+        }
         (Some(kind), _) if kind.meshed() => mesh::render(&mesh::bodies(spec)?, output),
         _ => bail!("there is no result to draw yet; run `gcad sim` first"),
     }

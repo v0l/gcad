@@ -41,6 +41,7 @@ pub use assembly::{
     ASSEMBLY_OPERATIONS, Couple, Joint, JointKind, Mate, Rig, Source, broken, explode_offsets,
     posed, subtree,
 };
+pub use bodies::{Material, Mechanics};
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
 pub use sheet::{Sheet, flat_dxf};

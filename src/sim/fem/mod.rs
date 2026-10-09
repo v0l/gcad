@@ -1,5 +1,6 @@
 pub mod elastic;
 pub mod solve;
+pub mod thermal;
 
 use super::tet::{HashMap, TetMesh};
 use monstertruck::modeling::*;

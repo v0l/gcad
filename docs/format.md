@@ -362,7 +362,7 @@ expect shoulder<15 sun_s_turn<4
 
 | operation | arguments | does |
 |---|---|---|
-| `sim` | `kind` | what to simulate. Comes first. `torque` and `static` work today. `thermal` and `modal` mesh the part (`--dry-run`, `render`) but their solvers are not built yet (`docs/simulation.md`) |
+| `sim` | `kind` | what to simulate. Comes first. `torque`, `static` and `thermal` work today. `modal` meshes the part (`--dry-run`, `render`) but its solver is not built yet (`docs/simulation.md`) |
 | `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
@@ -374,6 +374,10 @@ expect shoulder<15 sun_s_turn<4
 | `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
 | `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |
 | `probe` | `x,y,z`, with a label | reads the von Mises stress and displacement at a point inside the part as `label.stress` and `label.displacement` |
+| `temperature` | `faces value` | holds the faces at that temperature in °C (thermal). The heat leaving the part through them, in watts, is a reading named after the line's label (negative where heat comes in) |
+| `convect` | `faces h= ambient=` | the faces lose heat to air at `ambient` °C (20 unless given) with a film coefficient `h` in W/m²·K: about 5 to 10 for still air, 20 to 100 with a fan (thermal). The heat lost is a reading named after the label |
+| `heat` | `faces watts` | puts that much heat into the faces, spread by area (thermal) |
+| `source` | `watts` | makes that much heat evenly through the part's volume (thermal) |
 | `mesh` | `size` | the target edge length of the tetrahedra in mm, for `static`, `thermal` and `modal`; a twentieth of the part's size unless given. The mesher makes elements smaller where walls are thin, gaps are narrow or edges run close together |
 | `expect` | `reading<limit ...` or `reading>limit` | a check on a reading, by name. `gcad sim` fails when one does not hold |
 
@@ -415,7 +419,20 @@ top: probe 18,12,12
 expect stress<80 displacement<0.1
 ```
 
-For `thermal` and `modal`, `gcad sim file.gsim --dry-run` meshes every body of the
+`sim thermal` is steady heat conduction through the part, on the same mesh, using the
+material's conductivity. It needs at least one `temperature` or `convect` line. Its readings
+are `temperature` (the hottest point), `coolest`, the heat through each labelled boundary and
+each probe's `.temperature`. `render` draws the temperatures.
+
+```
+sim thermal
+part heatsink.gcad
+material aluminium
+heat pad.end 12
+air: convect fins.side h=10
+```
+
+For `modal`, `gcad sim file.gsim --dry-run` meshes every body of the
 part into tetrahedra and reports the node and element counts, how far the mesh volume is from
 the solid's, and the worst element. `gcad render file.gsim file.png` draws the mesh with the
 half nearer the front view cut away, the cut faces in orange.

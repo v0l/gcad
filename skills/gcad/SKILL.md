@@ -185,8 +185,8 @@ sits on the path.
 ## Simulations
 
 A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`. It prints
-readings, writes `x.result.json`, and fails when an `expect` line does not hold. `torque` and
-`static` solve so far; the rest are planned in `docs/simulation.md`.
+readings, writes `x.result.json`, and fails when an `expect` line does not hold. `torque`,
+`static` and `thermal` solve so far; the rest are planned in `docs/simulation.md`.
 
 ```
 sim torque
@@ -220,7 +220,11 @@ expect stress<80 safety>2
 Readings: `stress`, `displacement`, `safety`, each support's reaction, `probe.stress`. Peak
 stress at sharp inside corners and fixed-face edges is a singularity that grows with mesh
 refinement: fillet the corner or probe away from it. `gcad render x.gsim x.png` draws the
-stress on the deformed part. `thermal` and `modal` only mesh so far (`--dry-run`, `render`).
+stress on the deformed part.
+
+`sim thermal`: `temperature faces 60`, `convect faces h=10 ambient=25` (W/m²·K; still air 5-10),
+`heat faces 3` (W in), `source 3` (W through the volume). Readings: `temperature` (hottest),
+`coolest`, heat through each labelled boundary, `probe.temperature`. `modal` only meshes so far.
 
 ## Output
 
