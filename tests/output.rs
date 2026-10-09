@@ -76,7 +76,7 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass(), gap)
         ("rack", "rack 6 2\nextrude 5"),
         (
             "sheet-metal",
-            "sheet 1 r=1\nrect 40 30\nbase: tab\nwalls: flange base.end&base.side 10\nflange >X&walls.end 5 angle=60",
+            "sheet 1 r=1\nrect 40 30\nbase: tab\nwalls: flange base.end&>X|base.end&>Y 10\nflange >X&walls.end 5 angle=60\nflange base.start&<X 4 inset=3\nflange base.end&<Y 6 angle=180",
         ),
         (
             "case-features",

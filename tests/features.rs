@@ -818,3 +818,26 @@ fn sheet_unfolds() {
         .clone();
     assert!(said.contains("1 cut(s) or hole(s)"), "{said}");
 }
+
+#[test]
+fn sheet_flange_inset_and_hem() {
+    let model = build(&format!(
+        "{SHEET}flange base.end&>X 10 inset=5\nflange base.end&<X 10 inset=2,8\nflange base.end&>Y 6 angle=180"
+    ));
+    let flanges = 2.0 * (bend(90.0, 1.0, 1.0, 20.0) + 200.0) + bend(180.0, 1.0, 1.0, 40.0) + 240.0;
+    assert_volume(&model, 1200.0 + flanges, 1.0e-4);
+    let flat = build(&format!(
+        "{SHEET}flange base.end&>X 10 inset=5\nflange base.end&<X 10 inset=2,8\nflange base.end&>Y 6 angle=180\nunfold"
+    ));
+    let ba = allowance(90.0, 1.0, 1.0, 0.44);
+    assert_volume(
+        &flat,
+        1200.0 + 2.0 * (ba + 10.0) * 20.0 + (2.0 * ba + 6.0) * 40.0,
+        1.0e-4,
+    );
+    assert!(failure(&format!("{SHEET}flange base.end&>X 10 inset=20")).contains("nothing"));
+    assert!(
+        failure("sheet 1 r=0\nrect 40 30\nbase: tab\nflange base.end&>X 5 angle=180")
+            .contains("hem")
+    );
+}

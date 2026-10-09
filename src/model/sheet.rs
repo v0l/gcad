@@ -13,7 +13,7 @@ pub struct Plate {
     pub frame: Frame,
     pub outline: Vec<P2>,
     pub to_flat: [f64; 6],
-    pub used: Vec<bool>,
+    pub used: Vec<Vec<(f64, f64)>>,
 }
 
 #[derive(Clone, Debug)]
@@ -225,7 +225,7 @@ impl Model {
         sheet.flat = outline.clone();
         sheet.plates.push(Plate {
             frame: top,
-            used: vec![false; outline.len()],
+            used: vec![Vec::new(); outline.len()],
             outline,
             to_flat: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         });
@@ -259,12 +259,23 @@ impl Model {
     }
 
     pub(crate) fn op_flange(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["edges", "l"], &["angle"], false)?;
+        let args = Args::new(line, &["edges", "l"], &["angle", "inset"], false)?;
         let selector = args.text("edges")?;
         let reach = positive(args.number("l", &self.scope)?, "l")?;
         let angle = args.optional_number("angle", &self.scope)?.unwrap_or(90.0);
-        if !(0.0..180.0).contains(&angle) || angle == 0.0 {
-            bail!("a flange bends between 0 and 180 degrees, got {angle}");
+        if !(0.0..=180.0).contains(&angle) || angle == 0.0 {
+            bail!("a flange bends more than 0 and up to 180 degrees, got {angle}");
+        }
+        let inset = match args.values.get("inset") {
+            None => (0.0, 0.0),
+            Some(text) if text.contains(',') => crate::parse::eval_point(text, &self.scope)?,
+            Some(_) => {
+                let both = args.number("inset", &self.scope)?;
+                (both, both)
+            }
+        };
+        if inset.0 < 0.0 || inset.1 < 0.0 {
+            bail!("inset cannot be negative");
         }
         let sheet = self.sheet_mut("flange")?.clone();
         if sheet.plates.is_empty() {
@@ -286,7 +297,7 @@ impl Model {
         let mut said = Vec::new();
         for (a, b) in ends {
             let (p, i, top) = self.sheet_edge(a, b)?;
-            said.push(self.flange_one(&label, p, i, top, reach, angle)?);
+            said.push(self.flange_one(&label, (p, i, top), reach, angle, inset)?);
         }
         Ok(format!("{}; {}", said.join("; "), self.describe_solid()?))
     }
@@ -294,25 +305,36 @@ impl Model {
     fn flange_one(
         &mut self,
         label: &str,
-        p: usize,
-        i: usize,
-        top: bool,
+        (p, i, top): (usize, usize, bool),
         reach: f64,
         angle: f64,
+        inset: (f64, f64),
     ) -> Result<String> {
         let tolerance = self.tolerance() * 100.0;
         let sheet = self.sheet.clone().ok_or_else(|| anyhow!("no sheet"))?;
         let plate = sheet.plates[p].clone();
-        if plate.used[i] {
-            bail!(
-                "that edge already has a flange, or both sides of it are selected; pick the edge on the face the flange should rise from, like `walls.face&walls.end`"
-            );
-        }
         let (t, r) = (sheet.thickness, sheet.radius);
+        if angle == 180.0 && r == 0.0 {
+            bail!("a 180 degree hem needs a bend radius above 0 to leave room between its sides");
+        }
         let n = plate.outline.len();
         let (a, b) = (plate.outline[i], plate.outline[(i + 1) % n]);
-        let width = length(sub(b, a));
-        let e = mul(sub(b, a), 1.0 / width);
+        let full = length(sub(b, a));
+        let e = mul(sub(b, a), 1.0 / full);
+        let span = (inset.0, full - inset.1);
+        if span.1 - span.0 <= tolerance {
+            bail!("the insets leave nothing of the {full:.3} edge to flange");
+        }
+        if plate.used[i]
+            .iter()
+            .any(|&(lo, hi)| span.0 < hi - tolerance && lo < span.1 - tolerance)
+        {
+            bail!(
+                "that edge already has a flange there, or both sides of it are selected; pick the edge on the face the flange should rise from, like `walls.face&walls.end`"
+            );
+        }
+        let (a, b) = (add(a, mul(e, span.0)), add(a, mul(e, span.1)));
+        let width = span.1 - span.0;
         let o = (e.1, -e.0);
         let f = &plate.frame;
         let lift = |q: P2| f.at(q.0, q.1);
@@ -351,7 +373,7 @@ impl Model {
             },
             outline: vec![(0.0, 0.0), (width, 0.0), (width, reach), (0.0, reach)],
             to_flat: [0.0; 6],
-            used: vec![true, false, false, false],
+            used: vec![vec![(0.0, width)], Vec::new(), Vec::new(), Vec::new()],
         };
         let flange_solid = plate_solid(&flange, t)?;
         let tool = super::weld::weld_union(&bend, &flange_solid)
@@ -410,7 +432,7 @@ impl Model {
                 add(to, mul(out, allowance / 2.0)),
             ),
         });
-        sheet.plates[p].used[i] = true;
+        sheet.plates[p].used[i].push(span);
         sheet.plates.push(Plate { to_flat, ..flange });
         Ok(format!(
             "{} {angle} degrees, {reach} long, bend allowance {allowance:.3}",

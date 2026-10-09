@@ -151,11 +151,10 @@ Sheet metal:
 |---|---|---|
 | `sheet` | `t` `r=` `k=` | makes this part sheet metal `t` thick, bent to an inside radius `r` (`t` unless given) with K-factor `k` (0.44 unless given), so a bend of `a` degrees takes `a*pi/180*(r+k*t)` of flat sheet |
 | `tab` | | turns the sketch, one rect without rounded corners or one poly, into the flat base plate, `t` thick on the workplane. Groups as for `extrude`: `start`, `end`, `side` |
-| `flange` | `edges l` `angle=` | bends a flange off each straight outside edge of a plate's top or bottom face: it rises on the side of the face the edge is on, turns `angle` degrees (90 unless given) about an inside radius `r`, and runs on flat for `l`. A 90 degree flange off the top reaches `t+r+l` above the plate's bottom. Groups: `face` (the side that carries on from the face the edge was on), `back`, `end` (the free end), `side`, `bend` |
+| `flange` | `edges l` `angle=` `inset=` | bends a flange off each straight outside edge of a plate's top or bottom face: it rises on the side of the face the edge is on, turns `angle` degrees (90 unless given, up to 180 for a hem) about an inside radius `r`, and runs on flat for `l`. `inset=d` stops it `d` short of both ends of the edge, `inset=a,b` short of the start and end, going round the plate counterclockwise seen from its top; one edge can take several inset flanges that do not overlap. A 90 degree flange off the top reaches `t+r+l` above the plate's bottom. Groups: `face` (the side that carries on from the face the edge was on), `back`, `end` (the free end), `side`, `bend` |
 | `unfold` | | replaces the part with its flat pattern, on the base plate's workplane, with the holes and through cuts made in the plates |
 
-A flange spans the whole edge it is on, so flanges on edges that meet at a corner leave
-the corner open by `r+t`. Make holes and cuts in the plates, through the sheet, for them to
+Flanges on edges that meet at a corner leave the corner open by `r+t`. Make holes and cuts in the plates, through the sheet, for them to
 show in the flat pattern; `unfold` counts the ones it could not place. Its flat pattern is
 the part's DXF: `gcad export part.gcad flat.dxf` writes the outline and holes on layer
 `OUTLINE` and the middle of every bend on layer `BEND`.

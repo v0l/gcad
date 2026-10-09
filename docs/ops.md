@@ -146,6 +146,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | sheet thickness, bend radius and K-factor | supported | `sheet 1.5 r=1.5 k=0.44` | `features::sheet_flange` |
 | base tab | supported | `rect 40 30` then `base: tab` | `features::sheet_flange` |
 | edge flange | supported | `flange base.end&>X 10`, `angle=` | `features::sheet_flange`, `features::sheet_flange_at_an_angle` |
+| shorter flange and hem | supported | `flange e 10 inset=5`, `inset=2,8`, `angle=180` | `features::sheet_flange_inset_and_hem` |
 | flange on a flange | supported | `flange >X&walls.end 5` | `features::sheet_flange_on_a_flange` |
 | flat pattern | supported | `unfold`, holes and through cuts carried over | `features::sheet_unfolds` |
 | flat pattern DXF | supported | `gcad export part.gcad flat.dxf` | `output::flat_pattern_dxf` |
