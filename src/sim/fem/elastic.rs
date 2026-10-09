@@ -87,7 +87,7 @@ pub struct Answer {
     pub applied: Vector3,
 }
 
-fn lame(young: f64, poisson: f64) -> (f64, f64) {
+pub fn lame(young: f64, poisson: f64) -> (f64, f64) {
     let lambda = young * poisson / ((1.0 + poisson) * (1.0 - 2.0 * poisson));
     let mu = young / (2.0 * (1.0 + poisson));
     (lambda, mu)

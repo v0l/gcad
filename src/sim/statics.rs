@@ -424,3 +424,74 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
     crate::plot::title(&mut canvas, (picture.width() as f64 / 2.0, 38.0), &caption);
     canvas.save(path)
 }
+
+pub fn buckle(spec: &Spec) -> Result<Outcome> {
+    let prepared = prepare(spec)?;
+    let mesh = &prepared.mesh;
+    let materials = prepared.elastic()?;
+    let body_force = spec.gravity.map(|g| {
+        prepared
+            .parts
+            .iter()
+            .map(|p| g * (p.density * 1.0e-6))
+            .collect()
+    });
+    if spec.loads.is_empty() && body_force.is_none() {
+        bail!("buckling needs a `load`, `pressure` or `torque` to scale");
+    }
+    let wanted = spec.modes.unwrap_or(3);
+    let buckles = super::fem::buckling::solve(
+        &Problem {
+            mesh,
+            materials: &materials,
+            supports: &spec.supports,
+            loads: &spec.loads,
+            body_force,
+        },
+        wanted,
+    )?;
+    let Some(first) = buckles.first() else {
+        bail!("the loads do not compress the part anywhere, so it cannot buckle under them");
+    };
+    let mut readings = vec![Reading {
+        name: "buckling".into(),
+        value: first.factor,
+        unit: "".into(),
+        at: "times the loads given, where the part first buckles".into(),
+    }];
+    for (k, b) in buckles.iter().enumerate().skip(1) {
+        readings.push(Reading {
+            name: format!("buckling{}", k + 1),
+            value: b.factor,
+            unit: "".into(),
+            at: "times the loads given".into(),
+        });
+    }
+    let mut notes = vec![format!(
+        "{} nodes, {} quadratic tetrahedra; linear buckling, so imperfections and yielding lower the real figure",
+        mesh.nodes.len(),
+        mesh.tets.len()
+    )];
+    if let Some(bonds) = prepared.bonds() {
+        notes.push(bonds);
+    }
+    let displacement: Vec<[f64; 3]> = first.shape.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
+    let values = displacement
+        .iter()
+        .map(|d| (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt())
+        .collect();
+    Ok(Outcome {
+        kind: "buckling".into(),
+        readings,
+        notes,
+        series: Vec::new(),
+        checks: Vec::new(),
+        aliases: Vec::new(),
+        field: Some(Field {
+            title: format!("buckling mode, {} times the loads", short(first.factor)),
+            unit: "relative".into(),
+            values,
+            displacement,
+        }),
+    })
+}

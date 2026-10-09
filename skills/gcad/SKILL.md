@@ -186,7 +186,8 @@ sits on the path.
 
 A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`. It prints
 readings, writes `x.result.json`, and fails when an `expect` line does not hold. Kinds:
-`torque`, `static`, `thermal`, `modal`; the plan and limits are in `docs/simulation.md`.
+`torque`, `static`, `thermal`, `modal`, `buckling` (load factor before buckling under the
+`static` lines; keep it above about 3); the plan and limits are in `docs/simulation.md`.
 
 ```
 sim torque

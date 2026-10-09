@@ -169,7 +169,7 @@ fn upper_solve(l: &[Vec<f64>], b: &[f64]) -> Vec<f64> {
     x
 }
 
-fn ritz(k: &[Vec<f64>], m: &[Vec<f64>]) -> Option<(Vec<f64>, Vec<Vec<f64>>)> {
+pub fn ritz(k: &[Vec<f64>], m: &[Vec<f64>]) -> Option<(Vec<f64>, Vec<Vec<f64>>)> {
     let n = k.len();
     let l = cholesky(m)?;
     let mut c = vec![vec![0.0; n]; n];

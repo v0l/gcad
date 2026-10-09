@@ -1,3 +1,4 @@
+pub mod buckling;
 pub mod elastic;
 pub mod modal;
 pub mod solve;

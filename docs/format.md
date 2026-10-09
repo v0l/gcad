@@ -362,7 +362,7 @@ expect shoulder<15 sun_s_turn<4
 
 | operation | arguments | does |
 |---|---|---|
-| `sim` | `kind` | what to simulate. Comes first. `torque`, `static`, `thermal` and `modal`. The last three mesh the part; `--dry-run` shows the mesh without solving |
+| `sim` | `kind` | what to simulate. Comes first. `torque`, `static`, `thermal`, `modal` and `buckling`. All but `torque` mesh the part; `--dry-run` shows the mesh without solving |
 | `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line. Every body of it is simulated |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
@@ -442,7 +442,14 @@ the share of the part's mass that moves with it along x, y and z (the modes with
 are the ones a shaker or a motor along that axis excites). With no supports the six rigid-body
 modes at 0 Hz are left out. `render` draws the first mode's shape.
 
-`static`, `thermal` and `modal` take an assembly too. Each part is meshed on its own, in its
+`sim buckling` takes the same supports and loads as `static` and finds how many times those
+loads the part can carry before it buckles: the reading `buckling` is that factor, and
+`buckling2`, ... the next ones (`modes` sets how many, 3 unless given). A factor below 1 means
+the loads given already buckle it. It is linear buckling, so real parts with imperfections
+and yielding give way earlier; treat a factor under about 3 as too close. `render` draws the
+first buckled shape. Loads that only stretch the part are refused.
+
+`static`, `thermal`, `modal` and `buckling` take an assembly too. Each part is meshed on its own, in its
 own material, and parts whose faces touch (closer than a tenth of the mesh size) are bonded
 there, as if glued: no sliding, no gaps, heat passes freely. Pick faces as `part:faces`, like
 `fix base:<Z` or `load arm:tip.end force=0,0,-50`. A note lists which parts were bonded and over

@@ -20,9 +20,10 @@ pub enum Kind {
     Static,
     Thermal,
     Modal,
+    Buckling,
 }
 
-pub const KINDS: &[&str] = &["torque", "static", "thermal", "modal"];
+pub const KINDS: &[&str] = &["torque", "static", "thermal", "modal", "buckling"];
 
 impl Kind {
     pub fn named(name: &str) -> Result<Kind> {
@@ -31,6 +32,7 @@ impl Kind {
             "static" => Ok(Kind::Static),
             "thermal" => Ok(Kind::Thermal),
             "modal" => Ok(Kind::Modal),
+            "buckling" => Ok(Kind::Buckling),
             other => bail!(
                 "unknown simulation `{other}`; kinds are {}",
                 KINDS.join(", ")
@@ -44,6 +46,7 @@ impl Kind {
             Kind::Static => "static",
             Kind::Thermal => "thermal",
             Kind::Modal => "modal",
+            Kind::Buckling => "buckling",
         }
     }
 
@@ -128,6 +131,7 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
         Some(Kind::Static) => statics::run(spec)?,
         Some(Kind::Thermal) => heat::run(spec)?,
         Some(Kind::Modal) => vibration::run(spec)?,
+        Some(Kind::Buckling) => statics::buckle(spec)?,
         None => bail!("the file has no `sim` line"),
     };
     outcome.check(&spec.expects);
@@ -140,7 +144,7 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
         .filter(|o| Some(o.kind.as_str()) == spec.kind.map(Kind::name));
     match (spec.kind, outcome) {
         (Some(Kind::Torque), Some(outcome)) => crate::plot::chart(&outcome, output),
-        (Some(Kind::Static | Kind::Thermal | Kind::Modal), Some(outcome)) => {
+        (Some(Kind::Static | Kind::Thermal | Kind::Modal | Kind::Buckling), Some(outcome)) => {
             statics::render(spec, &outcome, output)
         }
         (Some(kind), _) if kind.meshed() => mesh::render(&mesh::bodies(spec)?, output),

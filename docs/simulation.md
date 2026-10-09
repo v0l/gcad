@@ -165,6 +165,10 @@ rigid-body motions are projected through the supports, and a part they leave fre
 The viewer colours a `.gsim` by its result when the result is up to date, using a 1D colour
 map texture on the boundary triangles.
 
+`buckling`: the static solution gives the stress at each Gauss point, which builds a geometric
+stiffness; subspace iteration on K^-1 (-K_G) finds the largest positive eigenvalues, whose
+inverses are the load factors. A clamped column matches Euler's load within 0.05%.
+
 Still to build: contact that can open or slide, an iterative path for `modal` and `thermal`,
 and a better smoother for bonded assemblies.
 

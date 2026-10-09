@@ -733,7 +733,28 @@ fn example_simulations() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/parts");
     for name in ["bracket", "heatsink"] {
         let path = root.join(format!("{name}.gsim"));
-        let outcome = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
+        let outcome =
+            gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
         assert!(outcome.failed().is_empty(), "{name}: {}", outcome.table());
     }
+}
+
+#[test]
+fn column_buckling() {
+    let outcome = simulated(
+        "column_buckling",
+        &[("col.gcad", "rect 10 10\ncol: extrude 200\nmaterial steel\n")],
+        "sim buckling\npart col.gcad\nfix <Z\nload >Z force=0,0,-1000\nmesh 3",
+    );
+    let euler = std::f64::consts::PI.powi(2) * 200.0e3 * (10.0_f64.powi(4) / 12.0)
+        / (4.0 * 200.0_f64.powi(2));
+    close(reading(&outcome, "buckling"), euler / 1000.0, 0.005);
+    let pulled = written(
+        "column_in_tension",
+        &[("col.gcad", "rect 10 10\ncol: extrude 200\nmaterial steel\n")],
+        "sim buckling\npart col.gcad\nfix <Z\nload >Z force=0,0,1000\nmesh 6",
+    );
+    let error = gcad::sim::simulate(spec_of(&pulled).sim.as_deref().expect("sim"))
+        .expect_err("no buckling");
+    assert!(format!("{error}").contains("cannot buckle"), "{error}");
 }
