@@ -139,6 +139,17 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | snap hook | supported | `snap 8 1.5 6 x,y hook=1.5 dir=90` | `features::snap_hook` |
 | case and lid with screws | supported | `examples/assemblies/case.gasm` | `assembly::case_and_lid_with_screws` |
 
+## Sheet metal
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| sheet thickness, bend radius and K-factor | supported | `sheet 1.5 r=1.5 k=0.44` | `features::sheet_flange` |
+| base tab | supported | `rect 40 30` then `base: tab` | `features::sheet_flange` |
+| edge flange | supported | `flange base.end&>X 10`, `angle=` | `features::sheet_flange`, `features::sheet_flange_at_an_angle` |
+| flange on a flange | supported | `flange >X&walls.end 5` | `features::sheet_flange_on_a_flange` |
+| flat pattern | supported | `unfold`, holes and through cuts carried over | `features::sheet_unfolds` |
+| flat pattern DXF | supported | `gcad export part.gcad flat.dxf` | `output::flat_pattern_dxf` |
+
 ## Fillets and chamfers
 
 | operation | status | syntax | tests |

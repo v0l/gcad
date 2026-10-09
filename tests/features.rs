@@ -747,3 +747,74 @@ fn snap_hook() {
         1.0e-5,
     );
 }
+
+fn bend(degrees: f64, r: f64, t: f64, width: f64) -> f64 {
+    degrees.to_radians() / 2.0 * ((r + t).powi(2) - r * r) * width
+}
+
+fn allowance(degrees: f64, r: f64, t: f64, k: f64) -> f64 {
+    degrees.to_radians() * (r + k * t)
+}
+
+const SHEET: &str = "sheet 1 r=1\nrect 40 30\nbase: tab\n";
+
+#[test]
+fn sheet_flange() {
+    let model = build(&format!("{SHEET}flange base.end&>X 10"));
+    assert_volume(&model, 1200.0 + bend(90.0, 1.0, 1.0, 30.0) + 300.0, 1.0e-4);
+    assert_bounds(&model, [-20.0, -15.0, 0.0], [22.0, 15.0, 12.0]);
+    let down = build(&format!("{SHEET}flange base.start&<Y 8"));
+    assert_volume(&down, 1200.0 + bend(90.0, 1.0, 1.0, 40.0) + 320.0, 1.0e-4);
+    assert_bounds(&down, [-20.0, -17.0, -9.0], [20.0, 15.0, 1.0]);
+}
+
+#[test]
+fn sheet_flange_at_an_angle() {
+    let model = build("sheet 2 r=3\nrect 50 30\nbase: tab\nflange base.start&>Y 15 angle=45");
+    assert_volume(
+        &model,
+        3000.0 + bend(45.0, 3.0, 2.0, 50.0) + 15.0 * 50.0 * 2.0,
+        1.0e-4,
+    );
+}
+
+#[test]
+fn sheet_flange_on_a_flange() {
+    let model = build(&format!(
+        "{SHEET}walls: flange base.end&>X 10\nflange >X&walls.end 5\nflange walls.side&walls.face 4"
+    ));
+    let flanges = 300.0 + 150.0 + 2.0 * 40.0;
+    let bends = bend(90.0, 1.0, 1.0, 30.0) * 2.0 + bend(90.0, 1.0, 1.0, 10.0) * 2.0;
+    assert_volume(&model, 1200.0 + flanges + bends, 1.0e-4);
+}
+
+#[test]
+fn sheet_unfolds() {
+    let ba = allowance(90.0, 1.0, 1.0, 0.44);
+    let model = build(&format!(
+        "{SHEET}plane base.end\nhole 3 -10,0\nwalls: flange base.end&base.side 10\nplane >X\nslot 10 4 at=0,8\ncut thru\nunfold"
+    ));
+    let flat = 1200.0 + 2.0 * (ba + 10.0) * 30.0 + 2.0 * (ba + 10.0) * 40.0;
+    let holes = PI * 2.25 + 2.0 * (6.0 * 4.0 + PI * 4.0);
+    assert_volume(&model, flat - holes, 1.0e-4);
+    assert_bounds(
+        &model,
+        [-30.0 - ba, -25.0 - ba, 0.0],
+        [30.0 + ba, 25.0 + ba, 1.0],
+    );
+    let note = gcad::model::run(
+        &gcad::parse::parse_program(&format!(
+            "{SHEET}walls: flange base.end&>X 10\nplane base.end\nrect 4 4\ncut 0.5\nunfold"
+        ))
+        .expect("parses"),
+    );
+    let said = note
+        .steps
+        .last()
+        .expect("steps")
+        .1
+        .as_ref()
+        .expect("unfolds")
+        .clone();
+    assert!(said.contains("1 cut(s) or hole(s)"), "{said}");
+}

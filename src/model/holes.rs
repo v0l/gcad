@@ -196,6 +196,10 @@ impl Model {
             .iter()
             .map(|(frame, (x, y))| frame.at(*x, *y))
             .collect();
+        let sheet_frame = (args.values.get("on").is_none())
+            .then(|| placements.first().copied())
+            .flatten();
+        let sheet_spots: Vec<(f64, f64)> = placements.iter().map(|(_, c)| *c).collect();
         let mut batches: Vec<Vec<Solid>> = vec![Vec::new(); pieces.len()];
         for (frame, center) in placements {
             for (k, piece) in pieces.iter().enumerate() {
@@ -238,6 +242,16 @@ impl Model {
         }
         for batch in batches {
             self.merge_all(&label, batch, Combine::Remove)?;
+        }
+        if let Some((frame, _)) = sheet_frame {
+            let circles: Vec<Profile> = sheet_spots
+                .iter()
+                .map(|&center| Profile::Circle { center, diameter })
+                .collect();
+            match depth {
+                Depth::Through => self.sheet_cutouts(&frame, &circles, true),
+                Depth::Blind(_) => self.sheet_cut(),
+            }
         }
         let note = match (&thread, limits, insert) {
             (Some(name), _, _) => Some(format!("{name} tapped")),

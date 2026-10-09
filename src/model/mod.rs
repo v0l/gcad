@@ -16,6 +16,7 @@ mod path;
 mod pattern;
 mod rib;
 mod round;
+mod sheet;
 mod sketch;
 mod skin;
 mod solids;
@@ -40,6 +41,7 @@ pub use assembly::{
 };
 pub use measure::{MassProperties, mass_properties};
 pub use path::SweepPath;
+pub use sheet::{Sheet, flat_dxf};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Combine {
@@ -106,6 +108,7 @@ pub struct Model {
     pub rounded: Vec<Rounded>,
     pub gear: Option<GearLead>,
     pub hole_notes: Vec<HoleNote>,
+    pub sheet: Option<sheet::Sheet>,
 }
 
 #[derive(Clone, Debug)]
@@ -203,6 +206,10 @@ pub const OPERATIONS: &[&str] = &[
     "vent",
     "snap",
     "thread",
+    "sheet",
+    "tab",
+    "flange",
+    "unfold",
     "fillet",
     "chamfer",
     "shell",
@@ -348,6 +355,10 @@ impl Model {
             "groove" => self.op_lip(line, true),
             "vent" => self.op_vent(line),
             "snap" => self.op_snap(line),
+            "sheet" => self.op_sheet(line),
+            "tab" => self.op_tab(line),
+            "flange" => self.op_flange(line),
+            "unfold" => self.op_unfold(line),
             "thread" => self.op_thread(line),
             "fillet" => self.op_blend(line, FilletProfile::Round),
             "chamfer" => self.op_blend(line, FilletProfile::Chamfer),

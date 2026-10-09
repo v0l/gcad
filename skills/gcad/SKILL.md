@@ -165,6 +165,15 @@ root because undercut is not modelled. `interference none` catches a gear out of
 `gear ... cone=atan(a/b)` then `extrude` a bevel gear. `rack teeth module` draws a rack with its
 pitch line on `at`; a gear meshes with its centre `pitch_diameter/2` above it.
 
+## Sheet metal
+
+`sheet t r= k=`, then a rect or poly and `base: tab` for the flat base, then
+`walls: flange base.end&>X 10` for each bent edge (`angle=`, off a top edge it rises up, off a
+`base.start` edge it goes down). Flange a flange from its `end`; pick the one edge on the side
+the new flange should rise from (`>X&walls.end`, `walls.face&walls.end`), since selecting both
+sides of an edge fails. Put holes and through cuts in the plates so they reach the flat
+pattern, then `gcad export part.gcad flat.dxf`, or end the file with `unfold` to see it.
+
 ## Output
 
 ```sh

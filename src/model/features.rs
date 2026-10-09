@@ -583,7 +583,12 @@ impl Model {
         };
         let taper = taper_of(&args, self)?;
         let (frame, profiles) = self.take_sketch("cut")?;
-        self.remove(
+        let flat = profiles.clone();
+        let (through, deep) = match depth {
+            Depth::Through => (true, true),
+            Depth::Blind(d) => (false, self.sheet.as_ref().is_some_and(|s| d >= s.thickness)),
+        };
+        let summary = self.remove(
             &label_of(line),
             Removal {
                 frame,
@@ -593,7 +598,13 @@ impl Model {
                 side: "side",
                 end: "end",
             },
-        )
+        )?;
+        if deep {
+            self.sheet_cutouts(&frame, &flat, through);
+        } else {
+            self.sheet_cut();
+        }
+        Ok(summary)
     }
 
     pub(crate) fn op_revolve(&mut self, line: &Line) -> Result<String> {

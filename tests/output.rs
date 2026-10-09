@@ -75,6 +75,10 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass(), gap)
         ("bevel-gear", "gear 16 2 cone=40\nextrude 5"),
         ("rack", "rack 6 2\nextrude 5"),
         (
+            "sheet-metal",
+            "sheet 1 r=1\nrect 40 30\nbase: tab\nwalls: flange base.end&base.side 10\nflange >X&walls.end 5 angle=60",
+        ),
+        (
             "case-features",
             "rect 40 30\nbox: extrude 20\nshell 2 open=box.end\nlip >Z 3\nplane XY offset=2\nboss 7 12 10,5 hole=M3 fit=insert ribs=3\nplane >X\nvent 12 2 0,10 count=2 step=0,-4\nplane XY offset=2\nsnap 8 1.5 6 -10,0 dir=90",
         ),
@@ -474,4 +478,30 @@ fn drawing_notes_fits_and_taps() {
     for callout in ["⌀6 H7", "⌀3.3 M4 tapped", "⌀3.4<", "⌀6<"] {
         assert!(svg.contains(callout), "missing {callout}");
     }
+}
+
+#[test]
+fn flat_pattern_dxf() {
+    let path = scratch("tray.dxf");
+    let model = build(
+        "sheet 1 r=1\nrect 40 30\nbase: tab\nplane base.end\nhole 3 0,0\nflange base.end&base.side 10",
+    );
+    gcad::export::export_model(&model, std::path::Path::new("tray.gcad"), &path).expect("exports");
+    let dxf = std::fs::read_to_string(&path).expect("written");
+    let entities: Vec<&str> = dxf.lines().collect();
+    let layers: Vec<&str> = entities
+        .windows(4)
+        .filter(|w| w[0] == "LINE" && w[1] == "8")
+        .map(|w| w[2])
+        .collect();
+    assert_eq!(layers.iter().filter(|l| **l == "BEND").count(), 4);
+    assert!(layers.iter().filter(|l| **l == "OUTLINE").count() >= 12 + 8);
+    assert!(dxf.ends_with("EOF\n"));
+    let plain = build("rect 10 10\nextrude 2");
+    assert!(
+        gcad::export::export_model(&plain, std::path::Path::new("p.gcad"), &path)
+            .expect_err("not sheet metal")
+            .to_string()
+            .contains("flat pattern")
+    );
 }

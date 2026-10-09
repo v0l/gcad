@@ -145,6 +145,31 @@ Enclosures:
 inserts, a lid with the groove sitting on it, and four flat head screws from the library.
 Make the `lip` before anything rises above the rim, since it takes the face the rim is on.
 
+Sheet metal:
+
+| operation | parameters | does |
+|---|---|---|
+| `sheet` | `t` `r=` `k=` | makes this part sheet metal `t` thick, bent to an inside radius `r` (`t` unless given) with K-factor `k` (0.44 unless given), so a bend of `a` degrees takes `a*pi/180*(r+k*t)` of flat sheet |
+| `tab` | | turns the sketch, one rect without rounded corners or one poly, into the flat base plate, `t` thick on the workplane. Groups as for `extrude`: `start`, `end`, `side` |
+| `flange` | `edges l` `angle=` | bends a flange off each straight outside edge of a plate's top or bottom face: it rises on the side of the face the edge is on, turns `angle` degrees (90 unless given) about an inside radius `r`, and runs on flat for `l`. A 90 degree flange off the top reaches `t+r+l` above the plate's bottom. Groups: `face` (the side that carries on from the face the edge was on), `back`, `end` (the free end), `side`, `bend` |
+| `unfold` | | replaces the part with its flat pattern, on the base plate's workplane, with the holes and through cuts made in the plates |
+
+A flange spans the whole edge it is on, so flanges on edges that meet at a corner leave
+the corner open by `r+t`. Make holes and cuts in the plates, through the sheet, for them to
+show in the flat pattern; `unfold` counts the ones it could not place. Its flat pattern is
+the part's DXF: `gcad export part.gcad flat.dxf` writes the outline and holes on layer
+`OUTLINE` and the middle of every bend on layer `BEND`.
+
+```
+sheet 1.5 r=1.5
+rect 60 40
+base: tab
+plane base.end
+hole M4 -20,0 20,0
+walls: flange base.end&<Y 15
+lip: flange walls.face&walls.end 6
+```
+
 `mode=cut` and `mode=intersect` on `revolve`, `sweep` and `loft` remove the shape or
 keep only what it shares with the solid.
 
@@ -364,7 +389,7 @@ lines where a rounded corner of a `rect r=` joins its flat sides.
 gcad check part.gcad                  # run every line, print what each did
 gcad query part.gcad 'base.end&base.side' [--line N]
 gcad render part.gcad part.png        # iso, top, front and right views
-gcad export part.gcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing)
+gcad export part.gcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing), .dxf (sheet metal flat pattern)
 gcad export part.gcad part.svg --section y=0   # adds a hatched section across y=0
 gcad check part.gcad --set w=50       # override a `let` variable
 gcad check part.gcad --time           # also show how long each line took

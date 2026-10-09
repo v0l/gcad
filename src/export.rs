@@ -44,7 +44,9 @@ pub fn export_coloured(parts: &[(&Solid, Option<Colour>)], path: &str) -> Result
         "obj" => monstertruck::mesh::obj::write(&merged_mesh(parts), std::fs::File::create(path)?)?,
         "3mf" => std::fs::write(path, three_mf(parts))?,
         "svg" => std::fs::write(path, crate::drawing::drawing(parts))?,
-        other => bail!("cannot export `.{other}`, use .step, .stl, .obj, .3mf or .svg"),
+        other => bail!(
+            "cannot export `.{other}`, use .step, .stl, .obj, .3mf, .svg or, for sheet metal, .dxf"
+        ),
     }
     Ok(())
 }
@@ -190,6 +192,17 @@ pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &
     if model.assembly && (step.ends_with(".step") || step.ends_with(".stp")) {
         let (products, instances) = assembly(model);
         std::fs::write(path, assembly_step(name, &products, &instances))?;
+        return Ok(());
+    }
+    if step.ends_with(".dxf") {
+        let sheet = model
+            .sheet
+            .as_ref()
+            .filter(|sheet| !sheet.plates.is_empty())
+            .ok_or_else(|| {
+                anyhow::anyhow!("a .dxf export is the flat pattern of a sheet metal part; start the part with `sheet` and `tab`")
+            })?;
+        std::fs::write(path, crate::model::flat_dxf(sheet))?;
         return Ok(());
     }
     if step.ends_with(".svg") {
