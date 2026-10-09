@@ -167,3 +167,23 @@ fn functions() {
     assert!(failure("let a=nope(1)").contains("functions are"));
     assert!(failure("let a=atan2(1)").contains("takes two numbers"));
 }
+
+#[test]
+fn measure_angle() {
+    let block = "rect 40 30\nbase: extrude 10\nplane base.end\nh: hole 4 0,0\nbevel: chamfer 4 base.end&>X d2=2\n";
+    let faces = summary(&format!("{block}measure angle <Y base.start"));
+    assert!(
+        faces.contains("angle 90.000 degrees between the face normals"),
+        "{faces}"
+    );
+    let slope = summary(&format!("{block}measure angle bevel.faces base.end"));
+    assert!(
+        slope.contains(&format!("angle {:.3}", 2.0_f64.atan2(4.0).to_degrees())),
+        "{slope}"
+    );
+    let axis = summary(&format!("{block}measure angle h.side base.end"));
+    assert!(
+        axis.contains("angle 90.000 degrees between the axis and the face"),
+        "{axis}"
+    );
+}

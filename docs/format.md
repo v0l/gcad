@@ -204,6 +204,7 @@ Measuring, which changes nothing and prints the answer:
 | operation | parameters | prints |
 |---|---|---|
 | `measure` | `faces faces` | the distance between two sets of faces |
+| `measure` | `angle faces faces` | the angle between two face normals, two axes, or an axis and a face; `faces` is flat faces facing one way or one round face |
 | `measure` | `mass` | volume, surface area and centroid of every body, and the mass in grams of those with a `material` |
 | `measure` | `overlap a b` | the volume two bodies share |
 | `measure` | `thickness` | the thinnest wall and where it is |

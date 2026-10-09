@@ -407,6 +407,19 @@ impl Model {
         for tool in tools {
             self.merge(&label, tool, Combine::Remove)?;
         }
+        let tolerance = self.tolerance() * 100.0;
+        let before: Vec<Surface> = faces.iter().map(|face| face.oriented_surface()).collect();
+        let made: Vec<Surface> = select::faces(self.active("chamfer")?)
+            .iter()
+            .filter(|face| {
+                !before
+                    .iter()
+                    .any(|surface| select::face_on(face, surface, tolerance))
+            })
+            .map(|face| face.oriented_surface())
+            .collect();
+        made.into_iter()
+            .for_each(|surface| self.groups.record(&label, "faces", surface));
         Ok(format!(
             "{} edge(s); {}",
             edges.len(),

@@ -79,6 +79,22 @@ impl Model {
                     ),
                 })
             }
+            ("angle", [a, b]) => {
+                let (da, plane_a) = self.direction_of(a)?;
+                let (db, plane_b) = self.direction_of(b)?;
+                let cos = da.dot(db).clamp(-1.0, 1.0);
+                let degrees = match (plane_a, plane_b) {
+                    (true, true) => cos.acos().to_degrees(),
+                    (false, false) => cos.abs().acos().to_degrees(),
+                    _ => 90.0 - cos.abs().acos().to_degrees(),
+                };
+                let what = match (plane_a, plane_b) {
+                    (true, true) => "between the face normals",
+                    (false, false) => "between the axes",
+                    _ => "between the axis and the face",
+                };
+                Ok(format!("angle {:.3} degrees {what}", tidy(degrees)))
+            }
             ("thickness", []) => self.thickness(),
             ("draft", []) => {
                 let pull = args.values.get("pull").copied().unwrap_or("z");
@@ -87,8 +103,37 @@ impl Model {
             }
             (faces_a, [faces_b]) => self.distance(faces_a, faces_b),
             _ => bail!(
-                "`measure` takes `mass`, `thickness`, `draft pull=`, `overlap body body`, or two face selectors"
+                "`measure` takes `mass`, `thickness`, `draft pull=`, `overlap body body`, `angle faces faces`, or two face selectors"
             ),
+        }
+    }
+
+    fn direction_of(&self, selector: &str) -> Result<(Vector3, bool)> {
+        let solid = self.active("measure")?;
+        let faces = select::select_faces(selector, solid, &self.groups, self.tolerance())?;
+        let all = select::faces(solid);
+        let normals: Vec<Vector3> = faces
+            .iter()
+            .filter_map(|&i| match all[i].oriented_surface() {
+                Surface::Plane(p) => Some(p.normal()),
+                _ => None,
+            })
+            .collect();
+        match normals.first() {
+            Some(&n) if normals.len() == faces.len() => {
+                if normals.iter().any(|m| m.dot(n) < 1.0 - 1.0e-9) {
+                    bail!("`{selector}` matched flat faces facing different ways");
+                }
+                Ok((n, true))
+            }
+            _ => match super::mate::cylinders(solid, &faces).as_slice() {
+                [one] => Ok((one.axis, false)),
+                [] => bail!("`{selector}` is neither flat faces facing one way nor one round face"),
+                many => bail!(
+                    "`{selector}` has {} round faces on different axes",
+                    many.len()
+                ),
+            },
         }
     }
 

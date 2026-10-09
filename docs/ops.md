@@ -267,6 +267,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | groups survive later edits | supported | | `inspect::groups_survive_later_cuts` |
 | errors that say what to do | supported | | `inspect::errors` |
 | measure distance | supported | `measure faces faces` | `inspect::measure_distance` |
+| measure an angle | supported | `measure angle faces faces` | `inspect::measure_angle` |
 | mass properties | supported | `measure mass` | `inspect::mass_properties` |
 | materials and mass | supported | `material steel`, `material pla density=1.24` | `inspect::material_mass`, `assembly::materials_follow_parts` |
 | wall thickness | supported | `measure thickness` | `inspect::wall_thickness` |
