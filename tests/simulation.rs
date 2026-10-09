@@ -306,6 +306,18 @@ fn stress_field_render() {
         .filter(|p| p.0[2] > 120 && p.0[0] < 60)
         .count();
     assert!(warm > 100 && cold > 100, "{warm} warm, {cold} cold pixels");
+    let view = gcad::sim::current_field(spec).expect("an up to date field");
+    assert!(!view.triangles.is_empty());
+    assert!(view.shade.iter().all(|s| (0.0..=1.0).contains(s)));
+    std::fs::write(
+        path.with_file_name("beam.gcad"),
+        BEAM.replace("200 20", "210 20"),
+    )
+    .expect("edit");
+    assert!(
+        gcad::sim::current_field(spec).is_none(),
+        "a stale result is not shown"
+    );
 }
 
 #[test]

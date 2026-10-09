@@ -599,7 +599,10 @@ fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Mo
     model.scope = model.fixed.clone();
     model.assembly = is_assembly(path);
     if crate::sim::is_sim(path) {
-        model.sim = Some(Default::default());
+        model.sim = Some(Box::new(crate::sim::Spec {
+            origin: Some(path.to_path_buf()),
+            ..Default::default()
+        }));
     }
     model.depth = depth;
     model

@@ -162,6 +162,9 @@ moment as tangential traction proportional to the distance from the axis. Checke
 shaft in torsion (stress and twist within 1%) and a link on two pins. Before solving, the six
 rigid-body motions are projected through the supports, and a part they leave free is refused.
 
+The viewer colours a `.gsim` by its result when the result is up to date, using a 1D colour
+map texture on the boundary triangles.
+
 Still to build: contact that can open or slide, an iterative path for `modal` and `thermal`,
 and a better smoother for bonded assemblies.
 

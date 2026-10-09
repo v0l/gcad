@@ -2,7 +2,7 @@ pub mod fem;
 mod heat;
 pub mod mesh;
 mod result;
-mod statics;
+pub mod statics;
 pub mod tet;
 mod torque;
 mod vibration;
@@ -75,6 +75,7 @@ pub struct Expect {
 
 #[derive(Clone, Default)]
 pub struct Spec {
+    pub origin: Option<PathBuf>,
     pub kind: Option<Kind>,
     pub target: Option<Box<Model>>,
     pub file: Option<PathBuf>,
@@ -145,4 +146,13 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
         (Some(kind), _) if kind.meshed() => mesh::render(&mesh::bodies(spec)?, output),
         _ => bail!("there is no result to draw yet; run `gcad sim` first"),
     }
+}
+
+pub fn current_field(spec: &Spec) -> Option<statics::FieldView> {
+    let origin = spec.origin.as_ref()?;
+    if !spec.kind.is_some_and(Kind::meshed) || stale(origin, &[]).is_some() {
+        return None;
+    }
+    let outcome = Outcome::read(&result_path(origin)).ok()?;
+    statics::field_view(spec, &outcome).ok()
 }

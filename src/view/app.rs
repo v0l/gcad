@@ -1619,7 +1619,34 @@ impl Browser {
     }
 }
 
+fn field_shown(view: &crate::sim::statics::FieldView, key: SceneKey) -> Shown {
+    let bounds: monstertruck::modeling::BoundingBox<monstertruck::modeling::Point3> =
+        view.positions.iter().copied().collect();
+    let (min, max) = (bounds.min(), bounds.max());
+    Shown {
+        key,
+        scene: Arc::new(scene::build_field(view)),
+        faces: 0,
+        bounds: ([min.x, min.y, min.z], [max.x, max.y, max.z]),
+        query: None,
+        joints: Vec::new(),
+        rig: Rig::default(),
+        explode: Vec::new(),
+        solids: Vec::new(),
+        assembly: false,
+        built: Duration::ZERO,
+    }
+}
+
 fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
+    if let Some(view) = snapshot
+        .model
+        .sim
+        .as_deref()
+        .and_then(crate::sim::current_field)
+    {
+        return Some(field_shown(&view, key));
+    }
     let model = match snapshot
         .model
         .sim

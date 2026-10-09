@@ -383,3 +383,67 @@ pub fn build(
         faces: info,
     }
 }
+
+pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
+    let mut surface = Surface {
+        colour: [1.0, 1.0, 1.0],
+        texture: Some(0),
+        group: 0,
+        ..Default::default()
+    };
+    for t in &view.triangles {
+        let corners = t.map(|v| v3(view.positions[v as usize]));
+        let flat = norm(cross(
+            sub(corners[1], corners[0]),
+            sub(corners[2], corners[0]),
+        ));
+        for (k, corner) in corners.iter().enumerate() {
+            surface.positions.push(*corner);
+            surface.normals.push(flat);
+            surface
+                .uvs
+                .push([view.shade[t[k] as usize].clamp(0.002, 0.998) as f32, 0.5]);
+        }
+    }
+    let mut rgba = Vec::with_capacity(256 * 4);
+    for k in 0..256 {
+        let c = crate::plot::heat(k as f64 / 255.0);
+        rgba.extend(c.map(|v| (v * 255.0) as u8));
+        rgba.push(255);
+    }
+    let bounds: BoundingBox<Point3> = view.positions.iter().copied().collect();
+    let low = bounds.min();
+    let high = bounds.max();
+    let name = format!(
+        "{} {} to {} {}",
+        view.title,
+        crate::plot::label(view.low),
+        crate::plot::label(view.high),
+        view.unit
+    );
+    Scene {
+        mesh: Arc::new(viewer3d::Scene {
+            surfaces: vec![surface],
+            lines: Vec::new(),
+            images: vec![viewer3d::Image {
+                width: 256,
+                height: 1,
+                rgba,
+            }],
+            centre: v3(bounds.center()),
+            radius: (bounds.diameter() / 2.0).max(1.0e-3) as f32,
+            ..Default::default()
+        }),
+        parts: vec![Part {
+            name,
+            colour: crate::plot::heat(1.0).map(|v| v as f32),
+            volume: 0.0,
+            current: true,
+            source: None,
+            material: None,
+            size: [high.x - low.x, high.y - low.y, high.z - low.z],
+        }],
+        vertices: Vec::new(),
+        faces: Vec::new(),
+    }
+}

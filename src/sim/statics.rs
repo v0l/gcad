@@ -295,7 +295,19 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     })
 }
 
-pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
+pub struct FieldView {
+    pub positions: Vec<Point3>,
+    pub triangles: Vec<[u32; 3]>,
+    pub shade: Vec<f64>,
+    pub edges: Vec<[u32; 3]>,
+    pub low: f64,
+    pub high: f64,
+    pub scale: f64,
+    pub title: String,
+    pub unit: String,
+}
+
+pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
     let Some(field) = &outcome.field else {
         bail!("the result has no field to draw; rerun `gcad sim`");
     };
@@ -332,31 +344,58 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
         0.0
     };
     let span = (high - low).max(1.0e-12);
-    let colour = |v: u32| crate::plot::heat((field.values[v as usize] - low) / span);
+    let shade = field.values.iter().map(|v| (v - low) / span).collect();
     let mut triangles = Vec::new();
     let mut edges = Vec::new();
     for (f, _) in &mesh.boundary {
         for t in [[0, 3, 5], [3, 1, 4], [5, 4, 2], [3, 4, 5]] {
-            let tri = t.map(|k| f[k]);
-            triangles.push((tri.map(|v| v as usize), tri.map(colour)));
+            triangles.push(t.map(|k| f[k]));
         }
         for (a, m, b) in [(0, 3, 1), (1, 4, 2), (2, 5, 0)] {
             if f[a] < f[b] {
-                edges.push(vec![
-                    positions[f[a] as usize],
-                    positions[f[m] as usize],
-                    positions[f[b] as usize],
-                ]);
+                edges.push([f[a], f[m], f[b]]);
             }
         }
     }
+    Ok(FieldView {
+        positions,
+        triangles,
+        shade,
+        edges,
+        low,
+        high: low + span,
+        scale,
+        title: field.title.clone(),
+        unit: field.unit.clone(),
+    })
+}
+
+pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
+    let view = field_view(spec, outcome)?;
+    let positions = &view.positions;
+    let (low, span, scale) = (view.low, view.high - view.low, view.scale);
+    let triangles: Vec<([usize; 3], [[f64; 3]; 3])> = view
+        .triangles
+        .iter()
+        .map(|t| {
+            (
+                t.map(|v| v as usize),
+                t.map(|v| crate::plot::heat(view.shade[v as usize])),
+            )
+        })
+        .collect();
+    let edges: Vec<Vec<Point3>> = view
+        .edges
+        .iter()
+        .map(|e| e.iter().map(|&v| positions[v as usize]).collect())
+        .collect();
     let shown: BoundingBox<Point3> = positions.iter().copied().collect();
-    let edges: Vec<Vec<Point3>> = if mesh.boundary.len() > 6000 {
+    let edges: Vec<Vec<Point3>> = if view.triangles.len() > 24000 {
         Vec::new()
     } else {
         edges
     };
-    let picture = crate::render::draw_triangles(&positions, &triangles, &edges, shown);
+    let picture = crate::render::draw_triangles(positions, &triangles, &edges, shown);
     let mut canvas = crate::plot::Canvas::new(picture.width() + 260, picture.height() + 60);
     canvas.paste(&picture, (0, 60));
     crate::plot::colour_bar(
@@ -368,19 +407,19 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
         ),
         low,
         low + span,
-        &field.unit,
+        &view.unit,
     );
-    let caption = if field.unit == "relative" {
-        format!("{}, shape", field.title)
+    let caption = if view.unit == "relative" {
+        format!("{}, shape", view.title)
     } else if scale > 0.0 {
         format!(
             "{} ({}), deformation drawn {}x",
-            field.title,
-            field.unit,
+            view.title,
+            view.unit,
             crate::plot::label(scale.round().max(1.0))
         )
     } else {
-        format!("{} ({})", field.title, field.unit)
+        format!("{} ({})", view.title, view.unit)
     };
     crate::plot::title(&mut canvas, (picture.width() as f64 / 2.0, 38.0), &caption);
     canvas.save(path)
