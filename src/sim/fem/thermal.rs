@@ -36,15 +36,15 @@ fn faces_of<'a>(mesh: &'a Quadratic, faces: &'a [usize]) -> impl Iterator<Item =
 
 pub fn solve(
     mesh: &Quadratic,
-    conductivity: f64,
+    conductivity: &[f64],
     boundaries: &[Boundary],
     source: f64,
 ) -> Result<Answer> {
     let n = mesh.nodes.len();
-    let k = conductivity * 1.0e-3;
     let mut entries: Vec<(u32, u32, f64)> = (0..mesh.tets.len())
         .into_par_iter()
         .flat_map_iter(|t| {
+            let k = conductivity[mesh.body[t] as usize] * 1.0e-3;
             let points = mesh.points(t);
             let tet = mesh.tets[t];
             let mut local = [[0.0; 10]; 10];
@@ -60,6 +60,18 @@ pub fn solve(
             (0..100).map(move |i| (tet[i / 10], tet[i % 10], local[i / 10][i % 10]))
         })
         .collect();
+    if !mesh.ties.is_empty() {
+        let best = conductivity.iter().copied().fold(0.0, f64::max) * 1.0e-3;
+        let penalty = best * super::elastic::spacing(mesh) * 1.0e3;
+        for tie in &mesh.ties {
+            let (nodes, c) = (tie.group(), tie.coefficients());
+            for a in 0..7 {
+                for b in 0..7 {
+                    entries.push((nodes[a], nodes[b], penalty * c[a] * c[b]));
+                }
+            }
+        }
+    }
     let mut rhs = vec![0.0; n];
     let volume = mesh.volume();
     if source != 0.0 {

@@ -144,7 +144,15 @@ same sparse Cholesky. Checked against a wall (exact) and a convecting fin (0.5%)
 Jacobi rotations. Checked against a clamped and a free beam (under 1% on the first mode) and the
 bending effective mass (61%).
 
-Still to build: `pin`, `torque` loads, and several bodies (phase 6, bonded assemblies).
+Bonded assemblies (phase 6, built): each body is meshed on its own and the meshes are merged.
+Every surface node of one body that lies within a tenth of the mesh size of another body's
+surface is tied to the point under it by a stiff penalty spring (scaled to the stiffest material
+and the element size), in both directions, which keeps interface stresses within a few percent
+on a matching pair. Checked on a bonded stack in tension, a two-material wall in series and a
+stacked block whose first mode matches the solid one.
+
+Still to build: `pin` supports, `torque` loads, contact that can open or slide, and a
+multigrid preconditioner for problems too big for the direct solver.
 
 ## Tests
 
@@ -172,4 +180,4 @@ the closed form.
    preconditioner.
 4. `thermal`. Done.
 5. `modal`. Done.
-6. Bonded assemblies.
+6. Bonded assemblies. Done.

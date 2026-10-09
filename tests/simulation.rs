@@ -597,3 +597,52 @@ fn mesh_dry_run() {
     .expect("renders");
     assert!(picture.exists());
 }
+
+const SLAB: &str = "rect 20 20\nblk: extrude 10\nmaterial steel\n";
+
+#[test]
+fn bonded_parts_carry_load() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
+    let outcome = simulated(
+        "bonded_parts_carry_load",
+        &[("block.gcad", SLAB), ("stack.gasm", stack)],
+        "sim static\npart stack.gasm\nslide a:<Z\nslide a:<X\nslide a:<Y\nslide b:<X\nslide b:<Y\nload b:>Z force=0,0,1000\ntop: probe 0,0,20\nmesh 3",
+    );
+    let axial: f64 = 1000.0 * 20.0 / (400.0 * 200.0e3);
+    let lateral = 0.29 * 2.5 / 200.0e3 * 10.0;
+    close(
+        reading(&outcome, "top.displacement"),
+        (axial * axial + 2.0 * lateral * lateral).sqrt(),
+        0.005,
+    );
+    close(reading(&outcome, "stress"), 2.5, 0.05);
+    assert!(outcome.notes.iter().any(|n| n.contains("bonded a to b")));
+}
+
+#[test]
+fn bonded_parts_conduct_heat() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\nmaterial b aluminium\n";
+    let outcome = simulated(
+        "bonded_parts_conduct_heat",
+        &[("block.gcad", SLAB), ("stack.gasm", stack)],
+        "sim thermal\npart stack.gasm\nhot: temperature a:<Z 100\ncold: temperature b:>Z 20\nmesh 3",
+    );
+    let resistance = 0.01 / (50.0 * 4.0e-4) + 0.01 / (167.0 * 4.0e-4);
+    close(reading(&outcome, "cold"), 80.0 / resistance, 0.005);
+}
+
+#[test]
+fn bonded_parts_vibrate_as_one() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
+    let joined = simulated(
+        "bonded_parts_vibrate_as_one",
+        &[("block.gcad", SLAB), ("stack.gasm", stack)],
+        "sim modal\npart stack.gasm\nfix a:<Z\nmodes 1\nmesh 3",
+    );
+    let whole = simulated(
+        "solid_block_vibrates",
+        &[("tall.gcad", "rect 20 20\nblk: extrude 20\nmaterial steel\n")],
+        "sim modal\npart tall.gcad\nfix <Z\nmodes 1\nmesh 3",
+    );
+    close(reading(&joined, "mode1"), reading(&whole, "mode1"), 0.01);
+}

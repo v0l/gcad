@@ -1,27 +1,15 @@
 use super::fem::modal::solve;
 use super::statics::prepare;
 use super::{Field, Outcome, Reading, Spec};
-use anyhow::{Result, bail};
+use anyhow::Result;
 
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
     let mesh = &prepared.mesh;
-    let m = prepared.mechanics;
-    let (Some(young), Some(poisson)) = (m.young, m.poisson) else {
-        bail!(
-            "`{}` has no stiffness; give it `E=` (GPa) and `nu=` on its `material` line",
-            prepared.name
-        );
-    };
+    let materials = prepared.elastic()?;
+    let densities: Vec<f64> = prepared.parts.iter().map(|p| p.density * 1.0e-9).collect();
     let wanted = spec.modes.unwrap_or(6);
-    let found = solve(
-        mesh,
-        young * 1000.0,
-        poisson,
-        prepared.density * 1.0e-9,
-        &spec.supports,
-        wanted,
-    )?;
+    let found = solve(mesh, &materials, &densities, &spec.supports, wanted)?;
     let readings: Vec<Reading> = found
         .modes
         .iter()
@@ -45,6 +33,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         super::result::short(found.total_mass * 1.0e6),
         found.iterations
     )];
+    if let Some(bonds) = prepared.bonds() {
+        notes.push(bonds);
+    }
     if spec.supports.is_empty() {
         notes.push("no supports, so the six rigid-body modes at 0 Hz are left out".into());
     }

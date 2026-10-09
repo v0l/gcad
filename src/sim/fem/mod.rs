@@ -8,12 +8,37 @@ use monstertruck::modeling::*;
 
 pub const EDGES: [(usize, usize); 6] = [(0, 1), (1, 2), (0, 2), (0, 3), (1, 3), (2, 3)];
 
+pub const STRIDE: usize = 1 << 20;
+
+#[derive(Clone, Copy, Debug)]
+pub struct Tie {
+    pub slave: u32,
+    pub masters: [u32; 6],
+    pub weights: [f64; 6],
+}
+
+impl Tie {
+    pub fn group(&self) -> [u32; 7] {
+        let m = self.masters;
+        [self.slave, m[0], m[1], m[2], m[3], m[4], m[5]]
+    }
+
+    pub fn coefficients(&self) -> [f64; 7] {
+        let w = self.weights;
+        [1.0, -w[0], -w[1], -w[2], -w[3], -w[4], -w[5]]
+    }
+}
+
 pub struct Quadratic {
     pub nodes: Vec<Point3>,
     pub corners: usize,
     pub tets: Vec<[u32; 10]>,
     pub boundary: Vec<([u32; 6], usize)>,
     pub faces: usize,
+    pub body: Vec<u16>,
+    pub bodies: Vec<String>,
+    pub ties: Vec<Tie>,
+    pub bonds: Vec<(usize, usize, usize)>,
 }
 
 pub fn shape(l: [f64; 4]) -> [f64; 10] {
@@ -175,12 +200,17 @@ impl Quadratic {
                 ([f[0], f[1], f[2], m(0, 1), m(1, 2), m(2, 0)], *tag)
             })
             .collect();
+        let body = vec![0; tets.len()];
         let mut quadratic = Quadratic {
             nodes,
             corners,
             tets,
             boundary,
             faces: mesh.faces,
+            body,
+            bodies: Vec::new(),
+            ties: Vec::new(),
+            bonds: Vec::new(),
         };
         quadratic.straighten_bad(mesh);
         quadratic
@@ -250,4 +280,141 @@ pub fn triangle_area_vector(points: &[Point3; 6], l: [f64; 3]) -> Vector3 {
         dv += p * (d[2][k] - d[0][k]);
     }
     du.cross(dv)
+}
+
+fn closest_on_triangle(p: Point3, [a, b, c]: [Point3; 3]) -> (f64, [f64; 3]) {
+    let (ab, ac, ap) = (b - a, c - a, p - a);
+    let (d1, d2) = (ab.dot(ap), ac.dot(ap));
+    if d1 <= 0.0 && d2 <= 0.0 {
+        return ((p - a).magnitude(), [1.0, 0.0, 0.0]);
+    }
+    let bp = p - b;
+    let (d3, d4) = (ab.dot(bp), ac.dot(bp));
+    if d3 >= 0.0 && d4 <= d3 {
+        return ((p - b).magnitude(), [0.0, 1.0, 0.0]);
+    }
+    let vc = d1 * d4 - d3 * d2;
+    if vc <= 0.0 && d1 >= 0.0 && d3 <= 0.0 {
+        let v = d1 / (d1 - d3);
+        return ((p - (a + ab * v)).magnitude(), [1.0 - v, v, 0.0]);
+    }
+    let cp = p - c;
+    let (d5, d6) = (ab.dot(cp), ac.dot(cp));
+    if d6 >= 0.0 && d5 <= d6 {
+        return ((p - c).magnitude(), [0.0, 0.0, 1.0]);
+    }
+    let vb = d5 * d2 - d1 * d6;
+    if vb <= 0.0 && d2 >= 0.0 && d6 <= 0.0 {
+        let w = d2 / (d2 - d6);
+        return ((p - (a + ac * w)).magnitude(), [1.0 - w, 0.0, w]);
+    }
+    let va = d3 * d6 - d5 * d4;
+    if va <= 0.0 && (d4 - d3) >= 0.0 && (d5 - d6) >= 0.0 {
+        let w = (d4 - d3) / ((d4 - d3) + (d5 - d6));
+        return ((p - (b + (c - b) * w)).magnitude(), [0.0, 1.0 - w, w]);
+    }
+    let denom = 1.0 / (va + vb + vc);
+    let (v, w) = (vb * denom, vc * denom);
+    ((p - (a + ab * v + ac * w)).magnitude(), [1.0 - v - w, v, w])
+}
+
+pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64) -> Quadratic {
+    let mut out = Quadratic {
+        nodes: Vec::new(),
+        corners: 0,
+        tets: Vec::new(),
+        boundary: Vec::new(),
+        faces: 0,
+        body: Vec::new(),
+        bodies: Vec::new(),
+        ties: Vec::new(),
+        bonds: Vec::new(),
+    };
+    let mut skins: Vec<Vec<[u32; 6]>> = Vec::new();
+    for (index, (name, part)) in parts.into_iter().enumerate() {
+        let offset = out.nodes.len() as u32;
+        out.nodes.extend(part.nodes);
+        out.corners += part.corners;
+        out.tets
+            .extend(part.tets.iter().map(|t| t.map(|v| v + offset)));
+        out.body
+            .extend(std::iter::repeat_n(index as u16, part.tets.len()));
+        let skin: Vec<[u32; 6]> = part
+            .boundary
+            .iter()
+            .map(|(f, _)| f.map(|v| v + offset))
+            .collect();
+        out.boundary.extend(
+            part.boundary
+                .iter()
+                .map(|(f, tag)| (f.map(|v| v + offset), index * STRIDE + tag)),
+        );
+        out.faces = out.faces.max(index * STRIDE + part.faces);
+        out.bodies.push(name);
+        skins.push(skin);
+    }
+    for master in 0..skins.len() {
+        let cell = gap.max(1.0e-9) * 8.0;
+        let key = |p: Point3| [p.x, p.y, p.z].map(|v| (v / cell).floor() as i64);
+        let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::default();
+        for (t, f) in skins[master].iter().enumerate() {
+            let corners = [f[0], f[1], f[2]].map(|v| out.nodes[v as usize]);
+            let lo = corners.iter().fold(corners[0], |m, p| {
+                Point3::new(m.x.min(p.x), m.y.min(p.y), m.z.min(p.z))
+            });
+            let hi = corners.iter().fold(corners[0], |m, p| {
+                Point3::new(m.x.max(p.x), m.y.max(p.y), m.z.max(p.z))
+            });
+            let (a, b) = (
+                key(lo - Vector3::new(gap, gap, gap)),
+                key(hi + Vector3::new(gap, gap, gap)),
+            );
+            for x in a[0]..=b[0] {
+                for y in a[1]..=b[1] {
+                    for z in a[2]..=b[2] {
+                        grid.entry([x, y, z]).or_default().push(t);
+                    }
+                }
+            }
+        }
+        for slave in (0..skins.len()).filter(|&s| s != master) {
+            let mut seen = std::collections::BTreeSet::new();
+            let mut tied = 0;
+            for f in &skins[slave] {
+                for &v in f {
+                    if !seen.insert(v) {
+                        continue;
+                    }
+                    let p = out.nodes[v as usize];
+                    let Some(list) = grid.get(&key(p)) else {
+                        continue;
+                    };
+                    let best = list
+                        .iter()
+                        .map(|&t| {
+                            let m = skins[master][t];
+                            let corners = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
+                            let (d, l) = closest_on_triangle(p, corners);
+                            (d, t, l)
+                        })
+                        .min_by(|a, b| a.0.total_cmp(&b.0));
+                    if let Some((d, t, l)) = best
+                        && d <= gap
+                    {
+                        let shape = triangle_shape(l);
+                        out.ties.push(Tie {
+                            slave: v,
+                            masters: skins[master][t],
+                            weights: shape,
+                        });
+                        tied += 1;
+                    }
+                }
+            }
+            if tied > 0 && master < slave {
+                out.bonds.push((master, slave, tied));
+            }
+        }
+    }
+    out
 }

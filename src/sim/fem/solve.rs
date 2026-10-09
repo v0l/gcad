@@ -40,10 +40,23 @@ pub fn invert(m: &Block) -> Block {
 
 impl Blocks {
     pub fn pattern<const K: usize>(nodes: usize, elements: &[[u32; K]]) -> Blocks {
+        Blocks::pattern_with(nodes, elements, &[])
+    }
+
+    pub fn pattern_with<const K: usize>(
+        nodes: usize,
+        elements: &[[u32; K]],
+        groups: &[[u32; 7]],
+    ) -> Blocks {
         let mut neighbours: Vec<Vec<u32>> = vec![Vec::new(); nodes];
         for element in elements {
             for &a in element {
                 neighbours[a as usize].extend_from_slice(element);
+            }
+        }
+        for group in groups {
+            for &a in group {
+                neighbours[a as usize].extend_from_slice(group);
             }
         }
         let mut starts = Vec::with_capacity(nodes + 1);

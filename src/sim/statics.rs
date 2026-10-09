@@ -6,38 +6,105 @@ use crate::model::Mechanics;
 use anyhow::{Result, bail};
 use monstertruck::modeling::*;
 
+pub struct Part {
+    pub name: String,
+    pub material: String,
+    pub mechanics: Mechanics,
+    pub density: f64,
+}
+
 pub struct Prepared {
     pub mesh: Quadratic,
-    pub mechanics: Mechanics,
-    pub name: String,
-    pub density: f64,
+    pub parts: Vec<Part>,
+}
+
+impl Prepared {
+    pub fn elastic(&self) -> Result<Vec<(f64, f64)>> {
+        self.parts
+            .iter()
+            .map(|p| match (p.mechanics.young, p.mechanics.poisson) {
+                (Some(e), Some(nu)) => Ok((e * 1000.0, nu)),
+                _ => bail!(
+                    "`{}` is {}, which has no stiffness; give it `E=` (GPa) and `nu=` on its `material` line",
+                    p.name,
+                    p.material
+                ),
+            })
+            .collect()
+    }
+
+    pub fn conductivity(&self) -> Result<Vec<f64>> {
+        self.parts
+            .iter()
+            .map(|p| match p.mechanics.conductivity {
+                Some(k) => Ok(k),
+                None => bail!(
+                    "`{}` is {}, which has no conductivity; give it `k=` (W/m·K) on its `material` line",
+                    p.name,
+                    p.material
+                ),
+            })
+            .collect()
+    }
+
+    pub fn bonds(&self) -> Option<String> {
+        let pairs: Vec<String> = self
+            .mesh
+            .bonds
+            .iter()
+            .map(|(a, b, n)| {
+                format!(
+                    "{} to {} at {n} nodes",
+                    self.parts[*a].name, self.parts[*b].name
+                )
+            })
+            .collect();
+        (!pairs.is_empty()).then(|| format!("bonded {}", pairs.join(", ")))
+    }
 }
 
 pub fn prepare(spec: &Spec) -> Result<Prepared> {
     let model = spec.target()?;
-    if model.assembly {
-        bail!(
-            "`sim {}` works on a part (.gcad) file for now",
-            spec.kind.map_or("", |k| k.name())
-        );
-    }
-    let Some(solid) = model.solid.as_ref() else {
-        bail!("the part has no solid");
-    };
-    let body = model.current_body();
-    let Some(material) = model.materials.get(&body) else {
-        bail!(
-            "give the part a material, like `material aluminium`, so it has a stiffness and conductivity"
-        );
-    };
     let size = super::mesh::size(spec)?;
-    let tets = super::tet::mesh_solid(solid, size)?;
-    Ok(Prepared {
-        mesh: Quadratic::from(&tets),
-        mechanics: material.mechanics,
-        name: material.name.clone(),
-        density: material.density,
-    })
+    let named = model.named_solids();
+    if named.is_empty() {
+        bail!("the part has no solid");
+    }
+    let mut parts = Vec::new();
+    for (name, _) in &named {
+        let Some(material) = model.materials.get(name) else {
+            bail!(
+                "give `{name}` a material, like `material aluminium`, so it has a stiffness and conductivity"
+            );
+        };
+        parts.push(Part {
+            name: name.clone(),
+            material: material.name.clone(),
+            mechanics: material.mechanics,
+            density: material.density,
+        });
+    }
+    use rayon::prelude::*;
+    let meshes: Vec<(String, Quadratic)> = named
+        .par_iter()
+        .map(|(name, solid)| {
+            let tets = super::tet::mesh_solid(solid, size)?;
+            Ok((name.clone(), Quadratic::from(&tets)))
+        })
+        .collect::<Result<_>>()?;
+    let mesh = if meshes.len() == 1 {
+        meshes
+            .into_iter()
+            .next()
+            .map(|(n, mut q)| {
+                q.bodies = vec![n];
+                q
+            })
+            .expect("one mesh")
+    } else {
+        super::fem::merge(meshes, size * 0.1)
+    };
+    Ok(Prepared { mesh, parts })
 }
 
 pub fn at(p: Point3) -> String {
@@ -52,19 +119,17 @@ pub fn at(p: Point3) -> String {
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
     let mesh = &prepared.mesh;
-    let m = prepared.mechanics;
-    let (Some(young), Some(poisson)) = (m.young, m.poisson) else {
-        bail!(
-            "`{}` has no stiffness; give it `E=` (GPa) and `nu=` on its `material` line",
-            prepared.name
-        );
-    };
-    let young = young * 1000.0;
-    let body_force = spec.gravity.map(|g| g * (prepared.density * 1.0e-6));
+    let materials = prepared.elastic()?;
+    let body_force = spec.gravity.map(|g| {
+        prepared
+            .parts
+            .iter()
+            .map(|p| g * (p.density * 1.0e-6))
+            .collect()
+    });
     let answer = solve(&Problem {
         mesh,
-        young,
-        poisson,
+        materials: &materials,
         supports: &spec.supports,
         loads: &spec.loads,
         body_force,
@@ -100,14 +165,34 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         unit: "mm".into(),
         at: at(mesh.nodes[where_moved]),
     });
-    if let Some(strength) = m.strength
+    let mut peaks = vec![0.0f64; prepared.parts.len()];
+    for (t, tet) in mesh.tets.iter().enumerate() {
+        let b = mesh.body[t] as usize;
+        for &v in tet {
+            peaks[b] = peaks[b].max(answer.von_mises[v as usize]);
+        }
+    }
+    let safety = prepared
+        .parts
+        .iter()
+        .zip(&peaks)
+        .filter_map(|(p, &peak)| Some((p.mechanics.strength? / peak.max(1.0e-300), p)))
+        .min_by(|a, b| a.0.total_cmp(&b.0));
+    if let Some((factor, part)) = safety
         && peak > 0.0
     {
         readings.push(Reading {
             name: "safety".into(),
-            value: strength / peak,
+            value: factor,
             unit: "".into(),
-            at: format!("yield {} MPa over the peak stress", short(strength)),
+            at: if prepared.parts.len() > 1 {
+                format!("in `{}`, yield over its peak stress", part.name)
+            } else {
+                format!(
+                    "yield {} MPa over the peak stress",
+                    short(part.mechanics.strength.unwrap_or_default())
+                )
+            },
         });
     }
     for (label, force) in &answer.reactions {
@@ -159,7 +244,10 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     notes.push(
         "peak stresses at sharp inside corners and at the edges of fixed faces keep rising as the mesh gets finer; `probe` a point away from them to read the stress there".into(),
     );
-    if m.printed {
+    if let Some(bonds) = prepared.bonds() {
+        notes.push(bonds);
+    }
+    if prepared.parts.iter().any(|p| p.mechanics.printed) {
         notes.push("printed-part stiffness and strength, along the layers".into());
     }
     let applied = answer.applied;

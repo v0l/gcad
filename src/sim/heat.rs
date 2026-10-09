@@ -8,13 +8,8 @@ use anyhow::{Result, bail};
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
     let mesh = &prepared.mesh;
-    let Some(conductivity) = prepared.mechanics.conductivity else {
-        bail!(
-            "`{}` has no conductivity; give it `k=` (W/m·K) on its `material` line",
-            prepared.name
-        );
-    };
-    let answer = solve(mesh, conductivity, &spec.thermal, spec.source)?;
+    let conductivity = prepared.conductivity()?;
+    let answer = solve(mesh, &conductivity, &spec.thermal, spec.source)?;
     let t = &answer.temperature;
     let (hot, hottest) =
         t.iter().enumerate().fold(
@@ -69,7 +64,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         .sum::<f64>()
         + spec.source;
     let out: f64 = answer.leaving.iter().map(|(_, w)| w).sum();
-    let notes = vec![
+    let mut notes = vec![
         format!(
             "{} nodes, {} quadratic tetrahedra; {} W goes in from sources and {} W leaves through the boundaries",
             mesh.nodes.len(),
@@ -79,6 +74,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         ),
         "steady state, conduction only inside the part".into(),
     ];
+    if let Some(bonds) = prepared.bonds() {
+        notes.push(bonds);
+    }
     Ok(Outcome {
         kind: "thermal".into(),
         readings,

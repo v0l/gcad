@@ -322,7 +322,7 @@ fn about(point: Point3, linear: Matrix3) -> Matrix4 {
 }
 
 impl Model {
-    fn reference(&self, text: &str) -> Result<(String, Solid, Vec<usize>)> {
+    pub(crate) fn reference(&self, text: &str) -> Result<(String, Solid, Vec<usize>)> {
         let (part, selector) = text.split_once(':').ok_or_else(|| {
             anyhow!("write `part:faces`, like `case.main:pilot.side`; `{text}` has no `:`")
         })?;

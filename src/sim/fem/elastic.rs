@@ -35,11 +35,10 @@ pub struct Load {
 
 pub struct Problem<'a> {
     pub mesh: &'a Quadratic,
-    pub young: f64,
-    pub poisson: f64,
+    pub materials: &'a [(f64, f64)],
     pub supports: &'a [Support],
     pub loads: &'a [Load],
-    pub body_force: Option<Vector3>,
+    pub body_force: Option<Vec<Vector3>>,
 }
 
 pub struct Answer {
@@ -82,15 +81,23 @@ fn element_matrix(points: &[Point3; 10], lambda: f64, mu: f64) -> Option<Vec<Blo
     Some(k)
 }
 
-pub fn assemble(mesh: &Quadratic, young: f64, poisson: f64) -> Result<Blocks> {
-    let (lambda, mu) = lame(young, poisson);
-    let mut blocks = Blocks::pattern(mesh.nodes.len(), &mesh.tets);
+pub fn spacing(mesh: &Quadratic) -> f64 {
+    (mesh.volume() / mesh.tets.len().max(1) as f64 * 6.0).cbrt()
+}
+
+pub fn assemble(mesh: &Quadratic, materials: &[(f64, f64)]) -> Result<Blocks> {
+    let constants: Vec<(f64, f64)> = materials.iter().map(|&(e, nu)| lame(e, nu)).collect();
+    let groups: Vec<[u32; 7]> = mesh.ties.iter().map(|t| t.group()).collect();
+    let mut blocks = Blocks::pattern_with(mesh.nodes.len(), &mesh.tets, &groups);
     let batch = 4096;
     for start in (0..mesh.tets.len()).step_by(batch) {
         let end = (start + batch).min(mesh.tets.len());
         let matrices: Vec<Option<Vec<Block>>> = (start..end)
             .into_par_iter()
-            .map(|t| element_matrix(&mesh.points(t), lambda, mu))
+            .map(|t| {
+                let (lambda, mu) = constants[mesh.body[t] as usize];
+                element_matrix(&mesh.points(t), lambda, mu)
+            })
             .collect();
         for (t, matrix) in (start..end).zip(matrices) {
             let Some(matrix) = matrix else {
@@ -104,6 +111,23 @@ pub fn assemble(mesh: &Quadratic, young: f64, poisson: f64) -> Result<Blocks> {
                     for (x, y) in target.iter_mut().zip(&matrix[a * 10 + b]) {
                         *x += y;
                     }
+                }
+            }
+        }
+    }
+    if !mesh.ties.is_empty() {
+        let stiffest = materials.iter().map(|m| m.0).fold(0.0, f64::max);
+        let penalty = stiffest * spacing(mesh) * 1.0e3;
+        for tie in &mesh.ties {
+            let (nodes, c) = (tie.group(), tie.coefficients());
+            for a in 0..7 {
+                for b in 0..7 {
+                    let at = blocks.find(nodes[a], nodes[b]);
+                    let v = penalty * c[a] * c[b];
+                    let block = &mut blocks.values[at];
+                    block[0] += v;
+                    block[4] += v;
+                    block[8] += v;
                 }
             }
         }
@@ -162,8 +186,9 @@ pub fn loads(problem: &Problem) -> Result<Vec<f64>> {
             }
         }
     }
-    if let Some(b) = problem.body_force {
+    if let Some(forces) = &problem.body_force {
         for t in 0..mesh.tets.len() {
+            let b = forces[mesh.body[t] as usize];
             let points = mesh.points(t);
             for (l, w) in GAUSS {
                 if let Some(m) = map(&points, l) {
@@ -240,7 +265,7 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     if problem.supports.is_empty() {
         bail!("add a support, like `fix <X`, or the part is free to fly away");
     }
-    let stiffness = assemble(mesh, problem.young, problem.poisson)?;
+    let stiffness = assemble(mesh, problem.materials)?;
     let f = loads(problem)?;
     let (projectors, owner) = projectors(mesh, problem.supports);
     let solution = if mesh.nodes.len() * 3 <= DIRECT_LIMIT {
@@ -271,7 +296,7 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
         .chunks(3)
         .map(|c| Vector3::new(c[0], c[1], c[2]))
         .collect();
-    let von_mises = stresses(mesh, &displacement, problem.young, problem.poisson);
+    let von_mises = stresses(mesh, &displacement, problem.materials);
     Ok(Answer {
         displacement,
         von_mises,
@@ -299,11 +324,14 @@ pub fn von_mises_of(grad: [[f64; 3]; 3], lambda: f64, mu: f64) -> f64 {
         .sqrt()
 }
 
-pub fn stresses(mesh: &Quadratic, u: &[Vector3], young: f64, poisson: f64) -> Vec<f64> {
-    let (lambda, mu) = lame(young, poisson);
+pub fn stresses(mesh: &Quadratic, u: &[Vector3], materials: &[(f64, f64)]) -> Vec<f64> {
     let per: Vec<[f64; 10]> = (0..mesh.tets.len())
         .into_par_iter()
         .map(|t| {
+            let (lambda, mu) = lame(
+                materials[mesh.body[t] as usize].0,
+                materials[mesh.body[t] as usize].1,
+            );
             let points = mesh.points(t);
             let tet = mesh.tets[t];
             NODE_COORDS.map(|l| {

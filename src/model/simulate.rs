@@ -1,6 +1,7 @@
 use super::args::{Args, point3, positive};
 use super::{Model, load_model, posed};
 use crate::parse::Line;
+use crate::sim::fem::STRIDE;
 use crate::sim::fem::elastic::{Hold, Load, Push, Support};
 use crate::sim::fem::thermal::Boundary;
 use crate::sim::{Expect, Kind, Payload, Spec, Sweep};
@@ -165,19 +166,31 @@ impl Model {
 
     fn target_faces(&mut self, selector: &str) -> Result<Vec<usize>> {
         let target = self.target_mut()?;
-        if target.assembly {
-            bail!("faces of an assembly cannot be picked yet; simulate the part file");
-        }
-        let tolerance = target.tolerance();
-        let solid = target
-            .solid
-            .as_ref()
-            .ok_or_else(|| anyhow!("the part has no solid"))?;
-        let faces = crate::select::select_faces(selector, solid, &target.groups, tolerance)?;
+        let names: Vec<String> = target
+            .named_solids()
+            .into_iter()
+            .map(|(name, _)| name)
+            .collect();
+        let (body, faces) = if target.assembly || selector.contains(':') {
+            let (part, _, faces) = target.reference(selector)?;
+            (part, faces)
+        } else {
+            let tolerance = target.tolerance();
+            let solid = target
+                .solid
+                .as_ref()
+                .ok_or_else(|| anyhow!("the part has no solid"))?;
+            let faces = crate::select::select_faces(selector, solid, &target.groups, tolerance)?;
+            (target.current_body(), faces)
+        };
         if faces.is_empty() {
             bail!("`{selector}` picks no faces");
         }
-        Ok(faces)
+        let index = names
+            .iter()
+            .position(|n| *n == body)
+            .ok_or_else(|| anyhow!("no body called `{body}`"))?;
+        Ok(faces.into_iter().map(|f| index * STRIDE + f).collect())
     }
 
     fn boundary_label(&mut self, line: &Line) -> String {

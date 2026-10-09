@@ -363,7 +363,7 @@ expect shoulder<15 sun_s_turn<4
 | operation | arguments | does |
 |---|---|---|
 | `sim` | `kind` | what to simulate. Comes first. `torque`, `static`, `thermal` and `modal`. The last three mesh the part; `--dry-run` shows the mesh without solving |
-| `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line |
+| `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line. Every body of it is simulated |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
 | `gravity` | `x,y,z` | in m/s². A torque simulation uses `0,0,-9.81` unless given; a static one leaves the part's weight out unless this line is there |
@@ -399,7 +399,7 @@ result's sweeps: one panel per sweep and unit, each joint's load against the fir
 joint (the worst over the other joints when several are swept). The viewer shows the
 simulated part.
 
-`sim static` is linear elasticity on curved 10-node tetrahedra, for a part file's main body.
+`sim static` is linear elasticity on curved 10-node tetrahedra.
 Units are millimetres, newtons and MPa. It needs a material with a stiffness and at least one
 `fix` or `slide`. Its readings are `stress` (the peak von Mises stress and where),
 `displacement` (the largest movement and where), `safety` (yield strength over the peak
@@ -438,6 +438,13 @@ lines, from its stiffness and density. The readings `mode1`, `mode2`, ... are in
 the share of the part's mass that moves with it along x, y and z (the modes with a large share
 are the ones a shaker or a motor along that axis excites). With no supports the six rigid-body
 modes at 0 Hz are left out. `render` draws the first mode's shape.
+
+`static`, `thermal` and `modal` take an assembly too. Each part is meshed on its own, in its
+own material, and parts whose faces touch (closer than a tenth of the mesh size) are bonded
+there, as if glued: no sliding, no gaps, heat passes freely. Pick faces as `part:faces`, like
+`fix base:<Z` or `load arm:tip.end force=0,0,-50`. A note lists which parts were bonded and over
+how many nodes. Stresses right at a bond between different materials are a corner singularity
+like a sharp inside corner.
 
 For any of the three, `gcad sim file.gsim --dry-run` meshes every body of the
 part into tetrahedra and reports the node and element counts, how far the mesh volume is from

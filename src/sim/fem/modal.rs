@@ -34,11 +34,13 @@ pub const MASS_RULE: [([f64; 4], f64); 14] = {
     ]
 };
 
-pub fn mass(mesh: &Quadratic, density: f64) -> Blocks {
-    let mut blocks = Blocks::pattern(mesh.nodes.len(), &mesh.tets);
+pub fn mass(mesh: &Quadratic, densities: &[f64]) -> Blocks {
+    let groups: Vec<[u32; 7]> = mesh.ties.iter().map(|t| t.group()).collect();
+    let mut blocks = Blocks::pattern_with(mesh.nodes.len(), &mesh.tets, &groups);
     let locals: Vec<[[f64; 10]; 10]> = (0..mesh.tets.len())
         .into_par_iter()
         .map(|t| {
+            let density = densities[mesh.body[t] as usize];
             let points = mesh.points(t);
             let mut local = [[0.0; 10]; 10];
             for (l, w) in MASS_RULE {
@@ -199,15 +201,14 @@ fn ritz(k: &[Vec<f64>], m: &[Vec<f64>]) -> Option<(Vec<f64>, Vec<Vec<f64>>)> {
 
 pub fn solve(
     mesh: &Quadratic,
-    young: f64,
-    poisson: f64,
-    density: f64,
+    materials: &[(f64, f64)],
+    densities: &[f64],
     supports: &[Support],
     wanted: usize,
 ) -> Result<Modes> {
     use faer::linalg::solvers::Solve;
-    let stiffness = assemble(mesh, young, poisson)?;
-    let mass = mass(mesh, density);
+    let stiffness = assemble(mesh, materials)?;
+    let mass = mass(mesh, densities);
     let (projectors, _) = projectors(mesh, supports);
     let reduced = Reduced::new(&projectors);
     let n = reduced.count;
