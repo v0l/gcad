@@ -278,7 +278,7 @@ pub fn surface_mesh(solid: &Solid, size: f64) -> Result<SurfaceMesh> {
             faces.len()
         );
     }
-    let least = (size / 64.0).max(diameter * 1.0e-4);
+    let least = (size / 16.0).max(diameter * 1.0e-4);
     let mut seen = HashSet::default();
     let mut curves: Vec<(Vec<Point3>, [Point3; 2])> = Vec::new();
     for shell in solid.boundaries() {

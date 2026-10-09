@@ -100,7 +100,10 @@ Tetrahedra that follow the surface, written in Rust (`src/sim/tet/`). Built in p
    to find wall thickness and gaps, and every B-rep edge is measured against the edges near
    it. Curved faces ask for an element per radian of turn, from the surface normals at each
    triangle's corners. Where any of these is below the target, the surface is meshed again
-   finer there, grading back up at 0.3 of the distance. The second pass is seeded by
+   finer there, grading back up at 0.3 of the distance, but never below a sixteenth of the
+   target: threads and small gear teeth come out coarse rather than dragging the whole part
+   down to their scale (a sixty-fourth made the forearm 940,000 nodes instead of 440,000); a
+   smaller `mesh` resolves them. The second pass is seeded by
    splitting the first pass's triangles across their longest edge only: splitting into four
    made a thin strip face (a gear tooth flank) as fine across its width as along its length,
    and the ring gear robot parts took two minutes or more to mesh. They now take 6 to 13 s.

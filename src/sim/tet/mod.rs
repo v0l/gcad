@@ -173,7 +173,7 @@ pub fn mesh_solid(solid: &Solid, size: f64) -> Result<TetMesh> {
     let mut skin = Skin::new(&surface, &id);
     dt.constrained = skin.index.keys().copied().collect();
     classify(&mut dt)?;
-    let least = (size / 64.0).max(span * 1.0e-4);
+    let least = (size / 16.0).max(span * 1.0e-4);
     let limit = size * 0.75;
     let bad = |dt: &Delaunay, t: usize| -> bool {
         if dt.dead[t] || !dt.inside[t] {
