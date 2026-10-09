@@ -1,0 +1,6 @@
+sim torque
+part arm.gasm
+payload hand 300
+sweep shoulder elbow steps=12
+sweep wrist steps=12
+expect shoulder<15 sun_s_turn<4 sun_e_turn<1.2

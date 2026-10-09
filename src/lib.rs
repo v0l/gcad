@@ -5,6 +5,8 @@ pub mod geometry;
 pub mod model;
 pub mod offset;
 pub mod parse;
+pub mod plot;
 pub mod render;
 pub mod select;
+pub mod sim;
 pub mod view;

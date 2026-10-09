@@ -35,7 +35,8 @@ gcad check bracket.gsim           # also warns when the result is stale
 ```
 
 `bracket.result.json` holds the readings, the field at each mesh node, and a hash of the spec,
-every part file it read and the gcad version; a mismatch makes the result stale. The viewer
+every part file it read, the `--set` variables and the gcad version; a mismatch makes the
+result stale. The viewer
 opens a `.gsim` and colours the part by the field, with a slider for mode shapes and deflection
 scale.
 
@@ -138,7 +139,7 @@ the closed form.
 
 ## Phases
 
-1. Spec files, results, staleness, the field render, and the material properties. `torque`.
+1. Spec files, results, staleness, charts, the material properties, and `torque`. Done.
 2. The tetrahedral mesher and `--dry-run`.
 3. `static` on the CPU, checked against the closed forms, then on the GPU.
 4. `thermal`.

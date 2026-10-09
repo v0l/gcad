@@ -1,6 +1,6 @@
 ---
 name: gcad
-description: Model mechanical parts and assemblies with gcad, a parametric CAD where every line of a `.gcad` part file or `.gasm` assembly file is one operation, like G-code, checked by the `gcad` CLI. Any design with more than one part is a `.gasm` assembly. Use when writing or editing `*.gcad` or `*.gasm` files, sketching and extruding parts, adding holes, fillets, shells, gears or text, picking faces with selectors, placing parts with mates, joints, couples and patterns, checking interference, posing an assembly, or exporting STEP, STL, 3MF, SVG drawings and a bill of materials.
+description: Model mechanical parts and assemblies with gcad, a parametric CAD where every line of a `.gcad` part file or `.gasm` assembly file is one operation, like G-code, checked by the `gcad` CLI. Any design with more than one part is a `.gasm` assembly. Use when writing or editing `*.gcad`, `*.gasm` or `*.gsim` files, sketching and extruding parts, adding holes, fillets, shells, gears or text, picking faces with selectors, placing parts with mates, joints, couples and patterns, checking interference, posing an assembly, sizing joint motors with a `.gsim` torque simulation, or exporting STEP, STL, 3MF, SVG drawings and a bill of materials.
 ---
 
 # gcad
@@ -182,6 +182,27 @@ tube, one body per straight run; also `bar`, `pipe DxT`, `rod D`, `angle`, `chan
 `gcad bom` turns them into a cut list. `up=`, `rotate=` and `offset=u,v` set how the profile
 sits on the path.
 
+## Simulations
+
+A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`. It prints
+readings, writes `x.result.json`, and fails when an `expect` line does not hold. Only
+`sim torque` exists so far; `static`, `thermal` and `modal` are planned in `docs/simulation.md`.
+
+```
+sim torque
+part arm.gasm
+payload hand 300
+sweep shoulder elbow steps=12
+expect shoulder<15 sun_s_turn<4
+```
+
+A payload is in grams, at the part's centre of mass unless `at=x,y,z`. Several joints on one
+`sweep` make a grid of poses. Every moving joint gets a reading: the worst holding torque (N·m) or force (N) against
+gravity and where it happened. Couples pass the load on, so a sun gear driven by a joint
+at `ratio=4` reads a quarter of it: that is the motor's torque. Parts need a `material` to
+weigh anything. `gcad check x.gsim` says when the result is stale and `gcad render x.gsim
+x.png` plots the sweeps. Materials also carry `E= nu= yield= k= alpha=`.
+
 ## Output
 
 ```sh
@@ -227,4 +248,4 @@ gcad bom asm.gasm --csv
 - `examples/robot/arm.gasm`: a 34-part robot arm. Every joint is a motor on its axis driving a
   planetary reducer whose ring is cut into the housing; suns and planets are coupled at their
   ratios and the planets are patterned. The gripper is two racks on one pinion. Copy its
-  patterns before inventing new ones.
+  patterns before inventing new ones. `examples/robot/arm.gsim` sizes its motors.

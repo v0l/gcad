@@ -18,6 +18,7 @@ mod pattern;
 mod rib;
 mod round;
 mod sheet;
+mod simulate;
 mod sketch;
 mod skin;
 mod solids;
@@ -111,6 +112,7 @@ pub struct Model {
     pub hole_notes: Vec<HoleNote>,
     pub sheet: Option<sheet::Sheet>,
     pub members: Vec<String>,
+    pub sim: Option<Box<crate::sim::Spec>>,
 }
 
 #[derive(Clone, Debug)]
@@ -303,6 +305,9 @@ impl Model {
     }
 
     pub fn apply(&mut self, line: &Line) -> Result<String> {
+        if self.sim.is_some() {
+            return self.apply_sim(line);
+        }
         if self.assembly {
             return self.apply_assembly(line);
         }
@@ -592,6 +597,9 @@ fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Mo
     model.fixed = vars.iter().cloned().collect();
     model.scope = model.fixed.clone();
     model.assembly = is_assembly(path);
+    if crate::sim::is_sim(path) {
+        model.sim = Some(Default::default());
+    }
     model.depth = depth;
     model
 }

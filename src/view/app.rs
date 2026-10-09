@@ -279,7 +279,8 @@ impl App {
                 && event.paths.iter().any(|p| {
                     p == &watched
                         || p.parent() == watched.parent()
-                            && p.extension().is_some_and(|e| e == "gcad" || e == "gasm")
+                            && p.extension()
+                                .is_some_and(|e| e == "gcad" || e == "gasm" || e == "gsim")
                 })
             {
                 let _ = tx.send(());
@@ -1504,8 +1505,9 @@ impl App {
                                     .is_some_and(|n| n.starts_with('.'));
                                 !hidden
                                     && (p.is_dir()
-                                        || p.extension()
-                                            .is_some_and(|e| e == "gcad" || e == "gasm"))
+                                        || p.extension().is_some_and(|e| {
+                                            e == "gcad" || e == "gasm" || e == "gsim"
+                                        }))
                             })
                             .map(|p| (p.is_dir(), p))
                             .collect()
@@ -1618,7 +1620,15 @@ impl Browser {
 }
 
 fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
-    let model = &snapshot.model;
+    let model = match snapshot
+        .model
+        .sim
+        .as_deref()
+        .and_then(|s| s.target.as_deref())
+    {
+        Some(target) => target,
+        None => &snapshot.model,
+    };
     if model.solids().is_empty() {
         return None;
     }

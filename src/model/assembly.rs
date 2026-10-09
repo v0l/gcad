@@ -182,6 +182,8 @@ pub struct Couple {
     pub offset: f64,
 }
 
+type PartKey = (String, std::path::PathBuf, Vec<(String, f64)>);
+
 pub type Settled =
     std::result::Result<(Vec<f64>, std::collections::HashMap<String, Matrix4>), String>;
 
@@ -633,7 +635,7 @@ impl Model {
         }
     }
 
-    fn part_key(&self, line: &Line) -> Result<(String, std::path::PathBuf, Vec<(String, f64)>)> {
+    fn part_key(&self, line: &Line) -> Result<PartKey> {
         let [_, file] = line.positional.as_slice() else {
             bail!("write `part name file.gcad [body=b] [variable=value ...]`");
         };
@@ -653,7 +655,7 @@ impl Model {
 
     pub(crate) fn prefetch(&self, lines: &[Line]) {
         let mut probe = self.clone();
-        let mut wanted: Vec<(String, std::path::PathBuf, Vec<(String, f64)>)> = Vec::new();
+        let mut wanted: Vec<PartKey> = Vec::new();
         for line in lines {
             let line = match line.op.as_str() {
                 "if" => match probe.guarded(line) {

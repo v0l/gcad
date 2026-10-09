@@ -275,3 +275,19 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | variables from outside the file | supported | `gcad check part.gcad --set w=20` | `inspect::outside_variables` |
 | include another file | supported | `include part.gcad d=10` | `inspect::include_file` |
 | conditional lines | supported | `if w>30 chamfer 1 edges` | `inspect::conditional` |
+
+## Simulation
+
+The plan for the rest is in `docs/simulation.md`.
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| joint torque against gravity | supported | `sim torque`, `part arm.gasm`, `sweep shoulder elbow steps=24` | `simulation::torque_of_a_pendulum`, `simulation::torque_needs_joints` |
+| torque through gears and racks | supported | a `couple` carries the load to the joint it drives | `simulation::torque_through_gears`, `simulation::robot_arm_motor_torque` |
+| payloads | supported | `payload hand 300 at=x,y,z` | `simulation::torque_of_a_pendulum`, `simulation::payload_follows_the_pose` |
+| expectations | supported | `expect shoulder<2 drive>0.5` | `simulation::torque_through_gears` |
+| stale results and charts | supported | `gcad check x.gsim`, `gcad render x.gsim x.png` | `simulation::result_goes_stale` |
+| stiffness, strength and conductivity | supported | `material pla`, `material delrin density=1.41 E=3.1 nu=0.35 yield=65` | `simulation::material_properties` |
+| static stress | missing | `sim static`, `fix faces`, `load faces force=x,y,z` | `simulation::cantilever_stress` |
+| steady heat | missing | `sim thermal`, `cold: temperature faces 20` | `simulation::conduction_through_a_wall` |
+| natural frequencies | missing | `sim modal`, `modes 3` | `simulation::cantilever_modes` |

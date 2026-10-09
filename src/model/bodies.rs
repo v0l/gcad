@@ -460,33 +460,59 @@ impl Model {
             self.body_name()
         };
         let wanted: &[&str] = if self.assembly { &["part"] } else { &[] };
-        let args = Args::new(line, wanted, &["density"], true)?;
+        let args = Args::new(
+            line,
+            wanted,
+            &["density", "E", "nu", "yield", "k", "alpha"],
+            true,
+        )?;
         let label = match args.rest.as_slice() {
             [] => None,
             [one] => Some(one.to_string()),
             _ => bail!("give one material name, like `material steel`"),
         };
-        let density = match (args.optional_number("density", &self.scope)?, &label) {
-            (Some(d), _) if d <= 0.0 => bail!("density must be above zero, not {d}"),
-            (Some(d), _) => d,
-            (None, Some(label)) => density_of(label).ok_or_else(|| {
-                anyhow!(
-                    "no density known for `{label}`; give `density=` in g/cm³, or use one of {}",
-                    MATERIALS
-                        .iter()
-                        .map(|(n, _)| *n)
-                        .collect::<Vec<_>>()
-                        .join(", ")
-                )
-            })?,
-            (None, None) => bail!("write `material steel` or `material name density=1.2`"),
+        let known = label.as_deref().and_then(stock_of);
+        let density = match (args.optional_number("density", &self.scope)?, known, &label) {
+            (Some(d), _, _) if d <= 0.0 => bail!("density must be above zero, not {d}"),
+            (Some(d), _, _) => d,
+            (None, Some(stock), _) => stock.density,
+            (None, None, Some(label)) => bail!(
+                "no density known for `{label}`; give `density=` in g/cm³, or use one of {}",
+                MATERIALS
+                    .iter()
+                    .map(|m| m.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            ),
+            (None, None, None) => bail!("write `material steel` or `material name density=1.2`"),
         };
+        let mut mechanics = known.map(Stock::mechanics).unwrap_or_default();
+        for (key, slot) in [
+            ("E", &mut mechanics.young),
+            ("nu", &mut mechanics.poisson),
+            ("yield", &mut mechanics.strength),
+            ("k", &mut mechanics.conductivity),
+            ("alpha", &mut mechanics.expansion),
+        ] {
+            if let Some(value) = args.optional_number(key, &self.scope)? {
+                let fine = if key == "nu" {
+                    (0.0..0.5).contains(&value)
+                } else {
+                    value > 0.0
+                };
+                if !fine {
+                    bail!("`{key}={value}` is out of range");
+                }
+                *slot = Some(value);
+            }
+        }
         let label = label.unwrap_or_else(|| format!("{density} g/cm³"));
         self.materials.insert(
             name.clone(),
             Material {
                 name: label.clone(),
                 density,
+                mechanics,
             },
         );
         Ok(format!("`{name}` is {label}, {density} g/cm³"))
@@ -830,29 +856,82 @@ fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSoli
 pub struct Material {
     pub name: String,
     pub density: f64,
+    pub mechanics: Mechanics,
 }
 
-pub const MATERIALS: &[(&str, f64)] = &[
-    ("steel", 7.85),
-    ("stainless", 8.0),
-    ("aluminium", 2.7),
-    ("aluminum", 2.7),
-    ("brass", 8.5),
-    ("copper", 8.96),
-    ("titanium", 4.43),
-    ("pla", 1.24),
-    ("petg", 1.27),
-    ("abs", 1.04),
-    ("asa", 1.07),
-    ("nylon", 1.14),
-    ("tpu", 1.21),
-    ("polycarbonate", 1.2),
-    ("acrylic", 1.18),
-    ("resin", 1.2),
-    ("wood", 0.6),
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Mechanics {
+    pub young: Option<f64>,
+    pub poisson: Option<f64>,
+    pub strength: Option<f64>,
+    pub conductivity: Option<f64>,
+    pub expansion: Option<f64>,
+    pub printed: bool,
+}
+
+pub struct Stock {
+    pub name: &'static str,
+    pub density: f64,
+    pub young: f64,
+    pub poisson: f64,
+    pub strength: f64,
+    pub conductivity: f64,
+    pub expansion: f64,
+    pub printed: bool,
+}
+
+const fn stock(
+    name: &'static str,
+    density: f64,
+    [young, poisson, strength, conductivity, expansion]: [f64; 5],
+    printed: bool,
+) -> Stock {
+    Stock {
+        name,
+        density,
+        young,
+        poisson,
+        strength,
+        conductivity,
+        expansion,
+        printed,
+    }
+}
+
+pub const MATERIALS: &[Stock] = &[
+    stock("steel", 7.85, [200.0, 0.29, 250.0, 50.0, 12.0], false),
+    stock("stainless", 8.0, [193.0, 0.29, 215.0, 16.0, 17.0], false),
+    stock("aluminium", 2.7, [69.0, 0.33, 240.0, 167.0, 23.6], false),
+    stock("aluminum", 2.7, [69.0, 0.33, 240.0, 167.0, 23.6], false),
+    stock("brass", 8.5, [97.0, 0.31, 124.0, 115.0, 20.5], false),
+    stock("copper", 8.96, [117.0, 0.34, 70.0, 390.0, 17.0], false),
+    stock("titanium", 4.43, [114.0, 0.34, 880.0, 6.7, 8.6], false),
+    stock("pla", 1.24, [2.8, 0.35, 40.0, 0.13, 68.0], true),
+    stock("petg", 1.27, [2.0, 0.38, 35.0, 0.2, 60.0], true),
+    stock("abs", 1.04, [2.0, 0.35, 30.0, 0.17, 90.0], true),
+    stock("asa", 1.07, [1.9, 0.35, 32.0, 0.17, 95.0], true),
+    stock("nylon", 1.14, [1.5, 0.39, 40.0, 0.25, 100.0], true),
+    stock("tpu", 1.21, [0.026, 0.48, 8.0, 0.2, 150.0], true),
+    stock("polycarbonate", 1.2, [2.3, 0.37, 60.0, 0.2, 68.0], false),
+    stock("acrylic", 1.18, [3.2, 0.37, 65.0, 0.19, 75.0], false),
+    stock("resin", 1.2, [2.2, 0.35, 50.0, 0.2, 80.0], false),
+    stock("wood", 0.6, [10.0, 0.3, 40.0, 0.12, 5.0], false),
 ];
 
-pub fn density_of(name: &str) -> Option<f64> {
+pub fn stock_of(name: &str) -> Option<&'static Stock> {
     let name = name.to_ascii_lowercase();
-    MATERIALS.iter().find(|(n, _)| *n == name).map(|(_, d)| *d)
+    MATERIALS.iter().find(|m| m.name == name)
+}
+
+impl Stock {
+    pub fn mechanics(&self) -> Mechanics {
+        Mechanics {
+            young: Some(self.young),
+            poisson: Some(self.poisson),
+            strength: Some(self.strength),
+            conductivity: Some(self.conductivity),
+            expansion: Some(self.expansion),
+            printed: self.printed,
+        }
+    }
 }

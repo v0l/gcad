@@ -51,6 +51,13 @@ enum Command {
         #[arg(long)]
         section: Option<gcad::drawing::Section>,
     },
+    /// Run a .gsim simulation, write NAME.result.json beside it and print the readings
+    Sim {
+        file: String,
+        /// Build the problem and print its size without solving it
+        #[arg(long)]
+        dry_run: bool,
+    },
     /// List the parts an assembly is made of, counted by file, body and variables
     Bom {
         file: String,
@@ -87,6 +94,10 @@ fn load(file: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<Run>
 fn finished(run: &Run) -> Result<()> {
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("line {}: {}: {error:#}", line.number, line.text);
+    }
+    if let Some(spec) = &run.model.sim {
+        spec.target()?;
+        return Ok(());
     }
     if run.model.solids().is_empty() {
         bail!("the file builds no solid");
@@ -139,8 +150,48 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
     }
     match run.steps.last() {
         Some((line, Err(_))) => bail!("stopped at line {}", line.number),
-        _ => finished(&run),
+        _ => finished(&run)?,
     }
+    if run.model.sim.is_some() {
+        let path = std::path::Path::new(file);
+        match gcad::sim::stale(path, vars) {
+            Some(why) => println!("note: {why}"),
+            None => println!("{} is up to date", gcad::sim::result_path(path).display()),
+        }
+    }
+    Ok(())
+}
+
+fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
+    let path = std::path::Path::new(file);
+    if !gcad::sim::is_sim(path) {
+        bail!("`gcad sim` runs a .gsim file");
+    }
+    let run = load(file, None, vars)?;
+    finished(&run)?;
+    let spec = run
+        .model
+        .sim
+        .as_deref()
+        .expect("a .gsim file runs as a simulation");
+    if dry_run {
+        println!("{}", gcad::sim::plan(spec)?);
+        return Ok(());
+    }
+    let outcome = gcad::sim::simulate(spec)?;
+    let stamp = gcad::sim::stamp(path, vars);
+    let out = gcad::sim::result_path(path);
+    std::fs::write(
+        &out,
+        serde_json::to_string_pretty(&outcome.to_json(&stamp))?,
+    )?;
+    print!("{}", outcome.table());
+    println!("wrote {}", out.display());
+    let failed = outcome.failed();
+    if !failed.is_empty() {
+        bail!("expectation not met: {}", failed.join("; "));
+    }
+    Ok(())
 }
 
 fn query(file: &str, selector: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<()> {
@@ -220,6 +271,7 @@ fn main() -> Result<()> {
             }
             export::export_model(&run.model, std::path::Path::new(&file), &output)
         }
+        Command::Sim { file, dry_run } => simulate(&file, &vars, dry_run),
         Command::Bom { file, csv } => {
             let run = load(&file, None, &vars)?;
             finished(&run)?;
@@ -236,6 +288,11 @@ fn main() -> Result<()> {
             output,
             explode,
         } => {
+            if gcad::sim::is_sim(std::path::Path::new(&file)) {
+                let outcome =
+                    gcad::sim::Outcome::read(&gcad::sim::result_path(std::path::Path::new(&file)))?;
+                return gcad::plot::chart(&outcome, &output);
+            }
             let run = load(&file, None, &vars)?;
             finished(&run)?;
             let parts = run.model.exploded_parts(if explode { 1.0 } else { 0.0 });

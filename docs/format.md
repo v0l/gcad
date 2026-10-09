@@ -197,7 +197,7 @@ Bodies:
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
 | `import` | `file.step` or `file.stl`, `solid=` | adds the solid in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file. A STEP file with several solids needs `solid=n` to pick one; the error lists them with their names and sizes. A STEP assembly's solids come where the file places them, a part used six times being six solids |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
-| `material` | `name` `density=` | sets what the current body is made of, for its mass. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood. `density=` in g/cm³ gives any other |
+| `material` | `name` `density=` `E=` `nu=` `yield=` `k=` `alpha=` | sets what the current body is made of, for its mass and for simulations. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood (their properties are under Simulations). `density=` in g/cm³ gives any other; the rest set stiffness in GPa, Poisson's ratio, yield strength in MPa, conductivity in W/m·K and expansion in µm/m·K |
 
 Measuring, which changes nothing and prints the answer:
 
@@ -343,6 +343,77 @@ each item in the iso view.
 reaches the assembly's own variables. The viewer rebuilds when any part file next to
 the assembly is saved.
 
+## Simulations
+
+A `.gsim` file describes one simulation of a part or assembly, one operation per line
+like the other files, with `let`, `if` and `include` as usual. `gcad sim file.gsim` runs it,
+prints the readings, and writes them to `file.result.json` beside it. It fails if an
+`expect` line does not hold. `--dry-run` reports the size of the problem without solving it.
+
+```
+sim torque
+part arm.gasm grip=60
+pose elbow -40
+payload hand 300 at=420,0,200
+sweep shoulder elbow steps=16
+sweep wrist
+expect shoulder<15 sun_s_turn<4
+```
+
+| operation | arguments | does |
+|---|---|---|
+| `sim` | `kind` | what to simulate. Comes first. `torque` works today; `static`, `thermal` and `modal` are planned (`docs/simulation.md`) |
+| `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line |
+| `pose` | `joint value` | poses a joint before the run, as in an assembly |
+| `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
+| `gravity` | `x,y,z` | in m/s², `0,0,-9.81` unless given |
+| `payload` | `part grams` `at=x,y,z` | a point mass carried by a part, at its centre of mass unless `at=` places it (in the assembly's coordinates as posed when the line runs). It moves with the part |
+| `sweep` | `joint ... steps=` | runs every pose of the listed joints across their ranges in `steps` (24 unless given) equal steps; a joint that turns all the way round goes from -180 to 180. Several joints on one line make a grid of poses; separate lines make separate sweeps |
+| `expect` | `reading<limit ...` or `reading>limit` | a check on a reading, by name. `gcad sim` fails when one does not hold |
+
+`sim torque` works out the load each joint of an assembly must hold against gravity and
+payloads, from the mass and centre of mass of every part with a `material`, at the posed
+position and at every pose of every `sweep`. Each moving joint gets a reading named after
+it: the largest torque (N·m, for `turn`) or force (N, for `slide`) seen and the pose
+where it was seen. Couples carry the load: a joint driven by another through
+`couple ... ratio=r` holds the driver's load divided by `r`, so a motor's sun gear reads
+the torque the motor needs. Joints that would read the same as another, like the copies a
+`pattern` makes, are listed in a note instead, and their names still work in `expect`.
+Parts with no material weigh nothing, and a note lists them.
+
+`gcad check file.gsim` runs the lines and says whether `file.result.json` is up to date.
+A result is stale when the spec, any file it reads, the `--set` variables or the gcad
+version changed since it was written. `gcad render file.gsim file.png` plots the
+result's sweeps: one panel per sweep and unit, each joint's load against the first swept
+joint (the worst over the other joints when several are swept). The viewer shows the
+simulated part.
+
+The material names know their stiffness, strength and conductivity as well as their
+density:
+
+| material | E GPa | ν | yield MPa | k W/m·K | α µm/m·K |
+|---|---|---|---|---|---|
+| steel | 200 | 0.29 | 250 | 50 | 12 |
+| stainless | 193 | 0.29 | 215 | 16 | 17 |
+| aluminium | 69 | 0.33 | 240 | 167 | 23.6 |
+| brass | 97 | 0.31 | 124 | 115 | 20.5 |
+| copper | 117 | 0.34 | 70 | 390 | 17 |
+| titanium | 114 | 0.34 | 880 | 6.7 | 8.6 |
+| pla (printed) | 2.8 | 0.35 | 40 | 0.13 | 68 |
+| petg (printed) | 2 | 0.38 | 35 | 0.2 | 60 |
+| abs (printed) | 2 | 0.35 | 30 | 0.17 | 90 |
+| asa (printed) | 1.9 | 0.35 | 32 | 0.17 | 95 |
+| nylon (printed) | 1.5 | 0.39 | 40 | 0.25 | 100 |
+| tpu (printed) | 0.026 | 0.48 | 8 | 0.2 | 150 |
+| polycarbonate | 2.3 | 0.37 | 60 | 0.2 | 68 |
+| acrylic | 3.2 | 0.37 | 65 | 0.19 | 75 |
+| resin | 2.2 | 0.35 | 50 | 0.2 | 80 |
+| wood | 10 | 0.3 | 40 | 0.12 | 5 |
+
+Printed plastics carry printed-part values, lower than moulded ones, along the layers;
+across the layers they are weaker again. Wood is along the grain. `material name E= nu= yield= k= alpha=` sets
+any of them, for a listed material or a new one.
+
 ## Workplanes
 
 `XY` has normal +Z, `XZ` has normal -Y with y up, `YZ` has normal +X with y up.
@@ -406,6 +477,8 @@ gcad export part.gcad part.step       # or .stl, .obj, .3mf, .svg (a four-view d
 gcad export part.gcad part.svg --section y=0   # adds a hatched section across y=0
 gcad check part.gcad --set w=50       # override a `let` variable
 gcad check part.gcad --time           # also show how long each line took
+gcad sim arm.gsim                     # run a simulation, write arm.result.json
+gcad render arm.gsim arm.png          # plot a simulation's sweeps
 gcad docs                             # print this reference
 gcad part.gcad                        # open the viewer; plain `gcad` starts with a file picker
 gcad view part.gcad [--line N] [--select 'base.end&base.side']
