@@ -665,3 +665,67 @@ pub fn direct(a: &Blocks, b: &[f64], projectors: &[Block]) -> Result<Solution, S
         residual: dot(&r, &r).sqrt() / norm,
     })
 }
+
+pub enum Factored<'a> {
+    Direct {
+        reduced: Reduced,
+        llt: faer::sparse::linalg::solvers::Llt<usize, f64>,
+    },
+    Iterative {
+        a: &'a Blocks,
+        projectors: &'a [Block],
+        level: TwoLevel<'a>,
+    },
+}
+
+impl<'a> Factored<'a> {
+    pub fn new(
+        a: &'a Blocks,
+        projectors: &'a [Block],
+        coarse: &'a Coarse,
+        direct_up_to: usize,
+    ) -> Result<Self, String> {
+        if a.nodes() * 3 <= direct_up_to {
+            let reduced = Reduced::new(projectors);
+            let llt = reduced.factor(&reduced.lower(a, None))?;
+            Ok(Factored::Direct { reduced, llt })
+        } else {
+            Ok(Factored::Iterative {
+                a,
+                projectors,
+                level: TwoLevel::new(a, projectors, coarse)?,
+            })
+        }
+    }
+
+    pub fn solve(&self, b: &[f64]) -> Solution {
+        use faer::linalg::solvers::Solve;
+        match self {
+            Factored::Direct { reduced, llt } => {
+                let rhs = reduced.restrict(b);
+                let solved = llt.solve(faer::Mat::<f64>::from_fn(reduced.count, 1, |i, _| rhs[i]));
+                Solution {
+                    x: reduced.expand(
+                        &(0..reduced.count)
+                            .map(|i| solved[(i, 0)])
+                            .collect::<Vec<_>>(),
+                    ),
+                    iterations: 1,
+                    residual: 0.0,
+                }
+            }
+            Factored::Iterative {
+                a,
+                projectors,
+                level,
+            } => preconditioned(
+                a,
+                b,
+                projectors,
+                1.0e-10,
+                3000,
+                &|r: &[f64], z: &mut [f64]| level.apply(r, z),
+            ),
+        }
+    }
+}

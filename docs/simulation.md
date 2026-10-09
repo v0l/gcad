@@ -195,7 +195,16 @@ master face's normal, switched on where they press and off where they would pull
 until the set settles. Checked with two blocks heated (they press, as if bonded) and cooled
 (they part, stress free).
 
-Still to build: friction.
+`friction=`: Coulomb friction on the same ties, solved as a sequence of Tresca problems. With
+each tie's slip limit held at the friction coefficient times its pressing gap, the tangential
+spring becomes a Huber function (quadratic while it sticks, linear once it slips), so the
+problem has a convex energy; Newton with an energy line search solves it, then the limits are
+updated from the new pressures until they stop changing. Two shortcuts both failed: dropping
+the slipping springs and pushing back with a fixed force diverged, and a secant spring took
+hundreds of solves near the limit. The tangent along the slip direction is 1e-8 of the penalty:
+1e-4 or more stalled the Newton steps. A part that slides shows as displacement growing past a
+thousand times the bonded answer. Two blocks pressed with 1000 N and friction 0.3 hold 297 N
+sideways in about 40 solves and give way at 303 N.
 
 ## Tests
 

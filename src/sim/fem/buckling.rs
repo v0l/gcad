@@ -1,4 +1,4 @@
-use super::elastic::{Problem, assemble, lame, projectors, solve as solve_static};
+use super::elastic::{Problem, assemble_bonded, lame, projectors, solve as solve_static};
 use super::modal::ritz;
 use super::solve::{Blocks, Reduced, TwoLevel};
 use super::{GAUSS, Quadratic, map};
@@ -85,7 +85,7 @@ fn geometric(
 pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
     let mesh = problem.mesh;
     let answer = solve_static(problem)?;
-    let stiffness = assemble(mesh, problem.materials)?;
+    let stiffness = assemble_bonded(mesh, problem.materials)?;
     let geometry = geometric(
         mesh,
         problem.materials,

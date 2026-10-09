@@ -200,8 +200,16 @@ impl Model {
                 }
             }
             "contact" => {
-                let args = Args::new(line, &["a", "b"], &[], false)?;
+                let args = Args::new(line, &["a", "b"], &["friction"], false)?;
                 let (a, b) = (args.text("a")?.to_string(), args.text("b")?.to_string());
+                let friction = args
+                    .optional_number("friction", &self.scope)?
+                    .unwrap_or(0.0);
+                if !(0.0..=2.0).contains(&friction) {
+                    bail!(
+                        "`friction` is a coefficient from 0 to 2, like 0.3 for dry steel on steel"
+                    );
+                }
                 let names: Vec<String> = self
                     .target_mut()?
                     .named_solids()
@@ -213,10 +221,16 @@ impl Model {
                         bail!("no part called `{part}`; parts are {names:?}");
                     }
                 }
-                self.spec().contacts.push((a.clone(), b.clone()));
-                Ok(format!(
-                    "`{a}` and `{b}` press on each other where they touch but can slide and part"
-                ))
+                self.spec().contacts.push((a.clone(), b.clone(), friction));
+                Ok(if friction > 0.0 {
+                    format!(
+                        "`{a}` and `{b}` press on each other where they touch, slide once the sideways force passes {friction} times the pressing force, and part"
+                    )
+                } else {
+                    format!(
+                        "`{a}` and `{b}` press on each other where they touch but can slide and part"
+                    )
+                })
             }
             "source" => {
                 let args = Args::new(line, &["watts"], &[], false)?;

@@ -749,6 +749,71 @@ fn mesh_convergence_check() {
 }
 
 #[test]
+fn friction_holds_until_it_slides() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
+    let run = |name: &str, push: f64, extra: &str| {
+        written(
+            name,
+            &[("block.gcad", SLAB), ("stack.gasm", stack)],
+            &format!(
+                "sim static\npart stack.gasm\nfix a:<Z\nload b:>Z force={push},0,-1000\n{extra}\nlow: probe 0,0,5\nmesh 4"
+            ),
+        )
+    };
+    let bonded = gcad::sim::simulate(
+        spec_of(&run("friction_bonded", 270.0, ""))
+            .sim
+            .as_deref()
+            .expect("sim"),
+    )
+    .expect("bonded solves");
+    let held = gcad::sim::simulate(
+        spec_of(&run("friction_held", 270.0, "contact a b friction=0.3"))
+            .sim
+            .as_deref()
+            .expect("sim"),
+    )
+    .expect("friction holds 0.9 of its limit");
+    close(
+        reading(&held, "low.stress"),
+        reading(&bonded, "low.stress"),
+        0.02,
+    );
+    assert!(
+        held.notes.iter().any(|n| n.contains("slipping")),
+        "{}",
+        held.table()
+    );
+    let error = gcad::sim::simulate(
+        spec_of(&run("friction_slides", 330.0, "contact a b friction=0.3"))
+            .sim
+            .as_deref()
+            .expect("sim"),
+    )
+    .expect_err("friction gives way above its limit");
+    assert!(format!("{error}").contains("slide"), "{error}");
+}
+
+#[test]
+fn contact_vibrates_as_bonded() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
+    let run = |name: &str, extra: &str| {
+        simulated(
+            name,
+            &[("block.gcad", SLAB), ("stack.gasm", stack)],
+            &format!("sim modal\npart stack.gasm\nfix a:<Z\nmodes 1\n{extra}\nmesh 4"),
+        )
+    };
+    let bonded = run("modes_bonded", "");
+    let touching = run("modes_touching", "contact a b");
+    close(
+        reading(&touching, "mode1"),
+        reading(&bonded, "mode1"),
+        1.0e-9,
+    );
+}
+
+#[test]
 fn bonded_parts_carry_load() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(

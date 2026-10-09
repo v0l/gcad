@@ -1,6 +1,6 @@
 #![allow(clippy::needless_range_loop)]
 
-use super::elastic::{Support, assemble, projectors};
+use super::elastic::{Support, assemble_bonded, projectors};
 use super::solve::{Blocks, Reduced, TwoLevel};
 use super::{Quadratic, map, shape};
 use anyhow::{Result, anyhow};
@@ -209,7 +209,7 @@ pub fn solve(
     supports: &[Support],
     wanted: usize,
 ) -> Result<Modes> {
-    let stiffness = assemble(mesh, materials)?;
+    let stiffness = assemble_bonded(mesh, materials)?;
     let mass = mass(mesh, densities);
     let (projectors, _) = projectors(mesh, supports);
     let reduced = Reduced::new(&projectors);

@@ -149,8 +149,8 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
         let touching = spec
             .contacts
             .iter()
-            .map(|(a, b)| match (index(a), index(b)) {
-                (Some(i), Some(j)) => Ok((i.min(j), i.max(j))),
+            .map(|(a, b, mu)| match (index(a), index(b)) {
+                (Some(i), Some(j)) => Ok((i.min(j), i.max(j), *mu)),
                 _ => bail!("`contact {a} {b}` names a part the simulation does not have"),
             })
             .collect::<Result<Vec<_>>>()?;
@@ -313,10 +313,15 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     if let Some(bonds) = prepared.bonds() {
         notes.push(bonds);
     }
-    if let Some((touching, rounds)) = answer.contact {
-        notes.push(format!(
-            "frictionless contact: {touching} node pairs pressing after {rounds} solve(s)"
-        ));
+    if let Some((touching, slipping, rounds)) = answer.contact {
+        let friction = spec.contacts.iter().any(|c| c.2 > 0.0);
+        notes.push(if friction {
+            format!(
+                "contact: {touching} node pairs pressing, {slipping} of them slipping, after {rounds} solve(s)"
+            )
+        } else {
+            format!("frictionless contact: {touching} node pairs pressing after {rounds} solve(s)")
+        });
     }
     if prepared.parts.iter().any(|p| p.mechanics.printed) {
         notes.push("printed-part stiffness and strength, along the layers".into());

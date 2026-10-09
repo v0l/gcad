@@ -229,8 +229,8 @@ stress on the deformed part.
 `coolest`, heat through each labelled boundary, `probe.temperature`.
 
 Static, thermal and modal take a `.gasm` too: touching parts are bonded, each in its own
-material; pick faces as `part:faces` (`fix base:<Z`). `contact a b` makes a pair press without
-friction and let go instead of bonding (static).
+material; pick faces as `part:faces` (`fix base:<Z`). `contact a b` makes a pair press and let go
+instead of bonding (static); `friction=0.3` makes it hold until it slips.
 
 Add `converge` to any meshed simulation to solve again on a coarser mesh and get a note naming
 readings that moved more than 5%; trust the ones it does not name.

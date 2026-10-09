@@ -19,6 +19,7 @@ pub struct Tie {
     pub masters: [u32; 6],
     pub weights: [f64; 6],
     pub normal: Option<Vector3>,
+    pub friction: f64,
 }
 
 impl Tie {
@@ -394,7 +395,11 @@ fn closest_on_triangle(p: Point3, [a, b, c]: [Point3; 3]) -> (f64, [f64; 3]) {
     ((p - (a + ab * v + ac * w)).magnitude(), [1.0 - v - w, v, w])
 }
 
-pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64, touching: &[(usize, usize)]) -> Quadratic {
+pub fn merge(
+    parts: Vec<(String, Quadratic)>,
+    gap: f64,
+    touching: &[(usize, usize, f64)],
+) -> Quadratic {
     let mut out = Quadratic {
         nodes: Vec::new(),
         corners: 0,
@@ -454,6 +459,20 @@ pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64, touching: &[(usize, usiz
             }
         }
         for slave in (0..skins.len()).filter(|&s| s != master) {
+            let pair = (master.min(slave), master.max(slave));
+            let contact = touching.iter().find(|t| (t.0, t.1) == pair);
+            let mut facing: HashMap<u32, Vec<Vector3>> = HashMap::default();
+            if contact.is_some() {
+                for f in &skins[slave] {
+                    let [a, b, c] = [f[0], f[1], f[2]].map(|v| out.nodes[v as usize]);
+                    let n = (b - a).cross(c - a);
+                    if n.magnitude() > 0.0 {
+                        for &v in f {
+                            facing.entry(v).or_default().push(n.normalize());
+                        }
+                    }
+                }
+            }
             let mut seen = std::collections::BTreeSet::new();
             let mut tied = 0;
             for f in &skins[slave] {
@@ -467,6 +486,16 @@ pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64, touching: &[(usize, usiz
                     };
                     let best = list
                         .iter()
+                        .filter(|&&t| {
+                            contact.is_none() || {
+                                let m = skins[master][t];
+                                let [a, b, c] = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
+                                let n = (b - a).cross(c - a);
+                                facing.get(&v).is_some_and(|list| {
+                                    list.iter().any(|s| s.dot(n) < -0.7 * n.magnitude())
+                                })
+                            }
+                        })
                         .map(|&t| {
                             let m = skins[master][t];
                             let corners = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
@@ -480,12 +509,12 @@ pub fn merge(parts: Vec<(String, Quadratic)>, gap: f64, touching: &[(usize, usiz
                         let shape = triangle_shape(l);
                         let m = skins[master][t];
                         let [a, b, c] = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
-                        let contact = touching.contains(&(master.min(slave), master.max(slave)));
                         out.ties.push(Tie {
                             slave: v,
                             masters: m,
                             weights: shape,
-                            normal: contact.then(|| (b - a).cross(c - a).normalize()),
+                            normal: contact.map(|_| (b - a).cross(c - a).normalize()),
+                            friction: contact.map_or(0.0, |t| t.2),
                         });
                         tied += 1;
                     }

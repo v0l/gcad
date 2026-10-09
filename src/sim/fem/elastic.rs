@@ -1,4 +1,4 @@
-use super::solve::{Block, Blocks, IDENTITY, direct, two_level};
+use super::solve::{Block, Blocks, Factored, IDENTITY};
 
 const DIRECT_LIMIT: usize = 100_000;
 pub const DIRECT_FALLBACK: usize = 600_000;
@@ -83,7 +83,7 @@ pub struct Answer {
     pub von_mises: Vec<f64>,
     pub reactions: Vec<(String, Vector3, Vector3)>,
     pub scale: f64,
-    pub contact: Option<(usize, usize)>,
+    pub contact: Option<(usize, usize, usize)>,
     pub iterations: usize,
     pub residual: f64,
     pub applied: Vector3,
@@ -125,6 +125,14 @@ pub fn spacing(mesh: &Quadratic) -> f64 {
 }
 
 pub fn assemble(mesh: &Quadratic, materials: &[(f64, f64)]) -> Result<Blocks> {
+    assemble_with(mesh, materials, false)
+}
+
+pub fn assemble_bonded(mesh: &Quadratic, materials: &[(f64, f64)]) -> Result<Blocks> {
+    assemble_with(mesh, materials, true)
+}
+
+fn assemble_with(mesh: &Quadratic, materials: &[(f64, f64)], all: bool) -> Result<Blocks> {
     let constants: Vec<(f64, f64)> = materials.iter().map(|&(e, nu)| lame(e, nu)).collect();
     let groups: Vec<[u32; 7]> = mesh.ties.iter().map(|t| t.group()).collect();
     let mut blocks = Blocks::pattern_with(mesh.nodes.len(), &mesh.tets, &groups);
@@ -157,7 +165,7 @@ pub fn assemble(mesh: &Quadratic, materials: &[(f64, f64)]) -> Result<Blocks> {
     if !mesh.ties.is_empty() {
         let stiffest = materials.iter().map(|m| m.0).fold(0.0, f64::max);
         let penalty = stiffest * spacing(mesh) * TIE;
-        for tie in mesh.ties.iter().filter(|t| t.normal.is_none()) {
+        for tie in mesh.ties.iter().filter(|t| all || t.normal.is_none()) {
             let (nodes, c) = (tie.group(), tie.coefficients());
             for a in 0..7 {
                 for b in 0..7 {
@@ -178,10 +186,26 @@ fn contact_penalty(mesh: &Quadratic, materials: &[(f64, f64)]) -> f64 {
     materials.iter().map(|m| m.0).fold(0.0, f64::max) * spacing(mesh) * TIE
 }
 
-fn add_contacts(blocks: &mut Blocks, mesh: &Quadratic, penalty: f64, active: &[bool]) {
-    for (tie, on) in mesh.ties.iter().zip(active) {
-        let (Some(n), true) = (tie.normal, *on) else {
+fn add_contacts(blocks: &mut Blocks, mesh: &Quadratic, penalty: f64, touches: &[Touch]) {
+    for (tie, t) in mesh.ties.iter().zip(touches) {
+        let Some(n) = tie.normal else {
             continue;
+        };
+        if !t.closed && !t.sticking && !t.slipping {
+            continue;
+        }
+        let along = |i: usize, j: usize| {
+            let identity = if i == j { 1.0 } else { 0.0 };
+            let d = t.along;
+            let pressing = if t.closed { n[i] * n[j] } else { 0.0 };
+            let sideways = if t.sticking {
+                identity - n[i] * n[j]
+            } else if t.slipping {
+                t.ratio * (identity - n[i] * n[j] - d[i] * d[j]) + SLIDE * d[i] * d[j]
+            } else {
+                0.0
+            };
+            pressing + sideways
         };
         let (nodes, c) = (tie.group(), tie.coefficients());
         for a in 0..7 {
@@ -191,7 +215,7 @@ fn add_contacts(blocks: &mut Blocks, mesh: &Quadratic, penalty: f64, active: &[b
                 let block = &mut blocks.values[at];
                 for i in 0..3 {
                     for j in 0..3 {
-                        block[i * 3 + j] += v * n[i] * n[j];
+                        block[i * 3 + j] += v * along(i, j);
                     }
                 }
             }
@@ -199,16 +223,76 @@ fn add_contacts(blocks: &mut Blocks, mesh: &Quadratic, penalty: f64, active: &[b
     }
 }
 
-fn opening(tie: &super::Tie, u: &[f64]) -> f64 {
-    let Some(n) = tie.normal else { return 0.0 };
+const SLIDE: f64 = 1.0e-8;
+
+fn gap(tie: &super::Tie, u: &[f64]) -> Vector3 {
     tie.group()
         .iter()
         .zip(tie.coefficients())
-        .map(|(&v, c)| {
+        .fold(Vector3::zero(), |acc, (&v, c)| {
             let i = 3 * v as usize;
-            c * (u[i] * n.x + u[i + 1] * n.y + u[i + 2] * n.z)
+            acc + Vector3::new(u[i], u[i + 1], u[i + 2]) * c
         })
-        .sum()
+}
+
+#[derive(Clone)]
+struct Touch {
+    closed: bool,
+    sticking: bool,
+    slipping: bool,
+    pull: Vector3,
+    along: Vector3,
+    ratio: f64,
+}
+
+fn touch(tie: &super::Tie, u: &[f64], scale: f64, limit: f64) -> (Touch, f64) {
+    let mut t = Touch {
+        closed: false,
+        sticking: false,
+        slipping: false,
+        pull: Vector3::zero(),
+        along: Vector3::zero(),
+        ratio: 0.0,
+    };
+    let Some(n) = tie.normal else {
+        return (t, 0.0);
+    };
+    let g = gap(tie, u);
+    let normal = g.dot(n);
+    let mut stored = 0.0;
+    if normal <= scale * 1.0e-9 {
+        t.closed = true;
+        t.pull = n * normal;
+        stored += 0.5 * normal * normal;
+    }
+    if tie.friction == 0.0 || limit <= 0.0 {
+        return (t, stored);
+    }
+    let sideways = g - n * normal;
+    let length = sideways.magnitude();
+    if length <= limit {
+        t.sticking = true;
+        t.pull += sideways;
+        stored += 0.5 * length * length;
+    } else {
+        t.slipping = true;
+        t.pull += sideways * (limit / length);
+        t.along = sideways / length;
+        t.ratio = limit / length;
+        stored += limit * (length - 0.5 * limit);
+    }
+    (t, stored)
+}
+
+fn add_pulls(out: &mut [f64], mesh: &Quadratic, penalty: f64, touches: &[Touch]) {
+    for (tie, t) in mesh.ties.iter().zip(touches) {
+        for (&v, c) in tie.group().iter().zip(tie.coefficients()) {
+            let i = 3 * v as usize;
+            out[i] += penalty * c * t.pull.x;
+            out[i + 1] += penalty * c * t.pull.y;
+            out[i + 2] += penalty * c * t.pull.z;
+        }
+    }
 }
 
 fn faces_of<'a>(mesh: &'a Quadratic, faces: &'a [usize]) -> impl Iterator<Item = [u32; 6]> + 'a {
@@ -445,56 +529,184 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
         bail!("the supports leave the part free to move or turn; add one that holds it");
     }
     let penalty = contact_penalty(mesh, problem.materials);
-    let mut active: Vec<bool> = mesh.ties.iter().map(|t| t.normal.is_some()).collect();
-    let contacts = active.iter().any(|a| *a);
-    let mut rounds = 0;
-    let (solution, stiffness) = loop {
-        rounds += 1;
-        let mut stiffness = stiffness.clone();
-        add_contacts(&mut stiffness, mesh, penalty, &active);
-        let solution = if mesh.nodes.len() * 3 <= DIRECT_LIMIT {
-            direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
-        } else {
-            let iterative = two_level(&stiffness, &f, &projectors, &mesh.coarse(), 1.0e-10, 3000)
-                .map_err(|e| anyhow::anyhow!(e))?;
-            if iterative.residual > 1.0e-8 && mesh.nodes.len() * 3 <= DIRECT_FALLBACK {
-                direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
-            } else {
-                iterative
+    let contacts = mesh.ties.iter().any(|t| t.normal.is_some());
+    let friction = mesh.ties.iter().any(|t| t.friction > 0.0);
+    let coarse = mesh.coarse();
+    let largest = if friction {
+        DIRECT_FALLBACK
+    } else {
+        DIRECT_LIMIT
+    };
+    let project = |r: &mut [f64]| {
+        for (c, p) in r.chunks_mut(3).zip(&projectors) {
+            let v = [c[0], c[1], c[2]];
+            for (i, out) in c.iter_mut().enumerate() {
+                *out = p[i * 3] * v[0] + p[i * 3 + 1] * v[1] + p[i * 3 + 2] * v[2];
             }
-        };
-        if !contacts {
-            break (solution, stiffness);
-        }
-        let scale = solution
-            .x
-            .iter()
-            .fold(0.0f64, |a, b| a.max(b.abs()))
-            .max(1.0e-300);
-        let mut changed = 0;
-        for (tie, on) in mesh.ties.iter().zip(active.iter_mut()) {
-            if tie.normal.is_none() {
-                continue;
-            }
-            let gap = opening(tie, &solution.x);
-            let next = gap <= scale * 1.0e-9;
-            if next != *on {
-                *on = next;
-                changed += 1;
-            }
-        }
-        if changed == 0 || rounds >= 40 {
-            break (solution, stiffness);
         }
     };
-    let touching = active
+    let residual = |u: &[f64], touches: &[Touch]| -> Vec<f64> {
+        let mut inside = vec![0.0; u.len()];
+        stiffness.multiply(u, &mut inside);
+        add_pulls(&mut inside, mesh, penalty, touches);
+        let mut r: Vec<f64> = f.iter().zip(&inside).map(|(a, b)| a - b).collect();
+        project(&mut r);
+        r
+    };
+    let norm = |r: &[f64]| r.iter().map(|x| x * x).sum::<f64>().sqrt();
+    let reference = {
+        let mut pf = f.clone();
+        project(&mut pf);
+        norm(&pf).max(1.0e-300)
+    };
+    let scale_of = |u: &[f64]| u.iter().fold(0.0f64, |a, b| a.max(b.abs())).max(1.0e-300);
+    let energy = |u: &[f64], tie_energy: f64| -> f64 {
+        let mut ku = vec![0.0; u.len()];
+        stiffness.multiply(u, &mut ku);
+        0.5 * u.iter().zip(&ku).map(|(a, b)| a * b).sum::<f64>()
+            - u.iter().zip(&f).map(|(a, b)| a * b).sum::<f64>()
+            + penalty * tie_energy
+    };
+    let state = |u: &[f64], limits: &[f64]| -> (Vec<Touch>, f64) {
+        let scale = scale_of(u);
+        let mut stored = 0.0;
+        let touches = mesh
+            .ties
+            .iter()
+            .zip(limits)
+            .map(|(tie, &limit)| {
+                let (t, e) = touch(tie, u, scale, limit);
+                stored += e;
+                t
+            })
+            .collect();
+        (touches, stored)
+    };
+    let mut limits = vec![f64::INFINITY; mesh.ties.len()];
+    let mut touches: Vec<Touch> = mesh
+        .ties
         .iter()
-        .zip(&mesh.ties)
-        .filter(|(on, t)| **on && t.normal.is_some())
-        .count();
-    let u = solution.x;
+        .map(|t| Touch {
+            closed: t.normal.is_some(),
+            sticking: t.normal.is_some() && t.friction > 0.0,
+            slipping: false,
+            pull: Vector3::zero(),
+            along: Vector3::zero(),
+            ratio: 0.0,
+        })
+        .collect();
+    let mut u = vec![0.0; f.len()];
+    let mut stored = 0.0;
+    let mut r = residual(&u, &touches);
+    let mut rounds = 0;
+    let mut iterations = 0;
+    let mut bonded_scale = 0.0;
+    let mut inner = 0;
+    loop {
+        rounds += 1;
+        inner += 1;
+        let mut tangent = stiffness.clone();
+        add_contacts(&mut tangent, mesh, penalty, &touches);
+        let step = Factored::new(&tangent, &projectors, &coarse, largest)
+            .map(|solver| solver.solve(&r))
+            .ok()
+            .filter(|step| step.residual <= 1.0e-6);
+        let Some(step) = step else {
+            if friction {
+                bail!(
+                    "the parts in contact slide: friction cannot hold the sideways load, so nothing stops them"
+                );
+            }
+            bail!("the solver did not converge; check the supports hold the part");
+        };
+        iterations += step.iterations;
+        if !contacts {
+            u = step.x;
+            break;
+        }
+        let before = energy(&u, stored);
+        let slope: f64 = -r.iter().zip(&step.x).map(|(a, b)| a * b).sum::<f64>();
+        let mut alpha = 1.0;
+        loop {
+            let trial: Vec<f64> = u.iter().zip(&step.x).map(|(a, b)| a + alpha * b).collect();
+            let (next, e) = state(&trial, &limits);
+            let after = energy(&trial, e);
+            if after <= before + 1.0e-4 * alpha * slope || alpha < 1.0e-4 {
+                r = residual(&trial, &next);
+                u = trial;
+                touches = next;
+                stored = e;
+                break;
+            }
+            alpha *= 0.5;
+        }
+        if bonded_scale == 0.0 {
+            bonded_scale = scale_of(&u);
+        }
+        if scale_of(&u) > bonded_scale * 1.0e3 {
+            bail!(
+                "the parts in contact slide: friction cannot hold the sideways load, so nothing stops them"
+            );
+        }
+        if norm(&r) <= reference * if friction { 1.0e-5 } else { 1.0e-9 } {
+            if !friction {
+                break;
+            }
+            inner = 0;
+            let next: Vec<f64> = mesh
+                .ties
+                .iter()
+                .map(|tie| match tie.normal {
+                    Some(n) if tie.friction > 0.0 => tie.friction * (-gap(tie, &u).dot(n)).max(0.0),
+                    _ => f64::INFINITY,
+                })
+                .collect();
+            let top = next
+                .iter()
+                .filter(|v| v.is_finite())
+                .fold(0.0f64, |a, b| a.max(*b))
+                .max(1.0e-300);
+            let change = limits
+                .iter()
+                .zip(&next)
+                .filter(|(_, b)| b.is_finite())
+                .map(|(a, b)| {
+                    if a.is_finite() {
+                        (a - b).abs()
+                    } else {
+                        f64::INFINITY
+                    }
+                })
+                .fold(0.0, f64::max);
+            limits = next;
+            if change <= top * 1.0e-3 {
+                break;
+            }
+            let (t, e) = state(&u, &limits);
+            touches = t;
+            stored = e;
+            r = residual(&u, &touches);
+        }
+        if rounds >= 400 || inner > 120 {
+            if friction {
+                bail!(
+                    "the parts in contact did not settle in {rounds} steps; friction may not hold the sideways load, so they slide"
+                );
+            }
+            bail!("the contact did not settle in {rounds} steps; try a different `mesh` size");
+        }
+    }
+    let touching = touches.iter().filter(|t| t.closed).count();
+    let slipping = touches.iter().filter(|t| t.slipping && t.closed).count();
     let mut ku = vec![0.0; u.len()];
     stiffness.multiply(&u, &mut ku);
+    add_pulls(&mut ku, mesh, penalty, &touches);
+    let solution = super::solve::Solution {
+        x: u,
+        iterations,
+        residual: 0.0,
+    };
+    let u = solution.x;
     let mut reactions = vec![Vector3::zero(); problem.supports.len()];
     let mut centres = vec![(Vector3::zero(), 0.0); problem.supports.len()];
     for (v, o) in owner.iter().enumerate() {
@@ -544,7 +756,7 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
         scale,
         iterations: solution.iterations,
         residual: solution.residual,
-        contact: contacts.then_some((touching, rounds)),
+        contact: contacts.then_some((touching, slipping, rounds)),
         applied,
     })
 }
