@@ -6,6 +6,10 @@ use super::{Field, Outcome, Reading, Spec};
 use anyhow::{Result, bail};
 
 pub fn run(spec: &Spec) -> Result<Outcome> {
+    run_spec(spec)
+}
+
+fn run_spec(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
     let mesh = &prepared.mesh;
     let conductivity = prepared.conductivity()?;
@@ -91,4 +95,19 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             displacement: vec![[0.0; 3]; answer.temperature.len()],
         }),
     })
+}
+
+pub fn temperatures(file: &std::path::Path) -> Result<Vec<f64>> {
+    let run = crate::model::run_path(file, &[], None)?;
+    if let Some((line, Err(error))) = run.steps.last() {
+        bail!("{}:{}: {error:#}", file.display(), line.number);
+    }
+    let Some(spec) = run.model.sim.as_deref() else {
+        bail!("{} is not a simulation", file.display());
+    };
+    if spec.kind != Some(super::Kind::Thermal) {
+        bail!("{} is not a `sim thermal`", file.display());
+    }
+    let outcome = run_spec(spec)?;
+    Ok(outcome.field.map(|f| f.values).unwrap_or_default())
 }

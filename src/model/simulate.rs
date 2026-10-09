@@ -174,14 +174,30 @@ impl Model {
                 ))
             }
             "warm" => {
-                let args = Args::new(line, &["by"], &[], false)?;
-                let by = args.number("by", &self.scope)?;
-                self.spec().warming = Some(by);
-                Ok(format!(
-                    "the whole part {} by {} °C",
-                    if by < 0.0 { "cools" } else { "warms" },
-                    by.abs()
-                ))
+                let args = Args::new(line, &["by"], &["from"], false)?;
+                let by = args.text("by")?;
+                if crate::sim::is_sim(std::path::Path::new(by)) {
+                    let reference = args.optional_number("from", &self.scope)?.unwrap_or(20.0);
+                    let file = self.relative(by);
+                    if !file.is_file() {
+                        bail!("no file {}", file.display());
+                    }
+                    self.spec().warming = Some(crate::sim::Warm::From { file, reference });
+                    Ok(format!(
+                        "temperatures from {by}, expanding from {reference} °C"
+                    ))
+                } else {
+                    if args.has("from") {
+                        bail!("`from=` goes with a heat simulation, like `warm hot.gsim from=20`");
+                    }
+                    let by = args.number("by", &self.scope)?;
+                    self.spec().warming = Some(crate::sim::Warm::By(by));
+                    Ok(format!(
+                        "the whole part {} by {} °C",
+                        if by < 0.0 { "cools" } else { "warms" },
+                        by.abs()
+                    ))
+                }
             }
             "source" => {
                 let args = Args::new(line, &["watts"], &[], false)?;

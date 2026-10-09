@@ -252,9 +252,15 @@ pub fn loads(problem: &Problem) -> Result<Vec<f64>> {
         for t in 0..mesh.tets.len() {
             let body = mesh.body[t] as usize;
             let (lambda, mu) = lame(problem.materials[body].0, problem.materials[body].1);
-            let push = (3.0 * lambda + 2.0 * mu) * strains[body];
+            let stiffness = 3.0 * lambda + 2.0 * mu;
             let points = mesh.points(t);
             for (l, w) in GAUSS {
+                let free: f64 = shape(l)
+                    .iter()
+                    .zip(mesh.tets[t])
+                    .map(|(n, v)| n * strains[v as usize])
+                    .sum();
+                let push = stiffness * free;
                 if let Some(m) = map(&points, l) {
                     for (k, g) in m.gradients.iter().enumerate() {
                         add(mesh.tets[t][k], g * (push * m.det * w));
@@ -505,7 +511,13 @@ pub fn stresses(
                         }
                     }
                 }
-                let free = expansion.map_or(0.0, |e| e[mesh.body[t] as usize]);
+                let free = expansion.map_or(0.0, |e| {
+                    shape(l)
+                        .iter()
+                        .zip(tet)
+                        .map(|(n, v)| n * e[v as usize])
+                        .sum()
+                });
                 for (i, row) in grad.iter_mut().enumerate() {
                     row[i] -= free;
                 }

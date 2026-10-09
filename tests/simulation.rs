@@ -789,3 +789,37 @@ fn thermal_expansion() {
         .hypot(growth * 10.0);
     close(reading(&free, "displacement"), corner, 1.0e-6);
 }
+
+#[test]
+fn expansion_from_a_heat_result() {
+    let bar = "rect 100 10 at=50,0\nbar: extrude 10 both\nmaterial steel\n";
+    let dir = PathBuf::from(scratch("expansion_from_a_heat_result"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("hot.gsim"),
+        "sim thermal\npart bar.gcad\ntemperature <X 70\ntemperature >X 70\nmesh 4\n",
+    )
+    .expect("heat spec");
+    let free = simulated(
+        "expansion_from_a_heat_result",
+        &[("bar.gcad", bar)],
+        "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nwarm hot.gsim from=20\nmesh 4",
+    );
+    assert!(reading(&free, "stress") < 1.0e-4, "{}", free.table());
+    let growth: f64 = 12.0e-6 * 50.0;
+    let corner = (growth * 100.0_f64)
+        .hypot(growth * 10.0)
+        .hypot(growth * 10.0);
+    close(reading(&free, "displacement"), corner, 1.0e-6);
+    let path = written(
+        "expansion_from_a_heat_result",
+        &[("bar.gcad", bar)],
+        "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nwarm hot.gsim\nmesh 5",
+    );
+    let error =
+        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("mismatch");
+    assert!(
+        format!("{error}").contains("same `part` and `mesh`"),
+        "{error}"
+    );
+}

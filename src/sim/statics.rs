@@ -1,7 +1,7 @@
 use super::fem::Quadratic;
 use super::fem::elastic::{Problem, locate, sample, solve};
 use super::result::short;
-use super::{Field, Outcome, Reading, Spec};
+use super::{Field, Outcome, Reading, Spec, Warm};
 use crate::model::Mechanics;
 use anyhow::{Result, bail};
 use monstertruck::modeling::*;
@@ -47,22 +47,47 @@ impl Prepared {
             .collect()
     }
 
-    pub fn expansion(&self, warming: Option<f64>) -> Result<Option<Vec<f64>>> {
+    pub fn expansion(&self, warming: Option<&Warm>) -> Result<Option<Vec<f64>>> {
         let Some(warming) = warming else {
             return Ok(None);
         };
-        self.parts
+        let alphas: Vec<f64> = self
+            .parts
             .iter()
             .map(|p| match p.mechanics.expansion {
-                Some(alpha) => Ok(alpha * 1.0e-6 * warming),
+                Some(alpha) => Ok(alpha * 1.0e-6),
                 None => bail!(
                     "`{}` is {}, which has no expansion; give it `alpha=` (µm/m·K) on its `material` line",
                     p.name,
                     p.material
                 ),
             })
-            .collect::<Result<Vec<_>>>()
-            .map(Some)
+            .collect::<Result<_>>()?;
+        let mut body = vec![0usize; self.mesh.nodes.len()];
+        for (t, tet) in self.mesh.tets.iter().enumerate() {
+            for &v in tet {
+                body[v as usize] = self.mesh.body[t] as usize;
+            }
+        }
+        let rise: Vec<f64> = match warming {
+            Warm::By(by) => vec![*by; self.mesh.nodes.len()],
+            Warm::From { file, reference } => {
+                let heat = super::heat::temperatures(file)?;
+                if heat.len() != self.mesh.nodes.len() {
+                    bail!(
+                        "{} meshes the part differently; give it the same `part` and `mesh` lines",
+                        file.display()
+                    );
+                }
+                heat.iter().map(|t| t - reference).collect()
+            }
+        };
+        Ok(Some(
+            rise.iter()
+                .zip(&body)
+                .map(|(r, b)| r * alphas[*b])
+                .collect(),
+        ))
     }
 
     pub fn bonds(&self) -> Option<String> {
@@ -151,7 +176,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         supports: &spec.supports,
         loads: &spec.loads,
         body_force,
-        expansion: prepared.expansion(spec.warming)?,
+        expansion: prepared.expansion(spec.warming.as_ref())?,
     })?;
     let mut readings = Vec::new();
     let mut notes = Vec::new();
@@ -466,7 +491,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
             supports: &spec.supports,
             loads: &spec.loads,
             body_force,
-            expansion: prepared.expansion(spec.warming)?,
+            expansion: prepared.expansion(spec.warming.as_ref())?,
         },
         wanted,
     )?;

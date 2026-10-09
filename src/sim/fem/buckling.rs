@@ -37,7 +37,13 @@ fn geometric(
                         }
                     }
                 }
-                let free = expansion.map_or(0.0, |e| e[mesh.body[t] as usize]);
+                let free = expansion.map_or(0.0, |e| {
+                    super::shape(l)
+                        .iter()
+                        .zip(tet)
+                        .map(|(n, v)| n * e[v as usize])
+                        .sum()
+                });
                 for (i, row) in grad.iter_mut().enumerate() {
                     row[i] -= free;
                 }
