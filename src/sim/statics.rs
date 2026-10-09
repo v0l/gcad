@@ -195,7 +195,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             },
         });
     }
-    for (label, force) in &answer.reactions {
+    for (label, force, moment) in &answer.reactions {
         readings.push(Reading {
             name: label.clone(),
             value: force.magnitude(),
@@ -207,6 +207,19 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                 short(force.z)
             ),
         });
+        if moment.magnitude() > 1.0e-6 * answer.scale.max(1.0e-9) {
+            readings.push(Reading {
+                name: format!("{label}.moment"),
+                value: moment.magnitude(),
+                unit: "N·m".into(),
+                at: format!(
+                    "reaction moment {},{},{} about the support's centre",
+                    short(moment.x),
+                    short(moment.y),
+                    short(moment.z)
+                ),
+            });
+        }
     }
     for (name, point) in &spec.probes {
         let Some(found) = locate(mesh, *point) else {
@@ -254,8 +267,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let held: Vector3 = answer
         .reactions
         .iter()
-        .fold(Vector3::zero(), |a, (_, r)| a + *r);
-    if (applied + held).magnitude() > applied.magnitude().max(1.0e-9) * 1.0e-3 {
+        .fold(Vector3::zero(), |a, (_, r, _)| a + *r);
+    if (applied + held).magnitude() > answer.scale.max(1.0e-9) * 1.0e-3 {
         notes.push(format!(
             "the supports hold {} N of the {} N applied; some of the load goes into a sliding support's free direction",
             short(held.magnitude()),

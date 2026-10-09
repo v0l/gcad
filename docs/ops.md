@@ -291,6 +291,7 @@ The plan for the rest is in `docs/simulation.md`.
 | tetrahedral mesh | supported | `mesh 2`, `gcad sim x.gsim --dry-run`, `gcad render x.gsim x.png` | `simulation::tet_mesh_of_a_box`, `simulation::tet_mesh_of_curved_parts`, `simulation::tet_mesh_of_example_parts`, `simulation::tet_mesh_of_thin_walls`, `simulation::mesh_dry_run` |
 | static stress | supported | `sim static`, `fix faces`, `load faces force=x,y,z` | `simulation::bar_in_tension`, `simulation::cantilever_stress`, `simulation::static_needs_supports_and_stiffness` |
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
+| pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::pinned_link` |
 | probes | supported | `top: probe 100,0,10` | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure` |
 | stress plots | supported | `gcad render x.gsim x.png` | `simulation::stress_field_render` |
 | steady heat | supported | `sim thermal`, `cold: temperature faces 20`, `heat faces 5`, `source 5` | `simulation::conduction_through_a_wall`, `simulation::heat_needs_a_boundary` |

@@ -12,6 +12,7 @@ use rayon::prelude::*;
 pub enum Hold {
     Fixed,
     Slide,
+    Pin { point: Point3, axis: Vector3 },
 }
 
 #[derive(Clone, Debug)]
@@ -25,6 +26,39 @@ pub struct Support {
 pub enum Push {
     Force(Vector3),
     Pressure(f64),
+    Torque {
+        point: Point3,
+        axis: Vector3,
+        moment: f64,
+    },
+}
+
+fn off_axis(p: Point3, point: Point3, axis: Vector3) -> Vector3 {
+    let r = p - point;
+    r - axis * r.dot(axis)
+}
+
+fn polar(mesh: &Quadratic, faces: &[usize], point: Point3, axis: Vector3) -> f64 {
+    faces_of(mesh, faces)
+        .map(|f| {
+            let p = six(mesh, f);
+            triangle_gauss()
+                .iter()
+                .map(|(l, w)| {
+                    let shape = triangle_shape(*l);
+                    let at = Point3::from_vec(
+                        p.iter()
+                            .zip(shape)
+                            .map(|(q, n)| q.to_vec() * n)
+                            .sum::<Vector3>(),
+                    );
+                    off_axis(at, point, axis).magnitude2()
+                        * triangle_area_vector(&p, *l).magnitude()
+                        * w
+                })
+                .sum::<f64>()
+        })
+        .sum()
 }
 
 #[derive(Clone, Debug)]
@@ -44,7 +78,8 @@ pub struct Problem<'a> {
 pub struct Answer {
     pub displacement: Vec<Vector3>,
     pub von_mises: Vec<f64>,
-    pub reactions: Vec<(String, Vector3)>,
+    pub reactions: Vec<(String, Vector3, Vector3)>,
+    pub scale: f64,
     pub iterations: usize,
     pub residual: f64,
     pub applied: Vector3,
@@ -172,6 +207,16 @@ pub fn loads(problem: &Problem) -> Result<Vec<f64>> {
         if total <= 0.0 {
             bail!("a load's faces have no area");
         }
+        let polar_moment = match load.push {
+            Push::Torque { point, axis, .. } => {
+                let j = polar(mesh, &load.faces, point, axis);
+                if j <= 0.0 {
+                    bail!("the torque's faces all lie on its axis");
+                }
+                j
+            }
+            _ => 1.0,
+        };
         for face in faces_of(mesh, &load.faces) {
             let p = six(mesh, face);
             for (l, w) in triangle_gauss() {
@@ -179,6 +224,20 @@ pub fn loads(problem: &Problem) -> Result<Vec<f64>> {
                 let traction = match load.push {
                     Push::Force(force) => force * (normal.magnitude() / total),
                     Push::Pressure(pressure) => -normal * pressure,
+                    Push::Torque {
+                        point,
+                        axis,
+                        moment,
+                    } => {
+                        let at = Point3::from_vec(
+                            p.iter()
+                                .zip(triangle_shape(l))
+                                .map(|(q, n)| q.to_vec() * n)
+                                .sum::<Vector3>(),
+                        );
+                        axis.cross(off_axis(at, point, axis))
+                            * (moment / polar_moment * normal.magnitude())
+                    }
                 };
                 for (k, n) in triangle_shape(l).iter().enumerate() {
                     add(face[k], traction * (n * w));
@@ -213,6 +272,13 @@ pub fn projectors(mesh: &Quadratic, supports: &[Support]) -> (Vec<Block>, Vec<Op
                 owner[node as usize].get_or_insert(s);
                 match support.hold {
                     Hold::Fixed => fixed[node as usize] = true,
+                    Hold::Pin { point, axis } => {
+                        normals[node as usize].push(axis);
+                        let r = off_axis(mesh.nodes[node as usize], point, axis);
+                        if r.magnitude() > 0.0 {
+                            normals[node as usize].push(r.normalize());
+                        }
+                    }
                     Hold::Slide => {
                         let l = match k {
                             0 => [1.0, 0.0, 0.0],
@@ -260,6 +326,51 @@ pub fn projectors(mesh: &Quadratic, supports: &[Support]) -> (Vec<Block>, Vec<Op
     (blocks, owner)
 }
 
+fn loose(mesh: &Quadratic, projectors: &[Block]) -> bool {
+    let n = mesh.nodes.len().max(1) as f64;
+    let centre = mesh
+        .nodes
+        .iter()
+        .fold(Vector3::zero(), |a, p| a + p.to_vec())
+        / n;
+    let size = mesh
+        .nodes
+        .iter()
+        .map(|p| (p.to_vec() - centre).magnitude())
+        .fold(1.0e-9, f64::max);
+    let mut gram = vec![vec![0.0; 6]; 6];
+    for (p, block) in mesh.nodes.iter().zip(projectors) {
+        let r = (p.to_vec() - centre) / size;
+        let modes = [
+            Vector3::unit_x(),
+            Vector3::unit_y(),
+            Vector3::unit_z(),
+            Vector3::unit_x().cross(r),
+            Vector3::unit_y().cross(r),
+            Vector3::unit_z().cross(r),
+        ];
+        let held: Vec<Vector3> = modes
+            .iter()
+            .map(|m| {
+                let kept = Vector3::new(
+                    block[0] * m.x + block[1] * m.y + block[2] * m.z,
+                    block[3] * m.x + block[4] * m.y + block[5] * m.z,
+                    block[6] * m.x + block[7] * m.y + block[8] * m.z,
+                );
+                *m - kept
+            })
+            .collect();
+        for i in 0..6 {
+            for j in 0..6 {
+                gram[i][j] += held[i].dot(held[j]);
+            }
+        }
+    }
+    let (values, _) = super::modal::jacobi_eigen(&mut gram);
+    let top = values.iter().copied().fold(0.0, f64::max);
+    values.iter().any(|v| *v <= top * 1.0e-9)
+}
+
 pub fn solve(problem: &Problem) -> Result<Answer> {
     let mesh = problem.mesh;
     if problem.supports.is_empty() {
@@ -268,6 +379,9 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     let stiffness = assemble(mesh, problem.materials)?;
     let f = loads(problem)?;
     let (projectors, owner) = projectors(mesh, problem.supports);
+    if loose(mesh, &projectors) {
+        bail!("the supports leave the part free to move or turn; add one that holds it");
+    }
     let solution = if mesh.nodes.len() * 3 <= DIRECT_LIMIT {
         direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
     } else {
@@ -283,12 +397,28 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     let mut ku = vec![0.0; u.len()];
     stiffness.multiply(&u, &mut ku);
     let mut reactions = vec![Vector3::zero(); problem.supports.len()];
+    let mut centres = vec![(Vector3::zero(), 0.0); problem.supports.len()];
     for (v, o) in owner.iter().enumerate() {
         if let Some(s) = o {
             let i = 3 * v;
             reactions[*s] += Vector3::new(ku[i] - f[i], ku[i + 1] - f[i + 1], ku[i + 2] - f[i + 2]);
+            centres[*s].0 += mesh.nodes[v].to_vec();
+            centres[*s].1 += 1.0;
         }
     }
+    let mut moments = vec![Vector3::zero(); problem.supports.len()];
+    for (v, o) in owner.iter().enumerate() {
+        if let Some(s) = o {
+            let i = 3 * v;
+            let r = Vector3::new(ku[i] - f[i], ku[i + 1] - f[i + 1], ku[i + 2] - f[i + 2]);
+            let centre = centres[*s].0 / centres[*s].1;
+            moments[*s] += (mesh.nodes[v].to_vec() - centre).cross(r);
+        }
+    }
+    let scale: f64 = f
+        .chunks(3)
+        .map(|c| Vector3::new(c[0], c[1], c[2]).magnitude())
+        .sum();
     let applied = f
         .chunks(3)
         .fold(Vector3::zero(), |a, c| a + Vector3::new(c[0], c[1], c[2]));
@@ -304,8 +434,10 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
             .supports
             .iter()
             .zip(reactions)
-            .map(|(s, r)| (s.label.clone(), r))
+            .zip(moments)
+            .map(|((s, r), m)| (s.label.clone(), r, m * 1.0e-3))
             .collect(),
+        scale,
         iterations: solution.iterations,
         residual: solution.residual,
         applied,

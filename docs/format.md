@@ -371,6 +371,8 @@ expect shoulder<15 sun_s_turn<4
 | `sweep` | `joint ... steps=` | runs every pose of the listed joints across their ranges in `steps` (24 unless given) equal steps; a joint that turns all the way round goes from -180 to 180. Several joints on one line make a grid of poses; separate lines make separate sweeps |
 | `fix` | `faces` | holds the faces still (static). Its reaction force is a reading named after the line's label, or `fix1`, `fix2`, ... |
 | `slide` | `faces` | holds the faces only along their normal, free to slide along them (static); a symmetry plane, or a part resting on a flat. Reading as for `fix` |
+| `pin` | `faces` | holds a round face on its axis, free to turn about it, like a shaft in a bearing or a link on a pin (static). Reading as for `fix` |
+| `torque` | `faces moment` `axis=x,y,z` `at=x,y,z` | twists the faces by `moment` N·m about their axis: the axis of a round face, or the normal through the middle of a flat one, unless `axis=` and `at=` say (static) |
 | `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
 | `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |
 | `probe` | `x,y,z`, with a label | reads the von Mises stress and displacement at a point inside the part as `label.stress` and `label.displacement` |
@@ -403,7 +405,7 @@ simulated part.
 Units are millimetres, newtons and MPa. It needs a material with a stiffness and at least one
 `fix` or `slide`. Its readings are `stress` (the peak von Mises stress and where),
 `displacement` (the largest movement and where), `safety` (yield strength over the peak
-stress, when the material has one), each support's reaction force and each probe's values. The
+stress, when the material has one), each support's reaction force (and `label.moment` in N·m when it also holds a twist) and each probe's values. A part its supports leave free to move or turn is refused before solving. The
 peak stress at a sharp inside corner, or at the edge of a fixed face, is a singularity: it keeps
 rising as the mesh is refined, so put a fillet there or `probe` the stress a little away from it.
 `gcad render file.gsim file.png` draws the von Mises stress on the deformed part, with the

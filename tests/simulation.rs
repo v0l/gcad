@@ -646,3 +646,45 @@ fn bonded_parts_vibrate_as_one() {
     );
     close(reading(&joined, "mode1"), reading(&whole, "mode1"), 0.01);
 }
+
+#[test]
+fn shaft_in_torsion() {
+    let outcome = simulated(
+        "shaft_in_torsion",
+        &[("rod.gcad", "circle 20\nrod: extrude 100\nmaterial steel\n")],
+        "sim static\npart rod.gcad\nbase: fix rod.start\ntorque rod.end 10\nmid: probe 10,0,50\nmesh 3",
+    );
+    let shear = 16.0 * 10.0e3 / (std::f64::consts::PI * 20.0_f64.powi(3));
+    close(
+        reading(&outcome, "mid.stress"),
+        3.0_f64.sqrt() * shear,
+        0.01,
+    );
+    let modulus = 200.0e3 / (2.0 * 1.29);
+    let polar = std::f64::consts::PI * 20.0_f64.powi(4) / 32.0;
+    let twist = 10.0e3 * 50.0 / (modulus * polar);
+    close(reading(&outcome, "mid.displacement"), twist * 10.0, 0.01);
+    close(reading(&outcome, "base.moment"), 10.0, 1.0e-3);
+}
+
+#[test]
+fn pinned_link() {
+    let link = "rect 100 10 at=50,0\nbar: extrude 10\nplane bar.end\na: hole 6 10,0\nb: hole 6 90,0\nmaterial steel\n";
+    let outcome = simulated(
+        "pinned_link",
+        &[("link.gcad", link)],
+        "sim static\npart link.gcad\nleft: pin a.side\nright: pin b.side\nload >Y force=0,-500,0\nmesh 2",
+    );
+    for side in ["left", "right"] {
+        let at = &outcome.reading(side).expect("reaction").at;
+        assert!(at.contains(",250.0,"), "{side}: {at}");
+    }
+    let path = written(
+        "lone_pin",
+        &[("link.gcad", link)],
+        "sim static\npart link.gcad\npin a.side\nload >Y force=0,-500,0\nmesh 4",
+    );
+    let error =
+        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("turns");
+    assert!(format!("{error}").contains("turn"), "{error}");
+}

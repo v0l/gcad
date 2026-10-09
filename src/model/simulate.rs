@@ -8,6 +8,28 @@ use crate::sim::{Expect, Kind, Payload, Spec, Sweep};
 use anyhow::{Result, anyhow, bail};
 use monstertruck::modeling::*;
 
+fn flat_axis(solid: &Solid, faces: &[usize]) -> Option<(Point3, Vector3)> {
+    let all = crate::select::faces(solid);
+    let mut normal: Option<Vector3> = None;
+    let mut points = Vec::new();
+    for &f in faces {
+        let Surface::Plane(plane) = all.get(f)?.oriented_surface() else {
+            return None;
+        };
+        let n = plane.normal();
+        if normal.is_some_and(|m: Vector3| m.dot(n) < 1.0 - 1.0e-9) {
+            return None;
+        }
+        normal = Some(n);
+        for edge in all[f].edge_iter() {
+            points.extend(crate::geometry::curve_samples(&edge.curve()));
+        }
+    }
+    let count = points.len().max(1) as f64;
+    let centre = points.iter().fold(Vector3::zero(), |a, p| a + p.to_vec()) / count;
+    Some((Point3::from_vec(centre), normal?))
+}
+
 pub const SIM_OPERATIONS: &[&str] = &[
     "let",
     "if",
@@ -81,6 +103,12 @@ impl Model {
             "expect" => self.op_expect(line),
             "fix" => self.op_support(line, Hold::Fixed),
             "slide" => self.op_support(line, Hold::Slide),
+            "pin" => {
+                let args = Args::new(line, &["faces"], &[], false)?;
+                let (point, axis) = self.target_axis(args.text("faces")?)?;
+                self.op_support(line, Hold::Pin { point, axis })
+            }
+            "torque" => self.op_torque(line),
             "load" => self.op_load(line),
             "pressure" => self.op_load(line),
             "probe" => {
@@ -193,6 +221,72 @@ impl Model {
         Ok(faces.into_iter().map(|f| index * STRIDE + f).collect())
     }
 
+    fn target_axis(&mut self, selector: &str) -> Result<(Point3, Vector3)> {
+        let target = self.target_mut()?;
+        let (solid, faces) = if target.assembly || selector.contains(':') {
+            let (_, solid, faces) = target.reference(selector)?;
+            (solid, faces)
+        } else {
+            let tolerance = target.tolerance();
+            let solid = target
+                .solid
+                .clone()
+                .ok_or_else(|| anyhow!("the part has no solid"))?;
+            let faces = crate::select::select_faces(selector, &solid, &target.groups, tolerance)?;
+            (solid, faces)
+        };
+        match super::mate::cylinders(&solid, &faces).as_slice() {
+            [one] => Ok((one.point, one.axis)),
+            [] => flat_axis(&solid, &faces).ok_or_else(|| {
+                anyhow!("`{selector}` has no round face or single flat face to find an axis from")
+            }),
+            many => bail!(
+                "`{selector}` has {} round faces on different axes",
+                many.len()
+            ),
+        }
+    }
+
+    fn op_torque(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["faces", "moment"], &["axis", "at"], false)?;
+        let moment = args.number("moment", &self.scope)?;
+        let selector = args.text("faces")?;
+        let faces = self.target_faces(selector)?;
+        let (point, axis) = match (args.values.get("axis"), args.values.get("at")) {
+            (Some(axis), at) => {
+                let axis = point3(axis, &self.scope)?.to_vec();
+                if axis.magnitude() == 0.0 {
+                    bail!("`axis=` needs a direction");
+                }
+                let point = match at {
+                    Some(at) => point3(at, &self.scope)?,
+                    None => Point3::origin(),
+                };
+                (point, axis.normalize())
+            }
+            (None, None) => self.target_axis(selector)?,
+            (None, Some(_)) => bail!("give `axis=` with `at=`"),
+        };
+        let n = faces.len();
+        self.spec().loads.push(Load {
+            faces,
+            push: Push::Torque {
+                point,
+                axis,
+                moment: moment * 1000.0,
+            },
+        });
+        Ok(format!(
+            "{moment} N·m about {},{},{} through {},{},{} on {n} face(s)",
+            crate::plot::label(axis.x),
+            crate::plot::label(axis.y),
+            crate::plot::label(axis.z),
+            crate::plot::label(point.x),
+            crate::plot::label(point.y),
+            crate::plot::label(point.z)
+        ))
+    }
+
     fn boundary_label(&mut self, line: &Line) -> String {
         let count = self.spec().thermal.len() + 1;
         line.label
@@ -240,6 +334,7 @@ impl Model {
         Ok(match push {
             Push::Force(f) => format!("{} N over {n} face(s)", crate::plot::label(f.magnitude())),
             Push::Pressure(p) => format!("{p} MPa on {n} face(s)"),
+            Push::Torque { .. } => String::new(),
         })
     }
 

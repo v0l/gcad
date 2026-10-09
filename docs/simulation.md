@@ -151,8 +151,13 @@ and the element size), in both directions, which keeps interface stresses within
 on a matching pair. Checked on a bonded stack in tension, a two-material wall in series and a
 stacked block whose first mode matches the solid one.
 
-Still to build: `pin` supports, `torque` loads, contact that can open or slide, and a
-multigrid preconditioner for problems too big for the direct solver.
+`pin` holds the radial and axial directions of a round face's nodes; `torque` spreads a
+moment as tangential traction proportional to the distance from the axis. Checked against a
+shaft in torsion (stress and twist within 1%) and a link on two pins. Before solving, the six
+rigid-body motions are projected through the supports, and a part they leave free is refused.
+
+Still to build: contact that can open or slide, and a multigrid preconditioner for problems
+too big for the direct solver.
 
 ## Tests
 
