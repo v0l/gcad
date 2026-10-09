@@ -268,3 +268,19 @@ fn square_with_midpoint_and_online() {
         "{text}"
     );
 }
+
+#[test]
+fn rack() {
+    let (module, teeth, back) = (2.0, 10.0, 3.0);
+    let pitch = PI * module;
+    let thick = pitch / 2.0;
+    let tooth = 2.25 * module * thick + 0.5625 * module * module * 20.0_f64.to_radians().tan();
+    let area = teeth * (pitch * back + tooth);
+    let model = build(&format!("rack {teeth} {module} back={back}\nextrude 5"));
+    assert_volume(&model, area * 5.0, 1.0e-6);
+    assert_bounds(
+        &model,
+        [-teeth * pitch / 2.0, -2.5 - back, 0.0],
+        [teeth * pitch / 2.0, 2.0, 5.0],
+    );
+}

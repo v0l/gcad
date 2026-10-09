@@ -604,3 +604,63 @@ fn shell_follows_a_rounded_floor() {
         1.0e-4,
     );
 }
+
+#[test]
+fn extrude_twisted() {
+    let model = build("rect 10 2 at=5,0\nextrude 10 twist=90");
+    assert_volume(&model, 200.0, 1.0e-3);
+    let (min, max) = bounds(&model);
+    assert!(
+        max[1] > 10.0 && min[1] > -1.01,
+        "turns counterclockwise: {min:?} {max:?}"
+    );
+    let down = build("rect 10 2 at=5,0\nextrude -10 twist=90");
+    let (min, max) = bounds(&down);
+    assert!(
+        min[1] < -10.0 && max[1] < 1.01,
+        "right-handed going down: {min:?} {max:?}"
+    );
+}
+
+#[test]
+fn extrude_scaled() {
+    assert_volume(
+        &build("rect 20 20\nextrude 10 scale=0.5"),
+        frustum(400.0, 100.0, 10.0),
+        1.0e-6,
+    );
+}
+
+fn spur_area(teeth: f64, module: f64) -> f64 {
+    volume(&build(&format!("gear {teeth} {module}\nextrude 1")))
+}
+
+#[test]
+fn helical_gear() {
+    let area = spur_area(20.0, 2.0);
+    let model = build("gear 20 2 helix=20\nextrude 10");
+    assert_volume(&model, area * 10.0, 2.0e-4);
+    let twist = (10.0 * 20.0_f64.to_radians().tan() / 20.0).to_degrees();
+    let lines = gcad::parse::parse_program("gear 20 2 helix=20\nextrude 10").expect("parses");
+    let said = gcad::model::run(&lines).steps[0]
+        .1
+        .as_ref()
+        .expect("runs")
+        .clone();
+    assert!(
+        said.contains(&format!("{:.3} degrees per mm", twist / 10.0)),
+        "{said}"
+    );
+}
+
+#[test]
+fn bevel_gear() {
+    let area = spur_area(20.0, 2.0);
+    let scale: f64 = 1.0 - 5.0 / 20.0;
+    assert_volume(
+        &build("gear 20 2 cone=45\nextrude 5"),
+        area * 5.0 * (1.0 + scale + scale * scale) / 3.0,
+        2.0e-4,
+    );
+    assert!(failure("gear 20 2 cone=45\nextrude 25").contains("cone apex"));
+}

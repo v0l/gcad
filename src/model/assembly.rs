@@ -637,7 +637,11 @@ impl Model {
         let [_, file] = line.positional.as_slice() else {
             bail!("write `part name file.gcad [body=b] [variable=value ...]`");
         };
-        let path = self.relative(file);
+        let path = if super::standard::is_standard(file) {
+            std::path::PathBuf::from(file)
+        } else {
+            self.relative(file)
+        };
         let vars = line
             .named
             .iter()
@@ -1109,11 +1113,7 @@ impl Model {
             .collect()
     }
 
-    fn sweep_overlaps(
-        &self,
-        index: usize,
-        values: &[f64],
-    ) -> Result<Vec<(f64, Vec<Clash>)>> {
+    fn sweep_overlaps(&self, index: usize, values: &[f64]) -> Result<Vec<(f64, Vec<Clash>)>> {
         use rayon::prelude::*;
         let named = self.named_solids();
         let names: Vec<String> = named.iter().map(|(n, _)| n.clone()).collect();

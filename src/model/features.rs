@@ -311,7 +311,7 @@ impl Model {
         let args = Args::new(
             line,
             &["d", "how"],
-            &["draft", "mode", "upto", "offset", "thin"],
+            &["draft", "mode", "upto", "offset", "thin", "twist", "scale"],
             false,
         )?;
         let combine = match args.values.get("mode").copied() {
@@ -320,6 +320,9 @@ impl Model {
             Some("cut") => Combine::Remove,
             Some(other) => bail!("mode must be add, cut or intersect, got `{other}`"),
         };
+        if args.has("twist") || args.has("scale") || self.gear.is_some() {
+            return self.extrude_shaped(line, &args, combine);
+        }
         let both = match args.values.get("how").copied() {
             None => false,
             Some("both") => true,
@@ -453,6 +456,67 @@ impl Model {
         } else {
             summary
         })
+    }
+
+    fn extrude_shaped(&mut self, line: &Line, args: &Args<'_>, combine: Combine) -> Result<String> {
+        let lead = self.gear;
+        if let Some(name) = ["how", "upto", "draft", "thin", "offset"]
+            .into_iter()
+            .find(|name| args.has(name))
+        {
+            let what = if lead.is_some() && !args.has("twist") && !args.has("scale") {
+                "a helical or bevel gear"
+            } else {
+                "`twist=` or `scale=`"
+            };
+            bail!("extruding {what} takes a plain distance, not `{name}`");
+        }
+        let distance = args.number("d", &self.scope)?;
+        if distance == 0.0 {
+            bail!("extrude distance is zero");
+        }
+        let twist = match args.optional_number("twist", &self.scope)? {
+            Some(twist) => twist,
+            None => lead.map_or(0.0, |lead| {
+                (distance.abs() * lead.helix.to_radians().tan() / lead.pitch_radius).to_degrees()
+            }),
+        };
+        let scale = match (args.optional_number("scale", &self.scope)?, lead) {
+            (Some(scale), _) => positive(scale, "scale")?,
+            (None, Some(lead)) if lead.cone > 0.0 => {
+                let apex = lead.pitch_radius / lead.cone.to_radians().tan();
+                if distance.abs() >= apex {
+                    bail!(
+                        "the bevel gear reaches its cone apex {apex:.3} along; extrude it less than that"
+                    );
+                }
+                1.0 - distance.abs() / apex
+            }
+            _ => 1.0,
+        };
+        let (frame, profiles) = self.take_sketch("extrude")?;
+        let stations = if twist == 0.0 {
+            2
+        } else {
+            ((twist.abs() / 5.0).ceil() as usize + 1).max(5)
+        };
+        let travel = frame.normal * distance.signum();
+        let frames: Vec<Frame> = (0..stations)
+            .map(|k| {
+                let f = k as f64 / (stations - 1) as f64;
+                let spin = Matrix3::from_axis_angle(travel, Deg(twist * f));
+                let size = 1.0 + (scale - 1.0) * f;
+                Frame {
+                    origin: frame.origin + frame.normal * distance * f,
+                    x: spin * frame.x * size,
+                    y: spin * frame.y * size,
+                    normal: frame.normal,
+                }
+            })
+            .collect();
+        let tools = super::path::skin_frames(&frames, &profiles)?;
+        let end = frame.origin + frame.normal * distance;
+        self.place_swept(&label_of(line), tools, frame.origin, end, combine)
     }
 
     pub(crate) fn remove(&mut self, label: &str, removal: Removal<'_>) -> Result<String> {

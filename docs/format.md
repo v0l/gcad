@@ -71,7 +71,8 @@ Sketch:
 | `ellipse` | `dx dy` `at=x,y` | adds an ellipse of those diameters |
 | `poly` | `x,y x,y x,y ...` `r=` or `c=` | adds a closed polygon, corners rounded by `r` or cut by `c` |
 | `ngon` | `d n` `at=x,y` `angle=` | adds a regular polygon of `n` sides with corners on a circle of diameter `d` |
-| `gear` | `teeth module` `internal` `at=x,y` `angle=` `pressure=` `backlash=` | adds an involute spur gear with a tooth on `angle` (0 by default, along x), teeth of `module` (pitch diameter `teeth*module`), a `pressure` angle of 20 degrees unless given, and teeth thinned by `backlash` at the pitch circle. `internal` draws the toothed hole of a ring gear instead, to go inside a larger profile, with its tooth on `angle` pointing in. Two gears mesh at centres `module*(teeth_a+teeth_b)/2` apart, a gear inside a ring at `module*(ring-gear)/2`, with a tooth of one pointing at a gap of the other |
+| `gear` | `teeth module` `internal` `at=x,y` `angle=` `pressure=` `backlash=` `helix=` `cone=` | adds an involute spur gear with a tooth on `angle` (0 by default, along x), teeth of `module` (pitch diameter `teeth*module`), a `pressure` angle of 20 degrees unless given, and teeth thinned by `backlash` at the pitch circle. `internal` draws the toothed hole of a ring gear instead, to go inside a larger profile, with its tooth on `angle` pointing in. Two gears mesh at centres `module*(teeth_a+teeth_b)/2` apart, a gear inside a ring at `module*(ring-gear)/2`, with a tooth of one pointing at a gap of the other | `helix=` makes the next `extrude` a helical gear, its teeth leaning that many degrees at the pitch circle, right-hand when positive; mating helical gears take opposite signs. `cone=` makes the next `extrude` a bevel gear whose teeth shrink toward the apex of a pitch cone of that half-angle, `teeth*module/2/tan(cone)` along the extrude; a pair at right angles takes `cone=atan(teeth_a/teeth_b)` and the other `90` less that. The module is the one in the sketch plane, so helical gears mesh at the same centres as spur gears
+| `rack` | `teeth module` `at=x,y` `angle=` `pressure=` `backlash=` `back=` | adds a straight rack of `teeth` teeth along x, its pitch line through `at` and its teeth pointing +y, `back` (2 modules unless given) of solid below the roots. It is `teeth*pi*module` long and centred on `at`, with a tooth on `at` when `teeth` is odd and a gap when even. A gear of pitch diameter `d` meshes with its centre `d/2` above the pitch line
 | `slot` | `l w` `at=x,y` `angle=` | adds a slot `l` long overall and `w` wide, turned by `angle` degrees |
 | `spline` | `x,y x,y ... closed` | adds a smooth closed curve through the points |
 | `text` | `"words"` `size=` `at=x,y` | adds the outlines of the words, `size` tall, starting at `at` |
@@ -110,7 +111,7 @@ Features:
 
 | operation | parameters | does |
 |---|---|---|
-| `extrude` | `d`, `next` or `upto=faces` `offset=`, `both`, `draft=`, `thin=`, `mode=add\|cut\|intersect` | adds the sketch along the plane normal (negative `d` goes the other way); `both` centres it on the plane; `upto` stops at a flat face, `offset` past it; `next` stops at the first face the sketch reaches; `draft` tapers it inward by degrees; `thin` makes walls that thick inside the profile |
+| `extrude` | `d`, `next` or `upto=faces` `offset=`, `both`, `draft=`, `thin=`, `twist=`, `scale=`, `mode=add\|cut\|intersect` | adds the sketch along the plane normal (negative `d` goes the other way); `both` centres it on the plane; `upto` stops at a flat face, `offset` past it; `next` stops at the first face the sketch reaches; `draft` tapers it inward by degrees; `thin` makes walls that thick inside the profile; `twist` turns the sketch that many degrees by the end, counterclockwise looking back down the extrude, and `scale` sizes it by the end, both about the sketch origin and with a plain distance only |
 | `cut` | `d` or `thru`, `draft=` | removes the sketch from the solid, going into it against the plane normal |
 | `revolve` | `angle` `axis=x\|y\|name` `mode=` | spins the sketch about the workplane's x or y axis through its origin, or a named `axis` |
 | `path` | `x,y,z x,y,z ...` `r=` or `smooth` | sets the sweep path in world coordinates; corners are bent with radius `r`, or `smooth` makes one curve through the points |
@@ -118,7 +119,7 @@ Features:
 | `sweep` | `mode=` `twist=` `scale=` | carries the sketch from the path start along the path, turning it `twist` degrees and sizing it to `scale` by the end |
 | `section` | | stores the sketch as one cross-section for `loft` |
 | `loft` | `smooth` `mode=` | joins the stored sections with ruled faces, or one smooth surface through them all with `smooth`; sections with different edge counts are matched up by splitting edges |
-| `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` `on=label.side` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it; with `on=` the points are angle,height on the side of an extruded circle and the holes go in square to it |
+| `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` `fit=` `on=label.side` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it; with `on=` the points are angle,height on the side of an extruded circle and the holes go in square to it. `d` can be a screw size, `M2` to `M12`: `hole M3 x,y` is its clearance hole (ISO 273, `fit=normal` unless `fit=close` or `fit=loose`), `fit=tap` its tap drill, threaded like `thread=`, and `fit=insert` the hole for a heat-set insert, blind to the insert's length plus 1 unless `depth` says. `cbore=M3` is the counterbore for an ISO 4762 socket head (DIN 974 diameter, head height plus 0.4 deep) and `csink=M3` the 90 degree countersink for an ISO 10642 flat head. For a plain diameter, `fit=H7` (H, G, F, E, D or JS, grades 5 to 11) records an ISO 286 fit: `check` prints its limits and drawings add it to the callout. Holes are always modelled at the nominal size |
 | `thread` | `size` `on=faces` `pitch=` `left` | cuts an ISO metric thread (`M2` to `M12`) into a round face: a rod gets an outside thread with its crest on the rod, a hole an inside one with its crest on the drill; `pitch` overrides the coarse pitch and `left` makes it left-hand. Each end of the face must be a flat face square to it or a chamfer (or countersink) that goes past the thread's root, which the thread runs out into. Chamfer before threading; a rounded end, or a chamfer after, fails |
 | `shell` | `t` `open=faces,...` | hollows an extrusion (open `label.end`, `label.start` or both) or a full revolve (open its flat `label.caps`) to walls `t` thick; where `fillet` rounded the extrusion's straight edges, the inside is rounded to that radius less `t`, so the walls stay `t` thick |
 | `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face; `label.side` of an extrusion that is the whole solid tapers curved sides too |
@@ -146,7 +147,7 @@ Bodies:
 | `body` | `name` | sets the current solid aside and starts a new one: another part sharing this file's sizes, which an assembly brings in as `part.name`, or a piece to `combine` into one part; the first body is `main` |
 | `combine` | `into from` `mode=add\|cut\|intersect` | joins body `from` into body `into`, or cuts it out, and drops `from` |
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
-| `import` | `file.step` or `file.stl`, `solid=` | adds the solid in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file. A STEP file with several solids needs `solid=n` to pick one; the error lists them with their names and sizes |
+| `import` | `file.step` or `file.stl`, `solid=` | adds the solid in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file. A STEP file with several solids needs `solid=n` to pick one; the error lists them with their names and sizes. A STEP assembly's solids come where the file places them, a part used six times being six solids |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
 | `material` | `name` `density=` | sets what the current body is made of, for its mass. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood. `density=` in g/cm³ gives any other |
 
@@ -173,7 +174,8 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 
 | operation | parameters | does |
 |---|---|---|
-| `part` | `name file.gcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.gasm` file brings in its parts and joints too |
+| `part` | `name file.gcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.gasm` file brings in its parts and joints too. A `.step` file brings in each solid where the file places it, named after its product (`box`, `pin`, `pin_2`, ...), and the bill of materials counts repeats of one product together |
+| `part` | `name kind:size` | brings in a standard part, see below |
 | `move` | `part x,y,z` | moves a part and everything jointed to it |
 | `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it |
 | `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
@@ -193,6 +195,24 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 | `material` | `part name` `density=` | sets a part's material, over the one its file gave it |
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
 | `measure` | `mass`, `overlap a b` | as in part files |
+
+Standard parts are built in, M2 to M12, and come in steel (inserts in brass). A screw's
+axis is z, with the face its head bears on at z=0 and the shank going down, so
+`concentric s:shank.side plate:holes.side` and `flush s:head.start plate:holes.cbore_floor`
+seat it; a flat head's top is at z=0 instead, so it sits flush with `flush s:head.start`.
+Nuts and washers sit on z=0 and go up, inserts hang down from z=0.
+
+| `kind:size` | part | faces |
+|---|---|---|
+| `shcs:M3x10` | ISO 4762 socket head cap screw, 10 long under the head | `head`, `socket`, `shank` |
+| `fhcs:M3x10` | ISO 10642 countersunk socket screw, 10 long overall | `head`, `socket`, `shank` |
+| `hex:M6x20` | ISO 4017 hex head bolt | `head`, `shank` |
+| `nut:M3` | ISO 4032 hex nut | `nut`, `bore` |
+| `washer:M3` | ISO 7089 plain washer | `washer`, `bore` |
+| `insert:M3` | heat-set insert (M2 to M6, Ruthex sizes) | `insert`, `bore` |
+
+Screws are drawn plain, without a modelled thread. The bill of materials lists them by
+standard and size, like `ISO 4762 M3x10`.
 
 `faces` in `parallel`, `angle`, `distance` and `tangent` is either flat faces on one
 plane or the round faces of one cylinder, which stands for its axis.

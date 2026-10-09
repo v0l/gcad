@@ -346,6 +346,17 @@ impl Model {
                 vec![loft_wires(&wires)?]
             }
         };
+        self.place_swept(&label, tools, start_point, end_point, combine)
+    }
+
+    pub(crate) fn place_swept(
+        &mut self,
+        label: &str,
+        tools: Vec<Solid>,
+        start_point: Point3,
+        end_point: Point3,
+        combine: super::Combine,
+    ) -> Result<String> {
         let tolerance = self.tolerance() * 100.0;
         for tool in tools {
             let groups = select::faces(&tool)
@@ -368,8 +379,8 @@ impl Model {
                     (group, surface)
                 })
                 .collect();
-            self.record_for(&label, groups, combine);
-            self.merge(&label, tool, combine)?;
+            self.record_for(label, groups, combine);
+            self.merge(label, tool, combine)?;
         }
         self.describe_solid()
     }
@@ -421,6 +432,14 @@ fn skinned_sweep(
             normal: tangent,
         });
     }
+    skin_frames(&frames, profiles)
+}
+
+pub(crate) fn skin_frames(
+    frames: &[Frame],
+    profiles: &[crate::geometry::Profile],
+) -> Result<Vec<Solid>> {
+    let stations = frames.len();
     let shapes = loops(&frames[0], profiles)?;
     let at_station = |k: usize, index: usize| -> Result<Wire> {
         let loops = loops(&frames[k], profiles)?;

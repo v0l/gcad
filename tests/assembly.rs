@@ -796,3 +796,67 @@ fn planetary_gears_turn_without_touching() {
     );
     assert!(out_of_phase.last().is_some_and(Result::is_err));
 }
+
+#[test]
+fn standard_parts_from_the_library() {
+    let plate = "rect 40 20\ntop: extrude 6\nplane top.end\nholes: hole M3 -10,0 10,0 cbore=M3\n";
+    let (model, _) = built(
+        "standard_parts_from_the_library",
+        "part plate plate.gcad\npart s1 shcs:M3x10\nconcentric s1:shank.side plate:holes.side near=-10,0,6\nflush s1:head.start plate:holes.cbore_floor\npattern s1 holes=plate:holes.side\npart w1 washer:M3\nconcentric w1:bore.side plate:holes.side near=-10,0,0\nflush w1:washer.end plate:top.start\npart n1 nut:M3\nconcentric n1:bore.side plate:holes.side near=-10,0,0\nflush n1:nut.end plate:top.start offset=0.5\ninterference none",
+        &[("plate.gcad", plate)],
+    );
+    let path =
+        std::path::PathBuf::from(scratch("standard_parts_from_the_library")).join("top.gasm");
+    let items = gcad::bom::items(&model, &path);
+    let summary: Vec<(usize, &str, Option<&str>)> = items
+        .iter()
+        .map(|i| (i.names.len(), i.file.as_str(), i.material.as_deref()))
+        .collect();
+    assert_eq!(
+        summary,
+        [
+            (1, "plate.gcad", None),
+            (2, "ISO 4762 M3x10", Some("steel")),
+            (1, "ISO 7089 M3", Some("steel")),
+            (1, "ISO 4032 M3", Some("steel")),
+        ]
+    );
+    let pi = std::f64::consts::PI;
+    let hexagon = |s: f64| s * s * 3.0_f64.sqrt() / 2.0;
+    let screw = pi * 2.75 * 2.75 * 3.0 - hexagon(2.5) * 1.3 + pi * 1.5 * 1.5 * 10.0;
+    let washer = pi * (3.5 * 3.5 - 1.6 * 1.6) * 0.5;
+    let nut = (hexagon(5.5) - pi * 1.5 * 1.5) * 2.4;
+    for (item, expected) in items[1..].iter().zip([screw, washer, nut]) {
+        assert!(
+            (item.volume - expected).abs() < expected * 1.0e-3,
+            "{} is {}, expected {expected}",
+            item.file,
+            item.volume
+        );
+    }
+}
+
+#[test]
+fn step_assembly_as_a_part() {
+    let step = format!(
+        "{}/tests/fixtures/occt-instances.step",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (model, _) = built(
+        "step_assembly_as_a_part",
+        &format!("part rig {step}\nmove rig.pin_2 0,0,20"),
+        &[],
+    );
+    assert_eq!(
+        model.body_names(),
+        ["rig.plate", "rig.pin", "rig.pin_2", "rig.pin_3"]
+    );
+    let path = std::path::PathBuf::from(scratch("step_assembly_as_a_part")).join("top.gasm");
+    let counts: Vec<usize> = gcad::bom::items(&model, &path)
+        .iter()
+        .map(|i| i.names.len())
+        .collect();
+    assert_eq!(counts, [1, 3]);
+    let pin = gcad::geometry::bounds(&model.named_body("rig.pin_3").expect("pin"));
+    assert!((pin.min().x - 28.0).abs() < 1.0e-6, "{pin:?}");
+}

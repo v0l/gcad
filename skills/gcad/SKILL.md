@@ -141,6 +141,13 @@ explode case.lid 0,0,30
   `interference joint=NAME steps=12` to find the range where it clashes. Set `min`/`max` from
   that.
 - `gcad bom asm.gasm` counts the parts; `gcad render asm.gasm x.png --explode` draws it apart.
+- Fasteners come from the built-in library rather than a part file: `part s1 shcs:M3x10`
+  (also `fhcs:`, `hex:`, `nut:M3`, `washer:M3`, `insert:M3`). Screw heads bear on z=0 with the
+  shank down; mate `s1:shank.side` and `s1:head.start`, nuts and washers by `bore.side`. Size the
+  holes they go in with the same name: `hole M3 x,y` (clearance), `cbore=M3`, `csink=M3`,
+  `fit=tap`, `fit=insert`.
+- A vendor STEP assembly comes in whole with `part box vendor.step`: each solid where the file
+  puts it, named after its product.
 
 ## Gears
 
@@ -150,6 +157,9 @@ explode case.lid 0,0,30
 one points at a gap of the other: with a tooth on the line of centres on one, turn the other
 by `180/teeth`. Use 17 or more teeth at 20 degrees; smaller pinions overlap their mate at the
 root because undercut is not modelled. `interference none` catches a gear out of phase.
+`gear ... helix=20` then `extrude` makes a helical gear (mate it with `helix=-20`), and
+`gear ... cone=atan(a/b)` then `extrude` a bevel gear. `rack teeth module` draws a rack with its
+pitch line on `at`; a gear meshes with its centre `pitch_diameter/2` above it.
 
 ## Output
 

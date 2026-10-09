@@ -585,7 +585,11 @@ impl Model {
         let found = if stl {
             vec![(String::new(), super::import::stl_solid(&path)?)]
         } else {
-            read_step(&path, pick).with_context(|| format!("importing {}", path.display()))?
+            read_step(&path, pick)
+                .with_context(|| format!("importing {}", path.display()))?
+                .into_iter()
+                .map(|part| (part.name, part.solid))
+                .collect()
         };
         let listing = || {
             found
@@ -629,36 +633,195 @@ impl Model {
     }
 }
 
-fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<(String, Solid)>> {
-    use monstertruck::step::load::Table;
+type StepTable = monstertruck::step::load::Table;
+
+fn placed_breps(table: &StepTable) -> Vec<(u64, String, String, Matrix4)> {
+    let Ok(assembly) = table.step_assy() else {
+        return Vec::new();
+    };
+    let mut placed = Vec::new();
+    for top in assembly.top_nodes() {
+        for path in assembly.maximal_paths_iter(top.index()) {
+            let Some(matrix) = path
+                .edges()
+                .iter()
+                .try_fold(Matrix4::identity(), |m, edge| {
+                    Matrix4::try_from(edge.matrix()).ok().map(|step| m * step)
+                })
+            else {
+                continue;
+            };
+            let Some(node) = path.nodes().last().copied() else {
+                continue;
+            };
+            let mut ids: Vec<u64> = node
+                .shape()
+                .iter()
+                .copied()
+                .filter(|id| table.manifold_solid_brep.contains_key(id))
+                .collect();
+            if let Some(representation) = table.shape_representation_of_node(node.entity()) {
+                ids.extend(
+                    table
+                        .solids_via_shape_relationship(representation)
+                        .0
+                        .into_iter()
+                        .filter(|id| table.manifold_solid_brep.contains_key(id)),
+                );
+            }
+            ids.sort_unstable();
+            ids.dedup();
+            let name = path
+                .edges()
+                .last()
+                .map(|edge| edge.attributes().name.clone())
+                .filter(|name| !name.is_empty() && !name.starts_with("=>"))
+                .unwrap_or_else(|| node.attributes().name.clone());
+            let product = node.attributes().name.clone();
+            placed.extend(
+                ids.into_iter()
+                    .map(|id| (id, name.clone(), product.clone(), matrix)),
+            );
+        }
+    }
+    placed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| natural(&a.1, &b.1)));
+    placed
+}
+
+fn natural(a: &str, b: &str) -> std::cmp::Ordering {
+    let split = |s: &str| {
+        let digits = s.len() - s.trim_end_matches(|c: char| c.is_ascii_digit()).len();
+        let (head, tail) = s.split_at(s.len() - digits);
+        (head.to_string(), tail.parse::<u64>().unwrap_or(0))
+    };
+    split(a).cmp(&split(b))
+}
+
+pub(crate) struct StepSolid {
+    pub name: String,
+    pub product: String,
+    pub matrix: Matrix4,
+    pub solid: Solid,
+}
+
+fn ident(text: &str) -> String {
+    let mut out = String::new();
+    for c in text.chars().flat_map(char::to_lowercase) {
+        if c.is_ascii_alphanumeric() {
+            out.push(c);
+        } else if !out.is_empty() && !out.ends_with('_') {
+            out.push('_');
+        }
+    }
+    let out = out.trim_end_matches('_').to_string();
+    if out.is_empty() {
+        "solid".to_string()
+    } else {
+        out
+    }
+}
+
+pub(crate) fn step_model(path: &std::path::Path) -> Result<Model> {
+    let found = read_step(path, None).with_context(|| format!("importing {}", path.display()))?;
+    let mut model = Model {
+        dir: path.parent().map(std::path::Path::to_path_buf),
+        ..Default::default()
+    };
+    for part in found {
+        let base = ident(&part.product);
+        let mut name = base.clone();
+        let mut n = 2;
+        while model.bodies.iter().any(|(b, _)| *b == name) {
+            name = format!("{base}_{n}");
+            n += 1;
+        }
+        model.sources.insert(
+            name.clone(),
+            super::Source {
+                file: path.to_path_buf(),
+                body: ident(&part.product),
+                vars: Vec::new(),
+            },
+        );
+        model.placements.insert(name.clone(), part.matrix);
+        model.bodies.push((name, part.solid));
+    }
+    Ok(model)
+}
+
+fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSolid>> {
     use monstertruck::step::load::step_geometry::{Curve3D, Surface as StepSurface};
     let text = std::fs::read(path)?;
-    let table = Table::from_step_bytes(&text).map_err(|error| anyhow!("{error}"))?;
-    let mut breps: Vec<_> = table.manifold_solid_brep.iter().collect();
-    if breps.is_empty() {
+    let table = StepTable::from_step_bytes(&text).map_err(|error| anyhow!("{error}"))?;
+    if table.manifold_solid_brep.is_empty() {
         bail!("the file has no solids");
     }
-    breps.sort_by_key(|(id, _)| **id);
+    let mut placed = placed_breps(&table);
+    if placed.is_empty() {
+        let mut ids: Vec<u64> = table.manifold_solid_brep.keys().copied().collect();
+        ids.sort_unstable();
+        placed = ids
+            .into_iter()
+            .map(|id| {
+                let label = table.manifold_solid_brep[&id].label.clone();
+                (id, label.clone(), label, Matrix4::identity())
+            })
+            .collect();
+    } else {
+        for (id, holder) in &table.manifold_solid_brep {
+            if !placed.iter().any(|(p, ..)| p == id) {
+                placed.push((
+                    *id,
+                    holder.label.clone(),
+                    holder.label.clone(),
+                    Matrix4::identity(),
+                ));
+            }
+        }
+    }
     let chosen: Vec<_> = match pick {
-        Some(index) if index < breps.len() => vec![breps[index]],
-        _ => breps,
+        Some(index) if index < placed.len() => vec![placed[index].clone()],
+        _ => placed,
     };
+    let mut converted: std::collections::HashMap<u64, Solid> = std::collections::HashMap::new();
     chosen
         .into_iter()
-        .map(|(_, holder)| {
-            let compressed = table
-                .to_compressed_trimmed_solid(holder)
-                .map_err(|error| anyhow!("{error}"))?;
-            let solid = monstertruck::healing::extract_healed_trimmed_solid(compressed, 1.0e-3)
-                .map_err(|error| anyhow!("{error}"))?
-                .erase_trims()
-                .try_mapped(
-                    |point| Some(*point),
-                    |curve: &Curve3D| Curve::try_from(curve).ok(),
-                    |surface: &StepSurface| Surface::try_from(surface).ok(),
-                )
-                .ok_or_else(|| anyhow!("the file uses a curve or surface gcad cannot read"))?;
-            Ok((holder.label.clone(), oriented(solid)))
+        .map(|(id, name, product, matrix)| {
+            let solid = match converted.get(&id) {
+                Some(solid) => solid.clone(),
+                None => {
+                    let holder = &table.manifold_solid_brep[&id];
+                    let compressed = table
+                        .to_compressed_trimmed_solid(holder)
+                        .map_err(|error| anyhow!("{error}"))?;
+                    let solid =
+                        monstertruck::healing::extract_healed_trimmed_solid(compressed, 1.0e-3)
+                            .map_err(|error| anyhow!("{error}"))?
+                            .erase_trims()
+                            .try_mapped(
+                                |point| Some(*point),
+                                |curve: &Curve3D| Curve::try_from(curve).ok(),
+                                |surface: &StepSurface| Surface::try_from(surface).ok(),
+                            )
+                            .ok_or_else(|| {
+                                anyhow!("the file uses a curve or surface gcad cannot read")
+                            })?;
+                    let solid = oriented(solid);
+                    converted.insert(id, solid.clone());
+                    solid
+                }
+            };
+            let placed = if matrix == Matrix4::identity() {
+                solid
+            } else {
+                oriented(builder::transformed(&solid, matrix))
+            };
+            Ok(StepSolid {
+                name,
+                product,
+                matrix,
+                solid: placed,
+            })
         })
         .collect()
 }

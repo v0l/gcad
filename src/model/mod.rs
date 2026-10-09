@@ -4,6 +4,7 @@ mod blends;
 mod bodies;
 mod constrain;
 mod exact;
+mod fastener;
 mod features;
 mod fuse;
 mod holes;
@@ -17,6 +18,7 @@ mod round;
 mod sketch;
 mod skin;
 mod solids;
+mod standard;
 mod thread;
 mod weld;
 mod wrap;
@@ -101,6 +103,22 @@ pub struct Model {
     pub couples: Vec<assembly::Couple>,
     pub cache: Cache,
     pub rounded: Vec<Rounded>,
+    pub gear: Option<GearLead>,
+    pub hole_notes: Vec<HoleNote>,
+}
+
+#[derive(Clone, Debug)]
+pub struct HoleNote {
+    pub diameter: f64,
+    pub centers: Vec<Point3>,
+    pub note: String,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct GearLead {
+    pub pitch_radius: f64,
+    pub helix: f64,
+    pub cone: f64,
 }
 
 #[derive(Clone, Default)]
@@ -159,6 +177,7 @@ pub const OPERATIONS: &[&str] = &[
     "poly",
     "ngon",
     "gear",
+    "rack",
     "offset",
     "slot",
     "ellipse",
@@ -207,8 +226,8 @@ pub const OPERATIONS: &[&str] = &[
 ];
 
 const PROFILE_OPS: &[&str] = &[
-    "rect", "circle", "poly", "ngon", "gear", "offset", "slot", "ellipse", "close", "spline",
-    "text",
+    "rect", "circle", "poly", "ngon", "gear", "rack", "offset", "slot", "ellipse", "close",
+    "spline", "text",
 ];
 
 impl Model {
@@ -299,6 +318,7 @@ impl Model {
             "poly" => self.op_poly(line),
             "ngon" => self.op_ngon(line),
             "gear" => self.op_gear(line),
+            "rack" => self.op_rack(line),
             "offset" => self.op_offset(line),
             "slot" => self.op_slot(line),
             "ellipse" => self.op_ellipse(line),
@@ -562,6 +582,15 @@ pub(crate) fn load_model(
     depth: usize,
     cache: &Cache,
 ) -> Result<Model> {
+    if let Some(spec) = path.to_str().filter(|text| standard::is_standard(text)) {
+        return standard_model(spec);
+    }
+    if path
+        .extension()
+        .is_some_and(|e| e.eq_ignore_ascii_case("step") || e.eq_ignore_ascii_case("stp"))
+    {
+        return bodies::step_model(path);
+    }
     let mut start = start_for(path, vars, depth);
     start.cache = cache.clone();
     let run = run_model(start, &read_lines(path)?);
@@ -569,6 +598,40 @@ pub(crate) fn load_model(
         bail!("{}:{}: {error:#}", path.display(), line.number);
     }
     Ok(run.model)
+}
+
+fn standard_model(spec: &str) -> Result<Model> {
+    let part = standard::standard(spec)?;
+    let lines = crate::parse::parse_program(&part.source)?;
+    let run = run_model(start(None), &lines);
+    if let Some((line, Err(error))) = run.steps.last() {
+        bail!("{spec}: line {} `{}`: {error:#}", line.number, line.text);
+    }
+    let mut model = run.model;
+    model.sources.insert(
+        "main".to_string(),
+        assembly::Source {
+            file: PathBuf::from(part.title),
+            body: "main".to_string(),
+            vars: Vec::new(),
+        },
+    );
+    Ok(model)
+}
+
+pub fn file_title(file: &std::path::Path) -> String {
+    let known = file.extension().is_some_and(|e| {
+        ["gcad", "gasm", "step", "stp"]
+            .iter()
+            .any(|k| e.eq_ignore_ascii_case(k))
+    });
+    let name = if known {
+        file.file_stem()
+    } else {
+        file.file_name()
+    };
+    name.map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default()
 }
 
 pub fn run_path(

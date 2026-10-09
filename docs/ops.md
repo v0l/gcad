@@ -27,6 +27,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | slot | supported | `slot 30 10` | `sketch::slot` |
 | involute spur gear | supported | `gear 20 2 at=x,y` | `sketch::involute_gear` |
 | internal gear | supported | `circle 80` then `gear 54 1 internal` | `sketch::internal_gear` |
+| rack | supported | `rack 10 2 back=3` | `sketch::rack` |
 | ellipse | supported | `ellipse 20 10` | `sketch::ellipse` |
 | lines and arcs | supported | `pen`, `line`, `arc via=`, `close` | `sketch::lines_and_arcs` |
 | spline | supported | `spline x,y ... closed` | `sketch::spline` |
@@ -90,6 +91,9 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | sweep along a smooth path | supported | `path ... smooth` | `features::sweep_smooth_path` |
 | sweep with twist | supported | `sweep twist=90` | `features::sweep_twist` |
 | sweep with scale | supported | `sweep scale=0.5` | `features::sweep_scale` |
+| twisted or tapered extrude | supported | `extrude 10 twist=90`, `extrude 10 scale=0.5` | `features::extrude_twisted`, `features::extrude_scaled` |
+| helical gear | supported | `gear 20 2 helix=20` then `extrude 10` | `features::helical_gear` |
+| bevel gear | supported | `gear 20 2 cone=45` then `extrude 5` | `features::bevel_gear` |
 | modelled thread | supported | `thread M6 on=rod.side`, `thread M6 on=h.side` in a hole, `left`, `pitch=` | `features::modelled_thread`, `features::tapped_thread`, `features::thread_up_to_a_bolt_head`, `features::thread_on_an_undersized_rod_with_a_fine_pitch`, `features::thread_turns_right_handed`, `features::thread_needs_a_round_face_that_fits` |
 | thread into a chamfer or countersink | supported | `chamfer 1 rod.end&rod.side` then `thread M6 on=rod.side` | `features::thread_runs_out_into_chamfers`, `features::left_hand_thread_runs_out_into_a_chamfer`, `features::tapped_thread_under_a_countersink` |
 | shell with several openings | supported | `shell 2 open=a.end,a.start` | `features::shell_two_openings` |
@@ -118,6 +122,10 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | angled hole | supported | `plane >Z rx=30` then `hole` | `holes::angled` |
 | hole on a curved face | supported | `hole 4 0,10 on=rod.side` | `holes::on_a_curved_face` |
 | exact circles on hole rims | supported | any `hole` or round `cut` | `holes::hole_rims_are_exact_circles` |
+| clearance hole for a screw | supported | `hole M3 x,y`, `fit=close\|normal\|loose` | `holes::clearance_for_a_screw` |
+| tap drill and heat-set insert holes | supported | `hole M4 x,y fit=tap`, `hole M3 x,y fit=insert` | `holes::tapped_and_insert_holes_for_a_screw` |
+| counterbore or countersink for a screw | supported | `cbore=M3`, `csink=M4` | `holes::counterbore_and_countersink_for_a_screw` |
+| hole fits | supported | `hole 6 x,y fit=H7` | `holes::hole_fit_limits`, `output::drawing_notes_fits_and_taps` |
 
 
 ## Fillets and chamfers
@@ -196,6 +204,8 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | assembly drawing with parts list | supported | `gcad export top.gasm top.svg` | `output::assembly_drawing_lists_parts` |
 | bill of materials | supported | `gcad bom top.gasm [--csv]` | `assembly::bill_of_materials_counts_parts` |
 | sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash`, `assembly::sweep_keeps_reporting_parts_that_do_not_move` |
+| standard screws, nuts, washers and inserts | supported | `part s1 shcs:M3x10`, `nut:M3`, `washer:M3`, `insert:M3` | `assembly::standard_parts_from_the_library` |
+| vendor STEP assembly as parts | supported | `part box vendor.step` | `assembly::step_assembly_as_a_part` |
 
 ## Output
 
@@ -205,6 +215,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | STL export | supported | `gcad export part.gcad part.stl` | `output::stl` |
 | PNG views | supported | `gcad render part.gcad part.png` | `output::png` |
 | STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid` |
+| STEP instances placed | supported | `import rig.step solid=4` puts a repeated part where the file places it | `output::step_import_places_instances` |
 | OBJ export | supported | `gcad export part.gcad part.obj` | `output::obj` |
 | 3MF export | supported | `gcad export part.gcad part.3mf` | `output::three_mf` |
 | SVG drawing | supported | `gcad export part.gcad part.svg` | `output::drawing` |

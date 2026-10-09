@@ -209,7 +209,7 @@ fn main() -> Result<()> {
                 let parts = run.model.parts();
                 std::fs::write(
                     &output,
-                    gcad::drawing::drawing_with(&parts, Some(section)),
+                    gcad::drawing::drawing_noted(&parts, Some(section), &run.model.hole_notes),
                 )?;
                 return Ok(());
             }

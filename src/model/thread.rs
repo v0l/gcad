@@ -11,30 +11,20 @@ use monstertruck::modeling::*;
 use std::collections::HashSet;
 use std::f64::consts::TAU;
 
-pub(crate) const THREADS: &[(&str, f64, f64, f64)] = &[
-    ("M2", 2.0, 1.6, 0.4),
-    ("M2.5", 2.5, 2.05, 0.45),
-    ("M3", 3.0, 2.5, 0.5),
-    ("M4", 4.0, 3.3, 0.7),
-    ("M5", 5.0, 4.2, 0.8),
-    ("M6", 6.0, 5.0, 1.0),
-    ("M8", 8.0, 6.8, 1.25),
-    ("M10", 10.0, 8.5, 1.5),
-    ("M12", 12.0, 10.2, 1.75),
-];
-
 const SPANS_PER_TURN: usize = 64;
 const END_SAMPLES: usize = 33;
 
 pub(crate) fn thread_named(name: &str) -> Result<(f64, f64, f64)> {
-    THREADS
-        .iter()
-        .find(|(known, ..)| known.eq_ignore_ascii_case(name))
-        .map(|&(_, major, tap, pitch)| (major, tap, pitch))
-        .ok_or_else(|| {
+    super::fastener::named(name)
+        .map(|m| (m.major, m.tap, m.pitch))
+        .map_err(|_| {
             anyhow!(
                 "unknown thread `{name}`; known: {}",
-                THREADS.iter().map(|t| t.0).collect::<Vec<_>>().join(", ")
+                super::fastener::METRIC
+                    .iter()
+                    .map(|m| m.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
             )
         })
 }

@@ -71,6 +71,13 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass(), gap)
         ),
         ("rounded-poly", "poly 0,0 30,0 30,20 0,20 r=4\nextrude 5"),
         ("twisted", "rect 4 2\npath 0,0,0 0,0,20\nsweep twist=90"),
+        ("helical-gear", "gear 16 2 helix=20\nextrude 8"),
+        ("bevel-gear", "gear 16 2 cone=40\nextrude 5"),
+        ("rack", "rack 6 2\nextrude 5"),
+        (
+            "screw-holes",
+            "rect 40 20\nb: extrude 8\nplane b.end\nhole M3 -10,0 cbore=M3\nhole M4 10,0 csink=M4\nhole M3 0,5 fit=insert",
+        ),
         (
             "smooth-sweep",
             "circle 2\npath 0,0,0 10,0,10 20,0,0 smooth\nsweep",
@@ -443,4 +450,24 @@ fn assembly_drawing_lists_parts() {
     assert_eq!(svg.matches("class=\"balloon\"").count(), 2);
     assert!(svg.contains("class=\"parts-list\""));
     assert!(svg.contains(">2× ⌀3<"));
+}
+
+#[test]
+fn step_import_places_instances() {
+    let file = fixture("occt-instances.step");
+    let error = failure(&format!("import {file}"));
+    assert!(error.contains("4: `pin:3`"), "{error}");
+    let third = build(&format!("import {file} solid=4"));
+    assert_bounds(&third, [28.0, 8.0, 5.0], [32.0, 12.0, 15.0]);
+}
+
+#[test]
+fn drawing_notes_fits_and_taps() {
+    let model = build(
+        "rect 40 20\nb: extrude 8\nplane b.end\nhole M3 -10,0 cbore=M3\nhole 6 10,0 fit=H7\nhole M4 0,5 fit=tap",
+    );
+    let svg = gcad::drawing::drawing_noted(&model.parts(), None, &model.hole_notes);
+    for callout in ["⌀6 H7", "⌀3.3 M4 tapped", "⌀3.4<", "⌀6<"] {
+        assert!(svg.contains(callout), "missing {callout}");
+    }
 }

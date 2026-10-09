@@ -152,23 +152,38 @@ fn section_of(mesh: &PolygonMesh, solid: &Solid, normal: Vector3, at: f64) -> Ve
 struct Callout {
     centers: Vec<Point3>,
     radius: f64,
+    note: Option<String>,
 }
 
-fn hole_callouts(holes: &[crate::model::mate::Cylinder], toward: Vector3) -> Vec<Callout> {
+fn hole_callouts(
+    holes: &[crate::model::mate::Cylinder],
+    toward: Vector3,
+    notes: &[crate::model::HoleNote],
+) -> Vec<Callout> {
     let mut found: Vec<Callout> = Vec::new();
     for cylinder in holes {
         if cylinder.axis.cross(toward).magnitude() > 1.0e-6 {
             continue;
         }
         let rounded = (cylinder.radius * 200.0).round() / 200.0;
+        let note = notes
+            .iter()
+            .find(|n| {
+                (n.diameter / 2.0 - cylinder.radius).abs() < 3.0e-3
+                    && n.centers
+                        .iter()
+                        .any(|p| (p - cylinder.point).cross(toward).magnitude() < 1.0e-3)
+            })
+            .map(|n| n.note.clone());
         match found
             .iter_mut()
-            .find(|c| (c.radius - rounded).abs() < 1.0e-9)
+            .find(|c| (c.radius - rounded).abs() < 1.0e-9 && c.note == note)
         {
             Some(known) => known.centers.push(cylinder.point),
             None => found.push(Callout {
                 centers: vec![cylinder.point],
                 radius: rounded,
+                note,
             }),
         }
     }
@@ -243,7 +258,15 @@ pub struct PartsList {
 const PARTS_HEADER: [&str; 5] = ["item", "qty", "part", "material", "mass g"];
 
 pub fn drawing_with(parts: &[(&Solid, Option<Colour>)], section: Option<Section>) -> String {
-    annotated(parts, section, None)
+    annotated(parts, section, None, &[])
+}
+
+pub fn drawing_noted(
+    parts: &[(&Solid, Option<Colour>)],
+    section: Option<Section>,
+    notes: &[crate::model::HoleNote],
+) -> String {
+    annotated(parts, section, None, notes)
 }
 
 fn view(name: &str, right: Vector3, up: Vector3) -> View {
@@ -264,6 +287,7 @@ pub fn annotated(
     parts: &[(&Solid, Option<Colour>)],
     section: Option<Section>,
     list: Option<&PartsList>,
+    notes: &[crate::model::HoleNote],
 ) -> String {
     let mut views = vec![
         view("top", Vector3::unit_x(), Vector3::unit_y()),
@@ -565,7 +589,7 @@ pub fn annotated(
         if ["top", "front", "right"].contains(&view.name.as_str()) {
             let mut taken: Vec<(f64, f64)> = Vec::new();
             for found in &holes {
-                for callout in hole_callouts(found, view.toward()) {
+                for callout in hole_callouts(found, view.toward(), notes) {
                     let lean = std::f64::consts::FRAC_1_SQRT_2;
                     let spot = |center: Point3| {
                         let (cx, cy) = place(center);
@@ -612,7 +636,15 @@ pub fn annotated(
                         end.1 + text * 0.35,
                         "start",
                         false,
-                        &format!("{count}⌀{}", number(callout.radius * 2.0)),
+                        &format!(
+                            "{count}⌀{}{}",
+                            number(callout.radius * 2.0),
+                            callout
+                                .note
+                                .as_ref()
+                                .map(|note| format!(" {note}"))
+                                .unwrap_or_default()
+                        ),
                     );
                 }
             }

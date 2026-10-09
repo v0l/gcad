@@ -103,11 +103,7 @@ pub fn assembly(model: &crate::model::Model) -> (Vec<Product>, Vec<Instance<'_>>
                 let label = source
                     .as_ref()
                     .map(|s| {
-                        let stem = s
-                            .file
-                            .file_stem()
-                            .map(|f| f.to_string_lossy().to_string())
-                            .unwrap_or_default();
+                        let stem = crate::model::file_title(&s.file);
                         if s.body == "main" {
                             stem
                         } else {
@@ -147,10 +143,7 @@ pub fn parts_list(
             .iter()
             .enumerate()
             .map(|(k, item)| {
-                let stem = std::path::Path::new(&item.file)
-                    .file_stem()
-                    .map(|s| s.to_string_lossy().to_string())
-                    .unwrap_or_default();
+                let stem = crate::model::file_title(std::path::Path::new(&item.file));
                 vec![
                     (k + 1).to_string(),
                     item.names.len().to_string(),
@@ -188,12 +181,20 @@ pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &
         let exploded = model.exploded_parts(if model.explode.is_empty() { 0.0 } else { 1.0 });
         let parts: Vec<(&Solid, Option<Colour>)> = exploded.iter().map(|(s, c)| (s, *c)).collect();
         let list = parts_list(model, file);
-        std::fs::write(path, crate::drawing::annotated(&parts, None, Some(&list)))?;
+        std::fs::write(
+            path,
+            crate::drawing::annotated(&parts, None, Some(&list), &[]),
+        )?;
         return Ok(());
     }
     if model.assembly && (step.ends_with(".step") || step.ends_with(".stp")) {
         let (products, instances) = assembly(model);
         std::fs::write(path, assembly_step(name, &products, &instances))?;
+        return Ok(());
+    }
+    if step.ends_with(".svg") {
+        let svg = crate::drawing::drawing_noted(&model.parts(), None, &model.hole_notes);
+        std::fs::write(path, svg)?;
         return Ok(());
     }
     export_coloured(&model.parts(), path)

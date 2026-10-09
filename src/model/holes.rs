@@ -50,10 +50,38 @@ impl Model {
         let args = Args::new(
             line,
             &["d"],
-            &["depth", "cbore", "csink", "thread", "on"],
+            &["depth", "cbore", "csink", "thread", "on", "fit"],
             true,
         )?;
-        let diameter = positive(args.number("d", &self.scope)?, "hole diameter")?;
+        let size = args.text("d")?;
+        let fastener = super::fastener::is_metric(size)
+            .then(|| super::fastener::named(size))
+            .transpose()?;
+        let fit = args.values.get("fit").copied();
+        let (diameter, insert) = match (fastener, fit) {
+            (Some(m), None | Some("normal")) => (m.clearance[1], None),
+            (Some(m), Some("close")) => (m.clearance[0], None),
+            (Some(m), Some("loose")) => (m.clearance[2], None),
+            (Some(m), Some("tap")) => (m.tap, None),
+            (Some(m), Some("insert")) => {
+                let (hole, length, _) = m.insert.ok_or_else(|| {
+                    anyhow::anyhow!("there is no heat-set insert listed for {}", m.name)
+                })?;
+                (hole, Some(length))
+            }
+            (Some(m), Some(other)) => bail!(
+                "a {} hole takes fit=close, normal, loose, tap or insert, not `{other}`",
+                m.name
+            ),
+            (None, _) => (
+                positive(args.number("d", &self.scope)?, "hole diameter")?,
+                None,
+            ),
+        };
+        let limits = match (fastener, fit) {
+            (None, Some(fit)) => Some((fit, super::fastener::hole_limits(diameter, fit)?)),
+            _ => None,
+        };
         if args.rest.is_empty() {
             bail!("`hole` needs at least one x,y position after the diameter");
         }
@@ -64,18 +92,26 @@ impl Model {
             .map(|text| eval_point(text, &self.scope))
             .collect::<Result<Vec<_>>>()?;
         let depth = match args.values.get("depth") {
+            None if insert.is_some() => Depth::Blind(insert.unwrap_or_default() + 1.0),
             None | Some(&"thru") => Depth::Through,
             Some(_) => Depth::Blind(positive(args.number("depth", &self.scope)?, "hole depth")?),
         };
-        let thread = match args.values.get("thread") {
-            None => None,
-            Some(name) => {
+        let thread = match (args.values.get("thread"), fastener, fit) {
+            (None, Some(m), Some("tap")) => Some(m.name.to_string()),
+            (Some(_), Some(_), _) => bail!("a hole sized `{size}` is tapped with `fit=tap`"),
+            (None, _, _) => None,
+            (Some(name), None, _) => {
                 let (major, tap, _) = super::thread::thread_named(name)?;
                 if diameter > major || diameter < tap * 0.9 {
                     bail!("a {name} thread needs a {tap} mm tap drill, the hole is {diameter}");
                 }
                 Some(name.to_uppercase())
             }
+        };
+        let named_size = |text: &str| -> Result<Option<&'static super::fastener::Metric>> {
+            super::fastener::is_metric(text)
+                .then(|| super::fastener::named(text))
+                .transpose()
         };
         let placements: Vec<(Frame, (f64, f64))> = match args.values.get("on") {
             None => centers.iter().map(|c| (self.sketch_frame(), *c)).collect(),
@@ -108,7 +144,10 @@ impl Model {
         match (args.values.get("cbore"), args.values.get("csink")) {
             (Some(_), Some(_)) => bail!("a hole takes `cbore=` or `csink=`, not both"),
             (Some(text), None) => {
-                let (bore, bore_depth) = eval_point(text, &self.scope)?;
+                let (bore, bore_depth) = match named_size(text)? {
+                    Some(m) => (m.counterbore, m.counterbore_depth()),
+                    None => eval_point(text, &self.scope)?,
+                };
                 if bore <= diameter || bore_depth <= 0.0 || bore_depth >= end {
                     bail!("cbore=diameter,depth must be wider than the hole and shallower than it");
                 }
@@ -120,7 +159,10 @@ impl Model {
                 });
             }
             (None, Some(text)) => {
-                let (sink, angle) = eval_point(text, &self.scope)?;
+                let (sink, angle) = match named_size(text)? {
+                    Some(m) => (m.flat_head, 90.0),
+                    None => eval_point(text, &self.scope)?,
+                };
                 if sink <= diameter || angle <= 0.0 || angle >= 180.0 {
                     bail!(
                         "csink=diameter,angle must be wider than the hole with an angle between 0 and 180"
@@ -150,6 +192,10 @@ impl Model {
                 floor: matches!(depth, Depth::Blind(_)).then_some("bottom"),
             },
         );
+        let spots: Vec<Point3> = placements
+            .iter()
+            .map(|(frame, (x, y))| frame.at(*x, *y))
+            .collect();
         let mut batches: Vec<Vec<Solid>> = vec![Vec::new(); pieces.len()];
         for (frame, center) in placements {
             for (k, piece) in pieces.iter().enumerate() {
@@ -193,10 +239,39 @@ impl Model {
         for batch in batches {
             self.merge_all(&label, batch, Combine::Remove)?;
         }
+        let note = match (&thread, limits, insert) {
+            (Some(name), _, _) => Some(format!("{name} tapped")),
+            (None, Some((fit, _)), _) => Some(fit.to_string()),
+            (None, None, Some(_)) => fastener.map(|m| format!("{} insert", m.name)),
+            _ => None,
+        };
+        if let Some(note) = note {
+            self.hole_notes.push(super::HoleNote {
+                diameter,
+                centers: spots,
+                note,
+            });
+        }
         let summary = self.describe_solid()?;
-        Ok(match thread {
-            Some(name) => format!("{name} tapped; {summary}"),
-            None => summary,
+        let size = match (fastener, limits) {
+            (_, Some((fit, (low, high)))) => {
+                format!("⌀{diameter} {fit} is {low:.3} to {high:.3}; ")
+            }
+            (Some(m), None) => format!(
+                "{} {} drilled ⌀{diameter}; ",
+                m.name,
+                match (fit, insert) {
+                    (_, Some(_)) => "insert",
+                    (Some("tap"), _) => "tap",
+                    (Some(other), _) => other,
+                    (None, _) => "normal clearance",
+                }
+            ),
+            (None, None) => String::new(),
+        };
+        Ok(match &thread {
+            Some(name) if fastener.is_none() => format!("{size}{name} tapped; {summary}"),
+            _ => format!("{size}{summary}"),
         })
     }
 }

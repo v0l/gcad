@@ -426,7 +426,7 @@ impl Model {
         let args = Args::new(
             line,
             &["teeth", "module"],
-            &["at", "angle", "pressure", "backlash"],
+            &["at", "angle", "pressure", "backlash", "helix", "cone"],
             true,
         )?;
         let internal = match args.rest.as_slice() {
@@ -461,21 +461,122 @@ impl Model {
             .unwrap_or(0.0)
             .to_radians()
             + if internal { shape.gap() } else { 0.0 };
+        let helix = args.optional_number("helix", &self.scope)?.unwrap_or(0.0);
+        let cone = args.optional_number("cone", &self.scope)?.unwrap_or(0.0);
+        if helix.abs() >= 60.0 {
+            bail!("helix must be under 60 degrees either way, got {helix}");
+        }
+        if !(0.0..90.0).contains(&cone) {
+            bail!("cone must be from 0 to under 90 degrees, got {cone}");
+        }
+        if helix != 0.0 && cone != 0.0 {
+            bail!("give a gear `helix=` or `cone=`, not both");
+        }
+        if internal && cone != 0.0 {
+            bail!("an internal gear cannot be a bevel gear");
+        }
         let (first, segments) = shape.outline(start, (cx, cy));
         let message = self.add_profile(Profile::Path {
             start: first,
             segments,
         })?;
+        if helix != 0.0 || cone != 0.0 {
+            self.gear = Some(super::GearLead {
+                pitch_radius: shape.pitch,
+                helix,
+                cone,
+            });
+        }
+        let lead = match (helix, cone) {
+            (0.0, 0.0) => String::new(),
+            (h, 0.0) => format!(
+                ", {}-hand helix, twists {:.3} degrees per mm",
+                if h > 0.0 { "right" } else { "left" },
+                h.to_radians().tan() / shape.pitch * 180.0 / std::f64::consts::PI
+            ),
+            (_, c) => format!(
+                ", cone apex {:.3} along the normal",
+                shape.pitch / c.to_radians().tan()
+            ),
+        };
         let (tip, root) = match internal {
             true => (shape.root, shape.tip),
             false => (shape.tip, shape.root),
         };
         Ok(format!(
-            "{message}; {}pitch diameter {:.3}, tip {:.3}, root {:.3}",
+            "{message}; {}pitch diameter {:.3}, tip {:.3}, root {:.3}{lead}",
             if internal { "internal, " } else { "" },
             shape.pitch * 2.0,
             tip * 2.0,
             root * 2.0
+        ))
+    }
+
+    pub(crate) fn op_rack(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(
+            line,
+            &["teeth", "module"],
+            &["at", "angle", "pressure", "backlash", "back"],
+            false,
+        )?;
+        let teeth = args.number("teeth", &self.scope)?;
+        if teeth < 1.0 || teeth.fract() != 0.0 {
+            bail!("teeth must be a whole number of at least 1, got {teeth}");
+        }
+        let module = positive(args.number("module", &self.scope)?, "module")?;
+        let pressure = args
+            .optional_number("pressure", &self.scope)?
+            .unwrap_or(20.0);
+        if !(5.0..=35.0).contains(&pressure) {
+            bail!("pressure must be between 5 and 35 degrees, got {pressure}");
+        }
+        let backlash = args
+            .optional_number("backlash", &self.scope)?
+            .unwrap_or(0.0);
+        let back = positive(
+            args.optional_number("back", &self.scope)?
+                .unwrap_or(2.0 * module),
+            "back",
+        )?;
+        let slope = pressure.to_radians().tan();
+        let pitch = std::f64::consts::PI * module;
+        let thick = pitch / 2.0 - backlash;
+        let (tip, root) = (module, -1.25 * module);
+        let half = |y: f64| thick / 2.0 - y * slope;
+        if half(tip) <= 0.0 {
+            bail!("backlash {backlash} leaves the rack teeth pointed");
+        }
+        if 2.0 * half(root) >= pitch {
+            bail!("the rack teeth meet at the root; use less pressure");
+        }
+        let count = teeth as usize;
+        let length = pitch * teeth;
+        let mut local = vec![(-length / 2.0, root - back), (-length / 2.0, root)];
+        for k in 0..count {
+            let c = (k as f64 - (teeth - 1.0) / 2.0) * pitch;
+            local.extend([
+                (c - half(root), root),
+                (c - half(tip), tip),
+                (c + half(tip), tip),
+                (c + half(root), root),
+            ]);
+        }
+        local.extend([(length / 2.0, root), (length / 2.0, root - back)]);
+        local.dedup_by(|a, b| (a.0 - b.0).abs() < 1.0e-12 && (a.1 - b.1).abs() < 1.0e-12);
+        let (cx, cy) = args.point("at", &self.scope)?;
+        let turn = args
+            .optional_number("angle", &self.scope)?
+            .unwrap_or(0.0)
+            .to_radians();
+        let (sin, cos) = turn.sin_cos();
+        let points = local
+            .into_iter()
+            .map(|(x, y)| (cx + x * cos - y * sin, cy + x * sin + y * cos))
+            .collect();
+        let message = self.add_profile(Profile::Polygon { points })?;
+        Ok(format!(
+            "{message}; rack {length:.3} long, pitch {pitch:.3}, {:.3} from tips to back",
+            tip - root + back
         ))
     }
 
@@ -762,6 +863,7 @@ impl Model {
         if self.sketch.is_empty() {
             bail!("`{op}` needs a sketch; add rect, circle, poly or another profile first");
         }
+        self.gear = None;
         Ok((self.sketch_frame(), std::mem::take(&mut self.sketch)))
     }
 
