@@ -224,6 +224,20 @@ impl Model {
                 self.spec().source += watts;
                 Ok(format!("{watts} W made evenly through the part"))
             }
+            "converge" => {
+                let args = Args::new(line, &[], &["within"], false)?;
+                let within = positive(
+                    args.optional_number("within", &self.scope)?.unwrap_or(5.0),
+                    "`within`",
+                )?;
+                if self.spec().kind == Some(crate::sim::Kind::Torque) {
+                    bail!("`converge` checks a mesh, and a torque simulation has none");
+                }
+                self.spec().converge = Some(within);
+                Ok(format!(
+                    "solves once more on a mesh 1.5 times coarser and flags readings that move more than {within}%"
+                ))
+            }
             "mesh" => {
                 let args = Args::new(line, &["size"], &[], false)?;
                 let size = positive(args.number("size", &self.scope)?, "the mesh size")?;

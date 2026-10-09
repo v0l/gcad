@@ -95,6 +95,7 @@ pub struct Spec {
     pub modes: Option<usize>,
     pub warming: Option<Warm>,
     pub contacts: Vec<(String, String)>,
+    pub converge: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -134,7 +135,63 @@ pub fn plan(spec: &Spec) -> Result<String> {
 }
 
 pub fn simulate(spec: &Spec) -> Result<Outcome> {
-    let mut outcome = match spec.kind {
+    let mut outcome = solve(spec)?;
+    if let Some(within) = spec.converge {
+        let size = mesh::size(spec)?;
+        let mut coarse = spec.clone();
+        coarse.mesh = Some(size * 1.5);
+        coarse.converge = None;
+        let rough = solve(&coarse)?;
+        outcome
+            .notes
+            .push(settled(&rough, &outcome, size * 1.5, within));
+    }
+    outcome.check(&spec.expects);
+    Ok(outcome)
+}
+
+fn settled(rough: &Outcome, fine: &Outcome, coarse: f64, within: f64) -> String {
+    let mut moved = Vec::new();
+    let mut steady = 0;
+    for reading in &fine.readings {
+        let Some(before) = rough.reading(&reading.name) else {
+            continue;
+        };
+        let largest = fine
+            .readings
+            .iter()
+            .filter(|r| r.unit == reading.unit)
+            .map(|r| r.value.abs())
+            .fold(0.0, f64::max);
+        let scale = reading.value.abs().max(before.value.abs());
+        if scale <= largest * 1.0e-6 {
+            continue;
+        }
+        let change = (reading.value - before.value).abs() / scale * 100.0;
+        if change > within {
+            moved.push(format!("`{}` moved {:.0}%", reading.name, change));
+        } else {
+            steady += 1;
+        }
+    }
+    let size = crate::plot::label(coarse);
+    if moved.is_empty() {
+        format!("mesh check: every reading is within {within}% of a solve on mesh {size}")
+    } else {
+        format!(
+            "mesh check against mesh {size}: {}, so {} not settled; refine the mesh, or `probe` away from sharp corners ({steady} other readings within {within}%)",
+            moved.join(", "),
+            if moved.len() == 1 {
+                "it has"
+            } else {
+                "they have"
+            }
+        )
+    }
+}
+
+fn solve(spec: &Spec) -> Result<Outcome> {
+    let outcome = match spec.kind {
         Some(Kind::Torque) => torque::run(spec)?,
         Some(Kind::Static) => statics::run(spec)?,
         Some(Kind::Thermal) => heat::run(spec)?,
@@ -142,7 +199,6 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
         Some(Kind::Buckling) => statics::buckle(spec)?,
         None => bail!("the file has no `sim` line"),
     };
-    outcome.check(&spec.expects);
     Ok(outcome)
 }
 

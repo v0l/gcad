@@ -232,6 +232,9 @@ Static, thermal and modal take a `.gasm` too: touching parts are bonded, each in
 material; pick faces as `part:faces` (`fix base:<Z`). `contact a b` makes a pair press without
 friction and let go instead of bonding (static).
 
+Add `converge` to any meshed simulation to solve again on a coarser mesh and get a note naming
+readings that moved more than 5%; trust the ones it does not name.
+
 `sim modal` with `fix` lines and `modes 6`: readings `mode1`... in Hz, each with its effective
 mass share along x, y, z. No supports means free-free (rigid modes dropped).
 

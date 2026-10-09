@@ -715,6 +715,40 @@ fn large_bonded_problem_converges() {
 }
 
 #[test]
+fn mesh_convergence_check() {
+    let ell = "pen 0,0\nline 40,0\nline 40,10\nline 10,10\nline 10,40\nline 0,40\nclose\nell: extrude 10\nmaterial steel\n";
+    let corner = simulated(
+        "mesh_convergence_corner",
+        &[("ell.gcad", ell)],
+        "sim static\npart ell.gcad\nfix <X\nload >X force=0,-500,0\nmesh 3\nconverge within=2",
+    );
+    let note = corner
+        .notes
+        .iter()
+        .find(|n| n.starts_with("mesh check"))
+        .expect("a mesh check note");
+    assert!(
+        note.contains("`stress` moved") && note.contains("not settled"),
+        "{note}"
+    );
+    let bar = simulated(
+        "mesh_convergence_bar",
+        &[(
+            "bar.gcad",
+            "rect 100 10 at=50,0\nbar: extrude 10 both\nmaterial steel\n",
+        )],
+        "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nload >X force=1000,0,0\nmid: probe 50,0,0\nmesh 4\nconverge",
+    );
+    assert!(
+        bar.notes
+            .iter()
+            .any(|n| n.contains("every reading is within 5%")),
+        "{}",
+        bar.table()
+    );
+}
+
+#[test]
 fn bonded_parts_carry_load() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(

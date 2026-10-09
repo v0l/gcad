@@ -383,6 +383,7 @@ expect shoulder<15 sun_s_turn<4
 | `source` | `watts` | makes that much heat evenly through the part's volume (thermal) |
 | `modes` | `count` | how many natural frequencies `modal` finds, 6 unless given |
 | `contact` | `part part` | the two parts press on each other where they touch instead of being bonded: no friction, and they may part (static). Parts held only by contact can slide, so give them supports that stop that |
+| `converge` | `within=` | solves a second time on a mesh 1.5 times coarser and adds a note naming every reading that moved more than `within` percent (5 unless given) between the two. A reading that moves has not settled: a peak stress at a sharp inside corner never does, so `probe` away from it or refine the mesh. Costs about a third more time |
 | `mesh` | `size` | the target edge length of the tetrahedra in mm, for `static`, `thermal` and `modal`; a twentieth of the part's size unless given. The mesher makes elements smaller where walls are thin, gaps are narrow or edges run close together |
 | `expect` | `reading<limit ...` or `reading>limit` | a check on a reading, by name. `gcad sim` fails when one does not hold |
 
