@@ -614,6 +614,18 @@ fn tet_mesh_of_example_parts() {
 }
 
 #[test]
+fn tet_mesh_of_a_ring_gear_part() {
+    let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/robot/turret.gcad");
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
+    let solid = run.model.solid.clone().expect("a solid");
+    let size = gcad::geometry::bounds(&solid).diameter() / 20.0;
+    let mesh = checked_mesh(&solid, size);
+    let q = mesh.quality();
+    close(q.volume, gcad::geometry::volume(&solid), 0.01);
+    assert!(mesh.quadratic_nodes() < 1_000_000, "{q:?}");
+}
+
+#[test]
 fn tet_mesh_of_thin_walls() {
     let solid = solid_of("rect 60 40 r=4\nbox: extrude 25\nshell 2 open=box.end");
     let mesh = checked_mesh(&solid, 5.0);

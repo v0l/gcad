@@ -174,6 +174,7 @@ impl SizeField {
         least: f64,
         triangles: Vec<[Point3; 3]>,
         curves: &[(Vec<Point3>, [Point3; 2])],
+        bends: Vec<(Point3, f64)>,
     ) -> SizeField {
         let bvh = Bvh::new(triangles);
         let samples: Vec<(Point3, f64)> = {
@@ -200,11 +201,16 @@ impl SizeField {
         };
         let mut samples = samples;
         samples.extend(edge_gaps(top, least, curves));
+        samples.extend(bends.into_iter().filter(|b| b.1 < top));
         let mut field = SizeField::uniform(top);
         field.least = least;
         field.cell = top / field.grade / 2.0;
         field.reach = 2;
+        samples.sort_by(|a, b| a.1.total_cmp(&b.1));
         for (p, s) in samples {
+            if field.at(p) <= s {
+                continue;
+            }
             let key = field.key(p);
             field.grid.entry(key).or_default().push((p, s));
         }

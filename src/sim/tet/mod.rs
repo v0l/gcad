@@ -733,6 +733,7 @@ impl TetMesh {
     }
 
     pub fn smooth(&mut self, passes: usize) {
+        use rayon::prelude::*;
         let mut star: Vec<Vec<u32>> = vec![Vec::new(); self.nodes.len()];
         for (t, tet) in self.tets.iter().enumerate() {
             for &v in tet {
@@ -744,76 +745,110 @@ impl TetMesh {
             .iter()
             .flat_map(|(f, _)| f.iter().copied())
             .collect();
-        let quality = |mesh: &TetMesh, tets: &[u32]| -> f64 {
-            tets.iter()
-                .map(|&t| mean_ratio(mesh.points(t as usize)))
-                .fold(f64::INFINITY, f64::min)
-        };
-        for _ in 0..passes {
-            let mut moved = 0;
-            for v in 0..self.nodes.len() as u32 {
-                if fixed.contains(&v) {
-                    continue;
-                }
-                let tets = &star[v as usize];
-                let before = quality(self, tets);
-                if before > 0.5 {
-                    continue;
-                }
-                let mut around: Vec<u32> = tets
+        let around: Vec<Vec<u32>> = (0..self.nodes.len())
+            .into_par_iter()
+            .map(|v| {
+                let mut list: Vec<u32> = star[v]
                     .iter()
                     .flat_map(|&t| self.tets[t as usize])
-                    .filter(|&u| u != v)
+                    .filter(|&u| u != v as u32)
                     .collect();
-                around.sort_unstable();
-                around.dedup();
-                let centre = around
-                    .iter()
-                    .map(|&u| self.nodes[u as usize].to_vec())
-                    .sum::<Vector3>()
-                    / around.len() as f64;
-                let home = self.nodes[v as usize];
-                let mut best = (before, home);
-                for w in [1.0, 0.5, 0.25] {
-                    let trial = home + (Point3::from_vec(centre) - home) * w;
-                    self.nodes[v as usize] = trial;
-                    let after = quality(self, tets);
-                    if after > best.0 + 1.0e-6 {
-                        best = (after, trial);
-                    }
-                }
-                let reach = around
-                    .iter()
-                    .map(|&u| (self.nodes[u as usize] - home).magnitude())
-                    .sum::<f64>()
-                    / around.len() as f64;
-                let mut step = reach * 0.1;
-                let axes = [
-                    Vector3::unit_x(),
-                    -Vector3::unit_x(),
-                    Vector3::unit_y(),
-                    -Vector3::unit_y(),
-                    Vector3::unit_z(),
-                    -Vector3::unit_z(),
-                ];
-                for _ in 0..12 {
-                    let mut improved = false;
-                    for axis in axes {
-                        let trial = best.1 + axis * step;
-                        self.nodes[v as usize] = trial;
-                        let after = quality(self, tets);
-                        if after > best.0 + 1.0e-9 {
-                            best = (after, trial);
-                            improved = true;
+                list.sort_unstable();
+                list.dedup();
+                list
+            })
+            .collect();
+        let mut colour = vec![u32::MAX; self.nodes.len()];
+        let mut classes: Vec<Vec<u32>> = Vec::new();
+        for v in 0..self.nodes.len() {
+            if fixed.contains(&(v as u32)) {
+                continue;
+            }
+            let mut used: Vec<u32> = around[v]
+                .iter()
+                .map(|&u| colour[u as usize])
+                .filter(|&c| c != u32::MAX)
+                .collect();
+            used.sort_unstable();
+            used.dedup();
+            let c = (0..).find(|c| used.binary_search(c).is_err()).unwrap_or(0);
+            colour[v] = c;
+            if classes.len() <= c as usize {
+                classes.resize(c as usize + 1, Vec::new());
+            }
+            classes[c as usize].push(v as u32);
+        }
+        let worst = |nodes: &[Point3], tets: &[u32], v: u32, at: Point3| -> f64 {
+            tets.iter()
+                .map(|&t| {
+                    mean_ratio(self.tets[t as usize].map(|u| {
+                        let p = if u == v { at } else { nodes[u as usize] };
+                        [p.x, p.y, p.z]
+                    }))
+                })
+                .fold(f64::INFINITY, f64::min)
+        };
+        let axes = [
+            Vector3::unit_x(),
+            -Vector3::unit_x(),
+            Vector3::unit_y(),
+            -Vector3::unit_y(),
+            Vector3::unit_z(),
+            -Vector3::unit_z(),
+        ];
+        for _ in 0..passes {
+            let mut moved = 0;
+            for class in &classes {
+                let nodes = &self.nodes;
+                let moves: Vec<(u32, Point3)> = class
+                    .par_iter()
+                    .filter_map(|&v| {
+                        let tets = &star[v as usize];
+                        let home = nodes[v as usize];
+                        let before = worst(nodes, tets, v, home);
+                        if before > 0.5 {
+                            return None;
                         }
-                    }
-                    if !improved {
-                        step *= 0.5;
-                    }
-                }
-                self.nodes[v as usize] = best.1;
-                if best.1 != home {
-                    moved += 1;
+                        let ring = &around[v as usize];
+                        let centre = ring
+                            .iter()
+                            .map(|&u| nodes[u as usize].to_vec())
+                            .sum::<Vector3>()
+                            / ring.len() as f64;
+                        let mut best = (before, home);
+                        for w in [1.0, 0.5, 0.25] {
+                            let trial = home + (Point3::from_vec(centre) - home) * w;
+                            let after = worst(nodes, tets, v, trial);
+                            if after > best.0 + 1.0e-6 {
+                                best = (after, trial);
+                            }
+                        }
+                        let reach = ring
+                            .iter()
+                            .map(|&u| (nodes[u as usize] - home).magnitude())
+                            .sum::<f64>()
+                            / ring.len() as f64;
+                        let mut step = reach * 0.1;
+                        for _ in 0..12 {
+                            let mut improved = false;
+                            for axis in axes {
+                                let trial = best.1 + axis * step;
+                                let after = worst(nodes, tets, v, trial);
+                                if after > best.0 + 1.0e-9 {
+                                    best = (after, trial);
+                                    improved = true;
+                                }
+                            }
+                            if !improved {
+                                step *= 0.5;
+                            }
+                        }
+                        (best.1 != home).then_some((v, best.1))
+                    })
+                    .collect();
+                moved += moves.len();
+                for (v, p) in moves {
+                    self.nodes[v as usize] = p;
                 }
             }
             if moved == 0 {

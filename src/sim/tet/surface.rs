@@ -290,6 +290,7 @@ pub fn surface_mesh(solid: &Solid, size: f64) -> Result<SurfaceMesh> {
         }
     }
     let first = build(&faces, &kernel, diameter, &SizeField::uniform(size), None)?;
+    let bends = curvature(&first, &faces, least);
     let field = SizeField::from_gaps(
         size,
         least,
@@ -299,6 +300,7 @@ pub fn surface_mesh(solid: &Solid, size: f64) -> Result<SurfaceMesh> {
             .map(|t| t.map(|v| first.points[v as usize]))
             .collect(),
         &curves,
+        bends,
     );
     let out = if field.is_uniform() {
         first
@@ -312,6 +314,41 @@ pub fn surface_mesh(solid: &Solid, size: f64) -> Result<SurfaceMesh> {
         bail!("the surface mesh has {open} open edge(s); the faces do not meet cleanly");
     }
     Ok(out)
+}
+
+const TURN: f64 = 1.0;
+
+fn curvature(mesh: &SurfaceMesh, faces: &[Face], least: f64) -> Vec<(Point3, f64)> {
+    use rayon::prelude::*;
+    mesh.triangles
+        .par_iter()
+        .zip(&mesh.tags)
+        .filter_map(|(t, &tag)| {
+            let surface = faces[tag].surface();
+            let normals: Vec<Vector3> = t
+                .iter()
+                .map(|&v| {
+                    let uv = mesh.uv_on(v, tag)?;
+                    let n = surface.normal(uv.x, uv.y);
+                    (n.magnitude() > 0.5).then_some(n)
+                })
+                .collect::<Option<_>>()?;
+            let p = t.map(|v| mesh.points[v as usize]);
+            let mut size = f64::INFINITY;
+            for k in 0..3 {
+                let j = (k + 1) % 3;
+                let angle = normals[k].angle(normals[j]).0;
+                if angle > 1.0e-3 {
+                    size = size.min((p[j] - p[k]).magnitude() / angle * TURN);
+                }
+            }
+            size.is_finite().then(|| {
+                let centre =
+                    Point3::from_vec((p[0].to_vec() + p[1].to_vec() + p[2].to_vec()) / 3.0);
+                (centre, size.max(least))
+            })
+        })
+        .collect()
 }
 
 fn build(
@@ -408,52 +445,35 @@ fn split_seed(
     depth: usize,
     out: &mut Vec<Vector2>,
 ) {
-    if depth > 7 {
+    if depth > 16 {
         return;
     }
     let p = uv.map(|q| surface.subs(q.x, q.y));
-    let longest = (0..3)
-        .map(|k| (p[k] - p[(k + 1) % 3]).magnitude())
-        .fold(0.0, f64::max);
+    let (k, longest) = (0..3)
+        .map(|k| (k, (p[k] - p[(k + 1) % 3]).magnitude()))
+        .fold((0, 0.0), |a, b| if b.1 > a.1 { b } else { a });
     let centre = (uv[0] + uv[1] + uv[2]) / 3.0;
     if longest <= field.at(surface.subs(centre.x, centre.y)) * 1.2 {
         return;
     }
-    let m = [0, 1, 2].map(|k| (uv[k] + uv[(k + 1) % 3]) / 2.0);
-    for k in 0..3 {
-        if !rim[k] {
-            out.push(m[k]);
-        }
+    let (a, b, c) = (k, (k + 1) % 3, (k + 2) % 3);
+    let m = (uv[a] + uv[b]) / 2.0;
+    if !rim[a] {
+        out.push(m);
     }
     split_seed(
         surface,
         field,
-        [uv[0], m[0], m[2]],
-        [rim[0], false, rim[2]],
+        [uv[a], m, uv[c]],
+        [rim[a], false, rim[c]],
         depth + 1,
         out,
     );
     split_seed(
         surface,
         field,
-        [m[0], uv[1], m[1]],
-        [rim[0], rim[1], false],
-        depth + 1,
-        out,
-    );
-    split_seed(
-        surface,
-        field,
-        [m[2], m[1], uv[2]],
-        [false, rim[1], rim[2]],
-        depth + 1,
-        out,
-    );
-    split_seed(
-        surface,
-        field,
-        [m[0], m[1], m[2]],
-        [false; 3],
+        [m, uv[b], uv[c]],
+        [rim[a], rim[b], false],
         depth + 1,
         out,
     );

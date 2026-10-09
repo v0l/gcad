@@ -601,18 +601,29 @@ pub fn stresses(
             })
         })
         .collect();
+    let weights: Vec<f64> = (0..mesh.tets.len())
+        .into_par_iter()
+        .map(|t| {
+            let p = mesh.points(t);
+            let corners = [p[0], p[1], p[2], p[3]].map(|q| [q.x, q.y, q.z]);
+            let quality = crate::sim::tet::mean_ratio(corners).max(0.0);
+            let volume = (p[1] - p[0]).dot((p[2] - p[0]).cross(p[3] - p[0])).abs() / 6.0;
+            volume * quality * quality
+        })
+        .collect();
     let mut sum = vec![0.0; mesh.nodes.len()];
-    let mut count = vec![0u32; mesh.nodes.len()];
+    let mut total = vec![0.0; mesh.nodes.len()];
     for (t, values) in per.iter().enumerate() {
+        let w = weights[t].max(1.0e-300);
         for (k, v) in values.iter().enumerate() {
             let node = mesh.tets[t][k] as usize;
-            sum[node] += v;
-            count[node] += 1;
+            sum[node] += w * v;
+            total[node] += w;
         }
     }
     sum.iter()
-        .zip(&count)
-        .map(|(s, &c)| if c > 0 { s / c as f64 } else { 0.0 })
+        .zip(&total)
+        .map(|(s, &w)| if w > 0.0 { s / w } else { 0.0 })
         .collect()
 }
 

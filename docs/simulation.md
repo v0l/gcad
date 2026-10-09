@@ -98,8 +98,12 @@ Tetrahedra that follow the surface, written in Rust (`src/sim/tet/`). Built in p
    element faces.
 2. The size field. A first pass at the target size is ray cast along every triangle's normal
    to find wall thickness and gaps, and every B-rep edge is measured against the edges near
-   it. Where either is below the target, the surface is meshed again finer there, grading
-   back up at 0.3 of the distance.
+   it. Curved faces ask for an element per radian of turn, from the surface normals at each
+   triangle's corners. Where any of these is below the target, the surface is meshed again
+   finer there, grading back up at 0.3 of the distance. The second pass is seeded by
+   splitting the first pass's triangles across their longest edge only: splitting into four
+   made a thin strip face (a gear tooth flank) as fine across its width as along its length,
+   and the ring gear robot parts took two minutes or more to mesh. They now take 6 to 13 s.
 3. Conforming Delaunay. All surface points go into an incremental Bowyer-Watson
    tetrahedralization with exact predicates (`robust`). A surface triangle missing from it has
    its longest edge split (on the true surface), followed by Delaunay edge flips within each
@@ -117,9 +121,11 @@ The tests check every mesh closes, every face is shared by exactly two elements 
 surface, the elements fill the surface exactly, and the volume is close to the solid's, on a
 box, curved parts, thin walls and the example parts.
 
-Still to do: quadratic (10-node) elements with mid-side nodes on the true surface, which come
-with the solver in phase 3; and better sliver removal where every corner of an element lies
-on the surface (they survive near tangent edges and tiny faces).
+Smoothing works through colour classes of points that share no element, in parallel.
+
+Still to do: better sliver removal where every corner of an element lies on the surface (they
+survive near tangent edges and tiny faces). Nodal stresses are averaged weighted by element
+volume times the square of its mean ratio, so such a flat element cannot set the peak.
 
 ## Solvers
 
@@ -132,7 +138,8 @@ spent most of its time in the kernel). Larger ones use conjugate gradients preco
 two-level cycle: two damped block-Jacobi sweeps, a coarse correction on the linear (corner-only)
 tetrahedra of the same mesh, built as the Galerkin product of the quadratic matrix and factored
 directly, and two more sweeps. If that has not converged and the problem is under 600,000
-unknowns, the direct solver takes over. Stresses are taken at each element's nodes and averaged.
+unknowns, the direct solver takes over. Stresses are taken at each element's nodes and averaged,
+weighted by element volume and shape.
 
 Measured on the 200 mm cantilever: at 284,000 unknowns the direct solver took 7 s and the
 two-level solver 28 iterations and 1.8 s; at 796,000 unknowns direct took 58 s and 15 GB, the
