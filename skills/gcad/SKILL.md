@@ -186,7 +186,7 @@ sits on the path.
 
 A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`. It prints
 readings, writes `x.result.json`, and fails when an `expect` line does not hold. Only
-`sim torque` exists so far; `static`, `thermal` and `modal` are planned in `docs/simulation.md`.
+`sim torque` solves so far; the rest are planned in `docs/simulation.md`.
 
 ```
 sim torque
@@ -202,6 +202,10 @@ gravity and where it happened. Couples pass the load on, so a sun gear driven by
 at `ratio=4` reads a quarter of it: that is the motor's torque. Parts need a `material` to
 weigh anything. `gcad check x.gsim` says when the result is stale and `gcad render x.gsim
 x.png` plots the sweeps. Materials also carry `E= nu= yield= k= alpha=`.
+
+`sim static`, `thermal` and `modal` only mesh so far: add `mesh 2` (element size, mm), run
+`gcad sim x.gsim --dry-run` for node and element counts and the worst element, and
+`gcad render x.gsim x.png` to see the mesh cut open.
 
 ## Output
 

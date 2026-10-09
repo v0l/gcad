@@ -7,7 +7,7 @@ use monstertruck::modeling::*;
 
 pub const SIM_OPERATIONS: &[&str] = &[
     "let", "if", "include", "sim", "part", "pose", "material", "gravity", "payload", "sweep",
-    "expect",
+    "expect", "mesh",
 ];
 
 impl Model {
@@ -56,6 +56,12 @@ impl Model {
             "payload" => self.op_payload(line),
             "sweep" => self.op_sim_sweep(line),
             "expect" => self.op_expect(line),
+            "mesh" => {
+                let args = Args::new(line, &["size"], &[], false)?;
+                let size = positive(args.number("size", &self.scope)?, "the mesh size")?;
+                self.spec().mesh = Some(size);
+                Ok(format!("elements about {size} mm across"))
+            }
             other => bail!(
                 "unknown simulation operation `{other}`; simulations use {}",
                 SIM_OPERATIONS.join(", ")

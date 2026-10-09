@@ -159,6 +159,16 @@ pub fn render_coloured(parts: &[(&Solid, Option<[f64; 3]>)], path: &str) -> Resu
         .iter()
         .flat_map(|solid| [geometry::bounds(solid).min(), geometry::bounds(solid).max()])
         .collect();
+    render_triangles(&positions, &triangles, &edges, bounds, path)
+}
+
+pub fn render_triangles(
+    positions: &[Point3],
+    triangles: &[([usize; 3], [f64; 3])],
+    edges: &[Vec<Point3>],
+    bounds: BoundingBox<Point3>,
+    path: &str,
+) -> Result<()> {
     let center = bounds.center().to_vec();
     let mut image = RgbImage::from_pixel(CELL * 2, CELL * 2, BACKGROUND);
     for (index, view) in views().iter().enumerate() {
@@ -185,7 +195,7 @@ pub fn render_coloured(parts: &[(&Solid, Option<[f64; 3]>)], path: &str) -> Resu
             depth: vec![f64::NEG_INFINITY; (CELL * CELL) as usize],
             offset: ((index as u32 % 2) * CELL, (index as u32 / 2) * CELL),
         };
-        for (triangle, tint) in &triangles {
+        for (triangle, tint) in triangles {
             let [a, b, c] = triangle.map(|i| positions[i]);
             let normal = (b - a).cross(c - a);
             if normal.magnitude2() < 1.0e-24 {
@@ -200,7 +210,7 @@ pub fn render_coloured(parts: &[(&Solid, Option<[f64; 3]>)], path: &str) -> Resu
             canvas.triangle(triangle.map(|i| to_pixel(projected[i])), color);
         }
         let bias = depth_range * 0.01;
-        for polyline in &edges {
+        for polyline in edges {
             polyline.windows(2).for_each(|pair| {
                 canvas.line(
                     to_pixel(project(pair[0])),

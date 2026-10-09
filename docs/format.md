@@ -362,13 +362,14 @@ expect shoulder<15 sun_s_turn<4
 
 | operation | arguments | does |
 |---|---|---|
-| `sim` | `kind` | what to simulate. Comes first. `torque` works today; `static`, `thermal` and `modal` are planned (`docs/simulation.md`) |
+| `sim` | `kind` | what to simulate. Comes first. `torque` works today. `static`, `thermal` and `modal` mesh the part (`--dry-run`, `render`) but their solvers are not built yet (`docs/simulation.md`) |
 | `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
 | `gravity` | `x,y,z` | in m/s², `0,0,-9.81` unless given |
 | `payload` | `part grams` `at=x,y,z` | a point mass carried by a part, at its centre of mass unless `at=` places it (in the assembly's coordinates as posed when the line runs). It moves with the part |
 | `sweep` | `joint ... steps=` | runs every pose of the listed joints across their ranges in `steps` (24 unless given) equal steps; a joint that turns all the way round goes from -180 to 180. Several joints on one line make a grid of poses; separate lines make separate sweeps |
+| `mesh` | `size` | the target edge length of the tetrahedra in mm, for `static`, `thermal` and `modal`; a twentieth of the part's size unless given. The mesher makes elements smaller where walls are thin, gaps are narrow or edges run close together |
 | `expect` | `reading<limit ...` or `reading>limit` | a check on a reading, by name. `gcad sim` fails when one does not hold |
 
 `sim torque` works out the load each joint of an assembly must hold against gravity and
@@ -387,6 +388,11 @@ version changed since it was written. `gcad render file.gsim file.png` plots the
 result's sweeps: one panel per sweep and unit, each joint's load against the first swept
 joint (the worst over the other joints when several are swept). The viewer shows the
 simulated part.
+
+For `static`, `thermal` and `modal`, `gcad sim file.gsim --dry-run` meshes every body of the
+part into tetrahedra and reports the node and element counts, how far the mesh volume is from
+the solid's, and the worst element. `gcad render file.gsim file.png` draws the mesh with the
+half nearer the front view cut away, the cut faces in orange.
 
 The material names know their stiffness, strength and conductivity as well as their
 density:

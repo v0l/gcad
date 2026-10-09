@@ -1,4 +1,6 @@
+pub mod mesh;
 mod result;
+pub mod tet;
 mod torque;
 
 pub use result::{Curve, Outcome, Reading, Series, inputs, stale, stamp};
@@ -11,6 +13,9 @@ use std::path::{Path, PathBuf};
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Kind {
     Torque,
+    Static,
+    Thermal,
+    Modal,
 }
 
 pub const KINDS: &[&str] = &["torque", "static", "thermal", "modal"];
@@ -19,9 +24,9 @@ impl Kind {
     pub fn named(name: &str) -> Result<Kind> {
         match name {
             "torque" => Ok(Kind::Torque),
-            "static" | "thermal" | "modal" => {
-                bail!("`sim {name}` is planned but not built yet; `torque` works today")
-            }
+            "static" => Ok(Kind::Static),
+            "thermal" => Ok(Kind::Thermal),
+            "modal" => Ok(Kind::Modal),
             other => bail!(
                 "unknown simulation `{other}`; kinds are {}",
                 KINDS.join(", ")
@@ -32,7 +37,14 @@ impl Kind {
     pub fn name(self) -> &'static str {
         match self {
             Kind::Torque => "torque",
+            Kind::Static => "static",
+            Kind::Thermal => "thermal",
+            Kind::Modal => "modal",
         }
+    }
+
+    pub fn meshed(self) -> bool {
+        self != Kind::Torque
     }
 }
 
@@ -66,6 +78,7 @@ pub struct Spec {
     pub payloads: Vec<Payload>,
     pub sweeps: Vec<Sweep>,
     pub expects: Vec<Expect>,
+    pub mesh: Option<f64>,
 }
 
 impl Spec {
@@ -93,6 +106,7 @@ pub fn result_path(spec: &Path) -> PathBuf {
 pub fn plan(spec: &Spec) -> Result<String> {
     match spec.kind {
         Some(Kind::Torque) => torque::plan(spec),
+        Some(_) => mesh::plan(spec),
         None => bail!("the file has no `sim` line"),
     }
 }
@@ -100,6 +114,10 @@ pub fn plan(spec: &Spec) -> Result<String> {
 pub fn simulate(spec: &Spec) -> Result<Outcome> {
     let mut outcome = match spec.kind {
         Some(Kind::Torque) => torque::run(spec)?,
+        Some(kind) => bail!(
+            "the {} solver is not built yet; `gcad sim --dry-run` meshes the part and `gcad render` draws the mesh",
+            kind.name()
+        ),
         None => bail!("the file has no `sim` line"),
     };
     outcome.check(&spec.expects);

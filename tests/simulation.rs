@@ -260,3 +260,178 @@ fn robot_arm_motor_torque() {
     assert!(reading(&outcome, "yaw").abs() < 1.0e-9);
     assert_eq!(outcome.series.len(), 2);
 }
+
+fn solid_of(source: &str) -> monstertruck::modeling::Solid {
+    common::build(source).solid.expect("a solid")
+}
+
+fn checked_mesh(solid: &monstertruck::modeling::Solid, size: f64) -> gcad::sim::tet::TetMesh {
+    use std::collections::HashMap;
+    let mesh = gcad::sim::tet::mesh_solid(solid, size).expect("meshes");
+    let mut faces: HashMap<[u32; 3], usize> = HashMap::new();
+    let mut volume = 0.0;
+    for t in 0..mesh.tets.len() {
+        let q = mesh.points(t);
+        let six = robust::orient3d(
+            robust::Coord3D {
+                x: q[0][0],
+                y: q[0][1],
+                z: q[0][2],
+            },
+            robust::Coord3D {
+                x: q[1][0],
+                y: q[1][1],
+                z: q[1][2],
+            },
+            robust::Coord3D {
+                x: q[2][0],
+                y: q[2][1],
+                z: q[2][2],
+            },
+            robust::Coord3D {
+                x: q[3][0],
+                y: q[3][1],
+                z: q[3][2],
+            },
+        );
+        assert!(six > 0.0, "tetrahedron {t} is flat or inverted");
+        volume += six / 6.0;
+        let tet = mesh.tets[t];
+        for i in 0..4 {
+            let mut f: Vec<u32> = (0..4).filter(|&k| k != i).map(|k| tet[k]).collect();
+            f.sort_unstable();
+            *faces.entry([f[0], f[1], f[2]]).or_default() += 1;
+        }
+    }
+    let skin: std::collections::HashSet<[u32; 3]> = mesh
+        .boundary
+        .iter()
+        .map(|(f, _)| {
+            let mut k = *f;
+            k.sort_unstable();
+            k
+        })
+        .collect();
+    assert_eq!(
+        skin.len(),
+        mesh.boundary.len(),
+        "a boundary triangle is listed twice"
+    );
+    for (face, count) in &faces {
+        match (count, skin.contains(face)) {
+            (1, true) | (2, false) => {}
+            other => panic!("face {face:?} is shared {other:?}"),
+        }
+    }
+    let mut edges: HashMap<[u32; 2], usize> = HashMap::new();
+    let mut enclosed = 0.0;
+    for (f, tag) in &mesh.boundary {
+        assert!(*tag < mesh.faces);
+        for k in 0..3 {
+            let (a, b) = (f[k].min(f[(k + 1) % 3]), f[k].max(f[(k + 1) % 3]));
+            *edges.entry([a, b]).or_default() += 1;
+        }
+        let [a, b, c] = f.map(|v| mesh.nodes[v as usize]);
+        enclosed += a.x * (b.y * c.z - b.z * c.y) - a.y * (b.x * c.z - b.z * c.x)
+            + a.z * (b.x * c.y - b.y * c.x);
+    }
+    let open: Vec<_> = edges.iter().filter(|(_, n)| **n != 2).collect();
+    assert!(
+        open.is_empty(),
+        "the boundary is not closed: {:?}",
+        &open[..open.len().min(4)]
+    );
+    close(enclosed / 6.0, volume, 1.0e-9);
+    let tagged: std::collections::HashSet<usize> = mesh.boundary.iter().map(|(_, t)| *t).collect();
+    assert_eq!(
+        tagged.len(),
+        mesh.faces,
+        "every face of the solid has boundary triangles"
+    );
+    mesh
+}
+
+#[test]
+fn tet_mesh_of_a_box() {
+    let mesh = checked_mesh(&solid_of("rect 40 30\nextrude 10"), 4.0);
+    let q = mesh.quality();
+    close(q.volume, 12000.0, 1.0e-9);
+    assert!(q.min_dihedral > 5.0 && q.max_ratio < 3.0, "{q:?}");
+}
+
+#[test]
+fn tet_mesh_of_curved_parts() {
+    let pi = std::f64::consts::PI;
+    for (source, size, volume) in [
+        (
+            "rect 40 30\nbase: extrude 10\nplane base.end\nhole 8 0,0",
+            3.0,
+            12000.0 - pi * 16.0 * 10.0,
+        ),
+        ("circle 20\nextrude 30", 3.0, pi * 100.0 * 30.0),
+        ("rect 20 20\nextrude 10\nfillet 3 all", 2.0, 0.0),
+    ] {
+        let solid = solid_of(source);
+        let mesh = checked_mesh(&solid, size);
+        let q = mesh.quality();
+        let exact = if volume > 0.0 {
+            volume
+        } else {
+            gcad::geometry::volume(&solid)
+        };
+        close(q.volume, exact, 0.02);
+        assert!(q.min_dihedral > 4.0, "{source}: {q:?}");
+    }
+}
+
+#[test]
+fn tet_mesh_of_example_parts() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/parts");
+    for (name, size) in [
+        ("bracket", 3.0),
+        ("plate", 2.5),
+        ("ring", 1.2),
+        ("frame", 3.0),
+        ("pipe", 1.5),
+    ] {
+        let run =
+            gcad::model::run_path(&root.join(format!("{name}.gcad")), &[], None).expect("runs");
+        let solid = run.model.solid.clone().expect("a solid");
+        let mesh = checked_mesh(&solid, size);
+        let q = mesh.quality();
+        close(q.volume, gcad::geometry::volume(&solid), 0.04);
+        assert!(q.min_dihedral > 4.0, "{name}: {q:?}");
+    }
+}
+
+#[test]
+fn tet_mesh_of_thin_walls() {
+    let solid = solid_of("rect 60 40 r=4\nbox: extrude 25\nshell 2 open=box.end");
+    let mesh = checked_mesh(&solid, 5.0);
+    close(mesh.quality().volume, gcad::geometry::volume(&solid), 0.01);
+}
+
+#[test]
+fn mesh_dry_run() {
+    let path = written(
+        "mesh_dry_run",
+        &[("beam.gcad", BEAM)],
+        "sim static\npart beam.gcad\nmesh 4",
+    );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("sim");
+    let plan = gcad::sim::plan(spec).expect("plans");
+    assert!(
+        plan.contains("mesh size 4") && plan.contains("tetrahedra"),
+        "{plan}"
+    );
+    let error = gcad::sim::simulate(spec).expect_err("not built");
+    assert!(format!("{error}").contains("not built yet"), "{error}");
+    let picture = path.with_file_name("mesh.png");
+    gcad::sim::mesh::render(
+        &gcad::sim::mesh::bodies(spec).expect("meshes"),
+        picture.to_str().expect("utf-8"),
+    )
+    .expect("renders");
+    assert!(picture.exists());
+}

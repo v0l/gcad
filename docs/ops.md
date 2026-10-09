@@ -288,6 +288,7 @@ The plan for the rest is in `docs/simulation.md`.
 | expectations | supported | `expect shoulder<2 drive>0.5` | `simulation::torque_through_gears` |
 | stale results and charts | supported | `gcad check x.gsim`, `gcad render x.gsim x.png` | `simulation::result_goes_stale` |
 | stiffness, strength and conductivity | supported | `material pla`, `material delrin density=1.41 E=3.1 nu=0.35 yield=65` | `simulation::material_properties` |
+| tetrahedral mesh | supported | `mesh 2`, `gcad sim x.gsim --dry-run`, `gcad render x.gsim x.png` | `simulation::tet_mesh_of_a_box`, `simulation::tet_mesh_of_curved_parts`, `simulation::tet_mesh_of_example_parts`, `simulation::tet_mesh_of_thin_walls`, `simulation::mesh_dry_run` |
 | static stress | missing | `sim static`, `fix faces`, `load faces force=x,y,z` | `simulation::cantilever_stress` |
 | steady heat | missing | `sim thermal`, `cold: temperature faces 20` | `simulation::conduction_through_a_wall` |
 | natural frequencies | missing | `sim modal`, `modes 3` | `simulation::cantilever_modes` |

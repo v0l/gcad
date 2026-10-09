@@ -88,25 +88,38 @@ The lowest natural frequencies and mode shapes, from the same supports as `stati
 
 ## Meshing
 
-Tetrahedra that follow the surface, from the start.
+Tetrahedra that follow the surface, written in Rust (`src/sim/tet/`). Built in phase 2:
 
-1. Tessellate every B-rep face to the target size with the kernel's triangulation, keeping the
-   face index on every triangle so selectors map to element faces.
-2. Fill the closed surface with tetrahedra, keeping the surface triangles as the boundary:
-   a constrained Delaunay tetrahedralization written in Rust (`src/sim/tet/`). Bowyer-Watson
-   insertion with exact orientation and insphere predicates (Shewchuk's adaptive arithmetic,
-   from the `robust` crate), boundary recovery by inserting Steiner points on missing surface
-   edges and faces, then Delaunay refinement (Shewchuk's terminating algorithm) to a
-   radius-edge ratio of 2 and a minimum dihedral angle, followed by sliver removal. Its own
-   tests: every surface triangle is a tetrahedron face, the tetrahedra fill exactly the solid's
-   volume, no element is inverted, and the quality limits hold, on boxes, revolves, thin walls,
-   holes, threads and the example parts.
-3. Make the elements quadratic (10-node tetrahedra), placing mid-side nodes on the true B-rep
-   surface for curved faces. Linear tetrahedra are too stiff in bending to trust.
-4. Assemblies: parts that touch are meshed separately and bonded where their faces meet, by
-   tying the nodes of one face to the other's elements.
+1. The surface. Each B-rep face is triangulated in its own parameter space with `spade`
+   (constrained Delaunay, refined to 25 degree angles), its parameters scaled by the surface's
+   mean metric so triangles come out the right size in 3D. Face boundaries come from the
+   kernel's edge polylines, split the same way on both sides, so neighbouring faces share
+   their points exactly. Each triangle keeps its B-rep face index, so selectors map to
+   element faces.
+2. The size field. A first pass at the target size is ray cast along every triangle's normal
+   to find wall thickness and gaps, and every B-rep edge is measured against the edges near
+   it. Where either is below the target, the surface is meshed again finer there, grading
+   back up at 0.3 of the distance.
+3. Conforming Delaunay. All surface points go into an incremental Bowyer-Watson
+   tetrahedralization with exact predicates (`robust`). A surface triangle missing from it has
+   its longest edge split (on the true surface), followed by Delaunay edge flips within each
+   face, until every surface triangle is a tetrahedron face.
+4. Refinement. Tetrahedra larger than the target or with a radius-edge ratio above 2 get a
+   point at their circumcentre, never across the surface. A point that would land inside a
+   surface triangle's diametral sphere splits that triangle instead, on the true surface.
+   Slivers then get their circumcentre or a point near it.
+5. Clean up. Flat tetrahedra lying against the surface are shed where that keeps the surface
+   closed and manifold. Then interior points are moved to raise the worst element in their
+   star, 2-3 and 3-2 flips replace poor elements wherever that raises the worst one, and the
+   points are smoothed again.
 
-`--dry-run` stops after meshing and prints the counts and the worst element.
+The tests check every mesh closes, every face is shared by exactly two elements or lies on the
+surface, the elements fill the surface exactly, and the volume is close to the solid's, on a
+box, curved parts, thin walls and the example parts.
+
+Still to do: quadratic (10-node) elements with mid-side nodes on the true surface, which come
+with the solver in phase 3; and better sliver removal where every corner of an element lies
+on the surface (they survive near tangent edges and tiny faces).
 
 ## Solvers
 
@@ -140,7 +153,7 @@ the closed form.
 ## Phases
 
 1. Spec files, results, staleness, charts, the material properties, and `torque`. Done.
-2. The tetrahedral mesher and `--dry-run`.
+2. The tetrahedral mesher, `--dry-run` and mesh renders. Done.
 3. `static` on the CPU, checked against the closed forms, then on the GPU.
 4. `thermal`.
 5. `modal`.

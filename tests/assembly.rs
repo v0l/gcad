@@ -25,7 +25,7 @@ fn steps(
     let results = run
         .steps
         .iter()
-        .map(|(_, r)| r.as_ref().map(Clone::clone).map_err(|e| format!("{e:#}")))
+        .map(|(_, r)| r.as_ref().cloned().map_err(|e| format!("{e:#}")))
         .collect();
     (run.model, results)
 }

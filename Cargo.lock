@@ -1048,7 +1048,9 @@ dependencies = [
  "monstertruck-topology",
  "notify",
  "rayon",
+ "robust",
  "serde_json",
+ "spade",
  "ttf-parser",
 ]
 

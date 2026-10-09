@@ -289,6 +289,16 @@ fn main() -> Result<()> {
             explode,
         } => {
             if gcad::sim::is_sim(std::path::Path::new(&file)) {
+                let run = load(&file, None, &vars)?;
+                finished(&run)?;
+                let spec = run
+                    .model
+                    .sim
+                    .as_deref()
+                    .expect("a .gsim file runs as a simulation");
+                if spec.kind.is_some_and(|k| k.meshed()) {
+                    return gcad::sim::mesh::render(&gcad::sim::mesh::bodies(spec)?, &output);
+                }
                 let outcome =
                     gcad::sim::Outcome::read(&gcad::sim::result_path(std::path::Path::new(&file)))?;
                 return gcad::plot::chart(&outcome, &output);
