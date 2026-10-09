@@ -114,7 +114,9 @@ Tetrahedra that follow the surface, written in Rust (`src/sim/tet/`). Built in p
 4. Refinement. Tetrahedra larger than the target or with a radius-edge ratio above 2 get a
    point at their circumcentre, never across the surface. A point that would land inside a
    surface triangle's diametral sphere splits that triangle instead, on the true surface.
-   Slivers then get their circumcentre or a point near it.
+   Slivers then get their circumcentre or a point near it, for at most a quarter more points:
+   on features thinner than the elements (gear teeth on a coarse mesh) each insertion made
+   new slivers, and an uncapped pass took a 14 mm wide gear from 8,000 points to 42,000.
 5. Clean up. Flat tetrahedra lying against the surface are shed where that keeps the surface
    closed and manifold. Then interior points are moved to raise the worst element in their
    star, 2-3 and 3-2 flips replace poor elements wherever that raises the worst one, and the

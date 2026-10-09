@@ -230,30 +230,24 @@ pub fn mesh_solid(solid: &Solid, size: f64) -> Result<TetMesh> {
         seed ^= seed << 17;
         (seed >> 11) as f64 / (1u64 << 53) as f64
     };
+    let budget = dt.points.len() + dt.points.len() / 4;
     for _ in 0..6 {
         let slivers: Vec<u32> = dt
             .alive()
             .filter(|&t| dt.inside[t] && sliver(dt.coords(dt.tets[t])))
             .map(|t| t as u32)
             .collect();
-        if slivers.is_empty() {
+        if slivers.is_empty() || dt.points.len() >= budget {
             break;
         }
         for t in slivers {
+            if dt.points.len() >= budget {
+                break;
+            }
             if dt.dead[t as usize] || !dt.inside[t as usize] {
                 continue;
             }
             let q = dt.coords(dt.tets[t as usize]);
-            let walled = (0..4).any(|i| {
-                dt.constrained
-                    .contains(&face_key(face_of(dt.tets[t as usize], i)))
-            });
-            if !walled {
-                let centroid = [0, 1, 2].map(|k| (q[0][k] + q[1][k] + q[2][k] + q[3][k]) / 4.0);
-                if let Insert::Added(_) = dt.insert_from(centroid, t, Mode::Walls) {
-                    continue;
-                }
-            }
             let Some(c) = circumcentre(q) else { continue };
             let radius = sub(c, q[0]).magnitude();
             for attempt in 0..8 {
