@@ -24,17 +24,17 @@ serde_json = "1.0.151"
 ttf-parser = "0.25"
 
 [patch.crates-io]
-monstertruck = { path = "../monstertruck/monstertruck" }
-monstertruck-core = { path = "../monstertruck/monstertruck-core" }
-monstertruck-traits = { path = "../monstertruck/monstertruck-traits" }
-monstertruck-derive = { path = "../monstertruck/monstertruck-derive" }
-monstertruck-geometry = { path = "../monstertruck/monstertruck-geometry" }
-monstertruck-topology = { path = "../monstertruck/monstertruck-topology" }
-monstertruck-mesh = { path = "../monstertruck/monstertruck-mesh" }
-monstertruck-meshing = { path = "../monstertruck/monstertruck-meshing" }
-monstertruck-modeling = { path = "../monstertruck/monstertruck-modeling" }
-monstertruck-solid = { path = "../monstertruck/monstertruck-solid" }
-monstertruck-fillet = { path = "../monstertruck/monstertruck-fillet" }
-monstertruck-healing = { path = "../monstertruck/monstertruck-healing" }
-monstertruck-assembly = { path = "../monstertruck/monstertruck-assembly" }
-monstertruck-io = { path = "../monstertruck/monstertruck-io" }
+monstertruck = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-core = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-traits = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-derive = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-geometry = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-topology = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-mesh = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-meshing = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-modeling = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-solid = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-fillet = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-healing = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-assembly = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
+monstertruck-io = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }

@@ -8,9 +8,6 @@ on:
 permissions:
   contents: write
 
-env:
-  MONSTERTRUCK_REV: f2e1021f96adb6c24e8464f90b293b42fc52b484
-
 jobs:
   build:
     strategy:
@@ -28,25 +25,14 @@ jobs:
           - target: x86_64-pc-windows-msvc
             os: windows-latest
     runs-on: ${{ matrix.os }}
-    defaults:
-      run:
-        working-directory: gcad
     steps:
       - uses: actions/checkout@v4
-        with:
-          path: gcad
-      - uses: actions/checkout@v4
-        with:
-          repository: v0l/monstertruck
-          ref: ${{ env.MONSTERTRUCK_REV }}
-          path: monstertruck
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
       - uses: Swatinem/rust-cache@v2
         with:
           key: ${{ matrix.target }}
-          workspaces: gcad
       - run: cargo build --release --locked --target ${{ matrix.target }}
       - name: package
         shell: bash

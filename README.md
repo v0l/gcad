@@ -69,18 +69,16 @@ the selectors, assemblies and the traps. It ships in every release archive; link
 ## Building
 
 The kernel is a fork of [monstertruck](https://github.com/v0l/monstertruck) with fillet and
-boolean fixes. Check out its `cad-regressions` branch next to this repo; `Cargo.toml` wires
-it in through `[patch.crates-io]` by path.
+boolean fixes. `Cargo.toml` pins a commit of its `cad-regressions` branch through
+`[patch.crates-io]`, so a plain build fetches it.
 
 ```sh
 git clone https://github.com/v0l/gcad
-git clone -b cad-regressions https://github.com/v0l/monstertruck
 cd gcad && cargo build --release
 ```
 
-Releases build the fork at the commit pinned in `.github/workflows/release.yml`
-(`MONSTERTRUCK_REV`). Push a `v*` tag to build Linux, macOS and Windows archives and publish
-them as a GitHub release.
+Push a `v*` tag to build Linux, macOS and Windows archives and publish them as a GitHub
+release.
 
 ## License
 
