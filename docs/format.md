@@ -399,7 +399,8 @@ A result is stale when the spec, any file it reads, the `--set` variables or the
 version changed since it was written. `gcad render file.gsim file.png` plots the
 result's sweeps: one panel per sweep and unit, each joint's load against the first swept
 joint (the worst over the other joints when several are swept). The viewer shows the
-simulated part.
+simulated part, and once a `static`, `thermal` or `modal` result is up to date it shows the
+part coloured by it instead (deformed as in `render`), with the range in the parts card.
 
 `sim static` is linear elasticity on curved 10-node tetrahedra.
 Units are millimetres, newtons and MPa. It needs a material with a stiffness and at least one
