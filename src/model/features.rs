@@ -464,6 +464,15 @@ impl Model {
                 farthest_along(&existing, removal.frame.origin, -removal.frame.normal) + clearance
             }
         };
+        let removal = Removal {
+            profiles: super::solids::clear_round_walls(
+                &existing,
+                &removal.frame,
+                removal.profiles,
+                distance,
+            ),
+            ..removal
+        };
         let outlines = loops(&removal.frame, &removal.profiles)?;
         let lead = if clear_above(&existing, &removal.frame, &outlines, clearance) {
             clearance

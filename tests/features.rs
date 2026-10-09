@@ -540,6 +540,32 @@ fn notch_flush_with_sides() {
 }
 
 #[test]
+fn cut_on_an_outer_wall() {
+    let model = build(
+        "circle 24\ncircle 15\nring: extrude 4.5\nplane ring.end\ncircle 24\ncircle 20\ncut 1.5",
+    );
+    let annulus = |a: f64, b: f64| PI / 4.0 * (a * a - b * b);
+    assert_volume(
+        &model,
+        annulus(24.0, 15.0) * 4.5 - annulus(24.0, 20.0) * 1.5,
+        1.0e-4,
+    );
+}
+
+#[test]
+fn cut_on_a_bore() {
+    let model = build(
+        "circle 24\ncircle 15\nring: extrude 4.5\nplane ring.end\ncircle 20\ncircle 15\ncut 1.5",
+    );
+    let annulus = |a: f64, b: f64| PI / 4.0 * (a * a - b * b);
+    assert_volume(
+        &model,
+        annulus(24.0, 15.0) * 4.5 - annulus(20.0, 15.0) * 1.5,
+        1.0e-4,
+    );
+}
+
+#[test]
 fn step_flush_with_sides() {
     assert_volume(
         &build("rect 20 20\nbase: extrude 10\nplane base.end\nrect 20 10 at=0,5\nextrude 5"),

@@ -425,6 +425,13 @@ impl Model {
     }
 
     fn op_if(&mut self, line: &Line) -> Result<String> {
+        match self.guarded(line)? {
+            Ok(inner) => self.apply(&inner),
+            Err(condition) => Ok(format!("skipped, `{condition}` is false")),
+        }
+    }
+
+    pub(crate) fn guarded(&self, line: &Line) -> Result<std::result::Result<Line, String>> {
         let text = line.text.trim_start();
         let text = match &line.label {
             Some(label) => text.trim_start_matches(&format!("{label}:")).trim_start(),
@@ -439,13 +446,13 @@ impl Model {
             .ok_or_else(|| anyhow!("write `if <condition> <operation ...>`"))?;
         let holds = crate::parse::eval(condition, &self.scope)?;
         if holds == 0.0 {
-            return Ok(format!("skipped, `{condition}` is false"));
+            return Ok(Err(condition.to_string()));
         }
         let mut inner = crate::parse::parse_line(line.number, inner.trim())?;
         if inner.label.is_none() {
             inner.label = line.label.clone();
         }
-        self.apply(&inner)
+        Ok(Ok(inner))
     }
 
     fn op_include(&mut self, line: &Line) -> Result<String> {

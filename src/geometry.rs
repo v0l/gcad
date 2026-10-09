@@ -623,30 +623,75 @@ fn column_spans(
 pub struct Meshed {
     triangles: Vec<[Point3; 3]>,
     bounds: BoundingBox<Point3>,
+    volume: f64,
 }
 
 impl Meshed {
     pub fn volume(&self) -> f64 {
-        self.triangles
-            .iter()
-            .map(|[a, b, c]| a.to_vec().dot(b.to_vec().cross(c.to_vec())) / 6.0)
-            .sum()
+        self.volume
     }
+
+    fn from_triangles(triangles: Vec<[Point3; 3]>) -> Meshed {
+        Meshed {
+            bounds: triangles.iter().flatten().copied().collect(),
+            volume: triangles
+                .iter()
+                .map(|[a, b, c]| a.to_vec().dot(b.to_vec().cross(c.to_vec())) / 6.0)
+                .sum(),
+            triangles,
+        }
+    }
+
+    pub fn transformed(&self, m: Matrix4) -> Meshed {
+        Meshed::from_triangles(
+            self.triangles
+                .iter()
+                .map(|t| t.map(|p| m.transform_point(p)))
+                .collect(),
+        )
+    }
+
+    fn apart(&self, other: &Meshed) -> bool {
+        let (a, b) = (&self.bounds, &other.bounds);
+        (0..3).any(|k| a.max()[k] < b.min()[k] || b.max()[k] < a.min()[k])
+    }
+
+    pub fn clash(&self, other: &Meshed) -> Option<f64> {
+        if self.apart(other) {
+            return None;
+        }
+        let shared = overlap_of(self, other, 96);
+        (shared > 1.0e-6 * self.volume.abs().max(1.0)).then_some(shared)
+    }
+}
+
+pub fn clashes(meshes: &[Meshed]) -> Vec<(usize, usize, f64)> {
+    use rayon::prelude::*;
+    let pairs: Vec<(usize, usize)> = (0..meshes.len())
+        .flat_map(|i| (i + 1..meshes.len()).map(move |j| (i, j)))
+        .filter(|&(i, j)| !meshes[i].apart(&meshes[j]))
+        .collect();
+    pairs
+        .into_par_iter()
+        .filter_map(|(i, j)| meshes[i].clash(&meshes[j]).map(|v| (i, j, v)))
+        .collect()
+}
+
+pub fn meshed_all(solids: &[&Solid]) -> Vec<Meshed> {
+    use rayon::prelude::*;
+    solids.par_iter().map(|s| Meshed::new(s)).collect()
 }
 
 impl Meshed {
     pub fn new(solid: &Solid) -> Meshed {
         let mesh = mesh(solid, mesh_tolerance(solid));
         let positions = mesh.positions();
-        let triangles: Vec<[Point3; 3]> = mesh
-            .faces()
-            .triangle_iter()
-            .map(|t| t.map(|v| positions[v.pos]))
-            .collect();
-        Meshed {
-            bounds: positions.iter().copied().collect(),
-            triangles,
-        }
+        Meshed::from_triangles(
+            mesh.faces()
+                .triangle_iter()
+                .map(|t| t.map(|v| positions[v.pos]))
+                .collect(),
+        )
     }
 }
 
@@ -664,8 +709,7 @@ pub fn overlap_of(ma: &Meshed, mb: &Meshed, per_side: usize) -> f64 {
     }
     let n = per_side;
     let (dx, dy) = ((x1 - x0) / n as f64, (y1 - y0) / n as f64);
-    let prepare = |meshed: &Meshed| {
-        let triangles = meshed.triangles.clone();
+    let prepare = |triangles: &[[Point3; 3]]| {
         let mut bins = vec![Vec::new(); n * n];
         for (index, tri) in triangles.iter().enumerate() {
             let range = |lo: f64, hi: f64, start: f64, step: f64| {
@@ -690,9 +734,10 @@ pub fn overlap_of(ma: &Meshed, mb: &Meshed, per_side: usize) -> f64 {
                 }
             }
         }
-        (triangles, bins)
+        bins
     };
-    let ((ta, bins_a), (tb, bins_b)) = (prepare(ma), prepare(mb));
+    let (ta, tb) = (&ma.triangles, &mb.triangles);
+    let (bins_a, bins_b) = (prepare(ta), prepare(tb));
     let mut total = 0.0;
     for i in 0..n {
         for j in 0..n {
@@ -701,8 +746,8 @@ pub fn overlap_of(ma: &Meshed, mb: &Meshed, per_side: usize) -> f64 {
                 y0 + dy * (j as f64 + 0.5 + 1.0e-7 * std::f64::consts::PI),
             );
             let (sa, sb) = (
-                column_spans(&ta, &bins_a, i * n + j, point),
-                column_spans(&tb, &bins_b, i * n + j, point),
+                column_spans(ta, &bins_a, i * n + j, point),
+                column_spans(tb, &bins_b, i * n + j, point),
             );
             let shared: f64 = sa
                 .iter()

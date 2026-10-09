@@ -651,12 +651,19 @@ impl Model {
         let mut probe = self.clone();
         let mut wanted: Vec<(String, std::path::PathBuf, Vec<(String, f64)>)> = Vec::new();
         for line in lines {
+            let line = match line.op.as_str() {
+                "if" => match probe.guarded(line) {
+                    Ok(Ok(inner)) => inner,
+                    _ => continue,
+                },
+                _ => line.clone(),
+            };
             match line.op.as_str() {
                 "let" => {
-                    let _ = probe.apply(line);
+                    let _ = probe.apply(&line);
                 }
                 "part" => {
-                    if let Ok(found) = probe.part_key(line)
+                    if let Ok(found) = probe.part_key(&line)
                         && !wanted.iter().any(|w| w.0 == found.0)
                     {
                         wanted.push(found);
@@ -874,7 +881,19 @@ impl Model {
     }
 
     fn set_joint(&mut self, index: usize, value: f64) -> Result<()> {
-        let joint = self.joints[index].clone();
+        let values = self.settled(index, value)?;
+        for (k, &target) in values.iter().enumerate() {
+            let joint = self.joints[k].clone();
+            if target != joint.value {
+                self.move_subtree(&joint.child, joint.motion(target - joint.value))?;
+                self.joints[k].value = target;
+            }
+        }
+        Ok(())
+    }
+
+    fn settled(&self, index: usize, value: f64) -> Result<Vec<f64>> {
+        let joint = &self.joints[index];
         let rig = self.rig();
         if let Some(couple) = rig.driver_of(&joint.name) {
             bail!(
@@ -890,14 +909,7 @@ impl Model {
                 joint.unit()
             )
         })?;
-        for (k, &target) in values.iter().enumerate() {
-            let joint = self.joints[k].clone();
-            if target != joint.value {
-                self.move_subtree(&joint.child, joint.motion(target - joint.value))?;
-                self.joints[k].value = target;
-            }
-        }
-        Ok(())
+        Ok(values)
     }
 
     pub(crate) fn op_couple(&mut self, line: &Line) -> Result<String> {
@@ -1088,34 +1100,78 @@ impl Model {
         })
     }
 
-    fn overlaps(&self) -> Vec<(String, String, f64)> {
-        let named: Vec<(String, &Solid)> = self
-            .bodies
-            .iter()
-            .map(|(n, s)| (n.clone(), s))
-            .chain(self.solid.as_ref().map(|s| (self.current_body(), s)))
+    fn overlaps(&self) -> Vec<Clash> {
+        let named = self.named_solids();
+        let solids: Vec<&Solid> = named.iter().map(|(_, s)| *s).collect();
+        geometry::clashes(&geometry::meshed_all(&solids))
+            .into_iter()
+            .map(|(i, j, v)| (named[i].0.clone(), named[j].0.clone(), v))
+            .collect()
+    }
+
+    fn sweep_overlaps(
+        &self,
+        index: usize,
+        values: &[f64],
+    ) -> Result<Vec<(f64, Vec<Clash>)>> {
+        use rayon::prelude::*;
+        let named = self.named_solids();
+        let names: Vec<String> = named.iter().map(|(n, _)| n.clone()).collect();
+        let solids: Vec<&Solid> = named.iter().map(|(_, s)| *s).collect();
+        let meshes = geometry::meshed_all(&solids);
+        let pairs: Vec<(usize, usize)> = (0..names.len())
+            .flat_map(|i| (i + 1..names.len()).map(move |j| (i, j)))
             .collect();
-        let meshes: Vec<geometry::Meshed> = named
-            .iter()
-            .map(|(_, s)| geometry::Meshed::new(s))
-            .collect();
-        let boxes: Vec<BoundingBox<Point3>> =
-            named.iter().map(|(_, s)| geometry::bounds(s)).collect();
-        let mut found = Vec::new();
-        for i in 0..named.len() {
-            for j in i + 1..named.len() {
-                let (a, b) = (&boxes[i], &boxes[j]);
-                let apart = (0..3).any(|k| a.max()[k] < b.min()[k] || b.max()[k] < a.min()[k]);
-                if apart {
-                    continue;
-                }
-                let shared = geometry::overlap_of(&meshes[i], &meshes[j], 96);
-                if shared > 1.0e-6 * meshes[i].volume().abs().max(1.0) {
-                    found.push((named[i].0.clone(), named[j].0.clone(), shared));
-                }
-            }
+        let mut still: std::collections::HashMap<(usize, usize), Option<f64>> = Default::default();
+        let mut out = Vec::new();
+        for &value in values {
+            let pose = posed(&self.joints, &self.settled(index, value)?);
+            let deltas: Vec<Matrix4> = names
+                .iter()
+                .map(|name| pose.get(name).copied().unwrap_or_else(Matrix4::identity))
+                .collect();
+            let moved: Vec<Option<geometry::Meshed>> = deltas
+                .par_iter()
+                .zip(&meshes)
+                .map(|(delta, mesh)| {
+                    (!same_motion(*delta, Matrix4::identity())).then(|| mesh.transformed(*delta))
+                })
+                .collect();
+            let mesh_of = |i: usize| moved[i].as_ref().unwrap_or(&meshes[i]);
+            let together = |i: usize, j: usize| same_motion(deltas[i], deltas[j]);
+            let (rigid, relative): (Vec<_>, Vec<_>) =
+                pairs.iter().copied().partition(|&(i, j)| together(i, j));
+            let unknown: Vec<(usize, usize)> = rigid
+                .iter()
+                .copied()
+                .filter(|pair| !still.contains_key(pair))
+                .collect();
+            let settled: Vec<((usize, usize), Option<f64>)> = unknown
+                .into_par_iter()
+                .map(|(i, j)| ((i, j), meshes[i].clash(&meshes[j])))
+                .collect();
+            still.extend(settled);
+            let mut found: Vec<(usize, usize, f64)> = relative
+                .into_par_iter()
+                .filter_map(|(i, j)| mesh_of(i).clash(mesh_of(j)).map(|v| (i, j, v)))
+                .collect();
+            found.extend(rigid.iter().filter_map(|pair| {
+                still
+                    .get(pair)
+                    .copied()
+                    .flatten()
+                    .map(|v| (pair.0, pair.1, v))
+            }));
+            found.sort_by_key(|&(i, j, _)| (i, j));
+            out.push((
+                value,
+                found
+                    .into_iter()
+                    .map(|(i, j, v)| (names[i].clone(), names[j].clone(), v))
+                    .collect(),
+            ));
         }
-        found
+        Ok(out)
     }
 
     pub(crate) fn op_interference(&mut self, line: &Line) -> Result<String> {
@@ -1127,7 +1183,7 @@ impl Model {
                 "`interference` takes `none` to fail on any overlap, and `joint=` `steps=` to sweep a joint"
             ),
         };
-        let report = |found: &[(String, String, f64)]| {
+        let report = |found: &[Clash]| {
             found
                 .iter()
                 .map(|(a, b, v)| format!("{a} and {b} share about {v:.3}"))
@@ -1154,12 +1210,11 @@ impl Model {
             bail!("steps must be a whole number of at least 1");
         }
         let (low, high) = self.joints[index].range;
-        let mut trial = self.clone();
+        let values: Vec<f64> = (0..=steps as usize)
+            .map(|k| low + (high - low) * k as f64 / steps)
+            .collect();
         let mut hits = Vec::new();
-        for k in 0..=steps as usize {
-            let value = low + (high - low) * k as f64 / steps;
-            trial.set_joint(index, value)?;
-            let found = trial.overlaps();
+        for (value, found) in self.sweep_overlaps(index, &values)? {
             if !found.is_empty() {
                 hits.push(format!(
                     "at {value:.1}{}: {}",
@@ -1178,4 +1233,11 @@ impl Model {
         }
         Ok(hits.join("; "))
     }
+}
+
+type Clash = (String, String, f64);
+
+fn same_motion(a: Matrix4, b: Matrix4) -> bool {
+    let (a, b): (&[f64; 16], &[f64; 16]) = (a.as_ref(), b.as_ref());
+    a.iter().zip(b).all(|(x, y)| (x - y).abs() < 1.0e-9)
 }

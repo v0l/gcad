@@ -414,6 +414,82 @@ impl Model {
     }
 }
 
+pub(crate) fn clear_round_walls(
+    solid: &Solid,
+    frame: &Frame,
+    profiles: Vec<Profile>,
+    depth: f64,
+) -> Vec<Profile> {
+    let circles: Vec<usize> = (0..profiles.len())
+        .filter(|&i| matches!(profiles[i], Profile::Circle { .. }))
+        .collect();
+    if circles.is_empty() {
+        return profiles;
+    }
+    let Ok(shapes) = loops(frame, &profiles) else {
+        return profiles;
+    };
+    let size = geometry::bounds(solid).diameter();
+    let tolerance = geometry::mesh_tolerance(solid);
+    let margin = size * 5.0e-3;
+    let mesh = geometry::mesh(solid, tolerance);
+    let direction = Vector3::new(0.5773, 0.5774, 0.5775).normalize();
+    let inside = |p: Point3| {
+        geometry::ray_hits(&mesh, p, direction)
+            .iter()
+            .filter(|(t, _)| *t > 0.0)
+            .count()
+            % 2
+            == 1
+    };
+    let nesting = |profile: usize| {
+        let Some(own) = shapes.iter().find(|l| l.profile == profile) else {
+            return 0;
+        };
+        shapes
+            .iter()
+            .filter(|other| other.profile != profile)
+            .filter(|other| own.outline.iter().all(|&p| contains(&other.outline, p)))
+            .count()
+    };
+    let mut profiles = profiles;
+    for index in circles {
+        let Profile::Circle { center, diameter } = profiles[index] else {
+            continue;
+        };
+        let outward = if nesting(index) % 2 == 0 { 1.0 } else { -1.0 };
+        let radius = diameter / 2.0;
+        let ring = |offset: f64, height: f64| {
+            (0..16).map(move |k| {
+                let angle = std::f64::consts::TAU * (k as f64 + 0.37) / 16.0;
+                let r = radius + outward * offset;
+                frame.at(center.0 + r * angle.cos(), center.1 + r * angle.sin())
+                    - frame.normal * height
+            })
+        };
+        let heights: Vec<f64> = (1..=5).map(|k| depth * k as f64 / 6.0).collect();
+        let walled = || {
+            heights
+                .iter()
+                .any(|&h| ring(-4.0 * tolerance, h).any(inside))
+        };
+        let open = || {
+            heights.iter().all(|&h| {
+                [4.0 * tolerance, margin / 2.0, margin]
+                    .iter()
+                    .all(|&offset| !ring(offset, h).any(inside))
+            })
+        };
+        if radius > margin && walled() && open() {
+            profiles[index] = Profile::Circle {
+                center,
+                diameter: diameter + outward * 2.0 * margin,
+            };
+        }
+    }
+    profiles
+}
+
 pub(crate) fn clear_flush(tool: &Solid, solid: &Solid) -> Solid {
     let size = geometry::bounds(solid).diameter();
     let margin = size * 5.0e-3;

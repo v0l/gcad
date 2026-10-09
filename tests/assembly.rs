@@ -154,6 +154,38 @@ fn sweep_finds_a_clash() {
 }
 
 #[test]
+fn sweep_keeps_reporting_parts_that_do_not_move() {
+    let (_, text) = built(
+        "sweep_keeps_reporting_parts_that_do_not_move",
+        &format!(
+            "{HINGE}part spare box.gcad body=lid\nmove spare 0,0,-5\njoint open box.lid box.main turn about=hinge min=-60 max=60\ninterference joint=open steps=4"
+        ),
+        &[("box.gcad", BOX)],
+    );
+    assert_eq!(text.matches("box.main and spare").count(), 5, "{text}");
+    assert!(text.contains("at 30.0°: box.main and box.lid"), "{text}");
+}
+
+#[test]
+fn concentric_far_from_the_origin() {
+    let (_, text) = built(
+        "concentric_far_from_the_origin",
+        "part plate plate.gcad\npart s screw.gcad\nrotate s -90 axis=y\nmove s -35,58,280\nconcentric s:shank.side plate:h.side near=-35,58,280",
+        &[
+            (
+                "screw.gcad",
+                "circle 3.28\nshank: extrude -40\nplane XY\ncircle 6.5\nhead: extrude 4",
+            ),
+            (
+                "plate.gcad",
+                "plane YZ\nrect 140 300 at=0,150\np: extrude -35\nplane p.end\nh: hole 4.5 -58,280 -58,131",
+            ),
+        ],
+    );
+    assert!(text.contains("radius 1.640 in 2.250"), "{text}");
+}
+
+#[test]
 fn strict_interference_fails() {
     let error = failed(
         "strict_interference_fails",
@@ -520,7 +552,10 @@ fn exploded_views_move_parts_apart() {
     let moved = gcad::model::posed(&model.joints, &open);
     let offsets = gcad::model::explode_offsets(&model.joints, &model.explode, &moved);
     let lid = offsets["box.lid"];
-    assert!(near(lid.x, 0.0) && near(lid.y, 20.0) && near(lid.z, 0.0), "{lid:?}");
+    assert!(
+        near(lid.x, 0.0) && near(lid.y, 20.0) && near(lid.z, 0.0),
+        "{lid:?}"
+    );
     let screw = offsets["screw"];
     assert!(near(screw.y, 30.0) && near(screw.z, 0.0), "{screw:?}");
 }

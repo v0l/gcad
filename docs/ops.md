@@ -101,6 +101,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | thicken a face | supported | `thicken base.side 1` | `features::thicken_face` |
 | union with coplanar faces | supported | same-size box on a face | `features::stack_same_size` |
 | cut with coplanar faces | supported | notch flush with the sides | `features::notch_flush_with_sides` |
+| cut with a circle on a round wall | supported | `circle D` on a ring of diameter D, or on its bore | `features::cut_on_an_outer_wall`, `features::cut_on_a_bore` |
 | coplanar faces fused after a boolean | supported | a boss flush with a wall leaves one face | `inspect::flush_unions_leave_one_face_per_plane` |
 | union flush with some sides | supported | step on top, flush with three sides | `features::step_flush_with_sides` |
 
@@ -173,7 +174,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | bring in a part file | supported | `part box box.gcad body=lid` | `assembly::parts_from_files` |
 | set a part's variables | supported | `part plate plate.gcad w=size` | `assembly::part_variables` |
 | geometry stays in part files | supported | `rect` in a `.gasm` fails | `assembly::geometry_stays_in_parts`, `assembly::part_errors_name_the_file` |
-| concentric mate | supported | `concentric pin:pin.side plate:hole.side near=x,y,z` | `assembly::concentric_pin_in_a_hole`, `assembly::concentric_picks_the_hole_near_a_point` |
+| concentric mate | supported | `concentric pin:pin.side plate:hole.side near=x,y,z` | `assembly::concentric_pin_in_a_hole`, `assembly::concentric_picks_the_hole_near_a_point`, `assembly::concentric_far_from_the_origin` |
 | flush mate | supported | `flush pin:pin.start plate:base.end offset=1` | `assembly::concentric_pin_in_a_hole` |
 | parallel mate | supported | `parallel b:rod.end a:rod.end` | `assembly::parallel_and_angle_turn_parts`, `assembly::a_parallel_mate_stops_a_joint` |
 | angle mate | supported | `angle lid:plate.end base:plate.end 30` | `assembly::parallel_and_angle_turn_parts` |
@@ -194,7 +195,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | exploded view | supported | `explode lid 0,0,30`, `render --explode` | `assembly::exploded_views_move_parts_apart` |
 | assembly drawing with parts list | supported | `gcad export top.gasm top.svg` | `output::assembly_drawing_lists_parts` |
 | bill of materials | supported | `gcad bom top.gasm [--csv]` | `assembly::bill_of_materials_counts_parts` |
-| sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash` |
+| sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash`, `assembly::sweep_keeps_reporting_parts_that_do_not_move` |
 
 ## Output
 

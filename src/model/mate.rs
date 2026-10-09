@@ -27,9 +27,14 @@ impl Cylinder {
 }
 
 pub(crate) fn fit_circle(points: &[(f64, f64)]) -> Option<((f64, f64), f64, f64)> {
+    let count = points.len().max(1) as f64;
+    let mean = points
+        .iter()
+        .fold((0.0, 0.0), |(sx, sy), &(x, y)| (sx + x / count, sy + y / count));
     let mut m = [[0.0f64; 3]; 3];
     let mut rhs = [0.0f64; 3];
     for &(x, y) in points {
+        let (x, y) = (x - mean.0, y - mean.1);
         let row = [x, y, 1.0];
         let target = -(x * x + y * y);
         for i in 0..3 {
@@ -54,11 +59,12 @@ pub(crate) fn fit_circle(points: &[(f64, f64)]) -> Option<((f64, f64), f64, f64)
         det(&c) / whole
     };
     let (d, e, f) = (solve(0), solve(1), solve(2));
-    let centre = (-d / 2.0, -e / 2.0);
-    let r2 = centre.0 * centre.0 + centre.1 * centre.1 - f;
+    let local = (-d / 2.0, -e / 2.0);
+    let r2 = local.0 * local.0 + local.1 * local.1 - f;
     if r2 <= 0.0 {
         return None;
     }
+    let centre = (local.0 + mean.0, local.1 + mean.1);
     let radius = r2.sqrt();
     let worst = points
         .iter()

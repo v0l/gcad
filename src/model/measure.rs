@@ -71,11 +71,13 @@ impl Model {
             }
             ("overlap", [a, b]) => {
                 let (a, b) = (self.named_body(a)?, self.named_body(b)?);
-                let overlap = match monstertruck::solid::and_normalized(&a, &b) {
-                    Ok(common) => geometry::volume(&common),
-                    Err(_) => 0.0,
-                };
-                Ok(format!("overlap {overlap:.3}"))
+                Ok(match monstertruck::solid::and_normalized(&a, &b) {
+                    Ok(common) => format!("overlap {:.3}", geometry::volume(&common)),
+                    Err(_) => format!(
+                        "overlap about {:.3}, estimated from meshes because the exact intersection failed",
+                        geometry::overlap_volume(&a, &b, 192)
+                    ),
+                })
             }
             ("thickness", []) => self.thickness(),
             ("draft", []) => {
