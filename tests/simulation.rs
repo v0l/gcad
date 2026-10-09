@@ -758,3 +758,34 @@ fn column_buckling() {
         .expect_err("no buckling");
     assert!(format!("{error}").contains("cannot buckle"), "{error}");
 }
+
+#[test]
+fn thermal_expansion() {
+    let bar = "rect 100 10 at=50,0\nbar: extrude 10 both\nmaterial steel\n";
+    let held = simulated(
+        "thermal_expansion_held",
+        &[("bar.gcad", bar)],
+        "sim static\npart bar.gcad\nslide <X\nends: slide >X\nslide <Y\nslide <Z\nwarm 50\nmid: probe 50,0,0\nmesh 4",
+    );
+    close(
+        reading(&held, "mid.stress"),
+        200.0e3 * 12.0e-6 * 50.0,
+        1.0e-6,
+    );
+    close(
+        reading(&held, "ends"),
+        200.0e3 * 12.0e-6 * 50.0 * 100.0,
+        1.0e-6,
+    );
+    let free = simulated(
+        "thermal_expansion_free",
+        &[("bar.gcad", bar)],
+        "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nwarm 50\nmesh 4",
+    );
+    assert!(reading(&free, "stress") < 1.0e-6);
+    let growth: f64 = 12.0e-6 * 50.0;
+    let corner = (growth * 100.0_f64)
+        .hypot(growth * 10.0)
+        .hypot(growth * 10.0);
+    close(reading(&free, "displacement"), corner, 1.0e-6);
+}

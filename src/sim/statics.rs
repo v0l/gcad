@@ -47,6 +47,24 @@ impl Prepared {
             .collect()
     }
 
+    pub fn expansion(&self, warming: Option<f64>) -> Result<Option<Vec<f64>>> {
+        let Some(warming) = warming else {
+            return Ok(None);
+        };
+        self.parts
+            .iter()
+            .map(|p| match p.mechanics.expansion {
+                Some(alpha) => Ok(alpha * 1.0e-6 * warming),
+                None => bail!(
+                    "`{}` is {}, which has no expansion; give it `alpha=` (µm/m·K) on its `material` line",
+                    p.name,
+                    p.material
+                ),
+            })
+            .collect::<Result<Vec<_>>>()
+            .map(Some)
+    }
+
     pub fn bonds(&self) -> Option<String> {
         let pairs: Vec<String> = self
             .mesh
@@ -133,6 +151,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         supports: &spec.supports,
         loads: &spec.loads,
         body_force,
+        expansion: prepared.expansion(spec.warming)?,
     })?;
     let mut readings = Vec::new();
     let mut notes = Vec::new();
@@ -436,8 +455,8 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
             .map(|p| g * (p.density * 1.0e-6))
             .collect()
     });
-    if spec.loads.is_empty() && body_force.is_none() {
-        bail!("buckling needs a `load`, `pressure` or `torque` to scale");
+    if spec.loads.is_empty() && body_force.is_none() && spec.warming.is_none() {
+        bail!("buckling needs a `load`, `pressure`, `torque` or `warm` to scale");
     }
     let wanted = spec.modes.unwrap_or(3);
     let buckles = super::fem::buckling::solve(
@@ -447,6 +466,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
             supports: &spec.supports,
             loads: &spec.loads,
             body_force,
+            expansion: prepared.expansion(spec.warming)?,
         },
         wanted,
     )?;

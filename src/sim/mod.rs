@@ -93,6 +93,7 @@ pub struct Spec {
     pub thermal: Vec<fem::thermal::Boundary>,
     pub source: f64,
     pub modes: Option<usize>,
+    pub warming: Option<f64>,
 }
 
 impl Spec {

@@ -173,6 +173,16 @@ impl Model {
                     "the lowest {count} modes; they read as `mode1`, `mode2`, ..."
                 ))
             }
+            "warm" => {
+                let args = Args::new(line, &["by"], &[], false)?;
+                let by = args.number("by", &self.scope)?;
+                self.spec().warming = Some(by);
+                Ok(format!(
+                    "the whole part {} by {} °C",
+                    if by < 0.0 { "cools" } else { "warms" },
+                    by.abs()
+                ))
+            }
             "source" => {
                 let args = Args::new(line, &["watts"], &[], false)?;
                 let watts = args.number("watts", &self.scope)?;

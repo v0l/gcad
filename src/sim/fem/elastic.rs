@@ -75,6 +75,7 @@ pub struct Problem<'a> {
     pub supports: &'a [Support],
     pub loads: &'a [Load],
     pub body_force: Option<Vec<Vector3>>,
+    pub expansion: Option<Vec<f64>>,
 }
 
 pub struct Answer {
@@ -243,6 +244,21 @@ pub fn loads(problem: &Problem) -> Result<Vec<f64>> {
                 };
                 for (k, n) in triangle_shape(l).iter().enumerate() {
                     add(face[k], traction * (n * w));
+                }
+            }
+        }
+    }
+    if let Some(strains) = &problem.expansion {
+        for t in 0..mesh.tets.len() {
+            let body = mesh.body[t] as usize;
+            let (lambda, mu) = lame(problem.materials[body].0, problem.materials[body].1);
+            let push = (3.0 * lambda + 2.0 * mu) * strains[body];
+            let points = mesh.points(t);
+            for (l, w) in GAUSS {
+                if let Some(m) = map(&points, l) {
+                    for (k, g) in m.gradients.iter().enumerate() {
+                        add(mesh.tets[t][k], g * (push * m.det * w));
+                    }
                 }
             }
         }
@@ -428,7 +444,12 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
         .chunks(3)
         .map(|c| Vector3::new(c[0], c[1], c[2]))
         .collect();
-    let von_mises = stresses(mesh, &displacement, problem.materials);
+    let von_mises = stresses(
+        mesh,
+        &displacement,
+        problem.materials,
+        problem.expansion.as_deref(),
+    );
     Ok(Answer {
         displacement,
         von_mises,
@@ -458,7 +479,12 @@ pub fn von_mises_of(grad: [[f64; 3]; 3], lambda: f64, mu: f64) -> f64 {
         .sqrt()
 }
 
-pub fn stresses(mesh: &Quadratic, u: &[Vector3], materials: &[(f64, f64)]) -> Vec<f64> {
+pub fn stresses(
+    mesh: &Quadratic,
+    u: &[Vector3],
+    materials: &[(f64, f64)],
+    expansion: Option<&[f64]>,
+) -> Vec<f64> {
     let per: Vec<[f64; 10]> = (0..mesh.tets.len())
         .into_par_iter()
         .map(|t| {
@@ -478,6 +504,10 @@ pub fn stresses(mesh: &Quadratic, u: &[Vector3], materials: &[(f64, f64)]) -> Ve
                             *cell += d[i] * g[j];
                         }
                     }
+                }
+                let free = expansion.map_or(0.0, |e| e[mesh.body[t] as usize]);
+                for (i, row) in grad.iter_mut().enumerate() {
+                    row[i] -= free;
                 }
                 von_mises_of(grad, lambda, mu)
             })

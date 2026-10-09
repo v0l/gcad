@@ -14,6 +14,7 @@ fn geometric(
     mesh: &Quadratic,
     materials: &[(f64, f64)],
     u: &[monstertruck::modeling::Vector3],
+    expansion: Option<&[f64]>,
 ) -> Blocks {
     let groups: Vec<[u32; 7]> = mesh.ties.iter().map(|t| t.group()).collect();
     let mut blocks = Blocks::pattern_with(mesh.nodes.len(), &mesh.tets, &groups);
@@ -35,6 +36,10 @@ fn geometric(
                             *cell += d[i] * g[j];
                         }
                     }
+                }
+                let free = expansion.map_or(0.0, |e| e[mesh.body[t] as usize]);
+                for (i, row) in grad.iter_mut().enumerate() {
+                    row[i] -= free;
                 }
                 let strain = |i: usize, j: usize| 0.5 * (grad[i][j] + grad[j][i]);
                 let trace = strain(0, 0) + strain(1, 1) + strain(2, 2);
@@ -76,7 +81,12 @@ pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
     let mesh = problem.mesh;
     let answer = solve_static(problem)?;
     let stiffness = assemble(mesh, problem.materials)?;
-    let geometry = geometric(mesh, problem.materials, &answer.displacement);
+    let geometry = geometric(
+        mesh,
+        problem.materials,
+        &answer.displacement,
+        problem.expansion.as_deref(),
+    );
     let (projectors, _) = projectors(mesh, problem.supports);
     let reduced = Reduced::new(&projectors);
     let n = reduced.count;

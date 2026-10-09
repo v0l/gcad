@@ -375,6 +375,7 @@ expect shoulder<15 sun_s_turn<4
 | `torque` | `faces moment` `axis=x,y,z` `at=x,y,z` | twists the faces by `moment` N·m about their axis: the axis of a round face, or the normal through the middle of a flat one, unless `axis=` and `at=` say (static) |
 | `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
 | `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |
+| `warm` | `by` | warms the whole part evenly by that many °C (negative cools it), so it expands by its material's `alpha` (static, buckling). Parts held from growing, or bonded to a material that grows differently, take stress from it |
 | `probe` | `x,y,z`, with a label | reads the von Mises stress and displacement at a point inside the part as `label.stress` and `label.displacement` |
 | `temperature` | `faces value` | holds the faces at that temperature in °C (thermal). The heat leaving the part through them, in watts, is a reading named after the line's label (negative where heat comes in) |
 | `convect` | `faces h= ambient=` | the faces lose heat to air at `ambient` °C (20 unless given) with a film coefficient `h` in W/m²·K: about 5 to 10 for still air, 20 to 100 with a fan (thermal). The heat lost is a reading named after the label |

@@ -298,6 +298,7 @@ The plan for the rest is in `docs/simulation.md`.
 | stress plots | supported | `gcad render x.gsim x.png` | `simulation::stress_field_render` |
 | steady heat | supported | `sim thermal`, `cold: temperature faces 20`, `heat faces 5`, `source 5` | `simulation::conduction_through_a_wall`, `simulation::heat_needs_a_boundary` |
 | convection | supported | `air: convect faces h=20 ambient=20` | `simulation::fin_with_convection` |
+| thermal expansion | supported | `warm 50` | `simulation::thermal_expansion` |
 | buckling | supported | `sim buckling`, `load >Z force=0,0,-1000` | `simulation::column_buckling` |
 | bonded assemblies | supported | `part stack.gasm`, `fix a:<Z`, `load b:>Z force=0,0,1000` | `simulation::bonded_parts_carry_load`, `simulation::bonded_parts_conduct_heat`, `simulation::bonded_parts_vibrate_as_one` |
 | natural frequencies | supported | `sim modal`, `modes 3` | `simulation::cantilever_modes`, `simulation::free_beam_modes` |
