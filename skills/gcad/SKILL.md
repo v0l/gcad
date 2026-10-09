@@ -142,7 +142,8 @@ explode case.lid 0,0,30
   that.
 - `gcad bom asm.gasm` counts the parts; `gcad render asm.gasm x.png --explode` draws it apart.
 - Fasteners come from the built-in library rather than a part file: `part s1 shcs:M3x10`
-  (also `fhcs:`, `hex:`, `nut:M3`, `washer:M3`, `insert:M3`). Screw heads bear on z=0 with the
+  (also `fhcs:`, `hex:`, `nut:M3`, `washer:M3`, `insert:M3`, `standoff:M3x10`, `bearing:608`,
+  `dowel:4x16`). Screw heads bear on z=0 with the
   shank down; mate `s1:shank.side` and `s1:head.start`, nuts and washers by `bore.side`. Size the
   holes they go in with the same name: `hole M3 x,y` (clearance), `cbore=M3`, `csink=M3`,
   `fit=tap`, `fit=insert`. Level a flat head with `distance s:head.start lid:top.end 0`.

@@ -8,7 +8,93 @@ pub const KINDS: &[(&str, &str)] = &[
     ("nut", "ISO 4032"),
     ("washer", "ISO 7089"),
     ("insert", "heat-set insert"),
+    ("standoff", "hex standoff"),
+    ("bearing", "bearing"),
+    ("dowel", "ISO 8734"),
 ];
+
+pub const BEARINGS: &[(&str, f64, f64, f64)] = &[
+    ("623", 3.0, 10.0, 4.0),
+    ("624", 4.0, 13.0, 5.0),
+    ("625", 5.0, 16.0, 5.0),
+    ("626", 6.0, 19.0, 6.0),
+    ("695", 5.0, 13.0, 4.0),
+    ("688", 8.0, 16.0, 5.0),
+    ("698", 8.0, 19.0, 6.0),
+    ("608", 8.0, 22.0, 7.0),
+    ("609", 9.0, 24.0, 7.0),
+    ("6000", 10.0, 26.0, 8.0),
+    ("6001", 12.0, 28.0, 8.0),
+    ("6002", 15.0, 32.0, 9.0),
+    ("6003", 17.0, 35.0, 10.0),
+    ("6004", 20.0, 42.0, 12.0),
+    ("6005", 25.0, 47.0, 12.0),
+    ("6200", 10.0, 30.0, 9.0),
+    ("6201", 12.0, 32.0, 10.0),
+    ("6202", 15.0, 35.0, 11.0),
+    ("6203", 17.0, 40.0, 12.0),
+    ("6204", 20.0, 47.0, 14.0),
+    ("6800", 10.0, 19.0, 5.0),
+    ("6801", 12.0, 21.0, 5.0),
+    ("6802", 15.0, 24.0, 5.0),
+    ("6803", 17.0, 26.0, 5.0),
+    ("6804", 20.0, 32.0, 7.0),
+];
+
+fn bearing(size: &str) -> Result<Standard> {
+    let &(name, bore, outer, wide) = BEARINGS.iter().find(|b| b.0 == size).ok_or_else(|| {
+        anyhow!(
+            "unknown bearing `{size}`; known: {}",
+            BEARINGS.iter().map(|b| b.0).collect::<Vec<_>>().join(", ")
+        )
+    })?;
+    let wall = (outer - bore) / 2.0;
+    let (seal_in, seal_out) = (bore + wall * 0.7, outer - wall * 0.7);
+    let source = [
+        format!("circle {outer}"),
+        format!("ring: extrude {wide}"),
+        "plane ring.end".into(),
+        format!("circle {bore}"),
+        "bore: cut thru".into(),
+        format!("circle {seal_out}"),
+        format!("circle {seal_in}"),
+        format!("seal: cut {}", wide * 0.05),
+        "plane ring.start".into(),
+        format!("circle {seal_out}"),
+        format!("circle {seal_in}"),
+        format!("seal: cut {}", wide * 0.05),
+        "material steel".into(),
+    ]
+    .join("\n");
+    Ok(Standard {
+        title: format!("{name} bearing {bore}x{outer}x{wide}"),
+        source,
+    })
+}
+
+fn dowel(size: &str) -> Result<Standard> {
+    let parts: Vec<f64> = size
+        .split(['x', 'X'])
+        .map(|p| p.parse::<f64>().ok().filter(|v| *v > 0.0))
+        .collect::<Option<Vec<_>>>()
+        .filter(|v| v.len() == 2)
+        .ok_or_else(|| anyhow!("a dowel is written dowel:DxL, like dowel:4x16"))?;
+    let (d, l) = (parts[0], parts[1]);
+    if l <= d * 0.5 {
+        bail!("a {d} dowel must be longer than {}", d * 0.5);
+    }
+    let source = [
+        format!("circle {d}"),
+        format!("pin: extrude {l}"),
+        format!("chamfer {} pin.start&pin.side|pin.end&pin.side", d * 0.1),
+        "material steel".into(),
+    ]
+    .join("\n");
+    Ok(Standard {
+        title: format!("ISO 8734 {d}x{l}"),
+        source,
+    })
+}
 
 pub struct Standard {
     pub title: String,
@@ -53,11 +139,16 @@ pub fn standard(spec: &str) -> Result<Standard> {
                 KINDS.iter().map(|k| k.0).collect::<Vec<_>>().join(", ")
             )
         })?;
+    match kind {
+        "bearing" => return bearing(size),
+        "dowel" => return dowel(size),
+        _ => {}
+    }
     let (m, length) = sized(size, kind)?;
-    let screw = matches!(kind, "shcs" | "fhcs" | "hex");
+    let screw = matches!(kind, "shcs" | "fhcs" | "hex" | "standoff");
     let length = match (screw, length) {
         (true, Some(l)) if l > 0.0 => Some(l),
-        (true, _) => bail!("a screw needs a length, like {kind}:{}x10", m.name),
+        (true, _) => bail!("`{kind}` needs a length, like {kind}:{}x10", m.name),
         (false, Some(_)) => bail!("`{kind}` takes a size alone, like {kind}:{}", m.name),
         (false, None) => None,
     };
@@ -109,6 +200,16 @@ pub fn standard(spec: &str) -> Result<Standard> {
                 format!("shank: extrude -{l}"),
             ]
         }
+        "standoff" => {
+            let (across, _) = m.nut;
+            let l = length.unwrap_or_default();
+            vec![
+                format!("ngon {} 6", hex_corners(across)),
+                format!("body: extrude {l}"),
+                "plane body.end".into(),
+                format!("bore: hole {} 0,0 fit=tap", m.name),
+            ]
+        }
         "nut" => {
             let (across, height) = m.nut;
             vec![
@@ -142,7 +243,11 @@ pub fn standard(spec: &str) -> Result<Standard> {
             ]
         }
     };
-    let material = if kind == "insert" { "brass" } else { "steel" };
+    let material = if matches!(kind, "insert" | "standoff") {
+        "brass"
+    } else {
+        "steel"
+    };
     let title = match length {
         Some(l) => format!("{standard} {}x{l}", m.name),
         None => format!("{standard} {}", m.name),

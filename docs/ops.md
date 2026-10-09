@@ -235,6 +235,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | bill of materials | supported | `gcad bom top.gasm [--csv]` | `assembly::bill_of_materials_counts_parts` |
 | sweep a joint for clashes | supported | `interference joint=open steps=8` | `assembly::sweep_finds_a_clash`, `assembly::sweep_keeps_reporting_parts_that_do_not_move` |
 | standard screws, nuts, washers and inserts | supported | `part s1 shcs:M3x10`, `nut:M3`, `washer:M3`, `insert:M3` | `assembly::standard_parts_from_the_library` |
+| bearings, dowels and standoffs | supported | `part b bearing:608`, `dowel:4x16`, `standoff:M3x10` | `assembly::bearings_dowels_and_standoffs` |
 | vendor STEP assembly as parts | supported | `part box vendor.step` | `assembly::step_assembly_as_a_part` |
 
 ## Output

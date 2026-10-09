@@ -244,7 +244,7 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
 | `measure` | `mass`, `overlap a b` | as in part files |
 
-Standard parts are built in, M2 to M12, and come in steel (inserts in brass). A screw's
+Standard parts are built in, M2 to M12, and come in steel (inserts and standoffs in brass). A screw's
 axis is z, with the face its head bears on at z=0 and the shank going down, so
 `concentric s:shank.side plate:holes.side` and `flush s:head.start plate:holes.cbore_floor`
 seat it. A flat head's top is at z=0 instead and faces up, so
@@ -259,6 +259,9 @@ Nuts and washers sit on z=0 and go up, inserts hang down from z=0.
 | `nut:M3` | ISO 4032 hex nut | `nut`, `bore` |
 | `washer:M3` | ISO 7089 plain washer | `washer`, `bore` |
 | `insert:M3` | heat-set insert (M2 to M6, Ruthex sizes) | `insert`, `bore` |
+| `standoff:M3x10` | hex standoff, tapped through, standing on z=0 (brass) | `body`, `bore` |
+| `bearing:608` | deep groove ball bearing, solid with shallow seal grooves, standing on z=0: 623 to 626, 695, 688, 698, 608, 609, 6000 to 6005, 6200 to 6204, 6800 to 6804 | `ring` (outer race), `bore`, `seal` |
+| `dowel:4x16` | ISO 8734 dowel pin, chamfered, standing on z=0 | `pin` |
 
 Screws are drawn plain, without a modelled thread. The bill of materials lists them by
 standard and size, like `ISO 4762 M3x10`.

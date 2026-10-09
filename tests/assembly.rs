@@ -875,3 +875,37 @@ fn case_and_lid_with_screws() {
     assert_eq!(items[2].file, "ISO 10642 M3x8");
     assert_eq!(items[2].names.len(), 4);
 }
+
+#[test]
+fn bearings_dowels_and_standoffs() {
+    let (model, _) = built(
+        "bearings_dowels_and_standoffs",
+        "part b bearing:608\npart d dowel:4x16\nmove d 30,0,0\npart s standoff:M3x10\nmove s 60,0,0",
+        &[],
+    );
+    let path = std::path::PathBuf::from(scratch("bearings_dowels_and_standoffs")).join("top.gasm");
+    let items = gcad::bom::items(&model, &path);
+    let pi = std::f64::consts::PI;
+    let ring = |a: f64, b: f64| pi / 4.0 * (a * a - b * b);
+    let wall = 7.0;
+    let bearing = ring(22.0, 8.0) * 7.0 - 2.0 * ring(22.0 - 0.7 * wall, 8.0 + 0.7 * wall) * 0.35;
+    let chamfer = 2.0 * pi * (2.0 - 0.4 / 3.0) * 0.4 * 0.4 / 2.0;
+    let dowel = pi * 4.0 * 16.0 - 2.0 * chamfer;
+    let standoff = (5.5 * 5.5 * 3.0_f64.sqrt() / 2.0 - pi * 1.25 * 1.25) * 10.0;
+    let expected = [
+        ("608 bearing 8x22x7", bearing, "steel"),
+        ("ISO 8734 4x16", dowel, "steel"),
+        ("hex standoff M3x10", standoff, "brass"),
+    ];
+    for (item, (file, volume, material)) in items.iter().zip(expected) {
+        assert_eq!(item.file, file);
+        assert_eq!(item.material.as_deref(), Some(material));
+        assert!(
+            (item.volume - volume).abs() < volume * 1.0e-3,
+            "{file} is {}, expected {volume}",
+            item.volume
+        );
+    }
+    let bore = gcad::geometry::bounds(&model.named_body("b").expect("bearing"));
+    assert!((bore.max().x - 11.0).abs() < 1.0e-6 && (bore.max().z - 7.0).abs() < 1.0e-6);
+}
