@@ -12,7 +12,7 @@ rayon = "1.12"
 clap = { version = "4.6.7", features = ["derive"] }
 eframe = { version = "0.35", default-features = false, features = ["default_fonts", "glow", "wayland", "x11"] }
 egui = "0.35"
-egui_bench = "0.1"
+egui_bench = { version = "0.2", features = ["viewer3d"] }
 epaint_default_fonts = "0.35"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 monstertruck = { version = "0.4.1", features = ["solid", "step"] }
@@ -21,7 +21,6 @@ monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
 monstertruck-topology = "0.4.1"
 notify = "8"
 serde_json = "1.0.151"
-three-d = { version = "0.19", default-features = false }
 ttf-parser = "0.25"
 
 [patch.crates-io]

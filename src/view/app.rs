@@ -1,5 +1,4 @@
-use super::gl::{self, BACKGROUND, Camera, Cut, Placement, Projector};
-use super::scene::{self, Highlight, Scene, V3};
+use super::scene::{self, Highlight, Ink, Scene, V3};
 use crate::geometry;
 use crate::model::{
     Joint, JointKind, Rig, Snapshot, explode_offsets, label_of, posed, snapshots_path,
@@ -8,7 +7,10 @@ use crate::parse::Line as SourceLine;
 use crate::select;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use egui_bench::prelude::*;
-use monstertruck::modeling::{Matrix4, Solid, SquareMatrix, builder};
+use egui_bench::viewer3d::{
+    self, BACKGROUND, Camera, Cut, Look, Orbit, Placement, Projector, Viewer, dot, sub,
+};
+use monstertruck::modeling::{Matrix4, Solid, SquareMatrix};
 use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -75,6 +77,19 @@ struct Browser {
     typed: String,
 }
 
+#[derive(Clone, Copy, PartialEq, Default)]
+enum Mode {
+    #[default]
+    Solid,
+    Ghost,
+    Hidden,
+}
+
+struct Focus {
+    part: String,
+    at: V3,
+}
+
 pub struct App {
     path: Option<PathBuf>,
     vars: Vec<(String, f64)>,
@@ -86,7 +101,7 @@ pub struct App {
     shown: Option<Shown>,
     building: Option<(SceneKey, Receiver<Shown>)>,
     cam: Camera,
-    pivot: Option<V3>,
+    orbit: Orbit,
     events: Option<Receiver<()>>,
     _watcher: Option<notify::RecommendedWatcher>,
     dirty: Option<Instant>,
@@ -99,7 +114,9 @@ pub struct App {
     explode: f64,
     section: Option<(usize, f32, bool)>,
     joint_key: Vec<String>,
-    hidden: Vec<bool>,
+    modes: std::collections::HashMap<String, Mode>,
+    opacity: f32,
+    focus: Option<Focus>,
     clashes: Option<Result<Vec<String>, ()>>,
     clash_job: Option<Receiver<Vec<String>>>,
     browser: Option<Browser>,
@@ -130,45 +147,6 @@ fn flat(m: Matrix4) -> Placement {
     out
 }
 
-fn apply(m: &Placement, p: V3) -> V3 {
-    [
-        m[0] * p[0] + m[4] * p[1] + m[8] * p[2] + m[12],
-        m[1] * p[0] + m[5] * p[1] + m[9] * p[2] + m[13],
-        m[2] * p[0] + m[6] * p[1] + m[10] * p[2] + m[14],
-    ]
-}
-
-fn sub(a: V3, b: V3) -> V3 {
-    [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
-}
-
-fn dot(a: V3, b: V3) -> f32 {
-    a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
-}
-
-fn cross(a: V3, b: V3) -> V3 {
-    [
-        a[1] * b[2] - a[2] * b[1],
-        a[2] * b[0] - a[0] * b[2],
-        a[0] * b[1] - a[1] * b[0],
-    ]
-}
-
-fn hit_triangle(origin: V3, direction: V3, [a, b, c]: [V3; 3]) -> Option<f32> {
-    let (e1, e2) = (sub(b, a), sub(c, a));
-    let p = cross(direction, e2);
-    let det = dot(e1, p);
-    if det.abs() < 1.0e-12 {
-        return None;
-    }
-    let s = sub(origin, a);
-    let u = dot(s, p) / det;
-    let q = cross(s, e1);
-    let v = dot(direction, q) / det;
-    let t = dot(e2, q) / det;
-    (u >= 0.0 && v >= 0.0 && u + v <= 1.0 && t > 0.0).then_some(t)
-}
-
 const VIEWS: [(&str, f32, f32); 7] = [
     ("iso", std::f32::consts::FRAC_PI_4, 0.6155),
     ("top", 0.0, 1.5699),
@@ -187,6 +165,26 @@ const CUBE_FACES: [(V3, &str); 6] = [
     ([1.0, 0.0, 0.0], "RIGHT"),
     ([-1.0, 0.0, 0.0], "LEFT"),
 ];
+
+fn ghost_button(ui: &mut Ui, on: bool) -> egui::Response {
+    let (rect, resp) = ui.allocate_exact_size(Vec2::splat(16.0), Sense::click());
+    let lit = on || resp.hovered();
+    let colour = if lit { READOUT } else { LEGEND };
+    let p = ui.painter();
+    let c = rect.center();
+    p.circle_stroke(c, 5.5, Stroke::new(1.0, colour));
+    if on {
+        p.circle_filled(c, 5.5, READOUT.gamma_multiply(0.35));
+    }
+    p.line_segment(
+        [c + Vec2::new(-4.0, 4.0), c + Vec2::new(4.0, -4.0)],
+        Stroke::new(1.0, colour),
+    );
+    if resp.hovered() {
+        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+    }
+    resp.on_hover_text(if on { "solid" } else { "see-through" })
+}
 
 fn inside(polygon: &[Pos2], p: Pos2) -> bool {
     (0..polygon.len()).fold(false, |inside, i| {
@@ -219,7 +217,7 @@ impl App {
             shown: None,
             building: None,
             cam: Camera::default(),
-            pivot: None,
+            orbit: Orbit::default(),
             events: None,
             _watcher: None,
             dirty: None,
@@ -232,7 +230,9 @@ impl App {
             explode: 0.0,
             section: None,
             joint_key: Vec::new(),
-            hidden: Vec::new(),
+            modes: Default::default(),
+            opacity: 0.25,
+            focus: None,
             clashes: None,
             clash_job: None,
             browser: None,
@@ -256,7 +256,8 @@ impl App {
         self.shown = None;
         self.building = None;
         self.picks.clear();
-        self.hidden.clear();
+        self.modes.clear();
+        self.focus = None;
         self.clashes = None;
         self.follow = true;
         self.cam = Camera::default();
@@ -369,9 +370,6 @@ impl App {
             self.joint_values = shown.joints.iter().map(|j| j.value).collect();
             self.joint_key = names;
         }
-        if self.hidden.len() != shown.scene.parts.len() {
-            self.hidden = vec![false; shown.scene.parts.len()];
-        }
         self.shown = Some(shown);
     }
 
@@ -426,7 +424,19 @@ impl App {
         self.building = Some((key, rx));
     }
 
-    fn placements(&self) -> Vec<(Placement, bool)> {
+    fn mode(&self, part: &str) -> Mode {
+        self.modes.get(part).copied().unwrap_or_default()
+    }
+
+    fn set_mode(&mut self, part: &str, mode: Mode) {
+        if mode == Mode::Solid {
+            self.modes.remove(part);
+        } else {
+            self.modes.insert(part.to_string(), mode);
+        }
+    }
+
+    fn looks(&self) -> Vec<Look> {
         let Some(shown) = &self.shown else {
             return Vec::new();
         };
@@ -441,14 +451,21 @@ impl App {
             .scene
             .parts
             .iter()
-            .enumerate()
-            .map(|(i, part)| {
+            .map(|part| {
                 let m = moved
                     .get(&part.name)
                     .copied()
                     .unwrap_or_else(Matrix4::identity);
                 let m = exploded(m, offsets.get(&part.name), self.explode);
-                (flat(m), !self.hidden.get(i).copied().unwrap_or(false))
+                Look {
+                    placement: flat(m),
+                    opacity: match self.mode(&part.name) {
+                        Mode::Solid => 1.0,
+                        Mode::Ghost => self.opacity,
+                        Mode::Hidden => 0.0,
+                    },
+                    selected: self.focus.as_ref().is_some_and(|f| f.part == part.name),
+                }
             })
             .collect()
     }
@@ -708,31 +725,70 @@ impl App {
         let solids = shown.solids.clone();
         let (min, max) = shown.bounds;
         let faces = shown.faces;
+        let mut show_all = false;
+        let changed = !self.modes.is_empty();
         card(
             ui,
             None,
             |ui| {
                 Line::new().legend("parts").show(ui);
+                if changed {
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                        show_all = toggle(ui, "show all", false).clicked();
+                    });
+                }
             },
             |ui| {
-                for (i, part) in scene.parts.iter().enumerate() {
+                let mut focus = None;
+                for (body, part) in scene.parts.iter().enumerate() {
+                    let mode = self.mode(&part.name);
+                    let focused = self.focus.as_ref().is_some_and(|f| f.part == part.name);
                     ui.horizontal(|ui| {
-                        let (rect, _) = ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
+                        let (rect, swatch) =
+                            ui.allocate_exact_size(Vec2::splat(12.0), Sense::click());
                         let [r, g, b] = part.colour.map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8);
                         ui.painter()
                             .rect_filled(rect, 2.0, Color32::from_rgb(r, g, b));
-                        let visible = !self.hidden.get(i).copied().unwrap_or(false);
-                        if toggle(ui, &part.name, visible).clicked()
-                            && let Some(flag) = self.hidden.get_mut(i)
-                        {
-                            *flag = !*flag;
+                        if focused || swatch.hovered() {
+                            ui.painter().rect_stroke(
+                                rect.expand(2.0),
+                                2.0,
+                                Stroke::new(1.5, READOUT),
+                                egui::StrokeKind::Outside,
+                            );
+                        }
+                        if swatch.clicked() {
+                            focus = Some((body, part.name.clone()));
+                        }
+                        if toggle(ui, &part.name, mode != Mode::Hidden).clicked() {
+                            let next = if mode == Mode::Hidden {
+                                Mode::Solid
+                            } else {
+                                Mode::Hidden
+                            };
+                            self.set_mode(&part.name, next);
+                        }
+                        if ghost_button(ui, mode == Mode::Ghost).clicked() {
+                            let next = if mode == Mode::Ghost {
+                                Mode::Solid
+                            } else {
+                                Mode::Ghost
+                            };
+                            self.set_mode(&part.name, next);
                         }
                         Line::new()
-                            .legend("volume")
                             .measured(format!("{:.1}", part.volume))
+                            .size(11.0)
                             .show(ui);
                     });
                 }
+                if let Some((body, part)) = focus {
+                    self.focus_on(body, part);
+                }
+                ui.horizontal(|ui| {
+                    Line::new().legend("ghost opacity").size(11.0).show(ui);
+                    ui.add(egui::Slider::new(&mut self.opacity, 0.05..=0.95).show_value(false));
+                });
                 Line::new()
                     .legend("faces")
                     .measured(faces.to_string())
@@ -753,6 +809,9 @@ impl App {
                 }
             },
         );
+        if show_all {
+            self.modes.clear();
+        }
         ui.add_space(8.0);
         if !joints.iter().any(Joint::movable) {
             return;
@@ -834,29 +893,24 @@ impl App {
             let ctx = ui.ctx().clone();
             std::thread::spawn(move || {
                 let moved = posed(&joints, &values);
-                let placed: Vec<(String, Solid)> = solids
-                    .iter()
-                    .map(|(name, solid)| {
-                        let m = moved.get(name).copied().unwrap_or_else(Matrix4::identity);
-                        (name.clone(), builder::transformed(solid, m))
+                let bare: Vec<&Solid> = solids.iter().map(|(_, s)| s).collect();
+                let meshes: Vec<geometry::Meshed> = geometry::meshed_all(&bare)
+                    .into_iter()
+                    .zip(&solids)
+                    .map(|(mesh, (name, _))| match moved.get(name) {
+                        Some(m) => mesh.transformed(*m),
+                        None => mesh,
                     })
                     .collect();
-                let meshes: Vec<geometry::Meshed> = placed
-                    .iter()
-                    .map(|(_, s)| geometry::Meshed::new(s))
+                let found: Vec<String> = geometry::clashes(&meshes)
+                    .into_iter()
+                    .map(|(i, j, shared)| {
+                        format!(
+                            "{} and {} share about {shared:.3}",
+                            solids[i].0, solids[j].0
+                        )
+                    })
                     .collect();
-                let mut found = Vec::new();
-                for i in 0..placed.len() {
-                    for j in i + 1..placed.len() {
-                        let shared = geometry::overlap_of(&meshes[i], &meshes[j], 96);
-                        if shared > 1.0e-6 * meshes[i].volume().abs().max(1.0) {
-                            found.push(format!(
-                                "{} and {} share about {shared:.3}",
-                                placed[i].0, placed[j].0
-                            ));
-                        }
-                    }
-                }
                 let _ = tx.send(found);
                 ctx.request_repaint();
             });
@@ -914,7 +968,7 @@ impl App {
 
     fn cut(&self) -> Option<Cut> {
         let (axis, at, flip) = self.section?;
-        let scene = &self.shown.as_ref()?.scene;
+        let scene = &self.shown.as_ref()?.scene.mesh;
         let low = scene.centre[axis] - scene.radius;
         let place = low + 2.0 * scene.radius * at;
         let mut normal = [0.0f32; 3];
@@ -930,7 +984,7 @@ impl App {
             return;
         };
         let place = self.shown.as_ref().map(|shown| {
-            let scene = &shown.scene;
+            let scene = &shown.scene.mesh;
             scene.centre[axis] - scene.radius + 2.0 * scene.radius * at
         });
         card(
@@ -968,71 +1022,176 @@ impl App {
         self.section = Some((axis, at, flip));
     }
 
-    fn pick(
-        &self,
-        projector: &Projector,
-        at: Pos2,
-        placements: &[(Placement, bool)],
-    ) -> Option<Pick> {
+    fn viewer(&self, shown: &Shown) -> Viewer<Ink> {
+        Viewer::new(shown.scene.mesh.clone(), self.cam)
+            .looks(self.looks())
+            .cut(self.cut())
+    }
+
+    fn pick(&self, viewer: &Viewer<Ink>, rect: Rect, at: Pos2) -> Option<Pick> {
         let shown = self.shown.as_ref()?;
-        let (origin, direction) = projector.ray(at);
-        let visible = |body: usize| placements.get(body).is_none_or(|(_, v)| *v);
-        let place = |body: usize, p: V3| placements.get(body).map_or(p, |(m, _)| apply(m, p));
+        let hit = viewer.pick(rect, at)?;
+        let projector = viewer.projector(rect);
         let cut = self.cut();
-        let kept = |p: V3| cut.is_none_or(|c| c.keeps(p));
-        let hit = shown
-            .scene
-            .surfaces
-            .iter()
-            .filter(|s| s.face.is_some() && visible(s.body))
-            .flat_map(|s| {
-                s.positions.chunks_exact(3).filter_map(move |t| {
-                    let corners = [
-                        place(s.body, t[0]),
-                        place(s.body, t[1]),
-                        place(s.body, t[2]),
-                    ];
-                    hit_triangle(origin, direction, corners)
-                        .filter(|d| {
-                            kept([
-                                origin[0] + direction[0] * d,
-                                origin[1] + direction[1] * d,
-                                origin[2] + direction[2] * d,
-                            ])
-                        })
-                        .map(|d| (d, s.face))
-                })
-            })
-            .min_by(|a, b| a.0.total_cmp(&b.0))?;
-        let point = [
-            origin[0] + direction[0] * hit.0,
-            origin[1] + direction[1] * hit.0,
-            origin[2] + direction[2] * hit.0,
-        ];
         let corner = shown
             .scene
             .vertices
             .iter()
-            .filter(|(body, _)| visible(*body))
-            .map(|(body, p)| place(*body, *p))
-            .filter(|p| kept(*p))
+            .filter(|(body, _)| viewer.look(*body).visible())
+            .map(|(body, p)| viewer.look(*body).place(*p))
+            .filter(|p| cut.is_none_or(|c| c.keeps(*p)))
             .filter_map(|p| projector.project(p).map(|s| (s.distance(at), p)))
             .filter(|(d, p)| {
-                *d < 10.0 && dot(sub(*p, point), sub(*p, point)).sqrt() < shown.scene.radius * 0.2
+                let gap = sub(*p, hit.point);
+                *d < 10.0 && dot(gap, gap).sqrt() < viewer.scene().radius * 0.2
             })
             .min_by(|a, b| a.0.total_cmp(&b.0));
-        Some(match corner {
-            Some((_, p)) => Pick {
-                point: p,
-                face: hit.1,
-                vertex: true,
-            },
-            None => Pick {
-                point,
-                face: hit.1,
-                vertex: false,
-            },
+        Some(Pick {
+            point: corner.map_or(hit.point, |(_, p)| p),
+            face: Some(hit.surface),
+            vertex: corner.is_some(),
         })
+    }
+
+    fn body_of(&self, pick: &Pick) -> Option<usize> {
+        let scene = &self.shown.as_ref()?.scene;
+        pick.face.and_then(|f| scene.faces.get(f)).map(|f| f.body)
+    }
+
+    fn focus_on(&mut self, body: usize, part: String) {
+        if self.focus.as_ref().is_some_and(|f| f.part == part) {
+            self.focus = None;
+            return;
+        }
+        let Some(shown) = &self.shown else { return };
+        let looks = self.looks();
+        let points: Vec<V3> = shown
+            .scene
+            .vertices
+            .iter()
+            .filter(|(b, _)| *b == body)
+            .map(|(_, p)| looks.get(body).map_or(*p, |l| l.place(*p)))
+            .collect();
+        let Some(&first) = points.first() else { return };
+        let (low, high) = points.iter().fold((first, first), |(lo, hi), p| {
+            (
+                [lo[0].min(p[0]), lo[1].min(p[1]), lo[2].min(p[2])],
+                [hi[0].max(p[0]), hi[1].max(p[1]), hi[2].max(p[2])],
+            )
+        });
+        self.focus = Some(Focus {
+            part,
+            at: [
+                (low[0] + high[0]) / 2.0,
+                (low[1] + high[1]) / 2.0,
+                (low[2] + high[2]) / 2.0,
+            ],
+        });
+    }
+
+    fn focus_popup(&mut self, ui: &Ui, rect: Rect, projector: &Projector, scene: &Scene) {
+        let Some(focus) = &self.focus else { return };
+        let Some(part) = scene.parts.iter().find(|p| p.name == focus.part) else {
+            self.focus = None;
+            return;
+        };
+        let Some(anchor) = projector.project(focus.at).filter(|p| rect.contains(*p)) else {
+            return;
+        };
+        ui.painter_at(rect)
+            .circle_stroke(anchor, 4.0, Stroke::new(1.5, READOUT));
+        let mode = self.mode(&part.name);
+        let mut chosen = None;
+        let mut close = false;
+        egui::Area::new(ui.id().with("focus"))
+            .order(egui::Order::Foreground)
+            .fixed_pos(anchor + Vec2::new(14.0, 14.0))
+            .constrain_to(rect)
+            .show(ui.ctx(), |ui| {
+                egui::Frame::NONE
+                    .fill(PANEL)
+                    .stroke(Stroke::new(1.0, ETCH))
+                    .corner_radius(3.0)
+                    .inner_margin(egui::Margin::symmetric(10, 8))
+                    .show(ui, |ui| {
+                        ui.set_max_width(300.0);
+                        ui.spacing_mut().item_spacing.y = 4.0;
+                        ui.horizontal(|ui| {
+                            let (swatch, _) =
+                                ui.allocate_exact_size(Vec2::splat(12.0), Sense::hover());
+                            let [r, g, b] = part.colour.map(|c| (c.clamp(0.0, 1.0) * 255.0) as u8);
+                            ui.painter()
+                                .rect_filled(swatch, 2.0, Color32::from_rgb(r, g, b));
+                            Line::new().value(&part.name).show(ui);
+                            ui.with_layout(
+                                egui::Layout::right_to_left(egui::Align::Center),
+                                |ui| {
+                                    if ui
+                                        .add(
+                                            egui::Label::new(
+                                                egui::RichText::new("x").color(LEGEND),
+                                            )
+                                            .sense(Sense::click()),
+                                        )
+                                        .clicked()
+                                    {
+                                        close = true;
+                                    }
+                                },
+                            );
+                        });
+                        if let Some(source) = &part.source {
+                            note(ui, source, LEGEND);
+                        }
+                        let [x, y, z] = part.size;
+                        Line::new()
+                            .legend("volume")
+                            .measured(format!("{:.1}", part.volume))
+                            .size(11.0)
+                            .show(ui);
+                        Line::new()
+                            .legend("size")
+                            .measured(format!("{x:.1} x {y:.1} x {z:.1}"))
+                            .size(11.0)
+                            .show(ui);
+                        if let Some((name, density)) = &part.material {
+                            Line::new()
+                                .legend("material")
+                                .value(name)
+                                .legend("mass")
+                                .measured(format!("{:.1} g", part.volume * density / 1000.0))
+                                .size(11.0)
+                                .show(ui);
+                        }
+                        ui.horizontal(|ui| {
+                            for (label, option) in [
+                                ("show", Mode::Solid),
+                                ("ghost", Mode::Ghost),
+                                ("hide", Mode::Hidden),
+                            ] {
+                                if toggle(ui, label, mode == option).clicked() {
+                                    chosen = Some(option);
+                                }
+                            }
+                        });
+                        if mode == Mode::Ghost {
+                            ui.horizontal(|ui| {
+                                Line::new().legend("opacity").size(11.0).show(ui);
+                                ui.add(
+                                    egui::Slider::new(&mut self.opacity, 0.05..=0.95)
+                                        .show_value(false),
+                                );
+                            });
+                        }
+                    });
+            });
+        let name = part.name.clone();
+        if let Some(mode) = chosen {
+            self.set_mode(&name, mode);
+        }
+        if close {
+            self.focus = None;
+        }
     }
 
     fn view_cube(&mut self, ui: &Ui, rect: Rect, projector: &Projector) -> bool {
@@ -1159,14 +1318,14 @@ impl App {
     }
 
     fn timings(&self, scene: &Scene, built: Duration) -> String {
-        let triangles: usize = scene.surfaces.iter().map(|s| s.positions.len() / 3).sum();
-        let segments: usize = scene.lines.iter().map(|l| l.segments.len()).sum();
+        let triangles = scene.mesh.triangles();
+        let segments = scene.mesh.segments();
         let fps = self
             .fps()
             .map_or_else(|| "idle".to_string(), |fps| format!("{fps:.0} fps"));
         format!(
             "{fps}  draw {:.1} ms  scene {:.0} ms  build {:.2} s  {:.1}k tris  {:.1}k edges",
-            gl::draw_time().as_secs_f32() * 1000.0,
+            viewer3d::draw_time().as_secs_f32() * 1000.0,
             built.as_secs_f32() * 1000.0,
             self.took.as_secs_f32(),
             triangles as f32 / 1000.0,
@@ -1199,52 +1358,13 @@ impl App {
         };
         let scene = shown.scene.clone();
         let built = shown.built;
-        let placements = Arc::new(self.placements());
-        gl::paint(
-            ui,
-            rect,
-            scene.clone(),
-            self.cam,
-            placements.clone(),
-            self.cut(),
-        );
-        let projector = Projector::new(&scene, &self.cam, rect);
+        let mut viewer = self.viewer(shown);
+        viewer.paint(ui, rect);
+        let projector = viewer.projector(rect);
         let on_cube = self.view_cube(ui, rect, &projector);
         if !on_cube {
-            let panning = ui.input(|i| i.modifiers.shift);
-            if resp.drag_started_by(egui::PointerButton::Primary) && !panning {
-                self.pivot = resp
-                    .interact_pointer_pos()
-                    .and_then(|at| self.pick(&projector, at, &placements))
-                    .map(|pick| pick.point);
-            }
-            if resp.dragged_by(egui::PointerButton::Primary) && !panning {
-                let d = resp.drag_delta();
-                let pivot = self
-                    .pivot
-                    .unwrap_or_else(|| gl::view(&scene, &self.cam, rect.size()).target);
-                self.cam = self
-                    .cam
-                    .orbited(&scene, rect.size(), -d.x * 0.01, d.y * 0.01, pivot);
-            } else if resp.dragged() {
-                self.cam = self.cam.panned(&scene, rect.size(), resp.drag_delta());
-            }
-            if resp.hovered()
-                && let Some(at) = resp.hover_pos()
-            {
-                let scroll = ui.input(|i| i.smooth_scroll_delta.y);
-                if scroll != 0.0 {
-                    let anchor = if self.cam.ortho {
-                        None
-                    } else {
-                        self.pick(&projector, at, &placements)
-                            .map(|pick| pick.point)
-                    };
-                    self.cam = self
-                        .cam
-                        .zoomed(&scene, rect, at, 1.0 + scroll * 0.002, anchor);
-                }
-            }
+            viewer.navigate(ui, &resp, &mut self.orbit);
+            self.cam = viewer.camera();
             if resp.double_clicked() {
                 self.cam = Camera {
                     ortho: self.cam.ortho,
@@ -1253,15 +1373,26 @@ impl App {
             } else if self.measuring
                 && resp.clicked()
                 && let Some(at) = resp.interact_pointer_pos()
-                && let Some(pick) = self.pick(&projector, at, &placements)
+                && let Some(pick) = self.pick(&viewer, rect, at)
             {
                 if self.picks.len() >= 2 {
                     self.picks.clear();
                 }
                 self.picks.push(pick);
+            } else if !self.measuring
+                && resp.clicked()
+                && let Some(at) = resp.interact_pointer_pos()
+            {
+                let hit = self
+                    .pick(&viewer, rect, at)
+                    .and_then(|pick| Some((self.body_of(&pick)?, pick.point)));
+                self.focus = hit.and_then(|(body, point)| {
+                    let part = scene.parts.get(body)?.name.clone();
+                    Some(Focus { part, at: point })
+                });
             }
         }
-        let projector = Projector::new(&scene, &self.cam, rect);
+        let projector = Projector::new(&scene.mesh, &self.cam, rect);
         let points: Vec<Pos2> = self
             .picks
             .iter()
@@ -1282,10 +1413,11 @@ impl App {
             p.circle_filled(*at, 4.0, if n == 0 { READOUT } else { TRACE });
             p.circle_stroke(*at, 4.0, Stroke::new(1.0, Color32::BLACK));
         }
+        self.focus_popup(ui, rect, &projector, &scene);
         let help = if self.measuring {
             "click to pick points, corners snap; drag to orbit, shift-drag to pan, scroll to zoom"
         } else {
-            "drag to orbit, shift-drag to pan, scroll to zoom, double-click to reset, up/down to step lines"
+            "click a part to select it, drag to orbit, shift-drag to pan, scroll to zoom, double-click to reset, up/down to step lines"
         };
         p.text(
             rect.left_bottom() + Vec2::new(10.0, -10.0),
@@ -1444,6 +1576,7 @@ impl App {
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
             self.picks.clear();
+            self.focus = None;
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
             self.browser = Some(Browser::at(std::env::current_dir().unwrap_or_default()));

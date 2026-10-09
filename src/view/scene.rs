@@ -1,27 +1,38 @@
 use crate::geometry;
 use crate::model::Model;
+use egui_bench::viewer3d::{self, Material, Shading};
 use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::Arc;
 
-pub type V3 = [f32; 3];
+pub use egui_bench::viewer3d::V3;
 
-#[derive(Clone, Default)]
-pub struct Surface {
-    pub positions: Vec<V3>,
-    pub normals: Vec<V3>,
-    pub colour: V3,
-    pub body: usize,
-    pub face: Option<usize>,
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Default)]
+pub enum Ink {
+    #[default]
+    Body,
+    Edge,
+    Marked,
 }
 
-#[derive(Clone, Default)]
-pub struct Lines {
-    pub segments: Vec<[V3; 2]>,
-    pub colour: V3,
-    pub body: usize,
-    pub width: f32,
+impl Material for Ink {
+    fn shading(&self) -> Shading {
+        match self {
+            Ink::Body => Shading {
+                capped: true,
+                ..Shading::default()
+            },
+            Ink::Edge => Shading::default(),
+            Ink::Marked => Shading {
+                tinted: false,
+                ..Shading::default()
+            },
+        }
+    }
 }
+
+pub type Surface = viewer3d::Surface<Ink>;
+pub type Lines = viewer3d::Lines<Ink>;
 
 #[derive(Clone)]
 pub struct Part {
@@ -29,6 +40,9 @@ pub struct Part {
     pub colour: V3,
     pub volume: f64,
     pub current: bool,
+    pub source: Option<String>,
+    pub material: Option<(String, f64)>,
+    pub size: [f64; 3],
 }
 
 #[derive(Clone)]
@@ -38,13 +52,8 @@ pub struct FaceInfo {
     pub area: f64,
 }
 
-#[derive(Default)]
 pub struct Scene {
-    pub id: u64,
-    pub surfaces: Vec<Surface>,
-    pub lines: Vec<Lines>,
-    pub centre: V3,
-    pub radius: f32,
+    pub mesh: Arc<viewer3d::Scene<Ink>>,
     pub parts: Vec<Part>,
     pub vertices: Vec<(usize, V3)>,
     pub faces: Vec<FaceInfo>,
@@ -129,8 +138,7 @@ fn faces(
         let Some(mesh) = face.surface() else { continue };
         let mut surface = Surface {
             colour: face_colour(index, base, highlights),
-            body,
-            face: Some(info.len()),
+            group: body,
             ..Default::default()
         };
         let positions = mesh.positions();
@@ -266,13 +274,27 @@ fn edge_lines(
     }
 }
 
+fn describe_source(source: &crate::model::Source) -> String {
+    let file = source.file.file_name().map_or_else(
+        || source.file.display().to_string(),
+        |n| n.to_string_lossy().into_owned(),
+    );
+    let mut text = file;
+    if !source.body.is_empty() {
+        text.push_str(&format!(" body={}", source.body));
+    }
+    for (name, value) in &source.vars {
+        text.push_str(&format!(" {name}={value}"));
+    }
+    text
+}
+
 pub fn build(
     model: &Model,
     highlights: &[Highlight<'_>],
     marked: &[Edge],
     marked_colour: V3,
 ) -> Scene {
-    static NEXT: AtomicU64 = AtomicU64::new(1);
     let current = model.current_body();
     let bodies: Vec<(String, &Solid)> = model
         .bodies
@@ -305,7 +327,8 @@ pub fn build(
         let volume = faces(solid, &meshed, body, colour, own, &mut surfaces, &mut info);
         let mut edges = Lines {
             colour: EDGE,
-            body,
+            material: Ink::Edge,
+            group: body,
             width: EDGE_WIDTH,
             ..Default::default()
         };
@@ -320,17 +343,26 @@ pub fn build(
                 .filter(|v| seen.insert(v.id()))
                 .map(|v| (body, v3(v.point()))),
         );
+        let extent = geometry::bounds(solid);
+        let (low, high) = (extent.min(), extent.max());
         parts.push(Part {
             name: name.clone(),
             colour,
             volume,
             current: is_current,
+            source: model.sources.get(name).map(describe_source),
+            material: model
+                .materials
+                .get(name)
+                .map(|m| (m.name.clone(), m.density)),
+            size: [high.x - low.x, high.y - low.y, high.z - low.z],
         });
     }
     let current_index = parts.iter().position(|p| p.current).unwrap_or(0);
     let mut highlighted = Lines {
         colour: marked_colour,
-        body: current_index,
+        material: Ink::Marked,
+        group: current_index,
         width: MARKED_WIDTH,
         ..Default::default()
     };
@@ -339,11 +371,13 @@ pub fn build(
         .for_each(|edge| segments(&polyline(edge), &mut highlighted.segments));
     lines.push(highlighted);
     Scene {
-        id: NEXT.fetch_add(1, Ordering::Relaxed),
-        surfaces,
-        lines,
-        centre: v3(bounds.center()),
-        radius,
+        mesh: Arc::new(viewer3d::Scene {
+            surfaces,
+            lines,
+            centre: v3(bounds.center()),
+            radius,
+            ..Default::default()
+        }),
         parts,
         vertices,
         faces: info,
