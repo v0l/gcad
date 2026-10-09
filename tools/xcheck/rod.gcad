@@ -1,0 +1,3 @@
+circle 8
+rod: extrude 50
+material steel

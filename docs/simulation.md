@@ -206,6 +206,26 @@ hundreds of solves near the limit. The tangent along the slip direction is 1e-8 
 thousand times the bonded answer. Two blocks pressed with 1000 N and friction 0.3 hold 297 N
 sideways in about 40 solves and give way at 303 N.
 
+## Cross-checks
+
+`tools/xcheck/run.sh` meshes the same STEP exports with gmsh and solves them with scikit-fem
+(quadratic elements on straight-sided tetrahedra, PARDISO for the solves), sharing no code with
+gcad. It runs in about 2.5 minutes. Measured with gcad at the same or a finer mesh:
+
+| case | gcad | reference |
+|---|---|---|
+| `bracket.gsim`, mesh 1.2: peak displacement | 0.003337 mm | 0.003326 mm |
+| same, `top` probe | 0.001786 mm, 3.762 MPa | 0.001783 mm, 3.788 MPa |
+| bracket fixed at `<Z`, first four frequencies | 43804, 43854, 69358, 99613 Hz | 43911, 43979, 69490, 99741 Hz |
+| `heatsink.gsim`: hottest, coolest | 64.833, 63.935 °C | 64.832, 63.935 °C |
+| rod in tube between plates, rod cooled 100 °C (penalty ties against one conforming mesh) | 142.2, 28.12 MPa | 143.3, 27.56 MPa |
+| 10 x 10 x 200 steel column, buckling factors | 10.285, 10.285, 91.08 | 10.285, 10.285, 91.09 |
+| 20 x 20 x 3 angle, 150 long, buckling factors (no closed form) | 36.48, 102.6, 211.7 | 36.48, 102.5, 211.4 |
+
+Contact and friction are not cross-checked; they rest on the stack tests in `tests/simulation.rs`.
+scipy's default direct solver needed minutes at 240,000 unknowns and pyamg 455 iterations, so
+the scripts use PARDISO.
+
 ## Tests
 
 Every kind is checked against closed forms, the way the volume tests check geometry:

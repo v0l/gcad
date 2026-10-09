@@ -1,0 +1,9 @@
+pen 0,0
+line 20,0
+line 20,3
+line 3,3
+line 3,20
+line 0,20
+close
+angle: extrude 150
+material steel

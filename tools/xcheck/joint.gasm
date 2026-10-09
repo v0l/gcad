@@ -1,0 +1,6 @@
+part a plate.gcad
+move a 0,0,-20
+part rod rod.gcad
+part tube tube.gcad
+part b plate.gcad
+move b 0,0,50

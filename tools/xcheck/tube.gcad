@@ -1,0 +1,4 @@
+circle 30
+circle 24
+tube: extrude 50
+material aluminium
