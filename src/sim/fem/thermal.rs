@@ -1,5 +1,8 @@
+use super::scalar::{Csr, direct, two_level};
 use super::{GAUSS, Quadratic, map, shape, triangle_area_vector, triangle_gauss, triangle_shape};
 use anyhow::{Result, anyhow, bail};
+
+pub const DIRECT_LIMIT: usize = 150_000;
 use monstertruck::modeling::*;
 use rayon::prelude::*;
 
@@ -25,6 +28,7 @@ pub enum Boundary {
 pub struct Answer {
     pub temperature: Vec<f64>,
     pub leaving: Vec<(String, f64)>,
+    pub iterations: Option<usize>,
 }
 
 fn faces_of<'a>(mesh: &'a Quadratic, faces: &'a [usize]) -> impl Iterator<Item = [u32; 6]> + 'a {
@@ -156,36 +160,50 @@ pub fn solve(
         .filter(|&v| fixed[v].is_none())
         .map(|v| rhs[v])
         .collect();
-    let mut triplets = Vec::new();
+    if count > 3 * super::elastic::DIRECT_FALLBACK {
+        bail!("{count} unknowns is too many for the heat solver; use a larger `mesh` size");
+    }
+    let mut reduced_entries = Vec::with_capacity(entries.len());
     for &(r, c, value) in &entries {
         let (r, c) = (r as usize, c as usize);
         match (fixed[r], fixed[c]) {
-            (None, None) if index[c] <= index[r] => {
-                triplets.push(faer::sparse::Triplet::new(index[r], index[c], value))
-            }
+            (None, None) => reduced_entries.push((index[r] as u32, index[c] as u32, value)),
             (None, Some(t)) => reduced_rhs[index[r]] -= value * t,
             _ => {}
         }
     }
-    if count > 3 * super::elastic::DIRECT_FALLBACK {
-        bail!("{count} unknowns is too many for the heat solver; use a larger `mesh` size");
-    }
     let mut temperature: Vec<f64> = fixed.iter().map(|f| f.unwrap_or(0.0)).collect();
+    let mut iterations = None;
     if count > 0 {
-        use faer::linalg::solvers::Solve;
-        let matrix = faer::sparse::SparseColMat::<usize, f64>::try_new_from_triplets(
-            count, count, &triplets,
-        )
-        .map_err(|e| anyhow!("{e:?}"))?;
-        faer::set_global_parallelism(faer::Par::Seq);
-        let llt = matrix
-            .sp_cholesky(faer::Side::Lower)
-            .map_err(|_| anyhow!("the heat problem has no single answer; check its boundaries"))?;
-        let b = faer::Mat::<f64>::from_fn(count, 1, |i, _| reduced_rhs[i]);
-        let x = llt.solve(&b);
+        let matrix = Csr::from_triplets(count, &reduced_entries);
+        drop(reduced_entries);
+        let x = if count <= DIRECT_LIMIT {
+            direct(&matrix, &reduced_rhs).map_err(|_| {
+                anyhow!("the heat problem has no single answer; check its boundaries")
+            })?
+        } else {
+            let coarse = mesh.coarse();
+            let parents: Vec<[(u32, f64); 2]> = (0..n)
+                .filter(|&v| fixed[v].is_none())
+                .map(|v| coarse.parents[v])
+                .collect();
+            let solved = two_level(&matrix, &reduced_rhs, &parents, coarse.nodes, 1.0e-10, 2000)
+                .map_err(|_| {
+                    anyhow!("the heat problem has no single answer; check its boundaries")
+                })?;
+            if solved.residual > 1.0e-8 {
+                bail!(
+                    "the heat solver did not settle (residual {:.1e} after {} iterations); try a different `mesh` size",
+                    solved.residual,
+                    solved.iterations
+                );
+            }
+            iterations = Some(solved.iterations);
+            solved.x
+        };
         for v in 0..n {
             if fixed[v].is_none() {
-                temperature[v] = x[(index[v], 0)];
+                temperature[v] = x[index[v]];
             }
         }
     }
@@ -231,5 +249,6 @@ pub fn solve(
     Ok(Answer {
         temperature,
         leaving,
+        iterations,
     })
 }

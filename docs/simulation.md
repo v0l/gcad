@@ -138,8 +138,10 @@ Measured on the 200 mm cantilever: at 284,000 unknowns the direct solver took 7 
 two-level solver 28 iterations and 1.8 s; at 796,000 unknowns direct took 58 s and 15 GB, the
 two-level solver 28 iterations, 6 s and 1.4 GB. Bonded assemblies converge more slowly (the
 penalty ties stiffen the system): the two-body case example at 2 million unknowns took 771
-iterations and two minutes. The frequency and heat solvers are still direct only, so they refuse
-problems above 600,000 and 1.8 million unknowns.
+iterations and two minutes. The frequency and buckling solvers are still direct only, so they
+refuse problems above 600,000 unknowns. The heat solver factors problems up to 150,000 unknowns
+and runs the same two-level scheme (scalar) above that, up to 1.8 million: a 500,000 node bar
+takes 13 iterations and 4.5 s where the direct solve took 20 s.
 
 `thermal` (phase 4, built): the scalar version on the same quadratic mesh, conductivity from the
 material, temperatures eliminated, film convection as a boundary mass term, solved with the
@@ -174,7 +176,7 @@ master face's normal, switched on where they press and off where they would pull
 until the set settles. Checked with two blocks heated (they press, as if bonded) and cooled
 (they part, stress free).
 
-Still to build: friction, an iterative path for `modal` and `thermal`,
+Still to build: friction, an iterative path for `modal` and `buckling`,
 and a better smoother for bonded assemblies.
 
 ## Tests

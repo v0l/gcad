@@ -1,6 +1,7 @@
 pub mod buckling;
 pub mod elastic;
 pub mod modal;
+pub mod scalar;
 pub mod solve;
 pub mod thermal;
 

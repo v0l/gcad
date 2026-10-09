@@ -78,6 +78,9 @@ fn run_spec(spec: &Spec) -> Result<Outcome> {
         ),
         "steady state, conduction only inside the part".into(),
     ];
+    if let Some(iterations) = answer.iterations {
+        notes.push(format!("solved iteratively in {iterations} steps"));
+    }
     if let Some(bonds) = prepared.bonds() {
         notes.push(bonds);
     }

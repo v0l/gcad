@@ -368,6 +368,39 @@ fn fin_with_convection() {
 }
 
 #[test]
+fn large_heat_problem_solves_iteratively() {
+    let outcome = simulated(
+        "large_heat_problem_solves_iteratively",
+        &[(
+            "fin.gcad",
+            "rect 100 10 at=50,0\nfin: extrude 10 both\nmaterial aluminium\n",
+        )],
+        "sim thermal\npart fin.gcad\nbase: temperature <X 100\nair: convect fin.start,fin.end,>X,>Y,<Y h=20 ambient=20\ntip: probe 100,0,0\nmesh 1",
+    );
+    assert!(
+        outcome
+            .notes
+            .iter()
+            .any(|n| n.contains("solved iteratively")),
+        "{}",
+        outcome.table()
+    );
+    let (h, perimeter, k, area, length): (f64, f64, f64, f64, f64) =
+        (2.0e-5, 40.0, 0.167, 100.0, 100.0);
+    let m = (h * perimeter / (k * area)).sqrt();
+    let r = h / (m * k);
+    let (c, s) = ((m * length).cosh(), (m * length).sinh());
+    let heat = (h * perimeter * k * area).sqrt() * 80.0 * (s + r * c) / (c + r * s);
+    close(reading(&outcome, "air"), heat, 0.005);
+    close(reading(&outcome, "base"), -heat, 0.005);
+    close(
+        reading(&outcome, "tip.temperature"),
+        20.0 + 80.0 / (c + r * s),
+        0.002,
+    );
+}
+
+#[test]
 fn heat_needs_a_boundary() {
     let path = written(
         "heat_needs_a_boundary",
