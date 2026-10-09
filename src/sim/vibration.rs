@@ -27,7 +27,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         })
         .collect();
     let mut notes = vec![format!(
-        "{} nodes, {} quadratic tetrahedra, {} g; {} subspace iterations",
+        "{} nodes, {} quadratic tetrahedra, {} g; {} eigenvalue iterations",
         mesh.nodes.len(),
         mesh.tets.len(),
         super::result::short(found.total_mass * 1.0e6),

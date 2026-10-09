@@ -1,10 +1,13 @@
 #![allow(clippy::needless_range_loop)]
 
 use super::elastic::{Support, assemble, projectors};
-use super::solve::{Blocks, Reduced};
+use super::solve::{Blocks, Reduced, TwoLevel};
 use super::{Quadratic, map, shape};
 use anyhow::{Result, anyhow};
+use monstertruck::modeling::*;
 use rayon::prelude::*;
+
+pub const DIRECT_LIMIT: usize = 250_000;
 
 pub const MASS_RULE: [([f64; 4], f64); 14] = {
     const A: f64 = 0.092_735_250_310_891_2;
@@ -206,21 +209,18 @@ pub fn solve(
     supports: &[Support],
     wanted: usize,
 ) -> Result<Modes> {
-    use faer::linalg::solvers::Solve;
     let stiffness = assemble(mesh, materials)?;
     let mass = mass(mesh, densities);
     let (projectors, _) = projectors(mesh, supports);
     let reduced = Reduced::new(&projectors);
     let n = reduced.count;
-    if n > super::elastic::DIRECT_FALLBACK {
+    if n > 6 * super::elastic::DIRECT_FALLBACK {
         anyhow::bail!(
-            "{n} unknowns is too many for the frequency solver, which factors the whole matrix; use a larger `mesh` size (under about {} nodes)",
-            super::elastic::DIRECT_FALLBACK / 3
+            "{n} unknowns is too many for the frequency solver; use a larger `mesh` size"
         );
     }
     let free = supports.is_empty();
     let count = (wanted + if free { 6 } else { 0 }).min(n);
-    let width = (count * 2).max(count + 8).min(n);
     let ratio: f64 = {
         let (k, m): (f64, f64) = (0..mesh.nodes.len()).fold((0.0, 0.0), |(k, m), i| {
             (k + stiffness.diagonal(i)[0], m + mass.diagonal(i)[0])
@@ -228,65 +228,73 @@ pub fn solve(
         k / m.max(1.0e-300)
     };
     let shift = ratio * 1.0e-8;
-    let llt = reduced
-        .factor(&reduced.lower(&stiffness, Some((&mass, shift))))
-        .map_err(|e| anyhow!(e))?;
     let apply = |blocks: &Blocks, x: &[f64]| -> Vec<f64> {
         let full = reduced.expand(x);
         let mut out = vec![0.0; full.len()];
         blocks.multiply(&full, &mut out);
         reduced.restrict(&out)
     };
-    let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
-    let mut x: Vec<Vec<f64>> = (0..width)
-        .map(|_| {
-            (0..n)
-                .map(|_| {
-                    seed ^= seed << 13;
-                    seed ^= seed >> 7;
-                    seed ^= seed << 17;
-                    (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+    let dot = |a: &[f64], b: &[f64]| a.par_iter().zip(b).map(|(p, q)| p * q).sum::<f64>();
+    let (values, x, iterations) = if n <= DIRECT_LIMIT {
+        shift_invert(&reduced, &stiffness, &mass, shift, count)?
+    } else {
+        let rigid: Vec<Vec<f64>> = if free {
+            let centre = mesh.nodes.iter().map(|p| p.to_vec()).sum::<Vector3>()
+                / mesh.nodes.len().max(1) as f64;
+            (0..6)
+                .map(|k| {
+                    let mut full = vec![0.0; mesh.nodes.len() * 3];
+                    for (i, p) in mesh.nodes.iter().enumerate() {
+                        let axis = [Vector3::unit_x(), Vector3::unit_y(), Vector3::unit_z()][k % 3];
+                        let d = if k < 3 {
+                            axis
+                        } else {
+                            axis.cross(p.to_vec() - centre)
+                        };
+                        full[3 * i..3 * i + 3].copy_from_slice(&[d.x, d.y, d.z]);
+                    }
+                    reduced.restrict(&full)
                 })
                 .collect()
-        })
-        .collect();
-    let dot = |a: &[f64], b: &[f64]| a.par_iter().zip(b).map(|(p, q)| p * q).sum::<f64>();
-    let mut values = vec![0.0; width];
-    let mut iterations = 0;
-    for round in 0..200 {
-        iterations = round + 1;
-        let y: Vec<Vec<f64>> = x.par_iter().map(|v| apply(&mass, v)).collect();
-        let rhs = faer::Mat::<f64>::from_fn(n, width, |i, j| y[j][i]);
-        let solved = llt.solve(&rhs);
-        let z: Vec<Vec<f64>> = (0..width)
-            .map(|j| (0..n).map(|i| solved[(i, j)]).collect())
-            .collect();
-        let mz: Vec<Vec<f64>> = z.par_iter().map(|v| apply(&mass, v)).collect();
-        let kr: Vec<Vec<f64>> = (0..width)
-            .map(|i| (0..width).map(|j| dot(&z[i], &y[j])).collect())
-            .collect();
-        let mr: Vec<Vec<f64>> = (0..width)
-            .map(|i| (0..width).map(|j| dot(&z[i], &mz[j])).collect())
-            .collect();
-        let Some((theta, q)) = ritz(&kr, &mr) else {
-            break;
+        } else {
+            Vec::new()
         };
-        x = (0..width)
-            .map(|k| {
-                let mut v = vec![0.0; n];
-                for (j, zj) in z.iter().enumerate() {
-                    let c = q[k][j];
-                    v.iter_mut().zip(zj).for_each(|(a, b)| *a += c * b);
+        let count = if free { wanted.min(n) } else { count };
+        let mut shifted = stiffness.clone();
+        for row in 0..mass.nodes() {
+            for k in mass.starts[row]..mass.starts[row + 1] {
+                let at = shifted.find(row as u32, mass.columns[k]);
+                for (a, b) in shifted.values[at].iter_mut().zip(&mass.values[k]) {
+                    *a += shift * b;
                 }
-                v
-            })
-            .collect();
-        let settled = (0..count).all(|k| (theta[k] - values[k]).abs() <= theta[k].abs() * 1.0e-10);
-        values = theta;
-        if settled && round > 2 {
-            break;
+            }
         }
-    }
+        let coarse = mesh.coarse();
+        let level = TwoLevel::new(&shifted, &projectors, &coarse).map_err(|e| anyhow!(e))?;
+        let eigen = super::lobpcg::smallest(
+            n,
+            count,
+            rigid,
+            &|v: &[f64]| apply(&shifted, v),
+            &|v: &[f64]| apply(&mass, v),
+            &|r: &[f64]| {
+                let full = reduced.expand(r);
+                let mut z = vec![0.0; full.len()];
+                level.apply(&full, &mut z);
+                reduced.restrict(&z)
+            },
+            1.0e-6,
+            400,
+        );
+        if eigen.residual > 1.0e-4 {
+            anyhow::bail!(
+                "the frequency solver did not settle (residual {:.1e} after {} iterations); try a different `mesh` size",
+                eigen.residual,
+                eigen.iterations
+            );
+        }
+        (eigen.values, eigen.vectors, eigen.iterations)
+    };
     let total_mass = {
         let mut full = vec![0.0; mesh.nodes.len() * 3];
         for i in 0..mesh.nodes.len() {
@@ -334,4 +342,78 @@ pub fn solve(
         total_mass,
         iterations,
     })
+}
+
+type Pairs = (Vec<f64>, Vec<Vec<f64>>, usize);
+
+fn shift_invert(
+    reduced: &Reduced,
+    stiffness: &Blocks,
+    mass: &Blocks,
+    shift: f64,
+    count: usize,
+) -> Result<Pairs> {
+    use faer::linalg::solvers::Solve;
+    let n = reduced.count;
+    let width = (count * 2).max(count + 8).min(n);
+    let llt = reduced
+        .factor(&reduced.lower(stiffness, Some((mass, shift))))
+        .map_err(|e| anyhow!(e))?;
+    let apply = |blocks: &Blocks, x: &[f64]| -> Vec<f64> {
+        let full = reduced.expand(x);
+        let mut out = vec![0.0; full.len()];
+        blocks.multiply(&full, &mut out);
+        reduced.restrict(&out)
+    };
+    let mut seed: u64 = 0x9e37_79b9_7f4a_7c15;
+    let mut x: Vec<Vec<f64>> = (0..width)
+        .map(|_| {
+            (0..n)
+                .map(|_| {
+                    seed ^= seed << 13;
+                    seed ^= seed >> 7;
+                    seed ^= seed << 17;
+                    (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+                })
+                .collect()
+        })
+        .collect();
+    let dot = |a: &[f64], b: &[f64]| a.par_iter().zip(b).map(|(p, q)| p * q).sum::<f64>();
+    let mut values = vec![0.0; width];
+    let mut iterations = 0;
+    for round in 0..200 {
+        iterations = round + 1;
+        let y: Vec<Vec<f64>> = x.par_iter().map(|v| apply(mass, v)).collect();
+        let rhs = faer::Mat::<f64>::from_fn(n, width, |i, j| y[j][i]);
+        let solved = llt.solve(&rhs);
+        let z: Vec<Vec<f64>> = (0..width)
+            .map(|j| (0..n).map(|i| solved[(i, j)]).collect())
+            .collect();
+        let mz: Vec<Vec<f64>> = z.par_iter().map(|v| apply(mass, v)).collect();
+        let kr: Vec<Vec<f64>> = (0..width)
+            .map(|i| (0..width).map(|j| dot(&z[i], &y[j])).collect())
+            .collect();
+        let mr: Vec<Vec<f64>> = (0..width)
+            .map(|i| (0..width).map(|j| dot(&z[i], &mz[j])).collect())
+            .collect();
+        let Some((theta, q)) = ritz(&kr, &mr) else {
+            break;
+        };
+        x = (0..width)
+            .map(|k| {
+                let mut v = vec![0.0; n];
+                for (j, zj) in z.iter().enumerate() {
+                    let c = q[k][j];
+                    v.iter_mut().zip(zj).for_each(|(a, b)| *a += c * b);
+                }
+                v
+            })
+            .collect();
+        let settled = (0..count).all(|k| (theta[k] - values[k]).abs() <= theta[k].abs() * 1.0e-10);
+        values = theta;
+        if settled && round > 2 {
+            break;
+        }
+    }
+    Ok((values, x, iterations))
 }

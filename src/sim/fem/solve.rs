@@ -187,65 +187,77 @@ fn coarse_pattern(a: &Blocks, coarse: &Coarse) -> Blocks {
     }
 }
 
-pub fn two_level(
-    a: &Blocks,
-    b: &[f64],
-    projectors: &[Block],
-    coarse: &Coarse,
-    tolerance: f64,
-    limit: usize,
-) -> Result<Solution, String> {
-    use faer::linalg::solvers::Solve;
-    let inverse = block_jacobi(a);
-    let mut small = coarse_pattern(a, coarse);
-    let projected = |i: usize, m: &Block, j: usize| -> Block {
-        let (pi, pj) = (&projectors[i], &projectors[j]);
-        let mut left = [0.0; 9];
-        for r in 0..3 {
-            for c in 0..3 {
-                left[r * 3 + c] = (0..3).map(|k| pi[r * 3 + k] * m[k * 3 + c]).sum();
-            }
-        }
-        let mut out = [0.0; 9];
-        for r in 0..3 {
-            for c in 0..3 {
-                out[r * 3 + c] = (0..3).map(|k| left[r * 3 + k] * pj[k * 3 + c]).sum();
-            }
-        }
-        out
-    };
-    for i in 0..a.nodes() {
-        for k in a.starts[i]..a.starts[i + 1] {
-            let j = a.columns[k] as usize;
-            let block = projected(i, &a.values[k], j);
-            for &(pa, wa) in &coarse.parents[i] {
-                if wa == 0.0 {
-                    continue;
+pub struct TwoLevel<'a> {
+    a: &'a Blocks,
+    projectors: &'a [Block],
+    coarse: &'a Coarse,
+    inverse: Vec<Block>,
+    reduced: Reduced,
+    llt: faer::sparse::linalg::solvers::Llt<usize, f64>,
+}
+
+impl<'a> TwoLevel<'a> {
+    pub fn new(a: &'a Blocks, projectors: &'a [Block], coarse: &'a Coarse) -> Result<Self, String> {
+        let inverse = block_jacobi(a);
+        let mut small = coarse_pattern(a, coarse);
+        let projected = |i: usize, m: &Block, j: usize| -> Block {
+            let (pi, pj) = (&projectors[i], &projectors[j]);
+            let mut left = [0.0; 9];
+            for r in 0..3 {
+                for c in 0..3 {
+                    left[r * 3 + c] = (0..3).map(|k| pi[r * 3 + k] * m[k * 3 + c]).sum();
                 }
-                for &(pb, wb) in &coarse.parents[j] {
-                    if wb == 0.0 {
+            }
+            let mut out = [0.0; 9];
+            for r in 0..3 {
+                for c in 0..3 {
+                    out[r * 3 + c] = (0..3).map(|k| left[r * 3 + k] * pj[k * 3 + c]).sum();
+                }
+            }
+            out
+        };
+        for i in 0..a.nodes() {
+            for k in a.starts[i]..a.starts[i + 1] {
+                let j = a.columns[k] as usize;
+                let block = projected(i, &a.values[k], j);
+                for &(pa, wa) in &coarse.parents[i] {
+                    if wa == 0.0 {
                         continue;
                     }
-                    let at = small.find(pa, pb);
-                    let target = &mut small.values[at];
-                    for (t, v) in target.iter_mut().zip(&block) {
-                        *t += wa * wb * v;
+                    for &(pb, wb) in &coarse.parents[j] {
+                        if wb == 0.0 {
+                            continue;
+                        }
+                        let at = small.find(pa, pb);
+                        let target = &mut small.values[at];
+                        for (t, v) in target.iter_mut().zip(&block) {
+                            *t += wa * wb * v;
+                        }
                     }
                 }
             }
         }
-    }
-    let mut coarse_projectors = vec![IDENTITY; coarse.nodes];
-    for (i, parents) in coarse.parents.iter().enumerate() {
-        if parents[1].1 == 0.0 && parents[0].1 == 1.0 {
-            coarse_projectors[parents[0].0 as usize] = projectors[i];
-        }
-    }
-    let reduced = Reduced::new(&coarse_projectors);
-    let llt = reduced.factor(&reduced.lower(&small, None))?;
-    let restrict = |r: &[f64]| -> Vec<f64> {
-        let mut out = vec![0.0; coarse.nodes * 3];
+        let mut coarse_projectors = vec![IDENTITY; coarse.nodes];
         for (i, parents) in coarse.parents.iter().enumerate() {
+            if parents[1].1 == 0.0 && parents[0].1 == 1.0 {
+                coarse_projectors[parents[0].0 as usize] = projectors[i];
+            }
+        }
+        let reduced = Reduced::new(&coarse_projectors);
+        let llt = reduced.factor(&reduced.lower(&small, None))?;
+        Ok(TwoLevel {
+            a,
+            projectors,
+            coarse,
+            inverse,
+            reduced,
+            llt,
+        })
+    }
+
+    fn restrict(&self, r: &[f64]) -> Vec<f64> {
+        let mut out = vec![0.0; self.coarse.nodes * 3];
+        for (i, parents) in self.coarse.parents.iter().enumerate() {
             for &(p, w) in parents {
                 if w != 0.0 {
                     for d in 0..3 {
@@ -255,10 +267,11 @@ pub fn two_level(
             }
         }
         out
-    };
-    let prolong = |c: &[f64], fine: &mut [f64]| {
+    }
+
+    fn prolong(&self, c: &[f64], fine: &mut [f64]) {
         fine.par_chunks_mut(3).enumerate().for_each(|(i, out)| {
-            for &(p, w) in &coarse.parents[i] {
+            for &(p, w) in &self.coarse.parents[i] {
                 if w != 0.0 {
                     for d in 0..3 {
                         out[d] += w * c[3 * p as usize + d];
@@ -266,63 +279,71 @@ pub fn two_level(
                 }
             }
         });
-    };
-    let n = b.len();
-    let weight = 0.6;
-    let precondition = |r: &[f64], z: &mut [f64]| {
+    }
+
+    fn sweep(&self, rr: &[f64], z: &mut [f64], ax: &mut [f64], residual: &mut [f64]) {
+        self.a.multiply(z, ax);
+        project(self.projectors, ax);
+        residual
+            .par_iter_mut()
+            .zip(rr)
+            .zip(ax.par_iter())
+            .for_each(|((o, a), b)| *o = a - b);
+    }
+
+    pub fn apply(&self, r: &[f64], z: &mut [f64]) {
+        use faer::linalg::solvers::Solve;
+        let n = r.len();
+        let weight = 0.6;
         z.iter_mut().for_each(|v| *v = 0.0);
         let mut rr = r.to_vec();
-        project(projectors, &mut rr);
+        project(self.projectors, &mut rr);
         let mut ax = vec![0.0; n];
         let mut residual = vec![0.0; n];
         for _ in 0..2 {
-            a.multiply(z, &mut ax);
-            project(projectors, &mut ax);
-            residual
-                .par_iter_mut()
-                .zip(&rr)
-                .zip(&ax)
-                .for_each(|((o, a), b)| *o = a - b);
-            smooth(&inverse, &residual, z, weight);
-            project(projectors, z);
+            self.sweep(&rr, z, &mut ax, &mut residual);
+            smooth(&self.inverse, &residual, z, weight);
+            project(self.projectors, z);
         }
-        a.multiply(z, &mut ax);
-        project(projectors, &mut ax);
-        residual
-            .par_iter_mut()
-            .zip(&rr)
-            .zip(&ax)
-            .for_each(|((o, a), b)| *o = a - b);
-        let coarse_rhs = reduced.restrict(&restrict(&residual));
-        let solved = llt.solve(faer::Mat::<f64>::from_fn(reduced.count, 1, |i, _| {
-            coarse_rhs[i]
-        }));
+        self.sweep(&rr, z, &mut ax, &mut residual);
+        let reduced = &self.reduced;
+        let coarse_rhs = reduced.restrict(&self.restrict(&residual));
+        let solved = self
+            .llt
+            .solve(faer::Mat::<f64>::from_fn(reduced.count, 1, |i, _| {
+                coarse_rhs[i]
+            }));
         let correction = reduced.expand(
             &(0..reduced.count)
                 .map(|i| solved[(i, 0)])
                 .collect::<Vec<_>>(),
         );
-        prolong(&correction, z);
-        project(projectors, z);
+        self.prolong(&correction, z);
+        project(self.projectors, z);
         for _ in 0..2 {
-            a.multiply(z, &mut ax);
-            project(projectors, &mut ax);
-            residual
-                .par_iter_mut()
-                .zip(&rr)
-                .zip(&ax)
-                .for_each(|((o, a), b)| *o = a - b);
-            smooth(&inverse, &residual, z, weight);
-            project(projectors, z);
+            self.sweep(&rr, z, &mut ax, &mut residual);
+            smooth(&self.inverse, &residual, z, weight);
+            project(self.projectors, z);
         }
-    };
+    }
+}
+
+pub fn two_level(
+    a: &Blocks,
+    b: &[f64],
+    projectors: &[Block],
+    coarse: &Coarse,
+    tolerance: f64,
+    limit: usize,
+) -> Result<Solution, String> {
+    let level = TwoLevel::new(a, projectors, coarse)?;
     Ok(preconditioned(
         a,
         b,
         projectors,
         tolerance,
         limit,
-        &precondition,
+        &|r: &[f64], z: &mut [f64]| level.apply(r, z),
     ))
 }
 

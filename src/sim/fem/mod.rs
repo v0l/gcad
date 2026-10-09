@@ -1,5 +1,6 @@
 pub mod buckling;
 pub mod elastic;
+pub mod lobpcg;
 pub mod modal;
 pub mod scalar;
 pub mod solve;

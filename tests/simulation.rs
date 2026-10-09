@@ -445,6 +445,33 @@ fn free_beam_modes() {
 }
 
 #[test]
+fn large_eigenproblems_iterate() {
+    let free = simulated(
+        "large_free_modes",
+        &[("beam.gcad", BEAM)],
+        "sim modal\npart beam.gcad\nmodes 2\nmesh 2",
+    );
+    let stiffness = 200.0e9 * 0.02 * 0.01_f64.powi(3) / 12.0;
+    let line_mass = 7850.0 * 0.02 * 0.01;
+    let first = 4.730_f64.powi(2) / (2.0 * std::f64::consts::PI)
+        * (stiffness / (line_mass * 0.2_f64.powi(4))).sqrt();
+    close(reading(&free, "mode1"), first, 0.02);
+    assert!(
+        free.notes
+            .iter()
+            .any(|n| n.contains("eigenvalue iterations"))
+    );
+    let column = simulated(
+        "large_buckling",
+        &[("col.gcad", "rect 10 10\ncol: extrude 100\nmaterial steel\n")],
+        "sim buckling\npart col.gcad\nfix <Z\nload >Z force=0,0,-1000\nmesh 1.2",
+    );
+    let euler = std::f64::consts::PI.powi(2) * 200.0e3 * (10.0_f64.powi(4) / 12.0)
+        / (4.0 * 100.0_f64.powi(2));
+    close(reading(&column, "buckling"), euler / 1000.0, 0.01);
+}
+
+#[test]
 fn robot_arm_motor_torque() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/robot/arm.gsim");
     let outcome = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");

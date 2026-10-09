@@ -288,13 +288,13 @@ The plan for the rest is in `docs/simulation.md`.
 | expectations | supported | `expect shoulder<2 drive>0.5` | `simulation::torque_through_gears` |
 | stale results and charts | supported | `gcad check x.gsim`, `gcad render x.gsim x.png` | `simulation::result_goes_stale` |
 | stiffness, strength and conductivity | supported | `material pla`, `material delrin density=1.41 E=3.1 nu=0.35 yield=65` | `simulation::material_properties` |
-| tetrahedral mesh | supported | `mesh 2`, `gcad sim x.gsim --dry-run`, `gcad render x.gsim x.png` | `simulation::tet_mesh_of_a_box`, `simulation::tet_mesh_of_curved_parts`, `simulation::tet_mesh_of_example_parts`, `simulation::tet_mesh_of_thin_walls`, `simulation::mesh_dry_run` |
+| tetrahedral mesh | supported | `mesh 2`, `gcad sim x.gsim --dry-run`, `gcad render x.gsim x.png` | `simulation::tet_mesh_of_a_box`, `simulation::tet_mesh_of_curved_parts`, `simulation::tet_mesh_of_example_parts`, `simulation::tet_mesh_of_thin_walls`, `simulation::tet_mesh_of_a_ring_gear_part`, `simulation::mesh_dry_run` |
 | static stress | supported | `sim static`, `fix faces`, `load faces force=x,y,z` | `simulation::bar_in_tension`, `simulation::cantilever_stress`, `simulation::static_needs_supports_and_stiffness` |
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::pinned_link` |
 | probes | supported | `top: probe 100,0,10` | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure` |
 | example simulations | supported | `examples/parts/bracket.gsim`, `examples/parts/heatsink.gsim` | `simulation::example_simulations` |
-| large problems | supported | conjugate gradients with a two-level preconditioner, above 100,000 unknowns for stress and 150,000 for heat | `simulation::large_problems_iterate`, `simulation::large_heat_problem_solves_iteratively` |
+| large problems | supported | conjugate gradients with a two-level preconditioner, above 100,000 unknowns for stress and 150,000 for heat; LOBPCG above 250,000 for frequencies and buckling | `simulation::large_problems_iterate`, `simulation::large_heat_problem_solves_iteratively`, `simulation::large_eigenproblems_iterate` |
 | stress plots | supported | `gcad render x.gsim x.png` | `simulation::stress_field_render` |
 | steady heat | supported | `sim thermal`, `cold: temperature faces 20`, `heat faces 5`, `source 5` | `simulation::conduction_through_a_wall`, `simulation::heat_needs_a_boundary` |
 | convection | supported | `air: convect faces h=20 ambient=20` | `simulation::fin_with_convection` |

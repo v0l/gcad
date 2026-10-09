@@ -1,6 +1,6 @@
 use super::elastic::{Problem, assemble, lame, projectors, solve as solve_static};
 use super::modal::ritz;
-use super::solve::{Blocks, Reduced};
+use super::solve::{Blocks, Reduced, TwoLevel};
 use super::{GAUSS, Quadratic, map};
 use anyhow::{Result, anyhow, bail};
 use rayon::prelude::*;
@@ -83,7 +83,6 @@ fn geometric(
 }
 
 pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
-    use faer::linalg::solvers::Solve;
     let mesh = problem.mesh;
     let answer = solve_static(problem)?;
     let stiffness = assemble(mesh, problem.materials)?;
@@ -96,13 +95,74 @@ pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
     let (projectors, _) = projectors(mesh, problem.supports);
     let reduced = Reduced::new(&projectors);
     let n = reduced.count;
-    if n > super::elastic::DIRECT_FALLBACK {
-        bail!(
-            "{n} unknowns is too many for the buckling solver, which factors the whole matrix; use a larger `mesh` size"
-        );
+    if n > 6 * super::elastic::DIRECT_FALLBACK {
+        bail!("{n} unknowns is too many for the buckling solver; use a larger `mesh` size");
     }
+    let apply = |blocks: &Blocks, x: &[f64]| -> Vec<f64> {
+        let full = reduced.expand(x);
+        let mut out = vec![0.0; full.len()];
+        blocks.multiply(&full, &mut out);
+        reduced.restrict(&out)
+    };
+    let (values, x) = if n <= super::modal::DIRECT_LIMIT {
+        inverse_iteration(&reduced, &stiffness, &geometry, wanted)?
+    } else {
+        let coarse = mesh.coarse();
+        let level = TwoLevel::new(&stiffness, &projectors, &coarse).map_err(|e| anyhow!(e))?;
+        let eigen = super::lobpcg::smallest(
+            n,
+            wanted,
+            Vec::new(),
+            &|v: &[f64]| apply(&geometry, v),
+            &|v: &[f64]| apply(&stiffness, v),
+            &|r: &[f64]| {
+                let full = reduced.expand(r);
+                let mut z = vec![0.0; full.len()];
+                level.apply(&full, &mut z);
+                reduced.restrict(&z)
+            },
+            1.0e-6,
+            400,
+        );
+        if eigen.residual > 1.0e-4 {
+            bail!(
+                "the buckling solver did not settle (residual {:.1e} after {} iterations); try a different `mesh` size",
+                eigen.residual,
+                eigen.iterations
+            );
+        }
+        (eigen.values.iter().map(|v| -v).collect(), eigen.vectors)
+    };
+    let buckles = values
+        .iter()
+        .zip(&x)
+        .filter(|(mu, _)| **mu > 0.0)
+        .take(wanted)
+        .map(|(mu, v)| {
+            let shape = reduced.expand(v);
+            let top = shape
+                .iter()
+                .fold(0.0f64, |a, b| a.max(b.abs()))
+                .max(1.0e-300);
+            Buckle {
+                factor: 1.0 / mu,
+                shape: shape.iter().map(|s| s / top).collect(),
+            }
+        })
+        .collect();
+    Ok(buckles)
+}
+
+fn inverse_iteration(
+    reduced: &Reduced,
+    stiffness: &Blocks,
+    geometry: &Blocks,
+    wanted: usize,
+) -> Result<(Vec<f64>, Vec<Vec<f64>>)> {
+    use faer::linalg::solvers::Solve;
+    let n = reduced.count;
     let llt = reduced
-        .factor(&reduced.lower(&stiffness, None))
+        .factor(&reduced.lower(stiffness, None))
         .map_err(|e| anyhow!(e))?;
     let apply = |blocks: &Blocks, x: &[f64]| -> Vec<f64> {
         let full = reduced.expand(x);
@@ -129,7 +189,7 @@ pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
     for round in 0..300 {
         let y: Vec<Vec<f64>> = x
             .par_iter()
-            .map(|v| apply(&geometry, v).iter().map(|g| -g).collect())
+            .map(|v| apply(geometry, v).iter().map(|g| -g).collect())
             .collect();
         let rhs = faer::Mat::<f64>::from_fn(n, width, |i, j| y[j][i]);
         let solved = llt.solve(&rhs);
@@ -138,7 +198,7 @@ pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
             .collect();
         let gz: Vec<Vec<f64>> = z
             .par_iter()
-            .map(|v| apply(&geometry, v).iter().map(|g| -g).collect())
+            .map(|v| apply(geometry, v).iter().map(|g| -g).collect())
             .collect();
         let kr: Vec<Vec<f64>> = (0..width)
             .map(|i| (0..width).map(|j| dot(&z[i], &y[j])).collect())
@@ -170,22 +230,5 @@ pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
             break;
         }
     }
-    let buckles = values
-        .iter()
-        .zip(&x)
-        .filter(|(mu, _)| **mu > 0.0)
-        .take(wanted)
-        .map(|(mu, v)| {
-            let shape = reduced.expand(v);
-            let top = shape
-                .iter()
-                .fold(0.0f64, |a, b| a.max(b.abs()))
-                .max(1.0e-300);
-            Buckle {
-                factor: 1.0 / mu,
-                shape: shape.iter().map(|s| s / top).collect(),
-            }
-        })
-        .collect();
-    Ok(buckles)
+    Ok((values, x))
 }
