@@ -185,8 +185,8 @@ sits on the path.
 ## Simulations
 
 A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`. It prints
-readings, writes `x.result.json`, and fails when an `expect` line does not hold. Only
-`sim torque` solves so far; the rest are planned in `docs/simulation.md`.
+readings, writes `x.result.json`, and fails when an `expect` line does not hold. `torque` and
+`static` solve so far; the rest are planned in `docs/simulation.md`.
 
 ```
 sim torque
@@ -203,9 +203,24 @@ at `ratio=4` reads a quarter of it: that is the motor's torque. Parts need a `ma
 weigh anything. `gcad check x.gsim` says when the result is stale and `gcad render x.gsim
 x.png` plots the sweeps. Materials also carry `E= nu= yield= k= alpha=`.
 
-`sim static`, `thermal` and `modal` only mesh so far: add `mesh 2` (element size, mm), run
-`gcad sim x.gsim --dry-run` for node and element counts and the worst element, and
-`gcad render x.gsim x.png` to see the mesh cut open.
+`sim static` solves linear stress on a part file (mm, N, MPa):
+
+```
+sim static
+part bracket.gcad
+material aluminium
+mesh 2
+base: fix <Z
+load boss.end force=0,-200,0
+top: probe 18,12,12
+expect stress<80 safety>2
+```
+
+`slide faces` holds only the normal (symmetry planes), `pressure faces 10` pushes in MPa.
+Readings: `stress`, `displacement`, `safety`, each support's reaction, `probe.stress`. Peak
+stress at sharp inside corners and fixed-face edges is a singularity that grows with mesh
+refinement: fillet the corner or probe away from it. `gcad render x.gsim x.png` draws the
+stress on the deformed part. `thermal` and `modal` only mesh so far (`--dry-run`, `render`).
 
 ## Output
 

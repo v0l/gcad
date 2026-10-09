@@ -6,7 +6,7 @@ pub mod surface;
 
 use anyhow::{Result, bail};
 use delaunay::{Delaunay, Insert, Mode, NONE, Point, face_key, face_of, orient};
-use fixed::{HashMap, HashSet};
+pub use fixed::{HashMap, HashSet};
 use monstertruck::modeling::*;
 
 use monstertruck::modeling::Face;
@@ -17,6 +17,8 @@ pub struct TetMesh {
     pub tets: Vec<[u32; 4]>,
     pub boundary: Vec<([u32; 3], usize)>,
     pub faces: usize,
+    pub surfaces: Vec<Face>,
+    pub uvs: HashMap<u32, Vec<(usize, Vector2)>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -279,7 +281,7 @@ pub fn mesh_solid(solid: &Solid, size: f64) -> Result<TetMesh> {
         .map(|(key, &s)| (*key, skin.tags[s]))
         .collect();
     shed_flat_caps(&mut dt, &mut tags);
-    let mut mesh = finish(&dt, &tags, surface.faces.len())?;
+    let mut mesh = finish(&dt, &tags, &skin)?;
     mesh.smooth(4);
     mesh.flip(6);
     mesh.smooth(4);
@@ -660,7 +662,7 @@ fn classify(dt: &mut Delaunay) -> Result<()> {
     Ok(())
 }
 
-fn finish(dt: &Delaunay, tags: &HashMap<[u32; 3], usize>, faces: usize) -> Result<TetMesh> {
+fn finish(dt: &Delaunay, tags: &HashMap<[u32; 3], usize>, skin: &Skin) -> Result<TetMesh> {
     let mut renumber: Vec<u32> = vec![NONE; dt.points.len()];
     let mut nodes = Vec::new();
     let mut tets = Vec::new();
@@ -687,11 +689,19 @@ fn finish(dt: &Delaunay, tags: &HashMap<[u32; 3], usize>, faces: usize) -> Resul
             }
         }
     }
+    let uvs = skin
+        .uvs
+        .iter()
+        .filter(|(v, _)| renumber[**v as usize] != NONE)
+        .map(|(v, list)| (renumber[*v as usize], list.clone()))
+        .collect();
     Ok(TetMesh {
         nodes,
         tets,
         boundary,
-        faces,
+        faces: skin.faces.len(),
+        surfaces: skin.faces.clone(),
+        uvs,
     })
 }
 

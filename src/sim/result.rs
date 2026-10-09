@@ -27,6 +27,14 @@ pub struct Series {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct Field {
+    pub title: String,
+    pub unit: String,
+    pub values: Vec<f64>,
+    pub displacement: Vec<[f64; 3]>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Outcome {
     pub kind: String,
     pub readings: Vec<Reading>,
@@ -34,6 +42,7 @@ pub struct Outcome {
     pub series: Vec<Series>,
     pub checks: Vec<(String, f64, bool)>,
     pub aliases: Vec<(String, String)>,
+    pub field: Option<Field>,
 }
 
 impl Outcome {
@@ -106,6 +115,10 @@ impl Outcome {
             })).collect::<Vec<_>>(),
             "notes": self.notes,
             "aliases": self.aliases.iter().map(|(a, n)| json!([a, n])).collect::<Vec<_>>(),
+            "field": self.field.as_ref().map(|f| json!({
+                "title": f.title, "unit": f.unit, "values": f.values,
+                "displacement": f.displacement,
+            })),
             "expect": self.checks.iter().map(|(t, v, p)| json!({
                 "text": t, "value": v, "pass": p,
             })).collect::<Vec<_>>(),
@@ -157,6 +170,21 @@ impl Outcome {
                         .collect(),
                 })
                 .collect(),
+            field: value["field"].as_object().map(|_| {
+                let f = &value["field"];
+                Field {
+                    title: text(f, "title"),
+                    unit: text(f, "unit"),
+                    values: numbers(&f["values"]),
+                    displacement: list(&f["displacement"])
+                        .iter()
+                        .map(|d| {
+                            let n = numbers(d);
+                            [n[0], n[1], n[2]]
+                        })
+                        .collect(),
+                }
+            }),
             aliases: list(&value["aliases"])
                 .iter()
                 .filter_map(|pair| {

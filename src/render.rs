@@ -54,7 +54,7 @@ impl Canvas<'_> {
         }
     }
 
-    fn triangle(&mut self, p: [(f64, f64, f64); 3], color: Rgb<u8>) {
+    fn triangle(&mut self, p: [(f64, f64, f64); 3], colors: [[f64; 3]; 3]) {
         let min_x = p
             .iter()
             .map(|q| q.0)
@@ -90,6 +90,10 @@ impl Canvas<'_> {
                 let w1 = ((p[2].0 - px) * (p[0].1 - py) - (p[0].0 - px) * (p[2].1 - py)) / area;
                 let w2 = 1.0 - w0 - w1;
                 if w0 >= 0.0 && w1 >= 0.0 && w2 >= 0.0 {
+                    let color = Rgb([0, 1, 2].map(|k| {
+                        (w0 * colors[0][k] + w1 * colors[1][k] + w2 * colors[2][k])
+                            .clamp(0.0, 255.0) as u8
+                    }));
                     self.plot(x, y, w0 * p[0].2 + w1 * p[1].2 + w2 * p[2].2, color);
                 }
             }
@@ -139,17 +143,18 @@ pub fn render(solids: &[&Solid], path: &str) -> Result<()> {
 pub fn render_coloured(parts: &[(&Solid, Option<[f64; 3]>)], path: &str) -> Result<()> {
     let solids: Vec<&Solid> = parts.iter().map(|(s, _)| *s).collect();
     let mut positions: Vec<Point3> = Vec::new();
-    let mut triangles: Vec<([usize; 3], [f64; 3])> = Vec::new();
+    let mut triangles: Vec<([usize; 3], [[f64; 3]; 3])> = Vec::new();
     for (solid, colour) in parts {
         let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
         let base = positions.len();
         positions.extend(mesh.positions().iter().copied());
         let tint = colour.unwrap_or([150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0]);
-        triangles.extend(
-            mesh.faces()
-                .triangle_iter()
-                .map(|t| ([t[0].pos + base, t[1].pos + base, t[2].pos + base], tint)),
-        );
+        triangles.extend(mesh.faces().triangle_iter().map(|t| {
+            (
+                [t[0].pos + base, t[1].pos + base, t[2].pos + base],
+                [tint; 3],
+            )
+        }));
     }
     let edges: Vec<Vec<Point3>> = solids
         .iter()
@@ -164,11 +169,21 @@ pub fn render_coloured(parts: &[(&Solid, Option<[f64; 3]>)], path: &str) -> Resu
 
 pub fn render_triangles(
     positions: &[Point3],
-    triangles: &[([usize; 3], [f64; 3])],
+    triangles: &[([usize; 3], [[f64; 3]; 3])],
     edges: &[Vec<Point3>],
     bounds: BoundingBox<Point3>,
     path: &str,
 ) -> Result<()> {
+    draw_triangles(positions, triangles, edges, bounds).save(path)?;
+    Ok(())
+}
+
+pub fn draw_triangles(
+    positions: &[Point3],
+    triangles: &[([usize; 3], [[f64; 3]; 3])],
+    edges: &[Vec<Point3>],
+    bounds: BoundingBox<Point3>,
+) -> RgbImage {
     let center = bounds.center().to_vec();
     let mut image = RgbImage::from_pixel(CELL * 2, CELL * 2, BACKGROUND);
     for (index, view) in views().iter().enumerate() {
@@ -206,8 +221,8 @@ pub fn render_triangles(
                 .dot(Vector3::new(0.3, -0.5, 0.8).normalize());
             let facing = normal.normalize().dot(view.toward_eye).abs();
             let shade = 0.35 + 0.4 * facing + 0.25 * light.max(0.0);
-            let color = Rgb(tint.map(|c| (255.0 * c * shade).clamp(0.0, 255.0) as u8));
-            canvas.triangle(triangle.map(|i| to_pixel(projected[i])), color);
+            let colors = tint.map(|t| t.map(|c| 255.0 * c * shade));
+            canvas.triangle(triangle.map(|i| to_pixel(projected[i])), colors);
         }
         let bias = depth_range * 0.01;
         for polyline in edges {
@@ -241,6 +256,5 @@ pub fn render_triangles(
         image.put_pixel(CELL, i, Rgb([200, 200, 200]));
         image.put_pixel(i, CELL, Rgb([200, 200, 200]));
     });
-    image.save(path)?;
-    Ok(())
+    image
 }

@@ -362,13 +362,18 @@ expect shoulder<15 sun_s_turn<4
 
 | operation | arguments | does |
 |---|---|---|
-| `sim` | `kind` | what to simulate. Comes first. `torque` works today. `static`, `thermal` and `modal` mesh the part (`--dry-run`, `render`) but their solvers are not built yet (`docs/simulation.md`) |
+| `sim` | `kind` | what to simulate. Comes first. `torque` and `static` work today. `thermal` and `modal` mesh the part (`--dry-run`, `render`) but their solvers are not built yet (`docs/simulation.md`) |
 | `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
-| `gravity` | `x,y,z` | in m/s², `0,0,-9.81` unless given |
+| `gravity` | `x,y,z` | in m/s². A torque simulation uses `0,0,-9.81` unless given; a static one leaves the part's weight out unless this line is there |
 | `payload` | `part grams` `at=x,y,z` | a point mass carried by a part, at its centre of mass unless `at=` places it (in the assembly's coordinates as posed when the line runs). It moves with the part |
 | `sweep` | `joint ... steps=` | runs every pose of the listed joints across their ranges in `steps` (24 unless given) equal steps; a joint that turns all the way round goes from -180 to 180. Several joints on one line make a grid of poses; separate lines make separate sweeps |
+| `fix` | `faces` | holds the faces still (static). Its reaction force is a reading named after the line's label, or `fix1`, `fix2`, ... |
+| `slide` | `faces` | holds the faces only along their normal, free to slide along them (static); a symmetry plane, or a part resting on a flat. Reading as for `fix` |
+| `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
+| `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |
+| `probe` | `x,y,z`, with a label | reads the von Mises stress and displacement at a point inside the part as `label.stress` and `label.displacement` |
 | `mesh` | `size` | the target edge length of the tetrahedra in mm, for `static`, `thermal` and `modal`; a twentieth of the part's size unless given. The mesher makes elements smaller where walls are thin, gaps are narrow or edges run close together |
 | `expect` | `reading<limit ...` or `reading>limit` | a check on a reading, by name. `gcad sim` fails when one does not hold |
 
@@ -389,7 +394,28 @@ result's sweeps: one panel per sweep and unit, each joint's load against the fir
 joint (the worst over the other joints when several are swept). The viewer shows the
 simulated part.
 
-For `static`, `thermal` and `modal`, `gcad sim file.gsim --dry-run` meshes every body of the
+`sim static` is linear elasticity on curved 10-node tetrahedra, for a part file's main body.
+Units are millimetres, newtons and MPa. It needs a material with a stiffness and at least one
+`fix` or `slide`. Its readings are `stress` (the peak von Mises stress and where),
+`displacement` (the largest movement and where), `safety` (yield strength over the peak
+stress, when the material has one), each support's reaction force and each probe's values. The
+peak stress at a sharp inside corner, or at the edge of a fixed face, is a singularity: it keeps
+rising as the mesh is refined, so put a fillet there or `probe` the stress a little away from it.
+`gcad render file.gsim file.png` draws the von Mises stress on the deformed part, with the
+deformation exaggerated so it shows.
+
+```
+sim static
+part bracket.gcad
+material aluminium
+mesh 2
+base: fix <Z
+load boss.end force=0,-200,0
+top: probe 18,12,12
+expect stress<80 displacement<0.1
+```
+
+For `thermal` and `modal`, `gcad sim file.gsim --dry-run` meshes every body of the
 part into tetrahedra and reports the node and element counts, how far the mesh volume is from
 the solid's, and the worst element. `gcad render file.gsim file.png` draws the mesh with the
 half nearer the front view cut away, the cut faces in orange.

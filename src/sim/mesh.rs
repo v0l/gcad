@@ -123,7 +123,7 @@ pub fn render(bodies: &[Body], path: &str) -> Result<()> {
                 continue;
             }
             let tint = if outer.contains(&key) { skin } else { inner };
-            triangles.push((face.map(|v| v as usize + base), tint));
+            triangles.push((face.map(|v| v as usize + base), [tint; 3]));
             for k in 0..3 {
                 let (a, b) = (face[k], face[(k + 1) % 3]);
                 if a < b {

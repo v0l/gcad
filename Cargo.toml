@@ -23,6 +23,7 @@ notify = "8"
 serde_json = "1.0.151"
 spade = "2.15"
 robust = "1.2"
+faer = "0.24"
 ttf-parser = "0.25"
 
 [patch.crates-io]

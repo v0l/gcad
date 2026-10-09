@@ -296,12 +296,8 @@ fn main() -> Result<()> {
                     .sim
                     .as_deref()
                     .expect("a .gsim file runs as a simulation");
-                if spec.kind.is_some_and(|k| k.meshed()) {
-                    return gcad::sim::mesh::render(&gcad::sim::mesh::bodies(spec)?, &output);
-                }
-                let outcome =
-                    gcad::sim::Outcome::read(&gcad::sim::result_path(std::path::Path::new(&file)))?;
-                return gcad::plot::chart(&outcome, &output);
+                let result = gcad::sim::result_path(std::path::Path::new(&file));
+                return gcad::sim::render(spec, &result, &output);
             }
             let run = load(&file, None, &vars)?;
             finished(&run)?;

@@ -1,13 +1,14 @@
 use super::args::{Args, point3, positive};
 use super::{Model, load_model, posed};
 use crate::parse::Line;
+use crate::sim::fem::elastic::{Hold, Load, Push, Support};
 use crate::sim::{Expect, Kind, Payload, Spec, Sweep};
 use anyhow::{Result, anyhow, bail};
 use monstertruck::modeling::*;
 
 pub const SIM_OPERATIONS: &[&str] = &[
     "let", "if", "include", "sim", "part", "pose", "material", "gravity", "payload", "sweep",
-    "expect", "mesh",
+    "expect", "mesh", "fix", "slide", "load", "pressure", "probe",
 ];
 
 impl Model {
@@ -56,6 +57,20 @@ impl Model {
             "payload" => self.op_payload(line),
             "sweep" => self.op_sim_sweep(line),
             "expect" => self.op_expect(line),
+            "fix" => self.op_support(line, Hold::Fixed),
+            "slide" => self.op_support(line, Hold::Slide),
+            "load" => self.op_load(line),
+            "pressure" => self.op_load(line),
+            "probe" => {
+                let args = Args::new(line, &["at"], &[], false)?;
+                let at = point3(args.text("at")?, &self.scope)?;
+                let name = line
+                    .label
+                    .clone()
+                    .ok_or_else(|| anyhow!("name the probe, like `top: probe 100,0,10`"))?;
+                self.spec().probes.push((name.clone(), at));
+                Ok(format!("reads `{name}.stress` and `{name}.displacement`"))
+            }
             "mesh" => {
                 let args = Args::new(line, &["size"], &[], false)?;
                 let size = positive(args.number("size", &self.scope)?, "the mesh size")?;
@@ -67,6 +82,66 @@ impl Model {
                 SIM_OPERATIONS.join(", ")
             ),
         }
+    }
+
+    fn target_faces(&mut self, selector: &str) -> Result<Vec<usize>> {
+        let target = self.target_mut()?;
+        if target.assembly {
+            bail!("faces of an assembly cannot be picked yet; simulate the part file");
+        }
+        let tolerance = target.tolerance();
+        let solid = target
+            .solid
+            .as_ref()
+            .ok_or_else(|| anyhow!("the part has no solid"))?;
+        let faces = crate::select::select_faces(selector, solid, &target.groups, tolerance)?;
+        if faces.is_empty() {
+            bail!("`{selector}` picks no faces");
+        }
+        Ok(faces)
+    }
+
+    fn op_support(&mut self, line: &Line, hold: Hold) -> Result<String> {
+        let args = Args::new(line, &["faces"], &[], false)?;
+        let faces = self.target_faces(args.text("faces")?)?;
+        let count = self.spec().supports.len() + 1;
+        let label = line
+            .label
+            .clone()
+            .unwrap_or_else(|| format!("{}{count}", line.op));
+        let n = faces.len();
+        self.spec().supports.push(Support {
+            label: label.clone(),
+            faces,
+            hold,
+        });
+        Ok(format!("{n} face(s); its reaction reads as `{label}`"))
+    }
+
+    fn op_load(&mut self, line: &Line) -> Result<String> {
+        let pressure = line.op == "pressure";
+        let args = if pressure {
+            Args::new(line, &["faces", "value"], &[], false)?
+        } else {
+            Args::new(line, &["faces"], &["force"], false)?
+        };
+        let faces = self.target_faces(args.text("faces")?)?;
+        let n = faces.len();
+        let push = if pressure {
+            let p = args.number("value", &self.scope)?;
+            Push::Pressure(p)
+        } else {
+            let text = args
+                .values
+                .get("force")
+                .ok_or_else(|| anyhow!("write `load faces force=x,y,z` in newtons"))?;
+            Push::Force(point3(text, &self.scope)?.to_vec())
+        };
+        self.spec().loads.push(Load { faces, push });
+        Ok(match push {
+            Push::Force(f) => format!("{} N over {n} face(s)", crate::plot::label(f.magnitude())),
+            Push::Pressure(p) => format!("{p} MPa on {n} face(s)"),
+        })
     }
 
     fn op_sim(&mut self, line: &Line) -> Result<String> {

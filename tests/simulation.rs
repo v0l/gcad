@@ -186,24 +186,126 @@ fn material_properties() {
 const BEAM: &str = "rect 200 20 at=100,0\nbeam: extrude 10\nmaterial steel\n";
 
 #[test]
-#[ignore = "missing: static stress simulation"]
+fn bar_in_tension() {
+    let outcome = simulated(
+        "bar_in_tension",
+        &[(
+            "bar.gcad",
+            "rect 100 10 at=50,0\nbar: extrude 10 both\nmaterial steel\n",
+        )],
+        "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nload >X force=1000,0,0\nmid: probe 50,0,0\nmesh 4",
+    );
+    close(reading(&outcome, "stress"), 10.0, 1.0e-6);
+    close(reading(&outcome, "mid.stress"), 10.0, 1.0e-6);
+    close(
+        reading(&outcome, "mid.displacement"),
+        1000.0 * 50.0 / (100.0 * 200.0e3),
+        1.0e-3,
+    );
+    close(reading(&outcome, "safety"), 25.0, 1.0e-6);
+    close(reading(&outcome, "slide1"), 1000.0, 1.0e-6);
+    let field = outcome.field.as_ref().expect("a field");
+    assert_eq!(field.values.len(), field.displacement.len());
+}
+
+#[test]
 fn cantilever_stress() {
     let outcome = simulated(
         "cantilever_stress",
         &[("beam.gcad", BEAM)],
-        "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\nmesh 2",
+        "sim static\npart beam.gcad\nroot: fix <X\nload >X force=0,0,-100\ntop: probe 100,0,10\nmesh 4",
     );
     let inertia = 20.0 * 10.0_f64.powi(3) / 12.0;
+    let tip = 100.0 * 200.0_f64.powi(3) / (3.0 * 200.0e3 * inertia);
+    close(reading(&outcome, "displacement"), tip, 0.02);
     close(
-        reading(&outcome, "displacement"),
-        100.0 * 200.0_f64.powi(3) / (3.0 * 200.0e3 * inertia),
-        0.03,
+        reading(&outcome, "top.stress"),
+        100.0 * 100.0 * 5.0 / inertia,
+        0.01,
     );
+    close(reading(&outcome, "root"), 100.0, 1.0e-6);
+}
+
+#[test]
+fn thick_cylinder_under_pressure() {
+    let ring = "circle 80\nbase: extrude 10\nplane base.end\nh: hole 40 0,0\nrect 100 100 at=-50,0\ncut thru\nrect 100 100 at=50,-50\ncut thru\nmaterial steel\n";
+    let outcome = simulated(
+        "thick_cylinder_under_pressure",
+        &[("ring.gcad", ring)],
+        "sim static\npart ring.gcad\nslide <X\nslide <Y\nslide <Z\npressure h.side 10\nmid: probe 21.2132,21.2132,5\ninner: probe 14.1421,14.1421,5\nmesh 3",
+    );
+    let (a, b, p) = (20.0_f64, 40.0_f64, 10.0);
+    let lame = |r: f64| {
+        let k = p * a * a / (b * b - a * a);
+        let (hoop, radial) = (k * (1.0 + b * b / (r * r)), k * (1.0 - b * b / (r * r)));
+        (hoop * hoop + radial * radial - hoop * radial).sqrt()
+    };
+    close(reading(&outcome, "mid.stress"), lame(30.0), 0.01);
+    close(reading(&outcome, "inner.stress"), lame(20.0), 0.02);
+    let hoop = p * (b * b + a * a) / (b * b - a * a);
     close(
-        reading(&outcome, "stress"),
-        100.0 * 200.0 * 5.0 / inertia,
-        0.1,
+        reading(&outcome, "inner.displacement"),
+        a / 200.0e3 * (hoop + 0.29 * p),
+        0.01,
     );
+    close(reading(&outcome, "slide1"), p * a * 10.0, 1.0e-3);
+}
+
+#[test]
+fn static_needs_supports_and_stiffness() {
+    let path = written(
+        "static_needs_supports",
+        &[("beam.gcad", BEAM)],
+        "sim static\npart beam.gcad\nload >X force=0,0,-1",
+    );
+    let error =
+        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("no supports");
+    assert!(format!("{error}").contains("support"), "{error}");
+    let path = written(
+        "static_needs_stiffness",
+        &[(
+            "beam.gcad",
+            "rect 20 20\nextrude 5\nmaterial stepper density=3\n",
+        )],
+        "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-1",
+    );
+    let error =
+        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("no stiffness");
+    assert!(format!("{error}").contains("E="), "{error}");
+}
+
+#[test]
+fn stress_field_render() {
+    let path = written(
+        "stress_field_render",
+        &[("beam.gcad", BEAM)],
+        "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\nmesh 8",
+    );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("sim");
+    let outcome = gcad::sim::simulate(spec).expect("solves");
+    std::fs::write(
+        gcad::sim::result_path(&path),
+        outcome.to_json(&gcad::sim::stamp(&path, &[])).to_string(),
+    )
+    .expect("write");
+    let picture = path.with_file_name("stress.png");
+    gcad::sim::render(
+        spec,
+        &gcad::sim::result_path(&path),
+        picture.to_str().expect("utf-8"),
+    )
+    .expect("draws");
+    let image = image::open(&picture).expect("png").to_rgb8();
+    let warm = image
+        .pixels()
+        .filter(|p| p.0[0] > 120 && p.0[2] < 60)
+        .count();
+    let cold = image
+        .pixels()
+        .filter(|p| p.0[2] > 120 && p.0[0] < 60)
+        .count();
+    assert!(warm > 100 && cold > 100, "{warm} warm, {cold} cold pixels");
 }
 
 #[test]
@@ -416,7 +518,7 @@ fn mesh_dry_run() {
     let path = written(
         "mesh_dry_run",
         &[("beam.gcad", BEAM)],
-        "sim static\npart beam.gcad\nmesh 4",
+        "sim thermal\npart beam.gcad\nmesh 4",
     );
     let model = spec_of(&path);
     let spec = model.sim.as_deref().expect("sim");

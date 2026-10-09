@@ -1,9 +1,11 @@
+pub mod fem;
 pub mod mesh;
 mod result;
+mod statics;
 pub mod tet;
 mod torque;
 
-pub use result::{Curve, Outcome, Reading, Series, inputs, stale, stamp};
+pub use result::{Curve, Field, Outcome, Reading, Series, inputs, stale, stamp};
 
 use crate::model::Model;
 use anyhow::{Result, bail};
@@ -79,6 +81,9 @@ pub struct Spec {
     pub sweeps: Vec<Sweep>,
     pub expects: Vec<Expect>,
     pub mesh: Option<f64>,
+    pub supports: Vec<fem::elastic::Support>,
+    pub loads: Vec<fem::elastic::Load>,
+    pub probes: Vec<(String, Point3)>,
 }
 
 impl Spec {
@@ -114,6 +119,7 @@ pub fn plan(spec: &Spec) -> Result<String> {
 pub fn simulate(spec: &Spec) -> Result<Outcome> {
     let mut outcome = match spec.kind {
         Some(Kind::Torque) => torque::run(spec)?,
+        Some(Kind::Static) => statics::run(spec)?,
         Some(kind) => bail!(
             "the {} solver is not built yet; `gcad sim --dry-run` meshes the part and `gcad render` draws the mesh",
             kind.name()
@@ -122,4 +128,16 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
     };
     outcome.check(&spec.expects);
     Ok(outcome)
+}
+
+pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
+    let outcome = Outcome::read(result)
+        .ok()
+        .filter(|o| Some(o.kind.as_str()) == spec.kind.map(Kind::name));
+    match (spec.kind, outcome) {
+        (Some(Kind::Torque), Some(outcome)) => crate::plot::chart(&outcome, output),
+        (Some(Kind::Static), Some(outcome)) => statics::render(spec, &outcome, output),
+        (Some(kind), _) if kind.meshed() => mesh::render(&mesh::bodies(spec)?, output),
+        _ => bail!("there is no result to draw yet; run `gcad sim` first"),
+    }
 }

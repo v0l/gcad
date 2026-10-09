@@ -123,14 +123,21 @@ on the surface (they survive near tangent edges and tiny faces).
 
 ## Solvers
 
-On the GPU through wgpu, as agentee does, with a CPU fallback.
+`static` (phase 3, built): the B-rep mesh becomes 10-node tetrahedra, their mid-side nodes put
+on the true surface wherever that keeps every element's Jacobian positive. Element stiffness
+uses a 4-point rule; supports are projections per node (a fixed node keeps nothing, a sliding
+node loses its normal direction), so they need no penalty. Problems up to 600,000 unknowns go
+to `faer`'s sparse Cholesky, single threaded (its threaded mode was slower here and spent most
+of its time in the kernel); larger ones use conjugate gradients with a 3x3 block Jacobi
+preconditioner. Stresses are taken at each element's nodes and averaged.
 
-- `static` and `thermal`: preconditioned conjugate gradient with the matrix applied element by
-  element in a compute shader, so the global matrix is never assembled. Jacobi preconditioning
-  first; a smoothed-aggregation multigrid preconditioner if large parts converge slowly.
-- `modal`: LOBPCG for the lowest modes on the GPU, using the same element kernels for the
-  stiffness and mass.
-- Small problems, and runs without a GPU, use `faer` sparse Cholesky on the CPU.
+Measured: the 200 mm cantilever at `mesh 2` (283,000 unknowns) solves in 7 s; at `mesh 4` in
+under a second. Conjugate gradients needed 7,000 iterations and 26 s on the same cantilever, so
+the GPU port planned here is only worth it together with a better preconditioner (multigrid).
+
+Still to build: `pin`, `torque` loads, several bodies, `thermal` (conduction, the same mesh and
+a scalar version of the same assembly) and `modal` (LOBPCG on the same stiffness plus a mass
+matrix).
 
 ## Tests
 
@@ -154,7 +161,8 @@ the closed form.
 
 1. Spec files, results, staleness, charts, the material properties, and `torque`. Done.
 2. The tetrahedral mesher, `--dry-run` and mesh renders. Done.
-3. `static` on the CPU, checked against the closed forms, then on the GPU.
+3. `static` on the CPU, checked against the closed forms. Done; the GPU waits on a multigrid
+   preconditioner.
 4. `thermal`.
 5. `modal`.
 6. Bonded assemblies.

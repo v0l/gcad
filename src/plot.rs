@@ -214,6 +214,14 @@ impl Canvas {
         self.fill(&contours, colour);
     }
 
+    pub fn paste(&mut self, picture: &RgbImage, (x0, y0): (u32, u32)) {
+        for (x, y, pixel) in picture.enumerate_pixels() {
+            if x + x0 < self.image.width() && y + y0 < self.image.height() {
+                self.image.put_pixel(x + x0, y + y0, *pixel);
+            }
+        }
+    }
+
     pub fn save(&self, path: &str) -> Result<()> {
         self.image.save(path)?;
         Ok(())
@@ -409,4 +417,45 @@ fn by_unit(series: &Series) -> Vec<Series> {
                 .collect(),
         })
         .collect()
+}
+
+pub fn heat(t: f64) -> [f64; 3] {
+    let stops = [
+        [0.17, 0.30, 0.75],
+        [0.15, 0.65, 0.85],
+        [0.35, 0.75, 0.35],
+        [0.95, 0.85, 0.25],
+        [0.85, 0.20, 0.15],
+    ];
+    let t = t.clamp(0.0, 1.0) * (stops.len() - 1) as f64;
+    let i = (t.floor() as usize).min(stops.len() - 2);
+    let f = t - i as f64;
+    [0, 1, 2].map(|k| stops[i][k] * (1.0 - f) + stops[i + 1][k] * f)
+}
+
+pub fn colour_bar(
+    canvas: &mut Canvas,
+    (x, top, bottom): (f64, f64, f64),
+    low: f64,
+    high: f64,
+    unit: &str,
+) {
+    let steps = 200;
+    for k in 0..steps {
+        let t = k as f64 / steps as f64;
+        let y0 = bottom - (bottom - top) * t;
+        let y1 = bottom - (bottom - top) * (t + 1.0 / steps as f64);
+        let c = heat(t).map(|v| (v * 255.0) as u8);
+        canvas.rect((x, y1), (x + 30.0, y0 + 0.5), c);
+    }
+    for t in ticks(low, high, 8) {
+        let y = bottom - (bottom - top) * (t - low) / (high - low).max(1.0e-300);
+        canvas.line(&[(x + 30.0, y), (x + 38.0, y)], 1.5, INK);
+        canvas.text((x + 44.0, y + 5.0), 15.0, &label(t), Anchor::Left, INK);
+    }
+    canvas.text((x + 15.0, top - 16.0), 16.0, unit, Anchor::Centre, INK);
+}
+
+pub fn title(canvas: &mut Canvas, (x, y): (f64, f64), text: &str) {
+    canvas.text((x, y), 20.0, text, Anchor::Centre, INK);
 }
