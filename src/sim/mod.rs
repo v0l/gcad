@@ -100,7 +100,7 @@ pub struct Spec {
 
 #[derive(Clone, Debug)]
 pub enum Warm {
-    By(f64),
+    By(Vec<(Option<String>, f64)>),
     From { file: PathBuf, reference: f64 },
 }
 

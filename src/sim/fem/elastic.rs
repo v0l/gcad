@@ -600,6 +600,7 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     let mut r = residual(&u, &touches);
     let mut rounds = 0;
     let mut iterations = 0;
+    let mut solved_to;
     let mut bonded_scale = 0.0;
     let mut inner = 0;
     loop {
@@ -620,6 +621,7 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
             bail!("the solver did not converge; check the supports hold the part");
         };
         iterations += step.iterations;
+        solved_to = step.residual;
         if !contacts {
             u = step.x;
             break;
@@ -696,6 +698,9 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
             bail!("the contact did not settle in {rounds} steps; try a different `mesh` size");
         }
     }
+    if contacts {
+        solved_to = norm(&r) / reference;
+    }
     let touching = touches.iter().filter(|t| t.closed).count();
     let slipping = touches.iter().filter(|t| t.slipping && t.closed).count();
     let mut ku = vec![0.0; u.len()];
@@ -704,7 +709,7 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     let solution = super::solve::Solution {
         x: u,
         iterations,
-        residual: 0.0,
+        residual: solved_to,
     };
     let u = solution.x;
     let mut reactions = vec![Vector3::zero(); problem.supports.len()];

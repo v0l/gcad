@@ -174,7 +174,7 @@ impl Model {
                 ))
             }
             "warm" => {
-                let args = Args::new(line, &["by"], &["from"], false)?;
+                let args = Args::new(line, &["by"], &["from", "part"], false)?;
                 let by = args.text("by")?;
                 if crate::sim::is_sim(std::path::Path::new(by)) {
                     let reference = args.optional_number("from", &self.scope)?.unwrap_or(20.0);
@@ -191,9 +191,37 @@ impl Model {
                         bail!("`from=` goes with a heat simulation, like `warm hot.gsim from=20`");
                     }
                     let by = args.number("by", &self.scope)?;
-                    self.spec().warming = Some(crate::sim::Warm::By(by));
+                    let part = args
+                        .has("part")
+                        .then(|| args.text("part"))
+                        .transpose()?
+                        .map(str::to_string);
+                    if let Some(name) = &part {
+                        let names: Vec<String> = self
+                            .target_mut()?
+                            .named_solids()
+                            .into_iter()
+                            .map(|(n, _)| n)
+                            .collect();
+                        if !names.contains(name) {
+                            bail!("no part called `{name}`; parts are {names:?}");
+                        }
+                    }
+                    let what = part
+                        .as_ref()
+                        .map_or("the whole part".to_string(), |n| format!("`{n}`"));
+                    let spec = self.spec();
+                    match &mut spec.warming {
+                        Some(crate::sim::Warm::By(list)) => list.push((part, by)),
+                        Some(crate::sim::Warm::From { .. }) => {
+                            bail!(
+                                "this simulation already takes its temperatures from a heat simulation"
+                            )
+                        }
+                        None => spec.warming = Some(crate::sim::Warm::By(vec![(part, by)])),
+                    }
                     Ok(format!(
-                        "the whole part {} by {} °C",
+                        "{what} {} by {} °C",
                         if by < 0.0 { "cools" } else { "warms" },
                         by.abs()
                     ))

@@ -814,6 +814,40 @@ fn contact_vibrates_as_bonded() {
 }
 
 #[test]
+fn preload_by_cooling_one_part() {
+    let outcome = simulated(
+        "preload_by_cooling_one_part",
+        &[
+            (
+                "plate.gcad",
+                "rect 40 40\nplate: extrude 20\nmaterial steel\n",
+            ),
+            ("rod.gcad", "circle 8\nrod: extrude 50\nmaterial steel\n"),
+            (
+                "tube.gcad",
+                "circle 30\ncircle 24\ntube: extrude 50\nmaterial aluminium\n",
+            ),
+            (
+                "joint.gasm",
+                "part a plate.gcad\nmove a 0,0,-20\npart rod rod.gcad\npart tube tube.gcad\npart b plate.gcad\nmove b 0,0,50\n",
+            ),
+        ],
+        "sim static\npart joint.gasm\nslide a:<Z\nslide a:<X\nslide a:<Y\nwarm -100 part=rod\nmid: probe 0,0,25\nwall: probe 13.5,0,25\nmesh 3",
+    );
+    let rod = std::f64::consts::PI * 16.0;
+    let tube = std::f64::consts::PI / 4.0 * (900.0 - 576.0);
+    let pull = reading(&outcome, "mid.stress") * rod;
+    let push = reading(&outcome, "wall.stress") * tube;
+    close(pull, push, 0.02);
+    let rigid = 12.0e-6 * 100.0 / (1.0 / (200.0e3 * rod) + 1.0 / (69.0e3 * tube));
+    close(pull, rigid, 0.1);
+    assert!(
+        pull < rigid,
+        "the plates flex, so the preload falls short of the rigid figure"
+    );
+}
+
+#[test]
 fn bonded_parts_carry_load() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(

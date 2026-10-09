@@ -51,11 +51,18 @@ impl Prepared {
         let Some(warming) = warming else {
             return Ok(None);
         };
+        let warmed = |p: &Part| match warming {
+            Warm::By(list) => list
+                .iter()
+                .any(|(part, by)| *by != 0.0 && part.as_ref().is_none_or(|n| *n == p.name)),
+            Warm::From { .. } => true,
+        };
         let alphas: Vec<f64> = self
             .parts
             .iter()
             .map(|p| match p.mechanics.expansion {
                 Some(alpha) => Ok(alpha * 1.0e-6),
+                None if !warmed(p) => Ok(0.0),
                 None => bail!(
                     "`{}` is {}, which has no expansion; give it `alpha=` (µm/m·K) on its `material` line",
                     p.name,
@@ -70,7 +77,19 @@ impl Prepared {
             }
         }
         let rise: Vec<f64> = match warming {
-            Warm::By(by) => vec![*by; self.mesh.nodes.len()],
+            Warm::By(list) => {
+                let per: Vec<f64> = self
+                    .parts
+                    .iter()
+                    .map(|p| {
+                        list.iter()
+                            .filter(|(part, _)| part.as_ref().is_none_or(|n| *n == p.name))
+                            .map(|(_, by)| by)
+                            .sum()
+                    })
+                    .collect();
+                body.iter().map(|b| per[*b]).collect()
+            }
             Warm::From { file, reference } => {
                 let heat = super::heat::temperatures(file)?;
                 if heat.len() != self.mesh.nodes.len() {

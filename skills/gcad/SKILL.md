@@ -218,7 +218,7 @@ expect stress<80 safety>2
 ```
 
 `slide faces` holds only the normal (symmetry planes), `pin h.side` holds a round face free to
-turn, `pressure faces 10` pushes in MPa, `torque shaft.end 5` twists in N·m, `warm 40` heats the whole part (thermal expansion stress).
+turn, `pressure faces 10` pushes in MPa, `torque shaft.end 5` twists in N·m, `warm 40` heats the whole part (thermal expansion stress); `warm -100 part=bolt` cools one part, which preloads a bolted joint.
 Readings: `stress`, `displacement`, `safety`, each support's reaction, `probe.stress`. Peak
 stress at sharp inside corners and fixed-face edges is a singularity that grows with mesh
 refinement: fillet the corner or probe away from it. `gcad render x.gsim x.png` draws the
