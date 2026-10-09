@@ -126,7 +126,7 @@ fn counterbore_and_countersink_for_a_screw() {
         12000.0 - PI * 1.7 * 1.7 * (10.0 - 3.4) - PI * 9.0 * 3.4,
         0.0002,
     );
-    let (big, small) = (4.48, 2.25);
+    let (big, small) = (4.58, 2.25);
     let depth = big - small;
     let cone = PI * depth / 3.0 * (big * big + big * small + small * small);
     let sunk = build(&format!("{BLOCK}hole M4 0,0 csink=M4"));

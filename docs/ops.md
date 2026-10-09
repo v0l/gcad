@@ -128,6 +128,17 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | hole fits | supported | `hole 6 x,y fit=H7` | `holes::hole_fit_limits`, `output::drawing_notes_fits_and_taps` |
 
 
+## Enclosures
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| lip on a rim | supported | `lip >Z 3 w=1` | `features::lip_on_a_rim` |
+| groove on a rim | supported | `groove <Z 3 w=1 gap=0.2` | `features::groove_on_a_rim` |
+| screw boss | supported | `boss 7 20 x,y ... hole=M3 fit=insert ribs=4` | `features::screw_boss`, `features::boss_for_an_insert` |
+| vents through one wall | supported | `vent 20 3 x,y count=3 step=0,-5` | `features::vents_through_one_wall` |
+| snap hook | supported | `snap 8 1.5 6 x,y hook=1.5 dir=90` | `features::snap_hook` |
+| case and lid with screws | supported | `examples/assemblies/case.gasm` | `assembly::case_and_lid_with_screws` |
+
 ## Fillets and chamfers
 
 | operation | status | syntax | tests |

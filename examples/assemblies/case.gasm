@@ -1,0 +1,7 @@
+part case ../parts/case.gcad
+part s1 fhcs:M3x8
+concentric s1:shank.side case.lid:screws.side near=26,13,35
+distance s1:head.start case.lid:top.end 0
+pattern s1 holes=case.lid:screws.side
+explode case.lid 0,0,30
+interference none

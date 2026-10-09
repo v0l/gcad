@@ -860,3 +860,18 @@ fn step_assembly_as_a_part() {
     let pin = gcad::geometry::bounds(&model.named_body("rig.pin_3").expect("pin"));
     assert!((pin.min().x - 28.0).abs() < 1.0e-6, "{pin:?}");
 }
+
+#[test]
+fn case_and_lid_with_screws() {
+    let path = std::path::PathBuf::from(format!(
+        "{}/examples/assemblies/case.gasm",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
+    let (line, last) = run.steps.last().expect("steps");
+    assert!(last.is_ok(), "line {}: {last:?}", line.number);
+    let items = gcad::bom::items(&run.model, &path);
+    assert_eq!(items.len(), 3);
+    assert_eq!(items[2].file, "ISO 10642 M3x8");
+    assert_eq!(items[2].names.len(), 4);
+}

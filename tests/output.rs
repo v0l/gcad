@@ -75,6 +75,10 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass(), gap)
         ("bevel-gear", "gear 16 2 cone=40\nextrude 5"),
         ("rack", "rack 6 2\nextrude 5"),
         (
+            "case-features",
+            "rect 40 30\nbox: extrude 20\nshell 2 open=box.end\nlip >Z 3\nplane XY offset=2\nboss 7 12 10,5 hole=M3 fit=insert ribs=3\nplane >X\nvent 12 2 0,10 count=2 step=0,-4\nplane XY offset=2\nsnap 8 1.5 6 -10,0 dir=90",
+        ),
+        (
             "screw-holes",
             "rect 40 20\nb: extrude 8\nplane b.end\nhole M3 -10,0 cbore=M3\nhole M4 10,0 csink=M4\nhole M3 0,5 fit=insert",
         ),

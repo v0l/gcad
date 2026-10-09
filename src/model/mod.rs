@@ -3,6 +3,7 @@ mod assembly;
 mod blends;
 mod bodies;
 mod constrain;
+mod enclosure;
 mod exact;
 mod fastener;
 mod features;
@@ -196,6 +197,11 @@ pub const OPERATIONS: &[&str] = &[
     "helix",
     "sweep",
     "hole",
+    "boss",
+    "lip",
+    "groove",
+    "vent",
+    "snap",
     "thread",
     "fillet",
     "chamfer",
@@ -337,6 +343,11 @@ impl Model {
             "helix" => self.op_helix(line),
             "sweep" => self.op_sweep(line),
             "hole" => self.op_hole(line),
+            "boss" => self.op_boss(line),
+            "lip" => self.op_lip(line, false),
+            "groove" => self.op_lip(line, true),
+            "vent" => self.op_vent(line),
+            "snap" => self.op_snap(line),
             "thread" => self.op_thread(line),
             "fillet" => self.op_blend(line, FilletProfile::Round),
             "chamfer" => self.op_blend(line, FilletProfile::Chamfer),

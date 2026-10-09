@@ -664,3 +664,86 @@ fn bevel_gear() {
     );
     assert!(failure("gear 20 2 cone=45\nextrude 25").contains("cone apex"));
 }
+
+const OPEN_BOX: &str = "rect 40 30\nbox: extrude 20\nshell 2 open=box.end\n";
+
+#[test]
+fn lip_on_a_rim() {
+    let open = 1200.0 * 20.0 - 36.0 * 26.0 * 18.0;
+    assert_volume(
+        &build(&format!("{OPEN_BOX}lip >Z 3")),
+        open - (1200.0 - 38.0 * 28.0) * 3.0,
+        1.0e-6,
+    );
+}
+
+#[test]
+fn groove_on_a_rim() {
+    let open = 1200.0 * 20.0 - 36.0 * 26.0 * 18.0;
+    assert_volume(
+        &build(&format!("{OPEN_BOX}groove >Z 3")),
+        open - (38.4 * 28.4 - 36.0 * 26.0) * 3.2,
+        1.0e-6,
+    );
+    assert!(failure(&format!("{OPEN_BOX}lip >Z 3 w=2")).contains("wall is only"));
+}
+
+#[test]
+fn screw_boss() {
+    let plate = "rect 60 40\nextrude 4\nplane XY offset=4\n";
+    assert_volume(
+        &build(&format!("{plate}boss 8 10 0,0 15,0 hole=3")),
+        9600.0 + 2.0 * PI * (16.0 - 2.25) * 10.0,
+        2.0e-4,
+    );
+    let (r, h, b) = (4.0, 10.0, 1.6);
+    let steps = 4000;
+    let rib: f64 = (0..steps)
+        .map(|i| {
+            let z = -b / 2.0 + b * (i as f64 + 0.5) / steps as f64;
+            let x0 = (r * r - z * z).sqrt();
+            let height = |x: f64| 0.75 * h * (2.0 * r - x) / (1.2 * r);
+            let (a, c) = (x0, 2.0 * r);
+            (height(a) + height(c)) / 2.0 * (c - a) * b / steps as f64
+        })
+        .sum();
+    assert_volume(
+        &build(&format!("{plate}boss 8 10 0,0 ribs=3")),
+        9600.0 + PI * 16.0 * 10.0 + 3.0 * rib,
+        5.0e-4,
+    );
+}
+
+#[test]
+fn boss_for_an_insert() {
+    let plate = "rect 60 40\nextrude 4\nplane XY offset=4\n";
+    let model = build(&format!("{plate}posts: boss 7 10 0,0 hole=M3 fit=insert"));
+    assert_volume(&model, 9600.0 + PI * 12.25 * 10.0 - PI * 4.0 * 6.7, 2.0e-4);
+}
+
+#[test]
+fn vents_through_one_wall() {
+    let open = 1200.0 * 20.0 - 36.0 * 26.0 * 18.0;
+    let slot = 17.0 * 3.0 + PI * 2.25;
+    assert_volume(
+        &build(&format!(
+            "{OPEN_BOX}plane >X\nvent 20 3 0,14 count=3 step=0,-5"
+        )),
+        open - 3.0 * slot * 2.0,
+        1.0e-5,
+    );
+}
+
+#[test]
+fn snap_hook() {
+    let (l, t, w, hook) = (8.0, 1.5, 6.0, 1.5);
+    let rise = hook / 30.0_f64.to_radians().tan();
+    let open = 1200.0 * 20.0 - 36.0 * 26.0 * 18.0;
+    assert_volume(
+        &build(&format!(
+            "{OPEN_BOX}plane XY offset=2\nsnap {l} {t} {w} 0,5 dir=90"
+        )),
+        open + w * (t * l + hook * rise / 2.0),
+        1.0e-5,
+    );
+}

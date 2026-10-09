@@ -1,0 +1,22 @@
+let w=80 d=50 h=30 t=2 r=6 lid=8 lap=3
+let bx=w/2-r-2 by=d/2-r-2
+rect w d r=r
+box: extrude h
+shell t open=box.end
+lip >Z lap
+plane XY offset=t
+posts: boss 7 h+lid-lap-2*t bx,by -bx,by -bx,-by bx,-by hole=M3 fit=insert ribs=4
+plane >X
+vents: vent 20 3 0,20 count=3 step=0,-5
+color #3a6ea5
+material petg
+body lid
+plane XY offset=h-lap
+rect w d r=r
+top: extrude lid
+shell t open=top.start
+groove <Z lap
+plane top.end
+screws: hole M3 bx,by -bx,by -bx,-by bx,-by csink=M3
+color #e8e8e8
+material petg

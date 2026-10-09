@@ -119,7 +119,7 @@ Features:
 | `sweep` | `mode=` `twist=` `scale=` | carries the sketch from the path start along the path, turning it `twist` degrees and sizing it to `scale` by the end |
 | `section` | | stores the sketch as one cross-section for `loft` |
 | `loft` | `smooth` `mode=` | joins the stored sections with ruled faces, or one smooth surface through them all with `smooth`; sections with different edge counts are matched up by splitting edges |
-| `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` `fit=` `on=label.side` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it; with `on=` the points are angle,height on the side of an extruded circle and the holes go in square to it. `d` can be a screw size, `M2` to `M12`: `hole M3 x,y` is its clearance hole (ISO 273, `fit=normal` unless `fit=close` or `fit=loose`), `fit=tap` its tap drill, threaded like `thread=`, and `fit=insert` the hole for a heat-set insert, blind to the insert's length plus 1 unless `depth` says. `cbore=M3` is the counterbore for an ISO 4762 socket head (DIN 974 diameter, head height plus 0.4 deep) and `csink=M3` the 90 degree countersink for an ISO 10642 flat head. For a plain diameter, `fit=H7` (H, G, F, E, D or JS, grades 5 to 11) records an ISO 286 fit: `check` prints its limits and drawings add it to the callout. Holes are always modelled at the nominal size |
+| `hole` | `d x,y ...` `depth=` `cbore=d,depth` `csink=d,angle` `thread=M4` `fit=` `on=label.side` | drills holes at each point, through unless `depth` is given, with an optional counterbore or countersink; `thread` checks the drill suits the tap and records it; with `on=` the points are angle,height on the side of an extruded circle and the holes go in square to it. `d` can be a screw size, `M2` to `M12`: `hole M3 x,y` is its clearance hole (ISO 273, `fit=normal` unless `fit=close` or `fit=loose`), `fit=tap` its tap drill, threaded like `thread=`, and `fit=insert` the hole for a heat-set insert, blind to the insert's length plus 1 unless `depth` says. `cbore=M3` is the counterbore for an ISO 4762 socket head (DIN 974 diameter, head height plus 0.4 deep) and `csink=M3` the 90 degree countersink for an ISO 10642 flat head, 0.2 wider than the head. For a plain diameter, `fit=H7` (H, G, F, E, D or JS, grades 5 to 11) records an ISO 286 fit: `check` prints its limits and drawings add it to the callout. Holes are always modelled at the nominal size |
 | `thread` | `size` `on=faces` `pitch=` `left` | cuts an ISO metric thread (`M2` to `M12`) into a round face: a rod gets an outside thread with its crest on the rod, a hole an inside one with its crest on the drill; `pitch` overrides the coarse pitch and `left` makes it left-hand. Each end of the face must be a flat face square to it or a chamfer (or countersink) that goes past the thread's root, which the thread runs out into. Chamfer before threading; a rounded end, or a chamfer after, fails |
 | `shell` | `t` `open=faces,...` | hollows an extrusion (open `label.end`, `label.start` or both) or a full revolve (open its flat `label.caps`) to walls `t` thick; where `fillet` rounded the extrusion's straight edges, the inside is rounded to that radius less `t`, so the walls stay `t` thick |
 | `draft` | `angle faces` `neutral=face` | tilts flat side faces inward by `angle` degrees, hinged where they meet the neutral face; `label.side` of an extrusion that is the whole solid tapers curved sides too |
@@ -130,6 +130,20 @@ Features:
 | `fillet` | `size edges` `to=` | rounds the edges with radius `size`, or from `size` to `to` along them (on a closed loop, up to `to` halfway round and back) |
 | `fillet` | `full label.end` | rounds the end of an extruded rect into a half cylinder across its short side, while the extrusion is the whole solid |
 | `chamfer` | `size edges` `d2=` | bevels the edges by `size`; with `d2`, the edges must be written `a&b` and `size` is cut along `a`, `d2` along `b` |
+
+Enclosures:
+
+| operation | parameters | does |
+|---|---|---|
+| `boss` | `d h x,y ...` `hole=` `fit=` `depth=` `ribs=` `rib=` `angle=` | stands posts `d` across and `h` tall on the workplane at each point, drilled from the top with `hole` (a diameter or a screw size, with `fit=` as for `hole`) down to the workplane, or `depth` deep (an insert hole is the insert's length plus 1). `ribs` adds that many triangular gussets `rib` thick (`d/5` unless given) around each post, reaching `d/2` out and three quarters of the way up, the first at `angle` degrees from x. Groups: `side`, `end`, `hole`, `ribs` |
+| `lip` | `faces h` `w=` | on the flat rim of a hollow part (a face with one outline and one hole, such as the top of a shelled box), lowers the outer part of the rim by `h`, leaving a lip `w` wide (half the wall unless given) standing at the inner edge. Group: `step` |
+| `groove` | `faces h` `w=` `gap=` | the matching rebate on the other part's rim: cuts the inner `w+gap` of the rim `h+gap` deep (`gap` is 0.2 unless given), so a lid shelled like the case and placed `h` lower than the case's rim drops onto its `lip` |
+| `vent` | `l w x,y ...` `count=` `step=x,y` `angle=` `depth=` | cuts slots `l` long and `w` wide at each point, `count` of them `step` apart, through the wall under the workplane and no further, unless `depth` is given |
+| `snap` | `l t w x,y ...` `hook=` `angle=` `dir=` | stands a cantilever snap hook on the workplane at each point: an arm `l` tall, `t` thick and `w` wide, with a catch `hook` deep (`t` unless given) at its tip, square underneath and with an `angle`-degree (30 unless given) lead-in above. The catch points `dir` degrees from the workplane's x. Group: `faces` |
+
+`examples/assemblies/case.gasm` puts these together: a case with a lip, bossed for heat-set
+inserts, a lid with the groove sitting on it, and four flat head screws from the library.
+Make the `lip` before anything rises above the rim, since it takes the face the rim is on.
 
 `mode=cut` and `mode=intersect` on `revolve`, `sweep` and `loft` remove the shape or
 keep only what it shares with the solid.
@@ -199,7 +213,8 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 Standard parts are built in, M2 to M12, and come in steel (inserts in brass). A screw's
 axis is z, with the face its head bears on at z=0 and the shank going down, so
 `concentric s:shank.side plate:holes.side` and `flush s:head.start plate:holes.cbore_floor`
-seat it; a flat head's top is at z=0 instead, so it sits flush with `flush s:head.start`.
+seat it. A flat head's top is at z=0 instead and faces up, so
+`distance s:head.start plate:top.end 0` sets it level with the surface.
 Nuts and washers sit on z=0 and go up, inserts hang down from z=0.
 
 | `kind:size` | part | faces |

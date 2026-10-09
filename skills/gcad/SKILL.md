@@ -145,7 +145,11 @@ explode case.lid 0,0,30
   (also `fhcs:`, `hex:`, `nut:M3`, `washer:M3`, `insert:M3`). Screw heads bear on z=0 with the
   shank down; mate `s1:shank.side` and `s1:head.start`, nuts and washers by `bore.side`. Size the
   holes they go in with the same name: `hole M3 x,y` (clearance), `cbore=M3`, `csink=M3`,
-  `fit=tap`, `fit=insert`.
+  `fit=tap`, `fit=insert`. Level a flat head with `distance s:head.start lid:top.end 0`.
+- Enclosures: `lip >Z 3` on the case rim and `groove <Z 3` on a lid shelled the same way and
+  placed 3 lower; `boss 7 20 x,y ... hole=M3 fit=insert ribs=4` for screw posts; `vent 20 3 x,y
+  count=3 step=0,-5` cuts through the one wall under the workplane; `snap l t w x,y dir=` for
+  clips. See `examples/assemblies/case.gasm`.
 - A vendor STEP assembly comes in whole with `part box vendor.step`: each solid where the file
   puts it, named after its product.
 

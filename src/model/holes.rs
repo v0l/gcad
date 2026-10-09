@@ -160,7 +160,7 @@ impl Model {
             }
             (None, Some(text)) => {
                 let (sink, angle) = match named_size(text)? {
-                    Some(m) => (m.flat_head, 90.0),
+                    Some(m) => (m.flat_head + 0.2, 90.0),
                     None => eval_point(text, &self.scope)?,
                 };
                 if sink <= diameter || angle <= 0.0 || angle >= 180.0 {
