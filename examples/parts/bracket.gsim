@@ -1,0 +1,8 @@
+sim static
+part bracket.gcad
+material aluminium
+mesh 2
+base: fix <Z
+load boss.end force=0,-200,0
+top: probe 18,12,12
+expect stress<40 displacement<0.01 safety>5

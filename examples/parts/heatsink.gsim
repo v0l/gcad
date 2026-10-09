@@ -1,0 +1,6 @@
+sim thermal
+part heatsink.gcad
+mesh 2
+chip: heat <Z 5
+air: convect base.side,fins.side,fins.end h=10 ambient=25
+expect temperature<80

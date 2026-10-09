@@ -727,3 +727,13 @@ fn large_problems_iterate() {
         .expect("a count");
     assert!(iterations > 1 && iterations < 100, "{note}");
 }
+
+#[test]
+fn example_simulations() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/parts");
+    for name in ["bracket", "heatsink"] {
+        let path = root.join(format!("{name}.gsim"));
+        let outcome = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
+        assert!(outcome.failed().is_empty(), "{name}: {}", outcome.table());
+    }
+}

@@ -279,3 +279,5 @@ gcad bom asm.gasm --csv
   planetary reducer whose ring is cut into the housing; suns and planets are coupled at their
   ratios and the planets are patterned. The gripper is two racks on one pinion. Copy its
   patterns before inventing new ones. `examples/robot/arm.gsim` sizes its motors.
+- `examples/parts/bracket.gsim` (static stress) and `examples/parts/heatsink.gsim` (heat with
+  convection).

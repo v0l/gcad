@@ -1,0 +1,9 @@
+let w=40 d=40 t=4 fins=7 fin=1.6 h=20
+rect w d
+base: extrude t
+plane base.end
+let pitch=(w-fin)/(fins-1)
+rect fin d at=-w/2+fin/2,0
+fins: extrude h
+repeat fins count=fins step=pitch,0
+material aluminium

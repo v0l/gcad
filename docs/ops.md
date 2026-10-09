@@ -293,6 +293,7 @@ The plan for the rest is in `docs/simulation.md`.
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::pinned_link` |
 | probes | supported | `top: probe 100,0,10` | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure` |
+| example simulations | supported | `examples/parts/bracket.gsim`, `examples/parts/heatsink.gsim` | `simulation::example_simulations` |
 | large problems | supported | above 100,000 unknowns, conjugate gradients with a two-level preconditioner | `simulation::large_problems_iterate` |
 | stress plots | supported | `gcad render x.gsim x.png` | `simulation::stress_field_render` |
 | steady heat | supported | `sim thermal`, `cold: temperature faces 20`, `heat faces 5`, `source 5` | `simulation::conduction_through_a_wall`, `simulation::heat_needs_a_boundary` |
