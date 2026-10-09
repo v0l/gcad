@@ -841,3 +841,46 @@ fn sheet_flange_inset_and_hem() {
             .contains("hem")
     );
 }
+
+#[test]
+fn structural_members() {
+    let straight = |kind: &str, area: f64| {
+        let round = kind.starts_with("pipe") || kind.starts_with("rod");
+        assert_volume(
+            &build(&format!("member {kind} 0,0,0 0,0,250")),
+            area * 250.0,
+            if round { 5.0e-4 } else { 1.0e-6 },
+        );
+    };
+    straight("tube 40x30x3", 1200.0 - 34.0 * 24.0);
+    straight("bar 40x10", 400.0);
+    straight("pipe 33.7x2.6", PI / 4.0 * (33.7 * 33.7 - 28.5 * 28.5));
+    straight("rod 12", PI * 36.0);
+    straight("angle 40x30x4", 40.0 * 4.0 + 26.0 * 4.0);
+    straight("channel 50x25x3", 50.0 * 3.0 + 2.0 * 22.0 * 3.0);
+    assert!(failure("member tube 40x40x25 0,0,0 0,0,10").contains("walls"));
+}
+
+#[test]
+fn mitred_frame() {
+    let model = build("frame: member tube 40x40x3 0,0,0 500,0,0 500,300,0 0,300,0 closed");
+    let area = 1600.0 - 34.0 * 34.0;
+    assert_volume(&model, area * 1600.0, 1.0e-5);
+    assert_bounds(&model, [-20.0, -20.0, -20.0], [520.0, 320.0, 20.0]);
+    let solids = model.solids();
+    for pair in solids.windows(2) {
+        assert!(gcad::geometry::overlap_volume(pair[0], pair[1], 64) < 1.0e-3);
+    }
+    let items = gcad::bom::items(&model, std::path::Path::new("frame.gcad"));
+    let cut: Vec<(usize, &str, &str)> = items
+        .iter()
+        .map(|i| (i.names.len(), i.file.as_str(), i.body.as_str()))
+        .collect();
+    assert_eq!(
+        cut,
+        [
+            (2, "tube 40x40x3", "540.0 long, cut 45.0/45.0"),
+            (2, "tube 40x40x3", "340.0 long, cut 45.0/45.0"),
+        ]
+    );
+}

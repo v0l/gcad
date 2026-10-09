@@ -151,6 +151,13 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | flat pattern | supported | `unfold`, holes and through cuts carried over | `features::sheet_unfolds` |
 | flat pattern DXF | supported | `gcad export part.gcad flat.dxf` | `output::flat_pattern_dxf` |
 
+## Weldments
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| structural members | supported | `member tube 40x40x3 x,y,z x,y,z ...`, `bar`, `pipe`, `rod`, `angle`, `channel` | `features::structural_members` |
+| mitred frame and cut list | supported | `member tube 40x40x3 ... closed`, `gcad bom` | `features::mitred_frame` |
+
 ## Fillets and chamfers
 
 | operation | status | syntax | tests |

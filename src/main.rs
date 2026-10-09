@@ -124,7 +124,12 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         let total: std::time::Duration = run.took.iter().sum();
         println!("{:.2} s in all", total.as_secs_f64());
     }
-    let bodies = run.model.body_names();
+    let bodies: Vec<String> = run
+        .model
+        .body_names()
+        .into_iter()
+        .filter(|name| !run.model.members.contains(name))
+        .collect();
     if !run.model.assembly && bodies.len() > 1 {
         println!(
             "note: {} separate bodies ({}). If they are separate parts, bring this file into a .gasm with `part` to place, join and check them; if they are one part, `combine` them",

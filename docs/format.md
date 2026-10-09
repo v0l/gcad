@@ -169,6 +169,16 @@ walls: flange base.end&<Y 15
 lip: flange walls.face&walls.end 6
 ```
 
+Weldments:
+
+| operation | parameters | does |
+|---|---|---|
+| `member` | `kind size x,y,z x,y,z ...` `closed` `up=x,y,z` `rotate=` `offset=u,v` | adds one straight structural member per segment of the path through the points, mitred where two meet; `closed` joins the last point back to the first. Kinds: `tube WxHxT` and `bar WxH` (centred), `pipe DxT` and `rod D` (centred), `angle WxHxT` (its outer corner on the path, legs along the profile's x and y) and `channel WxHxT` (the back of its web on the path, flanges up y). The profile's y points along `up`, or square to the path's plane when it is flat, or as near +Z as it can; `rotate` turns it about the path and `offset` moves it in its own x and y. Each member is its own body, named `label_1`, `label_2`, ... (just `label` for one segment). Groups: `side`, `end` |
+
+Members are listed in the bill of materials as a cut list, by profile, length to the long
+point and end cuts, like `tube 40x40x3  540.0 long, cut 45.0/45.0`, and `check` does not
+count them as separate parts.
+
 `mode=cut` and `mode=intersect` on `revolve`, `sweep` and `loft` remove the shape or
 keep only what it shares with the solid.
 

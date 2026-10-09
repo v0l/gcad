@@ -75,6 +75,10 @@ print(BRepCheck_Analyzer(shape).IsValid(), props.Mass(), gap)
         ("bevel-gear", "gear 16 2 cone=40\nextrude 5"),
         ("rack", "rack 6 2\nextrude 5"),
         (
+            "weldment",
+            "member pipe 33.7x2.6 0,0,0 300,0,0 300,0,200\nmember channel 50x25x3 0,-100,0 200,-100,0 300,-50,0 rotate=90",
+        ),
+        (
             "sheet-metal",
             "sheet 1 r=1\nrect 40 30\nbase: tab\nwalls: flange base.end&>X|base.end&>Y 10\nflange >X&walls.end 5 angle=60\nflange base.start&<X 4 inset=3\nflange base.end&<Y 6 angle=180",
         ),

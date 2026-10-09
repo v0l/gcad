@@ -174,6 +174,13 @@ the new flange should rise from (`>X&walls.end`, `walls.face&walls.end`), since 
 sides of an edge fails. Put holes and through cuts in the plates so they reach the flat
 pattern, then `gcad export part.gcad flat.dxf`, or end the file with `unfold` to see it.
 
+## Weldments
+
+`member tube 40x40x3 0,0,0 500,0,0 500,300,0 0,300,0 closed` lays a mitred frame of square
+tube, one body per straight run; also `bar`, `pipe DxT`, `rod D`, `angle`, `channel`.
+`gcad bom` turns them into a cut list. `up=`, `rotate=` and `offset=u,v` set how the profile
+sits on the path.
+
 ## Output
 
 ```sh

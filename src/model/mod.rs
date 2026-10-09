@@ -12,6 +12,7 @@ mod holes;
 mod import;
 pub mod mate;
 mod measure;
+mod member;
 mod path;
 mod pattern;
 mod rib;
@@ -109,6 +110,7 @@ pub struct Model {
     pub gear: Option<GearLead>,
     pub hole_notes: Vec<HoleNote>,
     pub sheet: Option<sheet::Sheet>,
+    pub members: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -210,6 +212,7 @@ pub const OPERATIONS: &[&str] = &[
     "tab",
     "flange",
     "unfold",
+    "member",
     "fillet",
     "chamfer",
     "shell",
@@ -359,6 +362,7 @@ impl Model {
             "tab" => self.op_tab(line),
             "flange" => self.op_flange(line),
             "unfold" => self.op_unfold(line),
+            "member" => self.op_member(line),
             "thread" => self.op_thread(line),
             "fillet" => self.op_blend(line, FilletProfile::Round),
             "chamfer" => self.op_blend(line, FilletProfile::Chamfer),
