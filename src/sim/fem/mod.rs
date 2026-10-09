@@ -117,6 +117,36 @@ fn edge_key(a: u32, b: u32) -> (u32, u32) {
 }
 
 impl Quadratic {
+    pub fn coarse(&self) -> solve::Coarse {
+        let mut index: Vec<Option<u32>> = vec![None; self.nodes.len()];
+        let mut count = 0u32;
+        for tet in &self.tets {
+            for &v in &tet[..4] {
+                if index[v as usize].is_none() {
+                    index[v as usize] = Some(count);
+                    count += 1;
+                }
+            }
+        }
+        let mut parents = vec![[(0u32, 0.0), (0u32, 0.0)]; self.nodes.len()];
+        for tet in &self.tets {
+            for (k, &v) in tet.iter().enumerate() {
+                if k < 4 {
+                    parents[v as usize] = [(index[v as usize].unwrap_or(0), 1.0), (0, 0.0)];
+                } else {
+                    let (i, j) = EDGES[k - 4];
+                    let (a, b) = (tet[i] as usize, tet[j] as usize);
+                    parents[v as usize] =
+                        [(index[a].unwrap_or(0), 0.5), (index[b].unwrap_or(0), 0.5)];
+                }
+            }
+        }
+        solve::Coarse {
+            parents,
+            nodes: count as usize,
+        }
+    }
+
     pub fn points(&self, t: usize) -> [Point3; 10] {
         self.tets[t].map(|v| self.nodes[v as usize])
     }

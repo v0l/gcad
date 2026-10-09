@@ -688,3 +688,30 @@ fn pinned_link() {
         gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("turns");
     assert!(format!("{error}").contains("turn"), "{error}");
 }
+
+#[test]
+fn large_problems_iterate() {
+    let outcome = simulated(
+        "large_problems_iterate",
+        &[("beam.gcad", BEAM)],
+        "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\ntop: probe 100,0,10\nmesh 2",
+    );
+    let inertia = 20.0 * 10.0_f64.powi(3) / 12.0;
+    close(
+        reading(&outcome, "top.stress"),
+        100.0 * 100.0 * 5.0 / inertia,
+        0.005,
+    );
+    let note = outcome
+        .notes
+        .iter()
+        .find(|n| n.contains("iterations"))
+        .expect("solver note");
+    let iterations: usize = note
+        .split("took ")
+        .nth(1)
+        .and_then(|t| t.split(' ').next())
+        .and_then(|t| t.parse().ok())
+        .expect("a count");
+    assert!(iterations > 1 && iterations < 100, "{note}");
+}

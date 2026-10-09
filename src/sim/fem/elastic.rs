@@ -1,6 +1,8 @@
-use super::solve::{Block, Blocks, IDENTITY, conjugate_gradient, direct};
+use super::solve::{Block, Blocks, IDENTITY, direct, two_level};
 
-const DIRECT_LIMIT: usize = 600_000;
+const DIRECT_LIMIT: usize = 100_000;
+pub const DIRECT_FALLBACK: usize = 600_000;
+pub const TIE: f64 = 100.0;
 use super::{
     GAUSS, NODE_COORDS, Quadratic, map, shape, triangle_area_vector, triangle_gauss, triangle_shape,
 };
@@ -152,7 +154,7 @@ pub fn assemble(mesh: &Quadratic, materials: &[(f64, f64)]) -> Result<Blocks> {
     }
     if !mesh.ties.is_empty() {
         let stiffest = materials.iter().map(|m| m.0).fold(0.0, f64::max);
-        let penalty = stiffest * spacing(mesh) * 1.0e3;
+        let penalty = stiffest * spacing(mesh) * TIE;
         for tie in &mesh.ties {
             let (nodes, c) = (tie.group(), tie.coefficients());
             for a in 0..7 {
@@ -385,13 +387,13 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     let solution = if mesh.nodes.len() * 3 <= DIRECT_LIMIT {
         direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
     } else {
-        conjugate_gradient(
-            &stiffness,
-            &f,
-            &projectors,
-            1.0e-10,
-            20 * mesh.nodes.len().max(1000),
-        )
+        let iterative = two_level(&stiffness, &f, &projectors, &mesh.coarse(), 1.0e-10, 3000)
+            .map_err(|e| anyhow::anyhow!(e))?;
+        if iterative.residual > 1.0e-8 && mesh.nodes.len() * 3 <= DIRECT_FALLBACK {
+            direct(&stiffness, &f, &projectors).map_err(|e| anyhow::anyhow!(e))?
+        } else {
+            iterative
+        }
     };
     let u = solution.x;
     let mut ku = vec![0.0; u.len()];

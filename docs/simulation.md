@@ -126,14 +126,20 @@ on the surface (they survive near tangent edges and tiny faces).
 `static` (phase 3, built): the B-rep mesh becomes 10-node tetrahedra, their mid-side nodes put
 on the true surface wherever that keeps every element's Jacobian positive. Element stiffness
 uses a 4-point rule; supports are projections per node (a fixed node keeps nothing, a sliding
-node loses its normal direction), so they need no penalty. Problems up to 600,000 unknowns go
-to `faer`'s sparse Cholesky, single threaded (its threaded mode was slower here and spent most
-of its time in the kernel); larger ones use conjugate gradients with a 3x3 block Jacobi
-preconditioner. Stresses are taken at each element's nodes and averaged.
+node loses its normal direction), so they need no penalty. Problems up to 100,000
+unknowns go to `faer`'s sparse Cholesky, single threaded (its threaded mode was slower here and
+spent most of its time in the kernel). Larger ones use conjugate gradients preconditioned by a
+two-level cycle: two damped block-Jacobi sweeps, a coarse correction on the linear (corner-only)
+tetrahedra of the same mesh, built as the Galerkin product of the quadratic matrix and factored
+directly, and two more sweeps. If that has not converged and the problem is under 600,000
+unknowns, the direct solver takes over. Stresses are taken at each element's nodes and averaged.
 
-Measured: the 200 mm cantilever at `mesh 2` (283,000 unknowns) solves in 7 s; at `mesh 4` in
-under a second. Conjugate gradients needed 7,000 iterations and 26 s on the same cantilever, so
-the GPU port planned here is only worth it together with a better preconditioner (multigrid).
+Measured on the 200 mm cantilever: at 284,000 unknowns the direct solver took 7 s and the
+two-level solver 28 iterations and 1.8 s; at 796,000 unknowns direct took 58 s and 15 GB, the
+two-level solver 28 iterations, 6 s and 1.4 GB. Bonded assemblies converge more slowly (the
+penalty ties stiffen the system): the two-body case example at 2 million unknowns took 771
+iterations and two minutes. The frequency and heat solvers are still direct only, so they refuse
+problems above 600,000 and 1.8 million unknowns.
 
 `thermal` (phase 4, built): the scalar version on the same quadratic mesh, conductivity from the
 material, temperatures eliminated, film convection as a boundary mass term, solved with the
@@ -156,8 +162,8 @@ moment as tangential traction proportional to the distance from the axis. Checke
 shaft in torsion (stress and twist within 1%) and a link on two pins. Before solving, the six
 rigid-body motions are projected through the supports, and a part they leave free is refused.
 
-Still to build: contact that can open or slide, and a multigrid preconditioner for problems
-too big for the direct solver.
+Still to build: contact that can open or slide, an iterative path for `modal` and `thermal`,
+and a better smoother for bonded assemblies.
 
 ## Tests
 

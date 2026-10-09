@@ -62,7 +62,7 @@ pub fn solve(
         .collect();
     if !mesh.ties.is_empty() {
         let best = conductivity.iter().copied().fold(0.0, f64::max) * 1.0e-3;
-        let penalty = best * super::elastic::spacing(mesh) * 1.0e3;
+        let penalty = best * super::elastic::spacing(mesh) * super::elastic::TIE;
         for tie in &mesh.ties {
             let (nodes, c) = (tie.group(), tie.coefficients());
             for a in 0..7 {
@@ -166,6 +166,9 @@ pub fn solve(
             (None, Some(t)) => reduced_rhs[index[r]] -= value * t,
             _ => {}
         }
+    }
+    if count > 3 * super::elastic::DIRECT_FALLBACK {
+        bail!("{count} unknowns is too many for the heat solver; use a larger `mesh` size");
     }
     let mut temperature: Vec<f64> = fixed.iter().map(|f| f.unwrap_or(0.0)).collect();
     if count > 0 {

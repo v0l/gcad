@@ -212,6 +212,12 @@ pub fn solve(
     let (projectors, _) = projectors(mesh, supports);
     let reduced = Reduced::new(&projectors);
     let n = reduced.count;
+    if n > super::elastic::DIRECT_FALLBACK {
+        anyhow::bail!(
+            "{n} unknowns is too many for the frequency solver, which factors the whole matrix; use a larger `mesh` size (under about {} nodes)",
+            super::elastic::DIRECT_FALLBACK / 3
+        );
+    }
     let free = supports.is_empty();
     let count = (wanted + if free { 6 } else { 0 }).min(n);
     let width = (count * 2).max(count + 8).min(n);
