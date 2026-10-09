@@ -45,12 +45,10 @@ fn geometric(
                     }
                 }
                 let weight = m.det * w;
-                for a in 0..10 {
-                    let ga = m.gradients[a];
+                for (row, ga) in local.iter_mut().zip(&m.gradients) {
                     let s = [0, 1, 2].map(|i| (0..3).map(|j| sigma[i][j] * ga[j]).sum::<f64>());
-                    for b in 0..10 {
-                        let gb = m.gradients[b];
-                        local[a][b] += (s[0] * gb[0] + s[1] * gb[1] + s[2] * gb[2]) * weight;
+                    for (cell, gb) in row.iter_mut().zip(&m.gradients) {
+                        *cell += (s[0] * gb[0] + s[1] * gb[1] + s[2] * gb[2]) * weight;
                     }
                 }
             }
