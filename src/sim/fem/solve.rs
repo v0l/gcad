@@ -144,6 +144,76 @@ fn smooth(inverse: &[Block], r: &[f64], z: &mut [f64], weight: f64) {
 pub struct Coarse {
     pub parents: Vec<[(u32, f64); 2]>,
     pub nodes: usize,
+    pub clusters: Vec<Vec<u32>>,
+}
+
+struct Cluster {
+    nodes: Vec<u32>,
+    inverse: Vec<f64>,
+}
+
+pub fn dense_inverse(mut a: Vec<f64>, n: usize) -> Option<Vec<f64>> {
+    let mut inv = vec![0.0; n * n];
+    for i in 0..n {
+        inv[i * n + i] = 1.0;
+    }
+    for c in 0..n {
+        let pivot = (c..n).max_by(|&x, &y| a[x * n + c].abs().total_cmp(&a[y * n + c].abs()))?;
+        if a[pivot * n + c].abs() < 1.0e-300 {
+            return None;
+        }
+        if pivot != c {
+            for k in 0..n {
+                a.swap(c * n + k, pivot * n + k);
+                inv.swap(c * n + k, pivot * n + k);
+            }
+        }
+        let d = 1.0 / a[c * n + c];
+        for k in 0..n {
+            a[c * n + k] *= d;
+            inv[c * n + k] *= d;
+        }
+        for r in 0..n {
+            if r != c {
+                let f = a[r * n + c];
+                if f != 0.0 {
+                    for k in 0..n {
+                        a[r * n + k] -= f * a[c * n + k];
+                        inv[r * n + k] -= f * inv[c * n + k];
+                    }
+                }
+            }
+        }
+    }
+    Some(inv)
+}
+
+fn clusters_of(a: &Blocks, groups: &[Vec<u32>]) -> Vec<Cluster> {
+    groups
+        .par_iter()
+        .filter_map(|nodes| {
+            let n = nodes.len() * 3;
+            let mut dense = vec![0.0; n * n];
+            for (i, &u) in nodes.iter().enumerate() {
+                let range = a.starts[u as usize]..a.starts[u as usize + 1];
+                for (j, &v) in nodes.iter().enumerate() {
+                    let Ok(at) = a.columns[range.clone()].binary_search(&v) else {
+                        continue;
+                    };
+                    let block = &a.values[range.start + at];
+                    for r in 0..3 {
+                        for c in 0..3 {
+                            dense[(3 * i + r) * n + 3 * j + c] = block[r * 3 + c];
+                        }
+                    }
+                }
+            }
+            Some(Cluster {
+                nodes: nodes.clone(),
+                inverse: dense_inverse(dense, n)?,
+            })
+        })
+        .collect()
 }
 
 fn coarse_pattern(a: &Blocks, coarse: &Coarse) -> Blocks {
@@ -192,13 +262,20 @@ pub struct TwoLevel<'a> {
     projectors: &'a [Block],
     coarse: &'a Coarse,
     inverse: Vec<Block>,
+    clusters: Vec<Cluster>,
     reduced: Reduced,
     llt: faer::sparse::linalg::solvers::Llt<usize, f64>,
 }
 
 impl<'a> TwoLevel<'a> {
     pub fn new(a: &'a Blocks, projectors: &'a [Block], coarse: &'a Coarse) -> Result<Self, String> {
-        let inverse = block_jacobi(a);
+        let clusters = clusters_of(a, &coarse.clusters);
+        let mut inverse = block_jacobi(a);
+        for cluster in &clusters {
+            for &v in &cluster.nodes {
+                inverse[v as usize] = [0.0; 9];
+            }
+        }
         let mut small = coarse_pattern(a, coarse);
         let projected = |i: usize, m: &Block, j: usize| -> Block {
             let (pi, pj) = (&projectors[i], &projectors[j]);
@@ -250,6 +327,7 @@ impl<'a> TwoLevel<'a> {
             projectors,
             coarse,
             inverse,
+            clusters,
             reduced,
             llt,
         })
@@ -291,6 +369,32 @@ impl<'a> TwoLevel<'a> {
             .for_each(|((o, a), b)| *o = a - b);
     }
 
+    fn smooth(&self, residual: &[f64], z: &mut [f64], weight: f64) {
+        smooth(&self.inverse, residual, z, weight);
+        let moves: Vec<Vec<f64>> = self
+            .clusters
+            .par_iter()
+            .map(|cluster| {
+                let n = cluster.nodes.len() * 3;
+                let local: Vec<f64> = cluster
+                    .nodes
+                    .iter()
+                    .flat_map(|&v| (0..3).map(move |d| residual[3 * v as usize + d]))
+                    .collect();
+                (0..n)
+                    .map(|r| (0..n).map(|c| cluster.inverse[r * n + c] * local[c]).sum())
+                    .collect()
+            })
+            .collect();
+        for (cluster, delta) in self.clusters.iter().zip(moves) {
+            for (i, &v) in cluster.nodes.iter().enumerate() {
+                for d in 0..3 {
+                    z[3 * v as usize + d] += weight * delta[3 * i + d];
+                }
+            }
+        }
+    }
+
     pub fn apply(&self, r: &[f64], z: &mut [f64]) {
         use faer::linalg::solvers::Solve;
         let n = r.len();
@@ -302,7 +406,7 @@ impl<'a> TwoLevel<'a> {
         let mut residual = vec![0.0; n];
         for _ in 0..2 {
             self.sweep(&rr, z, &mut ax, &mut residual);
-            smooth(&self.inverse, &residual, z, weight);
+            self.smooth(&residual, z, weight);
             project(self.projectors, z);
         }
         self.sweep(&rr, z, &mut ax, &mut residual);
@@ -322,7 +426,7 @@ impl<'a> TwoLevel<'a> {
         project(self.projectors, z);
         for _ in 0..2 {
             self.sweep(&rr, z, &mut ax, &mut residual);
-            smooth(&self.inverse, &residual, z, weight);
+            self.smooth(&residual, z, weight);
             project(self.projectors, z);
         }
     }

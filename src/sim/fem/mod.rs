@@ -148,7 +148,49 @@ impl Quadratic {
         solve::Coarse {
             parents,
             nodes: count as usize,
+            clusters: self.clusters(),
         }
+    }
+
+    fn clusters(&self) -> Vec<Vec<u32>> {
+        const LARGEST: usize = 8;
+        let mut parent: Vec<u32> = (0..self.nodes.len() as u32).collect();
+        let mut size = vec![1usize; self.nodes.len()];
+        fn root(parent: &mut [u32], mut v: u32) -> u32 {
+            while parent[v as usize] != v {
+                parent[v as usize] = parent[parent[v as usize] as usize];
+                v = parent[v as usize];
+            }
+            v
+        }
+        for tie in &self.ties {
+            let (k, _) =
+                tie.weights
+                    .iter()
+                    .enumerate()
+                    .fold(
+                        (0, f64::NEG_INFINITY),
+                        |a, (k, &w)| if w > a.1 { (k, w) } else { a },
+                    );
+            let (a, b) = (
+                root(&mut parent, tie.slave),
+                root(&mut parent, tie.masters[k]),
+            );
+            if a != b && size[a as usize] + size[b as usize] <= LARGEST {
+                parent[b as usize] = a;
+                size[a as usize] += size[b as usize];
+            }
+        }
+        let mut groups: HashMap<u32, Vec<u32>> = HashMap::default();
+        for v in 0..self.nodes.len() as u32 {
+            let r = root(&mut parent, v);
+            if size[r as usize] > 1 {
+                groups.entry(r).or_default().push(v);
+            }
+        }
+        let mut out: Vec<Vec<u32>> = groups.into_values().collect();
+        out.sort_unstable();
+        out
     }
 
     pub fn points(&self, t: usize) -> [Point3; 10] {

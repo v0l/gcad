@@ -141,28 +141,71 @@ fn galerkin(a: &Csr, parents: &[[(u32, f64); 2]], count: usize) -> Csr {
     Csr::from_rows(rows)
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn two_level(
     a: &Csr,
     b: &[f64],
     parents: &[[(u32, f64); 2]],
     count: usize,
+    clusters: &[Vec<u32>],
     tolerance: f64,
     limit: usize,
 ) -> Result<Solved, String> {
     use faer::linalg::solvers::Solve;
     let n = b.len();
-    let inverse: Vec<f64> = a
+    let mut inverse: Vec<f64> = a
         .diagonal()
         .iter()
         .map(|d| if *d != 0.0 { 1.0 / d } else { 0.0 })
         .collect();
+    let groups: Vec<(Vec<u32>, Vec<f64>)> = clusters
+        .par_iter()
+        .filter_map(|nodes| {
+            let k = nodes.len();
+            let mut dense = vec![0.0; k * k];
+            for (i, &u) in nodes.iter().enumerate() {
+                for (c, v) in a.row(u as usize) {
+                    if let Some(j) = nodes.iter().position(|&w| w as usize == c) {
+                        dense[i * k + j] = v;
+                    }
+                }
+            }
+            Some((nodes.clone(), super::solve::dense_inverse(dense, k)?))
+        })
+        .collect();
+    for (nodes, _) in &groups {
+        for &v in nodes {
+            inverse[v as usize] = 0.0;
+        }
+    }
     let llt = factor(&galerkin(a, parents, count))?;
     let weight = 0.6;
     let smooth = |r: &[f64], z: &mut [f64], az: &mut [f64]| {
         a.multiply(z, az);
+        let moves: Vec<Vec<f64>> = groups
+            .par_iter()
+            .map(|(nodes, inv)| {
+                let k = nodes.len();
+                (0..k)
+                    .map(|i| {
+                        (0..k)
+                            .map(|j| {
+                                let v = nodes[j] as usize;
+                                inv[i * k + j] * (r[v] - az[v])
+                            })
+                            .sum()
+                    })
+                    .collect()
+            })
+            .collect();
         z.par_iter_mut()
             .enumerate()
             .for_each(|(i, zi)| *zi += weight * inverse[i] * (r[i] - az[i]));
+        for ((nodes, _), delta) in groups.iter().zip(moves) {
+            for (&v, d) in nodes.iter().zip(delta) {
+                z[v as usize] += weight * d;
+            }
+        }
     };
     let precondition = |r: &[f64], z: &mut [f64]| {
         z.iter_mut().for_each(|v| *v = 0.0);

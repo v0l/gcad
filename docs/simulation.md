@@ -144,8 +144,11 @@ weighted by element volume and shape.
 Measured on the 200 mm cantilever: at 284,000 unknowns the direct solver took 7 s and the
 two-level solver 28 iterations and 1.8 s; at 796,000 unknowns direct took 58 s and 15 GB, the
 two-level solver 28 iterations, 6 s and 1.4 GB. Bonded assemblies converge more slowly (the
-penalty ties stiffen the system): the two-body case example at 2 million unknowns took 771
-iterations and two minutes. The frequency and buckling solvers factor problems up to 250,000
+penalty ties stiffen the system). Each tied node is smoothed together with the node it leans
+on most, in clusters of up to eight solved exactly, instead of one node at a time: on two
+stacked 20 mm blocks at 257,000 unknowns that took the solver from 213 iterations to 71, and at
+1.2 million unknowns it takes 130 iterations and 50 s. The heat solver clusters the same way
+(90 iterations to 39). The frequency and buckling solvers factor problems up to 250,000
 unknowns and above that run LOBPCG (block size the modes wanted plus three) preconditioned by
 the same two-level scheme; a free part's six rigid-body modes are worked out from the node
 positions and kept out of the search instead of shifted. The turret robot part at 1.6 million
@@ -187,8 +190,7 @@ master face's normal, switched on where they press and off where they would pull
 until the set settles. Checked with two blocks heated (they press, as if bonded) and cooled
 (they part, stress free).
 
-Still to build: friction,
-and a better smoother for bonded assemblies.
+Still to build: friction.
 
 ## Tests
 

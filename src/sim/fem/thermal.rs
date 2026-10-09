@@ -187,10 +187,27 @@ pub fn solve(
                 .filter(|&v| fixed[v].is_none())
                 .map(|v| coarse.parents[v])
                 .collect();
-            let solved = two_level(&matrix, &reduced_rhs, &parents, coarse.nodes, 1.0e-10, 2000)
-                .map_err(|_| {
-                    anyhow!("the heat problem has no single answer; check its boundaries")
-                })?;
+            let clusters: Vec<Vec<u32>> = coarse
+                .clusters
+                .iter()
+                .map(|c| {
+                    c.iter()
+                        .filter(|&&v| fixed[v as usize].is_none())
+                        .map(|&v| index[v as usize] as u32)
+                        .collect::<Vec<u32>>()
+                })
+                .filter(|c| c.len() > 1)
+                .collect();
+            let solved = two_level(
+                &matrix,
+                &reduced_rhs,
+                &parents,
+                coarse.nodes,
+                &clusters,
+                1.0e-10,
+                2000,
+            )
+            .map_err(|_| anyhow!("the heat problem has no single answer; check its boundaries"))?;
             if solved.residual > 1.0e-8 {
                 bail!(
                     "the heat solver did not settle (residual {:.1e} after {} iterations); try a different `mesh` size",

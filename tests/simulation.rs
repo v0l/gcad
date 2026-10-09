@@ -685,6 +685,36 @@ fn mesh_dry_run() {
 const SLAB: &str = "rect 20 20\nblk: extrude 10\nmaterial steel\n";
 
 #[test]
+fn large_bonded_problem_converges() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
+    let outcome = simulated(
+        "large_bonded_problem_converges",
+        &[("block.gcad", SLAB), ("stack.gasm", stack)],
+        "sim static\npart stack.gasm\nslide a:<Z\nslide a:<X\nslide a:<Y\nslide b:<X\nslide b:<Y\nload b:>Z force=0,0,1000\ntop: probe 0,0,20\nmesh 1.2",
+    );
+    let axial: f64 = 1000.0 * 20.0 / (400.0 * 200.0e3);
+    let lateral = 0.29 * 2.5 / 200.0e3 * 10.0;
+    close(
+        reading(&outcome, "top.displacement"),
+        (axial * axial + 2.0 * lateral * lateral).sqrt(),
+        0.005,
+    );
+    let iterations: usize = outcome
+        .notes
+        .iter()
+        .find_map(|n| {
+            n.split("the solver took ")
+                .nth(1)?
+                .split(' ')
+                .next()?
+                .parse()
+                .ok()
+        })
+        .expect("an iterative solve");
+    assert!(iterations < 120, "{iterations} iterations");
+}
+
+#[test]
 fn bonded_parts_carry_load() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(
