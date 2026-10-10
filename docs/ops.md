@@ -292,6 +292,7 @@ The plan for the rest is in `docs/simulation.md`.
 | static stress | supported | `sim static`, `fix faces`, `load faces force=x,y,z` | `simulation::bar_in_tension`, `simulation::cantilever_stress`, `simulation::static_needs_supports_and_stiffness` |
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::pinned_link` |
+| leaving parts out | supported | `leave ctl* *screw*` | `simulation::leave_parts_out` |
 | mesh convergence check | supported | `converge`, `converge within=2` | `simulation::mesh_convergence_check` |
 | probes | supported | `top: probe 100,0,10` | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure` |
 | example simulations | supported | `examples/parts/bracket.gsim`, `examples/parts/heatsink.gsim` | `simulation::example_simulations` |

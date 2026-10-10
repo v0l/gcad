@@ -96,6 +96,7 @@ pub struct Spec {
     pub warming: Option<Warm>,
     pub contacts: Vec<(String, String, f64)>,
     pub converge: Option<f64>,
+    pub leave: Vec<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -107,6 +108,15 @@ pub enum Warm {
 impl Spec {
     pub fn gravity(&self) -> Vector3 {
         self.gravity.unwrap_or(Vector3::new(0.0, 0.0, -9.81))
+    }
+
+    pub fn named(&self) -> Result<Vec<(String, &monstertruck::modeling::Solid)>> {
+        Ok(self
+            .target()?
+            .named_solids()
+            .into_iter()
+            .filter(|(name, _)| !self.leave.iter().any(|p| matches(p, name)))
+            .collect())
     }
 
     pub fn target(&self) -> Result<&Model> {
@@ -223,4 +233,23 @@ pub fn current_field(spec: &Spec) -> Option<statics::FieldView> {
     }
     let outcome = Outcome::read(&result_path(origin)).ok()?;
     statics::field_view(spec, &outcome).ok()
+}
+
+pub fn matches(pattern: &str, name: &str) -> bool {
+    let pieces: Vec<&str> = pattern.split('*').collect();
+    if pieces.len() == 1 {
+        return pattern == name;
+    }
+    let (first, last) = (pieces[0], pieces[pieces.len() - 1]);
+    if !name.starts_with(first) || name.len() < first.len() + last.len() || !name.ends_with(last) {
+        return false;
+    }
+    let mut rest = &name[first.len()..name.len() - last.len()];
+    for piece in &pieces[1..pieces.len() - 1] {
+        match rest.find(piece) {
+            Some(at) => rest = &rest[at + piece.len()..],
+            None => return false,
+        }
+    }
+    true
 }

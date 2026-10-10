@@ -943,6 +943,28 @@ fn bonded_joint_carries_moment() {
 }
 
 #[test]
+fn leave_parts_out() {
+    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\npart loose_1 block.gcad\nmove loose_1 50,0,0\n";
+    let outcome = simulated(
+        "leave_parts_out",
+        &[("block.gcad", SLAB), ("stack.gasm", stack)],
+        "sim static\npart stack.gasm\nleave loose*\nslide a:<Z\nslide a:<X\nslide a:<Y\nslide b:<X\nslide b:<Y\nload b:>Z force=0,0,1000\nmesh 4",
+    );
+    close(reading(&outcome, "stress"), 2.5, 0.05);
+    let path = written(
+        "leave_parts_out_bad",
+        &[("block.gcad", SLAB), ("stack.gasm", stack)],
+        "sim static\npart stack.gasm\nleave nothing*\nfix a:<Z\nmesh 4",
+    );
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
+    let (_, step) = run.steps.last().expect("a step");
+    assert!(
+        format!("{:#}", step.as_ref().expect_err("no part matches")).contains("matches no part"),
+        "{step:?}"
+    );
+}
+
+#[test]
 fn bonded_parts_carry_load() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(

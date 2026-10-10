@@ -3,7 +3,7 @@ use super::fem::elastic::{Problem, locate, sample, solve};
 use super::result::short;
 use super::{Field, Outcome, Reading, Spec, Warm};
 use crate::model::Mechanics;
-use anyhow::{Result, bail};
+use anyhow::{Context, Result, bail};
 use monstertruck::modeling::*;
 
 pub struct Part {
@@ -178,7 +178,7 @@ impl Prepared {
 pub fn prepare(spec: &Spec) -> Result<Prepared> {
     let model = spec.target()?;
     let size = super::mesh::size(spec)?;
-    let named = model.named_solids();
+    let named = spec.named()?;
     if named.is_empty() {
         bail!("the part has no solid");
     }
@@ -197,13 +197,16 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
         });
     }
     use rayon::prelude::*;
-    let meshes: Vec<(String, Quadratic)> = named
+    let meshed: Vec<(String, Quadratic, f64)> = named
         .par_iter()
         .map(|(name, solid)| {
-            let tets = super::tet::mesh_solid(solid, size)?;
-            Ok((name.clone(), Quadratic::from(&tets)))
+            let (tets, used) =
+                super::mesh::mesh_part(solid, size).with_context(|| format!("meshing `{name}`"))?;
+            Ok((name.clone(), Quadratic::from(&tets), used))
         })
         .collect::<Result<_>>()?;
+    let gaps: Vec<f64> = meshed.iter().map(|m| m.2 * 0.1).collect();
+    let meshes: Vec<(String, Quadratic)> = meshed.into_iter().map(|(n, q, _)| (n, q)).collect();
     let mesh = if meshes.len() == 1 {
         meshes
             .into_iter()
@@ -223,7 +226,7 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
                 _ => bail!("`contact {a} {b}` names a part the simulation does not have"),
             })
             .collect::<Result<Vec<_>>>()?;
-        super::fem::merge(meshes, size * 0.1, &touching)
+        super::fem::merge(meshes, &gaps, &touching)
     };
     Ok(Prepared { mesh, parts })
 }

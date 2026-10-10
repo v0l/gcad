@@ -481,7 +481,7 @@ pub fn closest_on_triangle(p: Point3, [a, b, c]: [Point3; 3]) -> (f64, [f64; 3])
 
 pub fn merge(
     parts: Vec<(String, Quadratic)>,
-    gap: f64,
+    gaps: &[f64],
     touching: &[(usize, usize, f64)],
 ) -> Quadratic {
     let mut out = Quadratic {
@@ -519,6 +519,7 @@ pub fn merge(
         skins.push(skin);
     }
     for master in 0..skins.len() {
+        let gap = gaps[master];
         let cell = gap.max(1.0e-9) * 8.0;
         let key = |p: Point3| [p.x, p.y, p.z].map(|v| (v / cell).floor() as i64);
         let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::default();
@@ -543,6 +544,7 @@ pub fn merge(
             }
         }
         for slave in (0..skins.len()).filter(|&s| s != master) {
+            let gap = gap.min(gaps[slave]);
             let pair = (master.min(slave), master.max(slave));
             let contact = touching.iter().find(|t| (t.0, t.1) == pair);
             let mut facing: HashMap<u32, Vec<Vector3>> = HashMap::default();

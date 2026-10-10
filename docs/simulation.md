@@ -126,6 +126,11 @@ The tests check every mesh closes, every face is shared by exactly two elements 
 surface, the elements fill the surface exactly, and the volume is close to the solid's, on a
 box, curved parts, thin walls and the example parts.
 
+In an assembly each part is meshed at the `mesh` size or a sixth of its own diagonal,
+whichever is smaller, so an M4 screw is not meshed at the 65 mm a whole rotator would get;
+a part that fails to mesh is tried again at 0.6 and 0.36 of that. Two parts bond within a
+tenth of the smaller of their two sizes.
+
 Smoothing works through colour classes of points that share no element, in parallel.
 
 Still to do: better sliver removal where every corner of an element lies on the surface (they

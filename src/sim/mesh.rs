@@ -28,9 +28,8 @@ pub fn size(spec: &Spec) -> Result<f64> {
 }
 
 pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
-    let model = spec.target()?;
     let size = size(spec)?;
-    let named = model.named_solids();
+    let named = spec.named()?;
     if named.is_empty() {
         bail!("there is nothing to mesh");
     }
@@ -39,7 +38,7 @@ pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
         .par_iter()
         .map(|(name, solid)| {
             let clock = std::time::Instant::now();
-            let mesh = mesh_solid(solid, size).with_context(|| format!("meshing `{name}`"))?;
+            let (mesh, _) = mesh_part(solid, size).with_context(|| format!("meshing `{name}`"))?;
             Ok(Body {
                 name: name.clone(),
                 volume: geometry::volume(solid),
@@ -48,6 +47,20 @@ pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
             })
         })
         .collect()
+}
+
+pub fn mesh_part(solid: &Solid, size: f64) -> Result<(TetMesh, f64)> {
+    let own = size.min(geometry::bounds(solid).diameter() / 6.0);
+    let mut tried = own;
+    let mut last = None;
+    for _ in 0..3 {
+        match mesh_solid(solid, tried) {
+            Ok(mesh) => return Ok((mesh, tried)),
+            Err(error) => last = Some(error),
+        }
+        tried *= 0.6;
+    }
+    Err(last.expect("tried at least once"))
 }
 
 pub fn plan(spec: &Spec) -> Result<String> {

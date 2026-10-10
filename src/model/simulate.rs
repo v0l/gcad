@@ -271,6 +271,31 @@ impl Model {
                 self.spec().source += watts;
                 Ok(format!("{watts} W made evenly through the part"))
             }
+            "leave" => {
+                let args = Args::new(line, &[], &[], true)?;
+                if args.rest.is_empty() {
+                    bail!("name the parts to leave out, like `leave ctl* cable`");
+                }
+                let names: Vec<String> = self
+                    .target_mut()?
+                    .named_solids()
+                    .into_iter()
+                    .map(|(n, _)| n)
+                    .collect();
+                let mut left = Vec::new();
+                for pattern in &args.rest {
+                    let hits: Vec<&String> = names
+                        .iter()
+                        .filter(|n| crate::sim::matches(pattern, n))
+                        .collect();
+                    if hits.is_empty() {
+                        bail!("`{pattern}` matches no part; parts are {names:?}");
+                    }
+                    left.extend(hits.into_iter().cloned());
+                    self.spec().leave.push(pattern.to_string());
+                }
+                Ok(format!("leaves out {}", left.join(", ")))
+            }
             "converge" => {
                 let args = Args::new(line, &[], &["within"], false)?;
                 let within = positive(
