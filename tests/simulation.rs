@@ -950,7 +950,7 @@ fn leave_parts_out() {
         &[("block.gcad", SLAB), ("stack.gasm", stack)],
         "sim static\npart stack.gasm\nleave loose*\nslide a:<Z\nslide a:<X\nslide a:<Y\nslide b:<X\nslide b:<Y\nload b:>Z force=0,0,1000\nmesh 4",
     );
-    close(reading(&outcome, "stress"), 2.5, 0.05);
+    close(reading(&outcome, "stress"), 2.5, 0.1);
     let path = written(
         "leave_parts_out_bad",
         &[("block.gcad", SLAB), ("stack.gasm", stack)],
@@ -970,7 +970,7 @@ fn bonded_parts_carry_load() {
     let outcome = simulated(
         "bonded_parts_carry_load",
         &[("block.gcad", SLAB), ("stack.gasm", stack)],
-        "sim static\npart stack.gasm\nslide a:<Z\nslide a:<X\nslide a:<Y\nslide b:<X\nslide b:<Y\nload b:>Z force=0,0,1000\ntop: probe 0,0,20\nmesh 3",
+        "sim static\npart stack.gasm\nslide a:<Z\nslide a:<X\nslide a:<Y\nslide b:<X\nslide b:<Y\nload b:>Z force=0,0,1000\ntop: probe 0,0,20\njoint: probe 0,0,10.5\nmesh 3",
     );
     let axial: f64 = 1000.0 * 20.0 / (400.0 * 200.0e3);
     let lateral = 0.29 * 2.5 / 200.0e3 * 10.0;
@@ -979,7 +979,8 @@ fn bonded_parts_carry_load() {
         (axial * axial + 2.0 * lateral * lateral).sqrt(),
         0.005,
     );
-    close(reading(&outcome, "stress"), 2.5, 0.05);
+    close(reading(&outcome, "joint.stress"), 2.5, 0.01);
+    close(reading(&outcome, "stress"), 2.5, 0.1);
     assert!(outcome.notes.iter().any(|n| n.contains("bonded a to b")));
 }
 

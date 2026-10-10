@@ -11,7 +11,7 @@ pub struct Blocks {
     pub values: Vec<Block>,
 }
 
-fn times(m: &Block, v: [f64; 3]) -> [f64; 3] {
+pub fn times(m: &Block, v: [f64; 3]) -> [f64; 3] {
     [
         m[0] * v[0] + m[1] * v[1] + m[2] * v[2],
         m[3] * v[0] + m[4] * v[1] + m[5] * v[2],
@@ -112,7 +112,7 @@ fn dot(a: &[f64], b: &[f64]) -> f64 {
     a.par_iter().zip(b).map(|(x, y)| x * y).sum()
 }
 
-fn project(projectors: &[Block], v: &mut [f64]) {
+pub fn project(projectors: &[Block], v: &mut [f64]) {
     v.par_chunks_mut(3).zip(projectors).for_each(|(c, p)| {
         let r = times(p, [c[0], c[1], c[2]]);
         c.copy_from_slice(&r);
@@ -145,6 +145,7 @@ pub struct Coarse {
     pub parents: Vec<[(u32, f64); 2]>,
     pub nodes: usize,
     pub clusters: Vec<Vec<u32>>,
+    pub positions: Vec<[f64; 3]>,
 }
 
 struct Cluster {
@@ -257,14 +258,16 @@ fn coarse_pattern(a: &Blocks, coarse: &Coarse) -> Blocks {
     }
 }
 
+const THIRD_LEVEL: usize = 20_000;
+
 pub struct TwoLevel<'a> {
     a: &'a Blocks,
     projectors: &'a [Block],
     coarse: &'a Coarse,
     inverse: Vec<Block>,
     clusters: Vec<Cluster>,
-    reduced: Reduced,
-    llt: faer::sparse::linalg::solvers::Llt<usize, f64>,
+    exact: Option<(Reduced, faer::sparse::linalg::solvers::Llt<usize, f64>)>,
+    rigid: Option<Box<super::aggregate::Rigid>>,
     weight: f64,
 }
 
@@ -321,16 +324,26 @@ impl<'a> TwoLevel<'a> {
                 coarse_projectors[parents[0].0 as usize] = projectors[i];
             }
         }
-        let reduced = Reduced::new(&coarse_projectors);
-        let llt = reduced.factor(&reduced.lower(&small, None))?;
+        let (exact, rigid) = if small.nodes() * 3 > THIRD_LEVEL {
+            let rigid = Box::new(super::aggregate::Rigid::new(
+                small,
+                coarse_projectors,
+                &coarse.positions,
+            )?);
+            (None, Some(rigid))
+        } else {
+            let reduced = Reduced::new(&coarse_projectors);
+            let llt = reduced.factor(&reduced.lower(&small, None))?;
+            (Some((reduced, llt)), None)
+        };
         let mut level = TwoLevel {
             a,
             projectors,
             coarse,
             inverse,
             clusters,
-            reduced,
-            llt,
+            exact,
+            rigid,
             weight: 0.6,
         };
         level.weight = (1.2 / level.spread()).min(0.6);
@@ -442,18 +455,20 @@ impl<'a> TwoLevel<'a> {
             project(self.projectors, z);
         }
         self.sweep(&rr, z, &mut ax, &mut residual);
-        let reduced = &self.reduced;
-        let coarse_rhs = reduced.restrict(&self.restrict(&residual));
-        let solved = self
-            .llt
-            .solve(faer::Mat::<f64>::from_fn(reduced.count, 1, |i, _| {
-                coarse_rhs[i]
-            }));
-        let correction = reduced.expand(
-            &(0..reduced.count)
-                .map(|i| solved[(i, 0)])
-                .collect::<Vec<_>>(),
-        );
+        let gathered = self.restrict(&residual);
+        let correction = match (&self.exact, &self.rigid) {
+            (_, Some(rigid)) => rigid.apply(&gathered),
+            (Some((reduced, llt)), None) => {
+                let rhs = reduced.restrict(&gathered);
+                let solved = llt.solve(faer::Mat::<f64>::from_fn(reduced.count, 1, |i, _| rhs[i]));
+                reduced.expand(
+                    &(0..reduced.count)
+                        .map(|i| solved[(i, 0)])
+                        .collect::<Vec<_>>(),
+                )
+            }
+            (None, None) => vec![0.0; gathered.len()],
+        };
         self.prolong(&correction, z);
         project(self.projectors, z);
         for _ in 0..2 {

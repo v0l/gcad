@@ -2,7 +2,7 @@ use super::solve::{Block, Blocks, Factored, IDENTITY};
 
 const DIRECT_LIMIT: usize = 100_000;
 pub const DIRECT_FALLBACK: usize = 600_000;
-pub const TIE: f64 = 100.0;
+pub const TIE: f64 = 10.0;
 use super::{
     GAUSS, NODE_COORDS, Quadratic, map, shape, triangle_area_vector, triangle_gauss, triangle_shape,
 };

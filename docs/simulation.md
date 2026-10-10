@@ -162,7 +162,21 @@ stacked 20 mm blocks at 257,000 unknowns that took the solver from 213 iteration
 estimate the largest eigenvalue of the smoothed operator and the weight is 1.2 over it, capped at
 0.6. A fixed 0.6 overshot on the rotator azimuth frame (seven bonded parts, the clusters solved
 exactly), whose solve stalled at a residual of 3e-4 after 3000 iterations; the estimated weight
-there is 0.28 and it converges in 877. The frequency and buckling solvers factor problems up to 250,000
+there is 0.28 and it converges in 877.
+
+When the corner-only coarse problem is over 20,000 unknowns its direct solve became the bulk of
+each iteration (faer's sparse triangular solve runs on one thread whatever its parallelism
+setting: 107 ms of 170 ms an iteration on the 560,000-unknown bolt joint). Above that size the
+coarse problem gets a third level: two damped block-Jacobi sweeps, then a direct solve on
+aggregates of neighbouring coarse nodes, each with the six rigid-body modes of its node cloud
+as its unknowns, then two more sweeps. The bolt joint went from 98 iterations and 16.7 s to 154
+and 10.2 s with the same answer.
+
+The tie penalty is 10 times the stiffest material over the element spacing. It was 100, which
+conditioned the system badly: the rotator azimuth frame took 795 iterations and 122 s at 100 and
+takes 299 and 25 s at 10, with every probe within 0.7%. The cost is at the very edge of a bonded
+patch, where the peak reads up to about 8% high (2.70 MPa on a stack carrying 2.5, against 2.62 at
+100); probes half a millimetre away are within 0.4%. The frequency and buckling solvers factor problems up to 250,000
 unknowns and above that run LOBPCG (block size the modes wanted plus three) preconditioned by
 the same two-level scheme; a free part's six rigid-body modes are worked out from the node
 positions and kept out of the search instead of shifted. The turret robot part at 1.6 million
@@ -182,8 +196,8 @@ bending effective mass (61%).
 
 Bonded assemblies (phase 6, built): each body is meshed on its own and the meshes are merged.
 Every surface node of one body that lies within a tenth of the mesh size of another body's
-surface is tied to the point under it by a stiff penalty spring (scaled to the stiffest material
-and the element size), in both directions, which keeps interface stresses within a few percent
+surface is tied to the point under it by a penalty spring (10 times the stiffest material over
+the element size), in both directions, which keeps interface stresses within a few percent
 on a matching pair. Checked on a bonded stack in tension, a two-material wall in series and a
 stacked block whose first mode matches the solid one.
 

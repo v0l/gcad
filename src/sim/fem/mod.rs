@@ -1,3 +1,4 @@
+pub mod aggregate;
 pub mod buckling;
 pub mod elastic;
 pub mod lobpcg;
@@ -214,10 +215,18 @@ impl Quadratic {
                 }
             }
         }
+        let mut positions = vec![[0.0; 3]; count as usize];
+        for (v, i) in index.iter().enumerate() {
+            if let Some(i) = i {
+                let p = self.nodes[v];
+                positions[*i as usize] = [p.x, p.y, p.z];
+            }
+        }
         solve::Coarse {
             parents,
             nodes: count as usize,
             clusters: self.clusters(),
+            positions,
         }
     }
 
