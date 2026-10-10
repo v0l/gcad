@@ -13,6 +13,8 @@ pub const EDGES: [(usize, usize); 6] = [(0, 1), (1, 2), (0, 2), (0, 3), (1, 3), 
 
 pub const STRIDE: usize = 1 << 20;
 
+const DISTORTION: f64 = 0.05;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Tie {
     pub slave: u32,
@@ -200,12 +202,19 @@ impl Quadratic {
 
     pub fn element_ok(&self, t: usize) -> bool {
         let points = self.points(t);
-        GAUSS
+        let dets: Option<Vec<f64>> = GAUSS
             .iter()
             .map(|(l, _)| *l)
-            .chain(NODE_COORDS.iter().take(4).copied())
+            .chain(NODE_COORDS.iter().copied())
             .chain(std::iter::once([0.25; 4]))
-            .all(|l| map(&points, l).is_some())
+            .map(|l| map(&points, l).map(|m| m.det))
+            .collect();
+        dets.is_some_and(|d| {
+            let (low, high) = d.iter().fold((f64::INFINITY, 0.0f64), |(lo, hi), &x| {
+                (lo.min(x), hi.max(x))
+            });
+            low >= high * DISTORTION
+        })
     }
 
     pub fn from(mesh: &TetMesh) -> Quadratic {

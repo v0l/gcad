@@ -205,6 +205,11 @@ Ties, bonded or contact, only join a node to a face it faces (normals within abo
 opposite). Without that, a node on a hole wall 0.72 mm above a standoff's end face was tied to
 it through solid material, and the rotator frame's top plate read 64,000 MPa there.
 
+A quadratic element whose mid-side nodes sit on a curved surface can be valid but nearly
+inside out, which gives huge stresses at one node. Elements whose Jacobian varies by more than
+20 times across them get straight edges. That took the same frame from a 5,900 MPa false peak
+to 189 MPa at a real sharp corner, without moving the cross-checked numbers.
+
 `friction=`: Coulomb friction on the same ties, solved as a sequence of Tresca problems. With
 each tie's slip limit held at the friction coefficient times its pressing gap, the tangential
 spring becomes a Huber function (quadratic while it sticks, linear once it slips), so the
