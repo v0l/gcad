@@ -141,8 +141,9 @@ pub fn solve(problem: &Problem, wanted: usize) -> Result<Vec<Buckle>> {
         .map(|(mu, v)| {
             let shape = reduced.expand(v);
             let top = shape
-                .iter()
-                .fold(0.0f64, |a, b| a.max(b.abs()))
+                .chunks(3)
+                .map(|c| (c[0] * c[0] + c[1] * c[1] + c[2] * c[2]).sqrt())
+                .fold(0.0f64, f64::max)
                 .max(1.0e-300);
             Buckle {
                 factor: 1.0 / mu,

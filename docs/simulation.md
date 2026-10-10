@@ -184,7 +184,9 @@ shaft in torsion (stress and twist within 1%) and a link on two pins. Before sol
 rigid-body motions are projected through the supports, and a part they leave free is refused.
 
 The viewer colours a `.gsim` by its result when the result is up to date, using a 1D colour
-map texture on the boundary triangles.
+map texture on the boundary triangles. Hovering over the part shows the value under the cursor
+(stress, temperature or mode shape), how far that point moved in a static run, and where it
+sits on the undeformed part, interpolated across the boundary triangle it lands on.
 
 `buckling`: the static solution gives the stress at each Gauss point, which builds a geometric
 stiffness; subspace iteration on K^-1 (-K_G) finds the largest positive eigenvalues, whose

@@ -377,6 +377,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     })
 }
 
+#[derive(Clone)]
 pub struct FieldView {
     pub positions: Vec<Point3>,
     pub triangles: Vec<[u32; 3]>,
@@ -387,6 +388,43 @@ pub struct FieldView {
     pub scale: f64,
     pub title: String,
     pub unit: String,
+    pub values: Vec<f64>,
+    pub moved: Vec<Vector3>,
+    pub rest: Vec<Point3>,
+}
+
+pub struct Probe {
+    pub value: f64,
+    pub moved: Vector3,
+    pub at: Point3,
+}
+
+impl FieldView {
+    pub fn probe(&self, at: Point3) -> Option<Probe> {
+        let (_, t, l) = self
+            .triangles
+            .iter()
+            .map(|t| {
+                let corners = t.map(|v| self.positions[v as usize]);
+                let (d, l) = super::fem::closest_on_triangle(at, corners);
+                (d, t, l)
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))?;
+        let blend = |f: &dyn Fn(usize) -> Vector3| -> Vector3 {
+            t.iter()
+                .zip(l)
+                .fold(Vector3::zero(), |acc, (&v, w)| acc + f(v as usize) * w)
+        };
+        Some(Probe {
+            value: t
+                .iter()
+                .zip(l)
+                .map(|(&v, w)| self.values[v as usize] * w)
+                .sum(),
+            moved: blend(&|v| self.moved[v]),
+            at: Point3::from_vec(blend(&|v| self.rest[v].to_vec())),
+        })
+    }
 }
 
 pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
@@ -449,6 +487,13 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         scale,
         title: field.title.clone(),
         unit: field.unit.clone(),
+        values: field.values.clone(),
+        moved: field
+            .displacement
+            .iter()
+            .map(|d| Vector3::new(d[0], d[1], d[2]))
+            .collect(),
+        rest: mesh.nodes.clone(),
     })
 }
 

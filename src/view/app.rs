@@ -57,6 +57,7 @@ struct Shown {
     solids: Vec<(String, Solid)>,
     assembly: bool,
     built: Duration,
+    field: Option<Arc<crate::sim::statics::FieldView>>,
 }
 
 enum Status {
@@ -1415,6 +1416,20 @@ impl App {
             p.circle_stroke(*at, 4.0, Stroke::new(1.0, Color32::BLACK));
         }
         self.focus_popup(ui, rect, &projector, &scene);
+        if !resp.dragged()
+            && let Some(at) = resp.hover_pos()
+            && let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
+            && let Some(hit) = viewer.pick(rect, at)
+        {
+            let point = monstertruck::modeling::Point3::new(
+                hit.point[0] as f64,
+                hit.point[1] as f64,
+                hit.point[2] as f64,
+            );
+            if let Some(probe) = field.probe(point) {
+                field_readout(&p, rect, at, &field, &probe);
+            }
+        }
         let help = if self.measuring {
             "click to pick points, corners snap; drag to orbit, shift-drag to pan, scroll to zoom"
         } else {
@@ -1619,6 +1634,52 @@ impl Browser {
     }
 }
 
+fn field_readout(
+    p: &egui::Painter,
+    rect: Rect,
+    at: Pos2,
+    field: &crate::sim::statics::FieldView,
+    probe: &crate::sim::statics::Probe,
+) {
+    use monstertruck::modeling::InnerSpace;
+    let label = crate::plot::label;
+    let round = |v: f64| label((v * 1000.0).round() / 1000.0);
+    let mut lines = vec![format!(
+        "{} {}",
+        label((probe.value * 1.0e4).round() / 1.0e4),
+        field.unit
+    )];
+    lines.push(field.title.clone());
+    if field.unit == "MPa" {
+        lines.push(format!("moved {} mm", label(probe.moved.magnitude())));
+    }
+    lines.push(format!(
+        "at {}, {}, {}",
+        round(probe.at.x),
+        round(probe.at.y),
+        round(probe.at.z)
+    ));
+    let text = p.layout_no_wrap(
+        lines.join("\n"),
+        egui::FontId::monospace(12.0),
+        Color32::from_gray(230),
+    );
+    let mut corner = at + Vec2::new(16.0, 16.0);
+    if corner.x + text.size().x > rect.right() - 8.0 {
+        corner.x = at.x - 16.0 - text.size().x;
+    }
+    if corner.y + text.size().y > rect.bottom() - 8.0 {
+        corner.y = at.y - 16.0 - text.size().y;
+    }
+    p.circle_stroke(at, 4.0, Stroke::new(1.5, READOUT));
+    p.rect_filled(
+        Rect::from_min_size(corner, text.size()).expand(5.0),
+        3.0,
+        Color32::from_black_alpha(200),
+    );
+    p.galley(corner, text, Color32::from_gray(230));
+}
+
 fn field_shown(view: &crate::sim::statics::FieldView, key: SceneKey) -> Shown {
     let bounds: monstertruck::modeling::BoundingBox<monstertruck::modeling::Point3> =
         view.positions.iter().copied().collect();
@@ -1635,6 +1696,7 @@ fn field_shown(view: &crate::sim::statics::FieldView, key: SceneKey) -> Shown {
         solids: Vec::new(),
         assembly: false,
         built: Duration::ZERO,
+        field: Some(Arc::new(view.clone())),
     }
 }
 
@@ -1724,6 +1786,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
         solids,
         assembly: model.assembly,
         built: Duration::ZERO,
+        field: None,
     })
 }
 

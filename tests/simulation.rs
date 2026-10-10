@@ -227,6 +227,37 @@ fn cantilever_stress() {
 }
 
 #[test]
+fn field_reads_at_a_point() {
+    let path = written(
+        "field_reads_at_a_point",
+        &[(
+            "bar.gcad",
+            "rect 100 10 at=50,0\nbar: extrude 10 both\nmaterial steel\n",
+        )],
+        "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nload >X force=1000,0,0\nmesh 4",
+    );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("sim");
+    let outcome = gcad::sim::simulate(spec).expect("solves");
+    let view = gcad::sim::statics::field_view(spec, &outcome).expect("a field");
+    let (v, _) = view
+        .triangles
+        .iter()
+        .flatten()
+        .map(|&v| (v as usize, (view.rest[v as usize].x - 50.0).abs()))
+        .min_by(|a, b| a.1.total_cmp(&b.1))
+        .expect("surface nodes");
+    let probe = view.probe(view.positions[v]).expect("a reading");
+    close(probe.value, 10.0, 1.0e-6);
+    close(probe.at.x, view.rest[v].x, 1.0e-9);
+    close(
+        probe.moved.x,
+        1000.0 * view.rest[v].x / (100.0 * 200.0e3),
+        1.0e-6,
+    );
+}
+
+#[test]
 fn thick_cylinder_under_pressure() {
     let ring = "circle 80\nbase: extrude 10\nplane base.end\nh: hole 40 0,0\nrect 100 100 at=-50,0\ncut thru\nrect 100 100 at=50,-50\ncut thru\nmaterial steel\n";
     let outcome = simulated(

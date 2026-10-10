@@ -359,7 +359,7 @@ pub fn triangle_area_vector(points: &[Point3; 6], l: [f64; 3]) -> Vector3 {
     du.cross(dv)
 }
 
-fn closest_on_triangle(p: Point3, [a, b, c]: [Point3; 3]) -> (f64, [f64; 3]) {
+pub fn closest_on_triangle(p: Point3, [a, b, c]: [Point3; 3]) -> (f64, [f64; 3]) {
     let (ab, ac, ap) = (b - a, c - a, p - a);
     let (d1, d2) = (ab.dot(ap), ac.dot(ap));
     if d1 <= 0.0 && d2 <= 0.0 {
