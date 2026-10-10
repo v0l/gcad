@@ -921,6 +921,28 @@ fn floating_part_is_refused() {
 }
 
 #[test]
+fn bonded_joint_carries_moment() {
+    let head = |hole: &str| {
+        format!(
+            "plane XY offset=87\ncircle 44\nf: extrude 8\nplane f.end\ncircle 24\npost: extrude 127\nplane XY offset=107\n{hole}\nbore: cut 20\nmaterial steel\n"
+        )
+    };
+    for (name, section) in [("square", "rect 13 13"), ("round", "circle 15")] {
+        let rod = format!("{section}\nr: extrude 107\nmaterial steel\n");
+        let outcome = simulated(
+            &format!("bonded_joint_carries_moment_{name}"),
+            &[
+                ("rod.gcad", rod.as_str()),
+                ("head.gcad", head(section).as_str()),
+                ("joint.gasm", "part s rod.gcad\npart h head.gcad\n"),
+            ],
+            "sim static\npart joint.gasm\nmesh 4\nroot: fix s:r.start\nload h:post.end force=0,100,0",
+        );
+        close(reading(&outcome, "root.moment"), 22.2, 1.0e-3);
+    }
+}
+
+#[test]
 fn bonded_parts_carry_load() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(

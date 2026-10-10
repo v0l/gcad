@@ -15,11 +15,14 @@ pub const STRIDE: usize = 1 << 20;
 
 const DISTORTION: f64 = 0.05;
 
+const SLIP: f64 = 0.1;
+
 #[derive(Clone, Copy, Debug)]
 pub struct Tie {
     pub slave: u32,
     pub masters: [u32; 6],
     pub weights: [f64; 6],
+    pub turn: [solve::Block; 6],
     pub normal: Option<Vector3>,
     pub friction: f64,
 }
@@ -34,6 +37,69 @@ impl Tie {
         let w = self.weights;
         [1.0, -w[0], -w[1], -w[2], -w[3], -w[4], -w[5]]
     }
+
+    pub fn matrices(&self) -> [solve::Block; 7] {
+        let mut out = [solve::IDENTITY; 7];
+        for k in 0..6 {
+            let w = self.weights[k];
+            out[k + 1] = std::array::from_fn(|i| {
+                let diagonal = if i % 4 == 0 { -w } else { 0.0 };
+                diagonal + self.turn[k][i]
+            });
+        }
+        out
+    }
+
+    pub fn gap(&self, u: &[f64]) -> Vector3 {
+        self.group()
+            .iter()
+            .zip(self.matrices())
+            .fold(Vector3::zero(), |acc, (&v, m)| {
+                let i = 3 * v as usize;
+                acc + Vector3::new(
+                    m[0] * u[i] + m[1] * u[i + 1] + m[2] * u[i + 2],
+                    m[3] * u[i] + m[4] * u[i + 1] + m[5] * u[i + 2],
+                    m[6] * u[i] + m[7] * u[i + 1] + m[8] * u[i + 2],
+                )
+            })
+    }
+}
+
+fn skew(v: Vector3) -> solve::Block {
+    [0.0, -v.z, v.y, v.z, 0.0, -v.x, -v.y, v.x, 0.0]
+}
+
+pub fn product(a: &solve::Block, b: &solve::Block) -> solve::Block {
+    std::array::from_fn(|k| {
+        let (i, j) = (k / 3, k % 3);
+        (0..3).map(|m| a[i * 3 + m] * b[m * 3 + j]).sum()
+    })
+}
+
+pub fn transposed(a: &solve::Block) -> solve::Block {
+    std::array::from_fn(|k| a[(k % 3) * 3 + k / 3])
+}
+
+fn turning(slave: Point3, points: [Point3; 6], weights: [f64; 6]) -> [solve::Block; 6] {
+    let at = points
+        .iter()
+        .zip(weights)
+        .fold(Vector3::zero(), |a, (p, w)| a + p.to_vec() * w);
+    let offset = slave.to_vec() - at;
+    let centre = points.iter().fold(Vector3::zero(), |a, p| a + p.to_vec()) / 6.0;
+    let arms = points.map(|p| p.to_vec() - centre);
+    let mut inertia = [0.0; 9];
+    for r in &arms {
+        let r2 = r.magnitude2();
+        for i in 0..3 {
+            for j in 0..3 {
+                inertia[i * 3 + j] += if i == j { r2 } else { 0.0 } - r[i] * r[j];
+            }
+        }
+    }
+    let inverse = solve::invert(&inertia);
+    let lever = product(&skew(offset), &inverse);
+    arms.map(|r| product(&lever, &skew(r)))
 }
 
 pub struct Quadratic {
@@ -262,9 +328,18 @@ impl Quadratic {
                             .find(|(f, _)| *f == tag)
                             .map(|(_, uv)| *uv)
                     };
-                    let (ua, ub) = (uv(a)?, uv(b)?);
-                    let mid = (ua + ub) / 2.0;
-                    let p = mesh.surfaces[tag].surface().subs(mid.x, mid.y);
+                    let surface = mesh.surfaces[tag].surface();
+                    let p = match (uv(a), uv(b)) {
+                        (Some(ua), Some(ub)) => {
+                            let mid = (ua + ub) / 2.0;
+                            surface.subs(mid.x, mid.y)
+                        }
+                        (ua, ub) => {
+                            let hint = ua.or(ub).map(|h| (h.x, h.y));
+                            let (u, v) = surface.search_nearest_parameter(chord, hint, 40)?;
+                            surface.subs(u, v)
+                        }
+                    };
                     let off = (p - chord).magnitude();
                     (off < length * 0.25).then_some((off, p))
                 })
@@ -501,11 +576,23 @@ pub fn merge(
                                 list.iter().any(|s| s.dot(n) < -0.7 * n.magnitude())
                             })
                         })
-                        .map(|&t| {
+                        .filter_map(|&t| {
                             let m = skins[master][t];
                             let corners = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
-                            let (d, l) = closest_on_triangle(p, corners);
-                            (d, t, l)
+                            let (_, l) = closest_on_triangle(p, corners);
+                            let q = m
+                                .iter()
+                                .zip(triangle_shape(l))
+                                .fold(Vector3::zero(), |a, (&v, w)| {
+                                    a + out.nodes[v as usize].to_vec() * w
+                                });
+                            let n = (corners[1] - corners[0])
+                                .cross(corners[2] - corners[0])
+                                .normalize();
+                            let offset = p.to_vec() - q;
+                            let along = (offset - n * offset.dot(n)).magnitude();
+                            let d = offset.magnitude();
+                            (d <= gap && along <= gap * SLIP).then_some((d, t, l))
                         })
                         .min_by(|a, b| a.0.total_cmp(&b.0));
                     if let Some((d, t, l)) = best
@@ -518,6 +605,7 @@ pub fn merge(
                             slave: v,
                             masters: m,
                             weights: shape,
+                            turn: turning(p, m.map(|n| out.nodes[n as usize]), shape),
                             normal: contact.map(|_| (b - a).cross(c - a).normalize()),
                             friction: contact.map_or(0.0, |t| t.2),
                         });

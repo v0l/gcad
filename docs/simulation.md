@@ -209,6 +209,16 @@ Ties, bonded or contact, only join a node to a face it faces (normals within abo
 opposite). Without that, a node on a hole wall 0.72 mm above a standoff's end face was tied to
 it through solid material, and the rotator frame's top plate read 64,000 MPa there.
 
+A tie holds u_s - sum w_k u_k to zero, which resists rigid rotation whenever the node is not
+exactly on the master patch (x_s - sum w_k x_k = d, nonzero where two curved meshes meet), so
+bonded joints leaked moment: a Ø15 rod bonded 20 mm into a bore and bent by 100 N at 222 mm
+reported 11.1 N·m at its root instead of 22.2. Each master gets a rotation term, d x J^-1 r_k x,
+with r_k the master nodes about their centre and J their inertia, so the tie measures the gap
+less the turn of the master patch carried through d, which is exactly zero for any rigid motion.
+Ties reaching more than a tenth of the gap along the master face are refused (a rod node 0.3 mm
+below a bore mouth was tied to its edge). The rod now reads 22.200 N·m square or round, and the
+bolt-joint cross-check agrees within 2% and solves in 98 iterations instead of 420.
+
 A quadratic element whose mid-side nodes sit on a curved surface can be valid but nearly
 inside out, which gives huge stresses at one node. Elements whose Jacobian varies by more than
 20 times across them get straight edges. That took the same frame from a 5,900 MPa false peak

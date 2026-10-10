@@ -167,17 +167,7 @@ fn assemble_with(mesh: &Quadratic, materials: &[(f64, f64)], all: bool) -> Resul
         let stiffest = materials.iter().map(|m| m.0).fold(0.0, f64::max);
         let penalty = stiffest * spacing(mesh) * TIE;
         for tie in mesh.ties.iter().filter(|t| all || t.normal.is_none()) {
-            let (nodes, c) = (tie.group(), tie.coefficients());
-            for a in 0..7 {
-                for b in 0..7 {
-                    let at = blocks.find(nodes[a], nodes[b]);
-                    let v = penalty * c[a] * c[b];
-                    let block = &mut blocks.values[at];
-                    block[0] += v;
-                    block[4] += v;
-                    block[8] += v;
-                }
-            }
+            add_tie(&mut blocks, tie, penalty, &IDENTITY);
         }
     }
     Ok(blocks)
@@ -208,17 +198,24 @@ fn add_contacts(blocks: &mut Blocks, mesh: &Quadratic, penalty: f64, touches: &[
             };
             pressing + sideways
         };
-        let (nodes, c) = (tie.group(), tie.coefficients());
-        for a in 0..7 {
-            for b in 0..7 {
-                let at = blocks.find(nodes[a], nodes[b]);
-                let v = penalty * c[a] * c[b];
-                let block = &mut blocks.values[at];
-                for i in 0..3 {
-                    for j in 0..3 {
-                        block[i * 3 + j] += v * along(i, j);
-                    }
-                }
+        let middle: Block = std::array::from_fn(|k| along(k / 3, k % 3));
+        add_tie(blocks, tie, penalty, &middle);
+    }
+}
+
+fn add_tie(blocks: &mut Blocks, tie: &super::Tie, penalty: f64, middle: &Block) {
+    let nodes = tie.group();
+    let matrices = tie.matrices();
+    let left: Vec<Block> = matrices
+        .iter()
+        .map(|m| super::product(&super::transposed(m), middle))
+        .collect();
+    for a in 0..7 {
+        for b in 0..7 {
+            let at = blocks.find(nodes[a], nodes[b]);
+            let term = super::product(&left[a], &matrices[b]);
+            for (x, y) in blocks.values[at].iter_mut().zip(term) {
+                *x += penalty * y;
             }
         }
     }
@@ -227,13 +224,7 @@ fn add_contacts(blocks: &mut Blocks, mesh: &Quadratic, penalty: f64, touches: &[
 const SLIDE: f64 = 1.0e-8;
 
 fn gap(tie: &super::Tie, u: &[f64]) -> Vector3 {
-    tie.group()
-        .iter()
-        .zip(tie.coefficients())
-        .fold(Vector3::zero(), |acc, (&v, c)| {
-            let i = 3 * v as usize;
-            acc + Vector3::new(u[i], u[i + 1], u[i + 2]) * c
-        })
+    tie.gap(u)
 }
 
 #[derive(Clone)]
@@ -287,11 +278,12 @@ fn touch(tie: &super::Tie, u: &[f64], scale: f64, limit: f64) -> (Touch, f64) {
 
 fn add_pulls(out: &mut [f64], mesh: &Quadratic, penalty: f64, touches: &[Touch]) {
     for (tie, t) in mesh.ties.iter().zip(touches) {
-        for (&v, c) in tie.group().iter().zip(tie.coefficients()) {
+        for (&v, m) in tie.group().iter().zip(tie.matrices()) {
             let i = 3 * v as usize;
-            out[i] += penalty * c * t.pull.x;
-            out[i + 1] += penalty * c * t.pull.y;
-            out[i + 2] += penalty * c * t.pull.z;
+            let p = t.pull;
+            out[i] += penalty * (m[0] * p.x + m[3] * p.y + m[6] * p.z);
+            out[i + 1] += penalty * (m[1] * p.x + m[4] * p.y + m[7] * p.z);
+            out[i + 2] += penalty * (m[2] * p.x + m[5] * p.y + m[8] * p.z);
         }
     }
 }
