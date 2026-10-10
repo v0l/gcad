@@ -462,14 +462,12 @@ pub fn merge(
             let pair = (master.min(slave), master.max(slave));
             let contact = touching.iter().find(|t| (t.0, t.1) == pair);
             let mut facing: HashMap<u32, Vec<Vector3>> = HashMap::default();
-            if contact.is_some() {
-                for f in &skins[slave] {
-                    let [a, b, c] = [f[0], f[1], f[2]].map(|v| out.nodes[v as usize]);
-                    let n = (b - a).cross(c - a);
-                    if n.magnitude() > 0.0 {
-                        for &v in f {
-                            facing.entry(v).or_default().push(n.normalize());
-                        }
+            for f in &skins[slave] {
+                let [a, b, c] = [f[0], f[1], f[2]].map(|v| out.nodes[v as usize]);
+                let n = (b - a).cross(c - a);
+                if n.magnitude() > 0.0 {
+                    for &v in f {
+                        facing.entry(v).or_default().push(n.normalize());
                     }
                 }
             }
@@ -487,14 +485,12 @@ pub fn merge(
                     let best = list
                         .iter()
                         .filter(|&&t| {
-                            contact.is_none() || {
-                                let m = skins[master][t];
-                                let [a, b, c] = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
-                                let n = (b - a).cross(c - a);
-                                facing.get(&v).is_some_and(|list| {
-                                    list.iter().any(|s| s.dot(n) < -0.7 * n.magnitude())
-                                })
-                            }
+                            let m = skins[master][t];
+                            let [a, b, c] = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
+                            let n = (b - a).cross(c - a);
+                            facing.get(&v).is_some_and(|list| {
+                                list.iter().any(|s| s.dot(n) < -0.7 * n.magnitude())
+                            })
                         })
                         .map(|&t| {
                             let m = skins[master][t];

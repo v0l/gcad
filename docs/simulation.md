@@ -201,6 +201,10 @@ master face's normal, switched on where they press and off where they would pull
 until the set settles. Checked with two blocks heated (they press, as if bonded) and cooled
 (they part, stress free).
 
+Ties, bonded or contact, only join a node to a face it faces (normals within about 45 degrees of
+opposite). Without that, a node on a hole wall 0.72 mm above a standoff's end face was tied to
+it through solid material, and the rotator frame's top plate read 64,000 MPa there.
+
 `friction=`: Coulomb friction on the same ties, solved as a sequence of Tresca problems. With
 each tie's slip limit held at the friction coefficient times its pressing gap, the tangential
 spring becomes a Huber function (quadratic while it sticks, linear once it slips), so the
