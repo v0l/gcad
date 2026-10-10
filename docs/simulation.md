@@ -153,7 +153,11 @@ penalty ties stiffen the system). Each tied node is smoothed together with the n
 on most, in clusters of up to eight solved exactly, instead of one node at a time: on two
 stacked 20 mm blocks at 257,000 unknowns that took the solver from 213 iterations to 71, and at
 1.2 million unknowns it takes 130 iterations and 50 s. The heat solver clusters the same way
-(90 iterations to 39). The frequency and buckling solvers factor problems up to 250,000
+(90 iterations to 39). The smoothing weight is set from the matrix: a dozen power iterations
+estimate the largest eigenvalue of the smoothed operator and the weight is 1.2 over it, capped at
+0.6. A fixed 0.6 overshot on the rotator azimuth frame (seven bonded parts, the clusters solved
+exactly), whose solve stalled at a residual of 3e-4 after 3000 iterations; the estimated weight
+there is 0.28 and it converges in 877. The frequency and buckling solvers factor problems up to 250,000
 unknowns and above that run LOBPCG (block size the modes wanted plus three) preconditioned by
 the same two-level scheme; a free part's six rigid-body modes are worked out from the node
 positions and kept out of the search instead of shifted. The turret robot part at 1.6 million

@@ -879,6 +879,28 @@ fn preload_by_cooling_one_part() {
 }
 
 #[test]
+fn floating_part_is_refused() {
+    let apart = "part a block.gcad\npart b block.gcad\nmove b 0,0,15\n";
+    let path = written(
+        "floating_part_is_refused",
+        &[("block.gcad", SLAB), ("stack.gasm", apart)],
+        "sim static\npart stack.gasm\nfix a:<Z\nload b:>Z force=0,0,-100\nmesh 4",
+    );
+    let error = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"))
+        .expect_err("b touches nothing");
+    let text = format!("{error}");
+    assert!(text.contains("`b` floats free"), "{text}");
+    let heat = written(
+        "floating_part_is_refused_heat",
+        &[("block.gcad", SLAB), ("stack.gasm", apart)],
+        "sim thermal\npart stack.gasm\ntemperature a:<Z 50\nmesh 4",
+    );
+    let error = gcad::sim::simulate(spec_of(&heat).sim.as_deref().expect("sim"))
+        .expect_err("b touches nothing");
+    assert!(format!("{error}").contains("`b` floats free"), "{error}");
+}
+
+#[test]
 fn bonded_parts_carry_load() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(

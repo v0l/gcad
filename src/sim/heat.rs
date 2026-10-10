@@ -11,6 +11,16 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
 
 fn run_spec(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
+    let anchors: Vec<usize> = spec
+        .thermal
+        .iter()
+        .flat_map(|b| match b {
+            super::fem::thermal::Boundary::Temperature { faces, .. }
+            | super::fem::thermal::Boundary::Convect { faces, .. } => faces.clone(),
+            super::fem::thermal::Boundary::Flux { .. } => Vec::new(),
+        })
+        .collect();
+    prepared.held(&anchors, "temperature or convect line")?;
     let mesh = &prepared.mesh;
     let conductivity = prepared.conductivity()?;
     let answer = solve(mesh, &conductivity, &spec.thermal, spec.source)?;

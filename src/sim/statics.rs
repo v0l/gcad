@@ -109,6 +109,56 @@ impl Prepared {
         ))
     }
 
+    pub fn held(&self, faces: &[usize], what: &str) -> Result<()> {
+        let count = self.parts.len();
+        if count < 2 {
+            return Ok(());
+        }
+        let mut parent: Vec<usize> = (0..count).collect();
+        fn root(parent: &mut [usize], mut v: usize) -> usize {
+            while parent[v] != v {
+                parent[v] = parent[parent[v]];
+                v = parent[v];
+            }
+            v
+        }
+        let mut body = vec![0usize; self.mesh.nodes.len()];
+        for (t, tet) in self.mesh.tets.iter().enumerate() {
+            for &v in tet {
+                body[v as usize] = self.mesh.body[t] as usize;
+            }
+        }
+        for tie in &self.mesh.ties {
+            let (a, b) = (
+                root(&mut parent, body[tie.slave as usize]),
+                root(&mut parent, body[tie.masters[0] as usize]),
+            );
+            parent[a] = b;
+        }
+        let mut anchored = vec![false; count];
+        for &face in faces {
+            let r = root(&mut parent, (face / super::fem::STRIDE).min(count - 1));
+            anchored[r] = true;
+        }
+        let loose: Vec<String> = (0..count)
+            .filter(|&b| !anchored[root(&mut parent, b)])
+            .map(|b| format!("`{}`", self.parts[b].name))
+            .collect();
+        if loose.is_empty() {
+            return Ok(());
+        }
+        let one = loose.len() == 1;
+        bail!(
+            "{} {} free: nothing connects {} to a {what}, so the solver cannot converge; check {} flush against the parts {} should bolt to, or give {} a {what}",
+            loose.join(", "),
+            if one { "floats" } else { "float" },
+            if one { "it" } else { "them" },
+            if one { "it sits" } else { "they sit" },
+            if one { "it" } else { "they" },
+            if one { "it" } else { "them" },
+        )
+    }
+
     pub fn bonds(&self) -> Option<String> {
         let pairs: Vec<String> = self
             .mesh
@@ -189,6 +239,14 @@ pub fn at(p: Point3) -> String {
 
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
+    prepared.held(
+        &spec
+            .supports
+            .iter()
+            .flat_map(|s| s.faces.iter().copied())
+            .collect::<Vec<_>>(),
+        "support",
+    )?;
     let mesh = &prepared.mesh;
     let materials = prepared.elastic()?;
     let body_force = spec.gravity.map(|g| {
@@ -556,6 +614,14 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
 
 pub fn buckle(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
+    prepared.held(
+        &spec
+            .supports
+            .iter()
+            .flat_map(|s| s.faces.iter().copied())
+            .collect::<Vec<_>>(),
+        "support",
+    )?;
     let mesh = &prepared.mesh;
     let materials = prepared.elastic()?;
     let body_force = spec.gravity.map(|g| {

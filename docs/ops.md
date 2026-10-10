@@ -301,7 +301,7 @@ The plan for the rest is in `docs/simulation.md`.
 | convection | supported | `air: convect faces h=20 ambient=20` | `simulation::fin_with_convection` |
 | thermal expansion | supported | `warm 50`, `warm -100 part=bolt`, `warm heat.gsim from=20` | `simulation::thermal_expansion`, `simulation::expansion_from_a_heat_result`, `simulation::preload_by_cooling_one_part` |
 | buckling | supported | `sim buckling`, `load >Z force=0,0,-1000` | `simulation::column_buckling` |
-| bonded assemblies | supported | `part stack.gasm`, `fix a:<Z`, `load b:>Z force=0,0,1000` | `simulation::bonded_parts_carry_load`, `simulation::large_bonded_problem_converges`, `simulation::bonded_parts_conduct_heat`, `simulation::bonded_parts_vibrate_as_one` |
+| bonded assemblies | supported | `part stack.gasm`, `fix a:<Z`, `load b:>Z force=0,0,1000` | `simulation::bonded_parts_carry_load`, `simulation::large_bonded_problem_converges`, `simulation::floating_part_is_refused`, `simulation::bonded_parts_conduct_heat`, `simulation::bonded_parts_vibrate_as_one` |
 | contact | supported | `contact a b` | `simulation::contact_presses_but_lets_go`, `simulation::contact_vibrates_as_bonded` |
 | friction | supported | `contact a b friction=0.3` | `simulation::friction_holds_until_it_slides` |
 | natural frequencies | supported | `sim modal`, `modes 3` | `simulation::cantilever_modes`, `simulation::free_beam_modes` |

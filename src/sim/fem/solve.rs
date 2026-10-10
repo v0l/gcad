@@ -265,6 +265,7 @@ pub struct TwoLevel<'a> {
     clusters: Vec<Cluster>,
     reduced: Reduced,
     llt: faer::sparse::linalg::solvers::Llt<usize, f64>,
+    weight: f64,
 }
 
 impl<'a> TwoLevel<'a> {
@@ -322,7 +323,7 @@ impl<'a> TwoLevel<'a> {
         }
         let reduced = Reduced::new(&coarse_projectors);
         let llt = reduced.factor(&reduced.lower(&small, None))?;
-        Ok(TwoLevel {
+        let mut level = TwoLevel {
             a,
             projectors,
             coarse,
@@ -330,7 +331,10 @@ impl<'a> TwoLevel<'a> {
             clusters,
             reduced,
             llt,
-        })
+            weight: 0.6,
+        };
+        level.weight = (1.2 / level.spread()).min(0.6);
+        Ok(level)
     }
 
     fn restrict(&self, r: &[f64]) -> Vec<f64> {
@@ -395,10 +399,38 @@ impl<'a> TwoLevel<'a> {
         }
     }
 
+    fn spread(&self) -> f64 {
+        let n = self.a.nodes() * 3;
+        let mut seed: u64 = 0x2545_f491_4f6c_dd1d;
+        let mut x: Vec<f64> = (0..n)
+            .map(|_| {
+                seed ^= seed << 13;
+                seed ^= seed >> 7;
+                seed ^= seed << 17;
+                (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+            })
+            .collect();
+        project(self.projectors, &mut x);
+        let mut largest = 1.0;
+        let mut ax = vec![0.0; n];
+        for _ in 0..12 {
+            let norm = dot(&x, &x).sqrt().max(1.0e-300);
+            x.iter_mut().for_each(|v| *v /= norm);
+            self.a.multiply(&x, &mut ax);
+            project(self.projectors, &mut ax);
+            let mut next = vec![0.0; n];
+            self.smooth(&ax, &mut next, 1.0);
+            project(self.projectors, &mut next);
+            largest = dot(&next, &next).sqrt();
+            x = next;
+        }
+        largest.max(1.0e-12)
+    }
+
     pub fn apply(&self, r: &[f64], z: &mut [f64]) {
         use faer::linalg::solvers::Solve;
         let n = r.len();
-        let weight = 0.6;
+        let weight = self.weight;
         z.iter_mut().for_each(|v| *v = 0.0);
         let mut rr = r.to_vec();
         project(self.projectors, &mut rr);

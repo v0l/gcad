@@ -456,7 +456,9 @@ first buckled shape. Loads that only stretch the part are refused.
 own material, and parts whose faces touch (closer than a tenth of the mesh size) are bonded
 there, as if glued: no sliding, no gaps, heat passes freely. Pick faces as `part:faces`, like
 `fix base:<Z` or `load arm:tip.end force=0,0,-50`. A note lists which parts were bonded and over
-how many nodes. `contact a b` makes a pair press on each other instead, free to slide and to
+how many nodes. A part that touches nothing held (no support, or for heat no `temperature` or
+`convect`, reaches it through touching parts) is refused by name before the solve, since the
+solver cannot converge with it loose. `contact a b` makes a pair press on each other instead, free to slide and to
 part, solved by repeating the solve until the touching nodes settle (static only; heat,
 frequencies and buckling treat the pair as bonded). `friction=0.3` adds Coulomb friction. Stresses right at a bond between different materials are a corner singularity
 like a sharp inside corner.

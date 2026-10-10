@@ -5,6 +5,16 @@ use anyhow::Result;
 
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
+    if !spec.supports.is_empty() {
+        prepared.held(
+            &spec
+                .supports
+                .iter()
+                .flat_map(|s| s.faces.iter().copied())
+                .collect::<Vec<_>>(),
+            "support",
+        )?;
+    }
     let mesh = &prepared.mesh;
     let materials = prepared.elastic()?;
     let densities: Vec<f64> = prepared.parts.iter().map(|p| p.density * 1.0e-9).collect();
