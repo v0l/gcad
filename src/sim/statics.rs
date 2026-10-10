@@ -466,17 +466,24 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
     let span = (high - low).max(1.0e-12);
     let shade = field.values.iter().map(|v| (v - low) / span).collect();
     let mut triangles = Vec::new();
-    let mut edges = Vec::new();
-    for (f, _) in &mesh.boundary {
+    let mut sides: std::collections::BTreeMap<(u32, u32), (u32, Vec<usize>)> =
+        std::collections::BTreeMap::new();
+    for (f, tag) in &mesh.boundary {
         for t in [[0, 3, 5], [3, 1, 4], [5, 4, 2], [3, 4, 5]] {
             triangles.push(t.map(|k| f[k]));
         }
         for (a, m, b) in [(0, 3, 1), (1, 4, 2), (2, 5, 0)] {
-            if f[a] < f[b] {
-                edges.push([f[a], f[m], f[b]]);
-            }
+            let entry = sides
+                .entry((f[a].min(f[b]), f[a].max(f[b])))
+                .or_insert((f[m], Vec::new()));
+            entry.1.push(*tag);
         }
     }
+    let edges: Vec<[u32; 3]> = sides
+        .into_iter()
+        .filter(|(_, (_, tags))| tags.windows(2).any(|w| w[0] != w[1]) || tags.len() == 1)
+        .map(|((a, b), (m, _))| [a, m, b])
+        .collect();
     Ok(FieldView {
         positions,
         triangles,
@@ -517,12 +524,7 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
         .map(|e| e.iter().map(|&v| positions[v as usize]).collect())
         .collect();
     let shown: BoundingBox<Point3> = positions.iter().copied().collect();
-    let edges: Vec<Vec<Point3>> = if view.triangles.len() > 24000 {
-        Vec::new()
-    } else {
-        edges
-    };
-    let picture = crate::render::draw_triangles(positions, &triangles, &edges, shown);
+    let picture = crate::render::draw_field(positions, &triangles, &edges, shown);
     let mut canvas = crate::plot::Canvas::new(picture.width() + 260, picture.height() + 60);
     canvas.paste(&picture, (0, 60));
     crate::plot::colour_bar(

@@ -184,6 +184,25 @@ pub fn draw_triangles(
     edges: &[Vec<Point3>],
     bounds: BoundingBox<Point3>,
 ) -> RgbImage {
+    draw_lit(positions, triangles, edges, bounds, 0.35)
+}
+
+pub fn draw_field(
+    positions: &[Point3],
+    triangles: &[([usize; 3], [[f64; 3]; 3])],
+    edges: &[Vec<Point3>],
+    bounds: BoundingBox<Point3>,
+) -> RgbImage {
+    draw_lit(positions, triangles, edges, bounds, 0.8)
+}
+
+fn draw_lit(
+    positions: &[Point3],
+    triangles: &[([usize; 3], [[f64; 3]; 3])],
+    edges: &[Vec<Point3>],
+    bounds: BoundingBox<Point3>,
+    floor: f64,
+) -> RgbImage {
     let center = bounds.center().to_vec();
     let mut image = RgbImage::from_pixel(CELL * 2, CELL * 2, BACKGROUND);
     for (index, view) in views().iter().enumerate() {
@@ -220,7 +239,7 @@ pub fn draw_triangles(
                 .normalize()
                 .dot(Vector3::new(0.3, -0.5, 0.8).normalize());
             let facing = normal.normalize().dot(view.toward_eye).abs();
-            let shade = 0.35 + 0.4 * facing + 0.25 * light.max(0.0);
+            let shade = floor + (1.0 - floor) * (0.6 * facing + 0.4 * light.max(0.0));
             let colors = tint.map(|t| t.map(|c| 255.0 * c * shade));
             canvas.triangle(triangle.map(|i| to_pixel(projected[i])), colors);
         }
