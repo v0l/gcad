@@ -296,7 +296,7 @@ The plan for the rest is in `docs/simulation.md`.
 | probes | supported | `top: probe 100,0,10` | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure` |
 | example simulations | supported | `examples/parts/bracket.gsim`, `examples/parts/heatsink.gsim` | `simulation::example_simulations` |
 | large problems | supported | conjugate gradients with a two-level preconditioner, above 100,000 unknowns for stress and 150,000 for heat; LOBPCG above 250,000 for frequencies and buckling | `simulation::large_problems_iterate`, `simulation::large_heat_problem_solves_iteratively`, `simulation::large_eigenproblems_iterate` |
-| stress plots | supported | `gcad render x.gsim x.png`; the viewer reads the value, movement and point under the cursor | `simulation::stress_field_render`, `simulation::field_reads_at_a_point` |
+| stress plots | supported | `gcad render x.gsim x.png`; the viewer reads the value, movement and point under the cursor, and draws and lists every load and support with its total | `simulation::stress_field_render`, `simulation::field_reads_at_a_point` |
 | steady heat | supported | `sim thermal`, `cold: temperature faces 20`, `heat faces 5`, `source 5` | `simulation::conduction_through_a_wall`, `simulation::heat_needs_a_boundary` |
 | convection | supported | `air: convect faces h=20 ambient=20` | `simulation::fin_with_convection` |
 | thermal expansion | supported | `warm 50`, `warm -100 part=bolt`, `warm heat.gsim from=20` | `simulation::thermal_expansion`, `simulation::expansion_from_a_heat_result`, `simulation::preload_by_cooling_one_part` |

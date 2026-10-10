@@ -14,6 +14,7 @@ pub enum Boundary {
         value: f64,
     },
     Flux {
+        label: String,
         faces: Vec<usize>,
         watts: f64,
     },
@@ -104,7 +105,7 @@ pub fn solve(
                 }
                 held = true;
             }
-            Boundary::Flux { faces, watts } => {
+            Boundary::Flux { faces, watts, .. } => {
                 let area = super::elastic::area(mesh, faces);
                 if area <= 0.0 {
                     bail!("the heated faces have no area");

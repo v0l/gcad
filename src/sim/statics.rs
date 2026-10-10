@@ -390,6 +390,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     if let Some(bonds) = prepared.bonds() {
         notes.push(bonds);
     }
+    for mark in stimuli(spec, mesh, None) {
+        if mark.kind == Stimulus::Push {
+            notes.push(format!("applied {}", mark.text));
+        }
+    }
     if let Some((touching, slipping, rounds)) = answer.contact {
         let friction = spec.contacts.iter().any(|c| c.2 > 0.0);
         notes.push(if friction {
@@ -449,6 +454,7 @@ pub struct FieldView {
     pub values: Vec<f64>,
     pub moved: Vec<Vector3>,
     pub rest: Vec<Point3>,
+    pub marks: Vec<Mark>,
 }
 
 pub struct Probe {
@@ -559,7 +565,26 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
             .map(|d| Vector3::new(d[0], d[1], d[2]))
             .collect(),
         rest: mesh.nodes.clone(),
+        marks: stimuli(spec, mesh, Some(outcome))
+            .into_iter()
+            .map(|mut m| {
+                if !m.nodes.is_empty() {
+                    let shift = m
+                        .nodes
+                        .iter()
+                        .map(|&v| positions_shift(&field.displacement[v as usize], scale))
+                        .sum::<Vector3>()
+                        / m.nodes.len() as f64;
+                    m.at += shift;
+                }
+                m
+            })
+            .collect(),
     })
+}
+
+fn positions_shift(d: &[f64; 3], scale: f64) -> Vector3 {
+    Vector3::new(d[0], d[1], d[2]) * scale
 }
 
 pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
@@ -576,15 +601,42 @@ pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
             )
         })
         .collect();
-    let edges: Vec<Vec<Point3>> = view
+    let mut edges: Vec<Vec<Point3>> = view
         .edges
         .iter()
         .map(|e| e.iter().map(|&v| positions[v as usize]).collect())
         .collect();
     let shown: BoundingBox<Point3> = positions.iter().copied().collect();
+    let length = shown.diameter() * 0.2;
+    for mark in &view.marks {
+        let Some(toward) = mark.toward.filter(|_| !mark.nodes.is_empty()) else {
+            continue;
+        };
+        let tail = mark.at - toward * length;
+        let side = if toward.x.abs() < 0.9 {
+            toward.cross(Vector3::unit_x())
+        } else {
+            toward.cross(Vector3::unit_y())
+        }
+        .normalize();
+        let barb = |s: f64| mark.at - toward * (length * 0.2) + side * (length * 0.1 * s);
+        edges.push(vec![tail, mark.at]);
+        edges.push(vec![barb(1.0), mark.at, barb(-1.0)]);
+    }
     let picture = crate::render::draw_field(positions, &triangles, &edges, shown);
-    let mut canvas = crate::plot::Canvas::new(picture.width() + 260, picture.height() + 60);
+    let listed: Vec<&str> = view.marks.iter().map(|m| m.text.as_str()).collect();
+    let below = 22 * listed.len() as u32 + if listed.is_empty() { 0 } else { 16 };
+    let mut canvas = crate::plot::Canvas::new(picture.width() + 260, picture.height() + 60 + below);
     canvas.paste(&picture, (0, 60));
+    for (k, text) in listed.iter().enumerate() {
+        canvas.text(
+            (24.0, (picture.height() + 60 + 24 + 22 * k as u32) as f64),
+            14.0,
+            text,
+            crate::plot::Anchor::Left,
+            [40, 40, 40],
+        );
+    }
     crate::plot::colour_bar(
         &mut canvas,
         (
@@ -671,6 +723,11 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
     if let Some(bonds) = prepared.bonds() {
         notes.push(bonds);
     }
+    for mark in stimuli(spec, mesh, None) {
+        if mark.kind == Stimulus::Push {
+            notes.push(format!("applied {}", mark.text));
+        }
+    }
     let displacement: Vec<[f64; 3]> = first.shape.chunks(3).map(|c| [c[0], c[1], c[2]]).collect();
     let values = displacement
         .iter()
@@ -690,4 +747,161 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
             displacement,
         }),
     })
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Stimulus {
+    Push,
+    Hold,
+    Heat,
+}
+
+#[derive(Clone, Debug)]
+pub struct Mark {
+    pub kind: Stimulus,
+    pub text: String,
+    pub nodes: Vec<u32>,
+    pub at: Point3,
+    pub toward: Option<Vector3>,
+}
+
+fn patch(mesh: &Quadratic, faces: &[usize]) -> (Vec<u32>, Point3, Vector3, f64) {
+    let mut nodes = Vec::new();
+    let mut centre = Vector3::zero();
+    let mut normal = Vector3::zero();
+    let mut area = 0.0;
+    for (f, tag) in &mesh.boundary {
+        if !faces.contains(tag) {
+            continue;
+        }
+        nodes.extend_from_slice(f);
+        let [a, b, c] = [f[0], f[1], f[2]].map(|v| mesh.nodes[v as usize]);
+        let n = (b - a).cross(c - a) * 0.5;
+        let da = n.magnitude();
+        area += da;
+        normal += n;
+        centre += (a.to_vec() + b.to_vec() + c.to_vec()) / 3.0 * da;
+    }
+    nodes.sort_unstable();
+    nodes.dedup();
+    let centre = Point3::from_vec(centre / area.max(1.0e-300));
+    (nodes, centre, normal, area)
+}
+
+fn triple(v: Vector3) -> String {
+    format!("{}, {}, {}", short(v.x), short(v.y), short(v.z))
+}
+
+pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<Mark> {
+    use super::fem::elastic::{Hold, Push};
+    use super::fem::thermal::Boundary;
+    let mut marks = Vec::new();
+    for load in &spec.loads {
+        let (nodes, at, normal, area) = patch(mesh, &load.faces);
+        let (text, toward) = match load.push {
+            Push::Force(f) => (
+                format!("{}: {} N ({})", load.label, short(f.magnitude()), triple(f)),
+                f,
+            ),
+            Push::Pressure(p) => {
+                let total = -normal * p;
+                (
+                    format!(
+                        "{}: {} MPa over {} mm², {} N in all",
+                        load.label,
+                        short(p),
+                        short(area),
+                        short(total.magnitude())
+                    ),
+                    total,
+                )
+            }
+            Push::Torque { axis, moment, .. } => (
+                format!(
+                    "{}: {} N·m about ({})",
+                    load.label,
+                    short(moment * 1.0e-3),
+                    triple(axis)
+                ),
+                axis * moment.signum(),
+            ),
+        };
+        marks.push(Mark {
+            kind: Stimulus::Push,
+            text,
+            nodes,
+            at,
+            toward: (toward.magnitude() > 0.0).then(|| toward.normalize()),
+        });
+    }
+    for support in &spec.supports {
+        let (nodes, at, _, _) = patch(mesh, &support.faces);
+        let how = match support.hold {
+            Hold::Fixed => "fixed",
+            Hold::Slide => "slides on its face",
+            Hold::Pin { .. } => "pinned, free to turn",
+        };
+        let reaction = outcome
+            .and_then(|o| o.reading(&support.label))
+            .map(|r| format!(", holds {} N", short(r.value)))
+            .unwrap_or_default();
+        marks.push(Mark {
+            kind: Stimulus::Hold,
+            text: format!("{}: {how}{reaction}", support.label),
+            nodes,
+            at,
+            toward: None,
+        });
+    }
+    for boundary in &spec.thermal {
+        let (faces, text) = match boundary {
+            Boundary::Temperature {
+                label,
+                faces,
+                value,
+            } => (faces, format!("{label}: held at {} °C", short(*value))),
+            Boundary::Flux {
+                label,
+                faces,
+                watts,
+            } => (faces, format!("{label}: {} W in", short(*watts))),
+            Boundary::Convect {
+                label,
+                faces,
+                film,
+                ambient,
+            } => (
+                faces,
+                format!(
+                    "{label}: air at {} °C, h {} W/m²·K",
+                    short(*ambient),
+                    short(*film)
+                ),
+            ),
+        };
+        let (nodes, at, normal, _) = patch(mesh, faces);
+        let toward = matches!(boundary, Boundary::Flux { .. })
+            .then(|| -normal)
+            .filter(|n| n.magnitude() > 0.0)
+            .map(|n| n.normalize());
+        marks.push(Mark {
+            kind: Stimulus::Heat,
+            text,
+            nodes,
+            at,
+            toward,
+        });
+    }
+    if let Some(g) = spec.gravity
+        && g.magnitude() > 0.0
+    {
+        marks.push(Mark {
+            kind: Stimulus::Push,
+            text: format!("gravity: {} m/s² ({})", short(g.magnitude()), triple(g)),
+            nodes: Vec::new(),
+            at: Point3::origin(),
+            toward: None,
+        });
+    }
+    marks
 }

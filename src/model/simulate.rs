@@ -159,7 +159,12 @@ impl Model {
                 let args = Args::new(line, &["faces", "watts"], &[], false)?;
                 let watts = args.number("watts", &self.scope)?;
                 let faces = self.target_faces(args.text("faces")?)?;
-                self.spec().thermal.push(Boundary::Flux { faces, watts });
+                let label = self.boundary_label(line);
+                self.spec().thermal.push(Boundary::Flux {
+                    label,
+                    faces,
+                    watts,
+                });
                 Ok(format!("{watts} W into the faces"))
             }
             "modes" => {
@@ -369,7 +374,9 @@ impl Model {
             (None, Some(_)) => bail!("give `axis=` with `at=`"),
         };
         let n = faces.len();
+        let label = line.label.clone().unwrap_or_else(|| selector.to_string());
         self.spec().loads.push(Load {
+            label,
             faces,
             push: Push::Torque {
                 point,
@@ -419,7 +426,9 @@ impl Model {
         } else {
             Args::new(line, &["faces"], &["force"], false)?
         };
-        let faces = self.target_faces(args.text("faces")?)?;
+        let selector = args.text("faces")?;
+        let faces = self.target_faces(selector)?;
+        let label = line.label.clone().unwrap_or_else(|| selector.to_string());
         let n = faces.len();
         let push = if pressure {
             let p = args.number("value", &self.scope)?;
@@ -431,7 +440,7 @@ impl Model {
                 .ok_or_else(|| anyhow!("write `load faces force=x,y,z` in newtons"))?;
             Push::Force(point3(text, &self.scope)?.to_vec())
         };
-        self.spec().loads.push(Load { faces, push });
+        self.spec().loads.push(Load { label, faces, push });
         Ok(match push {
             Push::Force(f) => format!("{} N over {n} face(s)", crate::plot::label(f.magnitude())),
             Push::Pressure(p) => format!("{p} MPa on {n} face(s)"),

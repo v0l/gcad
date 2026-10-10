@@ -1416,6 +1416,9 @@ impl App {
             p.circle_stroke(*at, 4.0, Stroke::new(1.0, Color32::BLACK));
         }
         self.focus_popup(ui, rect, &projector, &scene);
+        if let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone()) {
+            field_marks(&p, rect, &projector, &field, scene.mesh.radius);
+        }
         if !resp.dragged()
             && let Some(at) = resp.hover_pos()
             && let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
@@ -1632,6 +1635,89 @@ impl Browser {
             typed: String::new(),
         }
     }
+}
+
+fn field_marks(
+    p: &egui::Painter,
+    rect: Rect,
+    projector: &Projector,
+    field: &crate::sim::statics::FieldView,
+    radius: f32,
+) {
+    use crate::sim::statics::Stimulus;
+    let v = |q: monstertruck::modeling::Point3| [q.x as f32, q.y as f32, q.z as f32];
+    let font = egui::FontId::proportional(12.0);
+    let label = |at: Pos2, text: &str, colour: Color32| {
+        let galley = p.layout_no_wrap(text.to_string(), font.clone(), colour);
+        let corner = at + Vec2::new(6.0, -galley.size().y - 4.0);
+        p.rect_filled(
+            Rect::from_min_size(corner, galley.size()).expand(3.0),
+            3.0,
+            Color32::from_black_alpha(190),
+        );
+        p.galley(corner, galley, colour);
+    };
+    for mark in &field.marks {
+        let colour = match mark.kind {
+            Stimulus::Push => Color32::from_rgb(255, 80, 200),
+            Stimulus::Hold => Color32::from_rgb(235, 235, 235),
+            Stimulus::Heat => Color32::from_rgb(255, 170, 60),
+        };
+        if mark.nodes.is_empty() {
+            continue;
+        }
+        let step = (mark.nodes.len() / 400).max(1);
+        for &n in mark.nodes.iter().step_by(step) {
+            if let Some(at) = projector.project(v(field.positions[n as usize]))
+                && rect.contains(at)
+            {
+                p.circle_filled(at, 1.6, colour);
+            }
+        }
+        let Some(head) = projector.project(v(mark.at)) else {
+            continue;
+        };
+        let anchor = match mark.toward {
+            Some(toward) => {
+                let length = radius as f64 * 0.45;
+                let tail = mark.at - toward * length;
+                let Some(tail) = projector.project(v(tail)) else {
+                    continue;
+                };
+                let along = (head - tail).normalized();
+                let side = Vec2::new(-along.y, along.x);
+                for (width, ink) in [(5.0, Color32::BLACK), (2.5, colour)] {
+                    let stroke = Stroke::new(width, ink);
+                    p.line_segment([tail, head], stroke);
+                    p.line_segment([head, head - along * 12.0 + side * 6.0], stroke);
+                    p.line_segment([head, head - along * 12.0 - side * 6.0], stroke);
+                }
+                tail
+            }
+            None => {
+                p.circle_filled(head, 4.0, colour);
+                p.circle_stroke(head, 4.0, Stroke::new(1.0, Color32::BLACK));
+                head
+            }
+        };
+        label(anchor, &mark.text, colour);
+    }
+    let lines: Vec<&str> = field.marks.iter().map(|m| m.text.as_str()).collect();
+    if lines.is_empty() {
+        return;
+    }
+    let galley = p.layout_no_wrap(
+        lines.join("\n"),
+        egui::FontId::monospace(11.0),
+        Color32::from_gray(225),
+    );
+    let corner = rect.right_bottom() - galley.size() - Vec2::new(12.0, 30.0);
+    p.rect_filled(
+        Rect::from_min_size(corner, galley.size()).expand(5.0),
+        3.0,
+        Color32::from_black_alpha(190),
+    );
+    p.galley(corner, galley, Color32::from_gray(225));
 }
 
 fn field_readout(

@@ -65,6 +65,7 @@ fn polar(mesh: &Quadratic, faces: &[usize], point: Point3, axis: Vector3) -> f64
 
 #[derive(Clone, Debug)]
 pub struct Load {
+    pub label: String,
     pub faces: Vec<usize>,
     pub push: Push,
 }

@@ -255,6 +255,26 @@ fn field_reads_at_a_point() {
         1000.0 * view.rest[v].x / (100.0 * 200.0e3),
         1.0e-6,
     );
+    let texts: Vec<&str> = view.marks.iter().map(|m| m.text.as_str()).collect();
+    assert!(texts.contains(&">X: 1000.0 N (1000.0, 0, 0)"), "{texts:?}");
+    assert!(
+        texts.contains(&"slide1: slides on its face, holds 1000.0 N"),
+        "{texts:?}"
+    );
+    let push = view
+        .marks
+        .iter()
+        .find(|m| m.text.starts_with(">X"))
+        .expect("load mark");
+    close(push.toward.expect("a direction").x, 1.0, 1.0e-12);
+    assert!(
+        outcome
+            .notes
+            .iter()
+            .any(|n| n == "applied >X: 1000.0 N (1000.0, 0, 0)"),
+        "{:?}",
+        outcome.notes
+    );
 }
 
 #[test]

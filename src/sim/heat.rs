@@ -91,6 +91,11 @@ fn run_spec(spec: &Spec) -> Result<Outcome> {
     if let Some(iterations) = answer.iterations {
         notes.push(format!("solved iteratively in {iterations} steps"));
     }
+    for mark in super::statics::stimuli(spec, mesh, None) {
+        if mark.kind == super::statics::Stimulus::Heat && mark.text.ends_with(" W in") {
+            notes.push(format!("applied {}", mark.text));
+        }
+    }
     if let Some(bonds) = prepared.bonds() {
         notes.push(bonds);
     }
