@@ -192,7 +192,7 @@ map texture on the boundary triangles. Hovering over the part shows the value un
 (stress, temperature or mode shape), how far that point moved in a static run, and where it
 sits on the undeformed part, interpolated across the boundary triangle it lands on. Loads, supports and
 thermal boundaries are drawn too: an arrow for each load's resultant at the middle of its faces,
-dots on the faces each line acts on, a label with its total (`seat.side: 770.2 N (0, 767.9,
+an outline round the faces each line acts on, hidden behind the part like any edge, a label with its total (`seat.side: 770.2 N (0, 767.9,
 59.05)`, `bolts: fixed, holds 767.9 N`), and the whole list in a corner. `gcad render` draws
 the arrows and lists the same lines under the plot, and `gcad sim` notes each applied load.
 

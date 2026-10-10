@@ -1666,14 +1666,6 @@ fn field_marks(
         if mark.nodes.is_empty() {
             continue;
         }
-        let step = (mark.nodes.len() / 400).max(1);
-        for &n in mark.nodes.iter().step_by(step) {
-            if let Some(at) = projector.project(v(field.positions[n as usize]))
-                && rect.contains(at)
-            {
-                p.circle_filled(at, 1.6, colour);
-            }
-        }
         let Some(head) = projector.project(v(mark.at)) else {
             continue;
         };
@@ -1695,9 +1687,13 @@ fn field_marks(
                 tail
             }
             None => {
-                p.circle_filled(head, 4.0, colour);
-                p.circle_stroke(head, 4.0, Stroke::new(1.0, Color32::BLACK));
-                head
+                let Some(spot) = mark
+                    .spot
+                    .and_then(|n| projector.project(v(field.positions[n as usize])))
+                else {
+                    continue;
+                };
+                spot
             }
         };
         label(anchor, &mark.text, colour);

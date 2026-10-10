@@ -761,20 +761,39 @@ pub struct Mark {
     pub kind: Stimulus,
     pub text: String,
     pub nodes: Vec<u32>,
+    pub outline: Vec<[u32; 3]>,
+    pub spot: Option<u32>,
     pub at: Point3,
     pub toward: Option<Vector3>,
 }
 
-fn patch(mesh: &Quadratic, faces: &[usize]) -> (Vec<u32>, Point3, Vector3, f64) {
+struct Patch {
+    nodes: Vec<u32>,
+    outline: Vec<[u32; 3]>,
+    spot: Option<u32>,
+    at: Point3,
+    normal: Vector3,
+    area: f64,
+}
+
+fn patch(mesh: &Quadratic, faces: &[usize]) -> Patch {
     let mut nodes = Vec::new();
     let mut centre = Vector3::zero();
     let mut normal = Vector3::zero();
     let mut area = 0.0;
+    let mut sides: std::collections::BTreeMap<(u32, u32), (u32, usize)> =
+        std::collections::BTreeMap::new();
     for (f, tag) in &mesh.boundary {
         if !faces.contains(tag) {
             continue;
         }
         nodes.extend_from_slice(f);
+        for (a, m, b) in [(0, 3, 1), (1, 4, 2), (2, 5, 0)] {
+            sides
+                .entry((f[a].min(f[b]), f[a].max(f[b])))
+                .or_insert((f[m], 0))
+                .1 += 1;
+        }
         let [a, b, c] = [f[0], f[1], f[2]].map(|v| mesh.nodes[v as usize]);
         let n = (b - a).cross(c - a) * 0.5;
         let da = n.magnitude();
@@ -784,8 +803,25 @@ fn patch(mesh: &Quadratic, faces: &[usize]) -> (Vec<u32>, Point3, Vector3, f64) 
     }
     nodes.sort_unstable();
     nodes.dedup();
-    let centre = Point3::from_vec(centre / area.max(1.0e-300));
-    (nodes, centre, normal, area)
+    let at = Point3::from_vec(centre / area.max(1.0e-300));
+    let spot = nodes.iter().copied().min_by(|&p, &q| {
+        (mesh.nodes[p as usize] - at)
+            .magnitude2()
+            .total_cmp(&(mesh.nodes[q as usize] - at).magnitude2())
+    });
+    let outline = sides
+        .into_iter()
+        .filter(|(_, (_, count))| *count == 1)
+        .map(|((a, b), (m, _))| [a, m, b])
+        .collect();
+    Patch {
+        nodes,
+        outline,
+        spot,
+        at,
+        normal,
+        area,
+    }
 }
 
 fn triple(v: Vector3) -> String {
@@ -797,7 +833,14 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
     use super::fem::thermal::Boundary;
     let mut marks = Vec::new();
     for load in &spec.loads {
-        let (nodes, at, normal, area) = patch(mesh, &load.faces);
+        let Patch {
+            nodes,
+            outline,
+            spot,
+            at,
+            normal,
+            area,
+        } = patch(mesh, &load.faces);
         let (text, toward) = match load.push {
             Push::Force(f) => (
                 format!("{}: {} N ({})", load.label, short(f.magnitude()), triple(f)),
@@ -830,12 +873,20 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
             kind: Stimulus::Push,
             text,
             nodes,
+            outline,
+            spot,
             at,
             toward: (toward.magnitude() > 0.0).then(|| toward.normalize()),
         });
     }
     for support in &spec.supports {
-        let (nodes, at, _, _) = patch(mesh, &support.faces);
+        let Patch {
+            nodes,
+            outline,
+            spot,
+            at,
+            ..
+        } = patch(mesh, &support.faces);
         let how = match support.hold {
             Hold::Fixed => "fixed",
             Hold::Slide => "slides on its face",
@@ -849,6 +900,8 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
             kind: Stimulus::Hold,
             text: format!("{}: {how}{reaction}", support.label),
             nodes,
+            outline,
+            spot,
             at,
             toward: None,
         });
@@ -879,7 +932,14 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
                 ),
             ),
         };
-        let (nodes, at, normal, _) = patch(mesh, faces);
+        let Patch {
+            nodes,
+            outline,
+            spot,
+            at,
+            normal,
+            ..
+        } = patch(mesh, faces);
         let toward = matches!(boundary, Boundary::Flux { .. })
             .then(|| -normal)
             .filter(|n| n.magnitude() > 0.0)
@@ -888,6 +948,8 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
             kind: Stimulus::Heat,
             text,
             nodes,
+            outline,
+            spot,
             at,
             toward,
         });
@@ -899,6 +961,8 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
             kind: Stimulus::Push,
             text: format!("gravity: {} m/s² ({})", short(g.magnitude()), triple(g)),
             nodes: Vec::new(),
+            outline: Vec::new(),
+            spot: None,
             at: Point3::origin(),
             toward: None,
         });

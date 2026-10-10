@@ -421,10 +421,34 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         crate::plot::label(view.high),
         view.unit
     );
+    let point = |v: u32| v3(view.positions[v as usize]);
+    let curve = |edges: &[[u32; 3]], colour: V3, width: f32| {
+        let mut out = Lines {
+            colour,
+            material: Ink::Edge,
+            group: 0,
+            width,
+            ..Default::default()
+        };
+        for [a, m, b] in edges {
+            out.segments.push([point(*a), point(*m)]);
+            out.segments.push([point(*m), point(*b)]);
+        }
+        out
+    };
+    let mut lines = vec![curve(&view.edges, EDGE, EDGE_WIDTH)];
+    for mark in &view.marks {
+        let colour = match mark.kind {
+            crate::sim::statics::Stimulus::Push => [1.0, 0.31, 0.78],
+            crate::sim::statics::Stimulus::Hold => [0.95, 0.95, 0.95],
+            crate::sim::statics::Stimulus::Heat => [1.0, 0.67, 0.24],
+        };
+        lines.push(curve(&mark.outline, colour, MARKED_WIDTH));
+    }
     Scene {
         mesh: Arc::new(viewer3d::Scene {
             surfaces: vec![surface],
-            lines: Vec::new(),
+            lines,
             images: vec![viewer3d::Image {
                 width: 256,
                 height: 1,
