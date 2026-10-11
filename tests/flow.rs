@@ -157,7 +157,13 @@ fn throughput() {
     );
 }
 
-fn schaefer_turek(diameter: usize, reynolds: f64, steps: usize) -> (f64, f64) {
+fn schaefer_turek(
+    diameter: usize,
+    reynolds: f64,
+    steps: usize,
+    samples: usize,
+    every: usize,
+) -> Channel {
     let gpu = Gpu::open().expect("a compute device");
     let d = diameter as f64;
     let height = (4.1 * d).round() as usize;
@@ -214,17 +220,64 @@ fn schaefer_turek(diameter: usize, reynolds: f64, steps: usize) -> (f64, f64) {
     let settings = Settings::laminar(mean * d / reynolds);
     let mut lattice = Lattice::new(&gpu, &domain).expect("lattice");
     lattice.run(&settings, steps).expect("runs");
-    let force = lattice.forces(1).expect("forces")[0];
     let scale = 0.5 * mean * mean * d;
-    (force[0] / scale, force[1] / scale)
+    let mut history = Vec::new();
+    for _ in 0..samples {
+        lattice.run(&settings, every).expect("runs");
+        let force = lattice.forces(1).expect("forces")[0];
+        history.push((force[0] / scale, force[1] / scale));
+    }
+    let last = lattice.forces(1).expect("forces")[0];
+    Channel {
+        drag: last[0] / scale,
+        lift: last[1] / scale,
+        history,
+        period: every as f64 * mean / d,
+    }
+}
+
+struct Channel {
+    drag: f64,
+    lift: f64,
+    history: Vec<(f64, f64)>,
+    period: f64,
 }
 
 #[test]
 fn cylinder_in_a_channel_re20() {
-    let (drag, lift) = schaefer_turek(40, 20.0, 240_000);
+    let Channel { drag, lift, .. } = schaefer_turek(40, 20.0, 240_000, 0, 1);
     assert!(
         (drag - 5.5795).abs() / 5.5795 < 0.01,
         "drag {drag} against 5.5795"
     );
     assert!((lift - 0.0106).abs() < 0.01, "lift {lift} against 0.0106");
+}
+
+#[test]
+fn cylinder_in_a_channel_re100() {
+    let run = schaefer_turek(40, 100.0, 300_000, 1500, 40);
+    let drag = run.history.iter().map(|h| h.0).fold(f64::MIN, f64::max);
+    let lift = run.history.iter().map(|h| h.1).fold(f64::MIN, f64::max);
+    let ups: Vec<usize> = run
+        .history
+        .windows(2)
+        .enumerate()
+        .filter(|(_, w)| w[0].1 < 0.0 && w[1].1 >= 0.0)
+        .map(|(k, _)| k)
+        .collect();
+    let cycles = (ups.len() - 1) as f64;
+    let strouhal = cycles / ((ups[ups.len() - 1] - ups[0]) as f64 * run.period);
+    eprintln!("drag max {drag:.4} lift max {lift:.4} strouhal {strouhal:.4}");
+    assert!(
+        (drag - 3.23).abs() < 0.07,
+        "peak drag {drag} against 3.22 to 3.24"
+    );
+    assert!(
+        (lift - 1.0).abs() < 0.06,
+        "peak lift {lift} against 0.99 to 1.01"
+    );
+    assert!(
+        (strouhal - 0.3).abs() < 0.008,
+        "Strouhal {strouhal} against 0.295 to 0.305"
+    );
 }

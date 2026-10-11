@@ -75,7 +75,9 @@ bounce-back where a link's wall fraction is known, kept in a table that a fluid 
 word points into. The Schaefer-Turek cylinder at Re 20, 40 cells across: staircase walls gave
 drag 5.744 (2.9% high), interpolated walls 5.703, then 5.685 at 60 cells, so the rest was not
 resolution: at a peak inlet speed of 0.075 the Mach number is 0.13, and halving it gave 5.602,
-within 0.4% of 5.5795. Lattice speeds stay at or under about 0.04 for force work.
+within 0.4% of 5.5795. At Re 100 (case 2D-2, same grid) the shedding gives peak drag 3.229
+(published 3.22 to 3.24), Strouhal 0.302 (0.295 to 0.305) and peak lift 0.963, 3% under the
+published 0.99 to 1.01. Lattice speeds stay at or under about 0.04 for force work.
 
 The GPU on this machine is shared with a vLLM server holding 92 of its 96 GB, so runs are
 capped at about 3 GB (some 20 million cells) while that is up.
