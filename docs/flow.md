@@ -90,16 +90,46 @@ gcad solids go into the lattice with `flow::voxel::place`: cell centres inside t
 surface (crossings along x per column, the rays nudged off the cell centres) become wall cells
 of that body, and each link from a fluid cell into it gets its wall fraction from a ray cast
 against the same triangles. A sphere 20 cells across voxelizes to 4,145 cells against 4,189.
-Inlets ramp up over the first few thousand steps and sponge layers at the inlet and outlet pull
-the flow toward the free stream, because an impulsive start in a low-viscosity box leaves
-pressure waves sloshing between them for tens of thousands of steps (drag swung between +3.6
-and -3.6 around a steady 1.65).
+Inlets ramp up over the first few thousand steps and a sponge layer at the outlet pulls the
+flow toward the free stream, because an impulsive start in a low-viscosity box leaves pressure
+waves sloshing for tens of thousands of steps (drag swung between +3.6 and -3.6 around a
+steady 1.65). There is no sponge at the inlet: one there held the density at the free stream
+while the body's upstream influence wanted it to rise, and so fed total pressure into the flow
+(a cube's stagnation pressure read 1.16 q, and the sphere's drag 1.6% high).
 
-The sphere at Re 50 reads 1.654 against Clift's free-stream 1.574, 5% high at Re 20 and 100 as
+The sphere at Re 50 read 1.654 against Clift's free-stream 1.574, 5% high at Re 20 and 100 as
 well. Most of that is the box: `tools/foam/run.sh sphere` runs the same case in OpenFOAM v2412
 (Docker, `snappyHexMesh` with four prism layers, steady laminar `simpleFoam`), with symmetry
 planes 4D off the axis, which mirror the sphere at the same 8D spacing as the lattice's
-periodic sides. It gives 1.6048 on 313,000 cells and 1.6060 on 1.72 million, so the lattice is
-3.0% high in the same box. The likeliest cause is resolution: 20 cells across leaves the
-boundary layer about three cells thick, and a finer sphere does not fit next to the vLLM
-server. The test checks against OpenFOAM's 1.606 within 4%.
+periodic sides. It gives 1.6048 on 313,000 cells and 1.6060 on 1.72 million. With the inlet
+sponge removed the lattice reads 1.6285 at 20 cells across (1.4% high) and, before that fix,
+1.6242 at 40 cells against 1.654 at 20, so what remains is resolution. The test checks 20
+cells against 1.606 within 2.5%; `sphere_drag_re50_fine` runs 40 cells (61 million, ten
+minutes).
+
+### Turbulence
+
+At Re 22,000 the viscosity leaves tau at 0.5001, where the lattice hardly damps sound. The
+square cylinder's sharp corners fed a tone with a 32-step period that carried 72% of the lift
+signal (lift swung by 5 against a shedding amplitude near 1.5). `Settings::bulk` relaxes the
+trace of the non-equilibrium stress more slowly than the rest, which adds bulk viscosity
+(tau_bulk = tau + 4.5 bulk) and damps sound without touching nearly incompressible flow. At
+`bulk 0.1` the tone is gone and 96% of the lift energy sits at the shedding frequency.
+
+The flow also stays two-dimensional when the box and inflow are exactly uniform along the span,
+which gave drag 2.43 and Strouhal 0.155; a fixed 2% random disturbance on the inlet velocity
+lets it break up. With Smagorinsky 0.14, bulk 0.1, D = 24 in a 22D x 14D x 4D box (periodic
+sides, 7% blockage as in Lyn's tunnel), drag is 2.20 against Lyn's 2.1, Strouhal 0.145 against
+0.132 and rms lift 1.1. The LES entries of the Rodi workshop on this case spread over drag
+1.66 to 2.77 and Strouhal 0.09 to 0.15.
+
+### `sim flow`
+
+Phase 5 is built (`src/sim/wind.rs`, documented in `docs/simulation.md`): `wind`, `air`,
+`average` and `mesh` as the cell size; drag, side, lift, CdA, moments, per-part forces and the
+mean surface pressure as the field, sampled on the part surfaces subdivided to the cell size.
+The Schaefer-Turek pressure difference at Re 20 checks the lattice pressure: 2.9429 against
+2.9375. A 100 mm cube at 10 m/s and 20 cells across reads Cd 1.01 (Hoerner 1.05) and a
+stagnation pressure of 1.00 q once the inlet is 4 widths upstream and the sides 3 widths away;
+2 and 1.5 read Cd 1.30 and 1.16 q. The default box is therefore large, (L + 9H) x 7H x 7H, and
+the default cell puts 32 cells across H.

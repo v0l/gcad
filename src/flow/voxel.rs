@@ -16,20 +16,47 @@ impl Grid {
     }
 }
 
+pub fn surface(solid: &Solid, spacing: f64) -> (Vec<Point3>, Vec<[usize; 3]>) {
+    let tolerance = (spacing * 0.05).min(geometry::mesh_tolerance(solid));
+    geometry::welded(&geometry::mesh(solid, tolerance))
+}
+
 pub fn place(domain: &mut Domain, grid: &Grid, solid: &Solid, body: u16) -> usize {
+    let (points, triangles) = surface(solid, grid.spacing);
+    place_surface(domain, grid, &points, &triangles, body)
+}
+
+pub fn place_surface(
+    domain: &mut Domain,
+    grid: &Grid,
+    points: &[Point3],
+    triangles: &[[usize; 3]],
+    body: u16,
+) -> usize {
     use rayon::prelude::*;
-    let tolerance = (grid.spacing * 0.05).min(geometry::mesh_tolerance(solid));
-    let (points, triangles) = geometry::welded(&geometry::mesh(solid, tolerance));
     let triangles: Vec<[Point3; 3]> = triangles.iter().map(|t| t.map(|v| points[v])).collect();
     let bvh = Bvh::new(triangles);
     let [nx, ny, nz] = grid.size;
     let h = grid.spacing;
+    let span = |axis: usize, n: usize| {
+        let along = |p: &Point3| (p[axis] - grid.origin[axis]) / h;
+        let low = points.iter().map(along).fold(f64::INFINITY, f64::min);
+        let high = points.iter().map(along).fold(f64::NEG_INFINITY, f64::max);
+        let first = (low.floor() - 2.0).max(0.0) as usize;
+        let last = ((high.ceil() + 2.0).max(0.0) as usize).min(n - 1);
+        first..last + 1
+    };
+    let (xs, ys, zs) = (span(0, nx), span(1, ny), span(2, nz));
+    if points.is_empty() || xs.is_empty() || ys.is_empty() || zs.is_empty() {
+        return 0;
+    }
     let start = grid.origin.x - 2.0 * h;
     let nudge = Vector3::new(0.0, h * 1.234_567e-6, h * 2.345_678e-6);
-    let columns: Vec<Vec<usize>> = (0..ny * nz)
+    let wide = ys.len();
+    let columns: Vec<Vec<usize>> = (0..ys.len() * zs.len())
         .into_par_iter()
         .map(|column| {
-            let (y, z) = (column % ny, column / ny);
+            let (y, z) = (ys.start + column % wide, zs.start + column / wide);
             let from = Point3::new(start, grid.centre(0, y, z).y, grid.centre(0, y, z).z) + nudge;
             let mut crossings = Vec::new();
             let mut last = 0.0;
@@ -64,11 +91,19 @@ pub fn place(domain: &mut Domain, grid: &Grid, solid: &Solid, body: u16) -> usiz
             }
         }
     }
-    let cuts: Vec<(usize, usize, f64)> = (0..nx * ny * nz)
+    let (long, wide) = (xs.len(), ys.len());
+    let cuts: Vec<(usize, usize, f64)> = (0..xs.len() * ys.len() * zs.len())
         .into_par_iter()
-        .filter(|&cell| domain.flags[cell] == FLUID)
-        .flat_map_iter(|cell| {
-            let (x, y, z) = (cell % nx, (cell / nx) % ny, cell / (nx * ny));
+        .map(|k| {
+            let (x, y, z) = (
+                xs.start + k % long,
+                ys.start + (k / long) % wide,
+                zs.start + k / (long * wide),
+            );
+            (domain_index(grid, x, y, z), x, y, z)
+        })
+        .filter(|&(cell, ..)| domain.flags[cell] == FLUID)
+        .flat_map_iter(|(cell, x, y, z)| {
             let centre = grid.centre(x, y, z);
             let flags = &domain.flags;
             let bodies = &domain.body;

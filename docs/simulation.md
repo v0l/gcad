@@ -86,6 +86,42 @@ body, heat leaving through each boundary.
 The lowest natural frequencies and mode shapes, from the same supports as `static`
 (`modes 6`). Readings: each frequency and its effective mass along x, y and z.
 
+### flow
+
+Wind on a part or assembly, from the GPU lattice Boltzmann solver in `src/flow` (see
+`docs/flow.md`). No mesh: the parts are voxelized onto a uniform grid of cubes `mesh` mm across.
+
+```
+sim flow
+part head.gasm
+wind 30 toward=1,0,0 about=0,0,-500
+mesh 10
+average 40
+leave *screw* *nut*
+expect drag<400
+```
+
+- `wind speed toward=x,y,z about=x,y,z` is in m/s; `toward` is the way the air moves and
+  `about` is where moments are taken (default the origin).
+- `mesh` is the cell size in mm. The default puts 32 cells across the widest side the wind
+  meets.
+- `average passes` is how long the forces are averaged, in the time the wind takes to cross
+  that side (default 40, about five shedding cycles behind a bluff body).
+- `air density= viscosity=` overrides air at 20 °C (1.204 kg/m³, 1.516e-5 m²/s).
+
+Readings: `drag` along the wind, `side` across it and level, `lift` across it and up, `cda`
+(drag over the dynamic pressure, m²), `moment.x`, `.y` and `.z` about the `about` point in N·m,
+`pressure` and `suction` (the extremes of the mean surface pressure, Pa), and for an assembly
+`part.drag`, `part.side` and `part.lift`. The field is the mean surface pressure. `--dry-run`
+prints the grid, the GPU memory it needs and the number of steps.
+
+The box runs 4 widths upstream, 5 downstream and 3 to each side. Nearer sides and inlet were
+measured to read high: a 100 mm cube at 20 cells across reads Cd 1.30 and a stagnation pressure
+of 1.16 q with the inlet 2 widths away and the sides 1.5, and 1.01 and 1.00 q in this box
+(Hoerner gives 1.05). The flow is a large-eddy simulation that does not resolve boundary
+layers, so drag on sharp-edged parts, where the separation points are fixed, is more certain
+than on smooth rounded ones.
+
 ## Meshing
 
 Tetrahedra that follow the surface, written in Rust (`src/sim/tet/`). Built in phase 2:

@@ -85,6 +85,7 @@ pub struct Settings {
     pub inflow: f64,
     pub sponge: f64,
     pub stream: [f64; 3],
+    pub bulk: f64,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -104,6 +105,7 @@ impl Settings {
             inflow: 1.0,
             sponge: 0.0,
             stream: [0.0; 3],
+            bulk: 0.0,
         }
     }
 }
@@ -125,7 +127,7 @@ struct Params {
     regular: f32,
     smagorinsky: f32,
     sponge: f32,
-    pad0: f32,
+    bulk: f32,
     sx: f32,
     sy: f32,
     sz: f32,
@@ -134,7 +136,7 @@ struct Params {
 
 fn shader() -> String {
     let mut s = String::new();
-    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, sponge: f32, pad0: f32, sx: f32, sy: f32, sz: f32, pad1: f32 }\n";
+    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, sponge: f32, bulk: f32, sx: f32, sy: f32, sz: f32, pad1: f32 }\n";
     s += "@group(0) @binding(0) var<uniform> p: Params;\n";
     s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
     s += "@group(0) @binding(2) var<storage, read> cuts: array<f32>;\n";
@@ -221,7 +223,8 @@ fn shader() -> String {
     s += "  let tau = 0.5 * (tau0 + sqrt(tau0 * tau0 + 18.0 * 1.4142135 * cs2 * pnorm / rho));\n";
     s += "  let omega = 1.0 / tau;\n";
     s += "  let keep = 1.0 - 0.5 * omega;\n";
-    s += "  let edge = min(f32(x), f32(p.nx - 1u) - f32(x));\n";
+    s += "  let shed = select(0.0, (omega - 1.0 / (tau + 4.5 * p.bulk)) * (pxx + pyy + pzz) / 3.0, p.regular > 0.5);\n";
+    s += "  let edge = f32(p.nx - 1u) - f32(x);\n";
     s += "  var damp = 0.0;\n";
     s += "  if (p.sponge > 0.0 && edge < p.sponge) { let r = 1.0 - edge / p.sponge; damp = 0.5 * r * r; }\n";
     s += "  let su = p.sx * p.sx + p.sy * p.sy + p.sz * p.sz;\n";
@@ -240,7 +243,7 @@ fn shader() -> String {
             q(1, 2)
         );
         s += &format!(
-            "  {{ let cu = ({}.0) * ux + ({}.0) * uy + ({}.0) * uz;\n    let eq = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu));\n    let push = keep * {w:.17} * ((3.0 * (({}.0) - ux) + 9.0 * cu * ({}.0)) * p.fx + (3.0 * (({}.0) - uy) + 9.0 * cu * ({}.0)) * p.fy + (3.0 * (({}.0) - uz) + 9.0 * cu * ({}.0)) * p.fz);\n    let free = select(g{i} - eq, {:.17} * {projection} - {w:.17} * 1.5 * (({sx}.0) * p.fx + ({sy}.0) * p.fy + ({sz}.0) * p.fz), p.regular > 0.5);\n    let next = eq + (1.0 - omega) * free + push;\n    let cs = ({sx}.0) * p.sx + ({sy}.0) * p.sy + ({sz}.0) * p.sz;\n    let far = {w:.17} * (3.0 * cs + 4.5 * cs * cs - 1.5 * su);\n    b{i}[index] = next - damp * (next - far); }}\n",
+            "  {{ let cu = ({}.0) * ux + ({}.0) * uy + ({}.0) * uz;\n    let eq = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu));\n    let push = keep * {w:.17} * ((3.0 * (({}.0) - ux) + 9.0 * cu * ({}.0)) * p.fx + (3.0 * (({}.0) - uy) + 9.0 * cu * ({}.0)) * p.fy + (3.0 * (({}.0) - uz) + 9.0 * cu * ({}.0)) * p.fz);\n    let free = select(g{i} - eq, {:.17} * {projection} - {w:.17} * 1.5 * (({sx}.0) * p.fx + ({sy}.0) * p.fy + ({sz}.0) * p.fz), p.regular > 0.5);\n    let next = eq + (1.0 - omega) * free + push + {:.17} * shed;\n    let cs = ({sx}.0) * p.sx + ({sy}.0) * p.sy + ({sz}.0) * p.sz;\n    let far = {w:.17} * (3.0 * cs + 4.5 * cs * cs - 1.5 * su);\n    b{i}[index] = next - damp * (next - far); }}\n",
             c[0],
             c[1],
             c[2],
@@ -251,6 +254,7 @@ fn shader() -> String {
             c[2],
             c[2],
             4.5 * w,
+            4.5 * w * ((c[0] * c[0] + c[1] * c[1] + c[2] * c[2]) as f64 - 1.0),
             sx = c[0],
             sy = c[1],
             sz = c[2]
@@ -345,7 +349,12 @@ fn force_shader() -> String {
             c[2]
         );
     }
-    s += "  out[k] = vec4<f32>(f, 0.0);\n";
+    s += &format!(
+        "  out[k] = vec4<f32>(f, 1.0{});\n",
+        (0..19)
+            .map(|i| format!(" + a{i}[l.cell]"))
+            .collect::<String>()
+    );
     s += "}\n";
     s
 }
@@ -380,8 +389,9 @@ pub struct Lattice<'a> {
     common: wgpu::BindGroup,
     sides: [[wgpu::BindGroup; 2]; 2],
     edges: Option<Pass>,
-    forces: Option<(Pass, wgpu::Buffer, Vec<u32>)>,
+    forces: Option<(Pass, wgpu::Buffer)>,
     parity: usize,
+    pub links: Vec<[u32; 2]>,
 }
 
 pub struct Fields {
@@ -400,6 +410,23 @@ fn dispatch(count: u32) -> (u32, u32) {
 
 impl<'a> Lattice<'a> {
     pub fn new(gpu: &'a Gpu, domain: &Domain) -> Result<Lattice<'a>> {
+        let invalid = gpu.device.push_error_scope(wgpu::ErrorFilter::Validation);
+        let short = gpu.device.push_error_scope(wgpu::ErrorFilter::OutOfMemory);
+        let lattice = Lattice::build(gpu, domain);
+        let cells = domain.size.iter().product::<usize>();
+        if let Some(error) = pollster::block_on(short.pop()) {
+            bail!(
+                "the GPU has no room for {:.1} million cells ({error})",
+                cells as f64 / 1.0e6
+            );
+        }
+        if let Some(error) = pollster::block_on(invalid.pop()) {
+            bail!("the GPU refused the lattice: {error}");
+        }
+        lattice
+    }
+
+    fn build(gpu: &'a Gpu, domain: &Domain) -> Result<Lattice<'a>> {
         let size = domain.size;
         let count = size[0] * size[1] * size[2];
         if domain.flags.len() != count || domain.body.len() != count {
@@ -649,8 +676,7 @@ impl<'a> Lattice<'a> {
                 count: n,
                 header: header.clone(),
             };
-            let bodies = links.iter().map(|l| l[1]).collect();
-            (pass, out, bodies)
+            (pass, out)
         });
         Ok(Lattice {
             gpu,
@@ -663,6 +689,7 @@ impl<'a> Lattice<'a> {
             edges,
             forces,
             parity: 0,
+            links,
         })
     }
 
@@ -687,7 +714,7 @@ impl<'a> Lattice<'a> {
             },
             smagorinsky: settings.smagorinsky as f32,
             sponge: settings.sponge as f32,
-            pad0: 0.0,
+            bulk: settings.bulk as f32,
             sx: settings.stream[0] as f32,
             sy: settings.stream[1] as f32,
             sz: settings.stream[2] as f32,
@@ -736,8 +763,20 @@ impl<'a> Lattice<'a> {
 
     pub fn forces(&self, bodies: usize) -> Result<Vec<[f64; 3]>> {
         let mut out = vec![[0.0; 3]; bodies];
-        let Some((pass, buffer, owners)) = &self.forces else {
-            return Ok(out);
+        let values = self.link_samples()?;
+        for (k, link) in self.links.iter().enumerate() {
+            if let Some(total) = out.get_mut(link[1] as usize - 1) {
+                for d in 0..3 {
+                    total[d] += values[k][d] as f64;
+                }
+            }
+        }
+        Ok(out)
+    }
+
+    pub fn link_samples(&self) -> Result<Vec<[f32; 4]>> {
+        let Some((pass, buffer)) = &self.forces else {
+            return Ok(Vec::new());
         };
         let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
         {
@@ -750,14 +789,10 @@ impl<'a> Lattice<'a> {
         }
         self.gpu.queue.submit([encoder.finish()]);
         let values = self.gpu.read(buffer)?;
-        for (k, &body) in owners.iter().enumerate() {
-            if let Some(total) = out.get_mut(body as usize - 1) {
-                for d in 0..3 {
-                    total[d] += values[4 * k + d] as f64;
-                }
-            }
-        }
-        Ok(out)
+        Ok(values
+            .chunks_exact(4)
+            .map(|v| [v[0], v[1], v[2], v[3]])
+            .collect())
     }
 
     pub fn fields(&self, force: [f64; 3]) -> Result<Fields> {

@@ -235,9 +235,16 @@ fn schaefer_turek(
         history.push((force[0] / scale, force[1] / scale));
     }
     let last = lattice.forces(1).expect("forces")[0];
+    let fields = lattice.fields(settings.force).expect("fields");
+    let row = cy as usize;
+    let p = |x: usize| fields.density[domain.at(x, row, 0)] / 3.0;
+    let (front, back) = ((cx - r) as usize, (cx + r) as usize + 1);
+    let pressure =
+        (p(front) + 0.5 * (p(front) - p(front - 1))) - (p(back) - 0.5 * (p(back + 1) - p(back)));
     Channel {
         drag: last[0] / scale,
         lift: last[1] / scale,
+        pressure: pressure / (mean * mean),
         history,
         period: every as f64 * mean / d,
     }
@@ -246,13 +253,23 @@ fn schaefer_turek(
 struct Channel {
     drag: f64,
     lift: f64,
+    pressure: f64,
     history: Vec<(f64, f64)>,
     period: f64,
 }
 
 #[test]
 fn cylinder_in_a_channel_re20() {
-    let Channel { drag, lift, .. } = schaefer_turek(40, 20.0, 240_000, 0, 1);
+    let Channel {
+        drag,
+        lift,
+        pressure,
+        ..
+    } = schaefer_turek(40, 20.0, 240_000, 0, 1);
+    assert!(
+        (pressure - 2.9375).abs() / 2.9375 < 0.01,
+        "pressure difference {pressure} against 2.9375"
+    );
     assert!(
         (drag - 5.5795).abs() / 5.5795 < 0.01,
         "drag {drag} against 5.5795"
@@ -298,12 +315,10 @@ fn solid_from(name: &str, source: &str) -> monstertruck::modeling::Solid {
     run.model.solid.clone().expect("a solid")
 }
 
-#[test]
-fn sphere_drag_re50() {
+fn sphere_drag(gpu: &Gpu, d: f64) -> f64 {
     use gcad::flow::voxel::{Grid, place};
     use monstertruck::modeling::Point3;
-    let (_device, gpu) = device();
-    let d: f64 = 20.0;
+    let scale = (d / 20.0) as usize;
     let sphere = solid_from(
         "sphere",
         &format!(
@@ -343,21 +358,39 @@ fn sphere_drag_re50() {
         stream: [speed, 0.0, 0.0],
         ..Settings::laminar(speed * d / 50.0)
     };
-    let mut lattice = Lattice::new(&gpu, &domain).expect("lattice");
+    let mut lattice = Lattice::new(gpu, &domain).expect("lattice");
     for k in 1..=20 {
         settings.inflow = k as f64 / 20.0;
-        lattice.run(&settings, 300).expect("runs");
+        lattice.run(&settings, 300 * scale).expect("runs");
     }
     let area = std::f64::consts::PI * d * d / 4.0;
-    lattice.run(&settings, 20_000).expect("runs");
+    lattice.run(&settings, 20_000 * scale).expect("runs");
     let mut drags = Vec::new();
     for _ in 0..20 {
-        lattice.run(&settings, 500).expect("runs");
+        lattice.run(&settings, 500 * scale).expect("runs");
         drags.push(lattice.forces(1).expect("forces")[0][0] / (0.5 * speed * speed * area));
     }
-    let drag = drags.iter().sum::<f64>() / drags.len() as f64;
+    drags.iter().sum::<f64>() / drags.len() as f64
+}
+
+#[test]
+fn sphere_drag_re50() {
+    let (_device, gpu) = device();
+    let drag = sphere_drag(&gpu, 20.0);
     assert!(
-        (drag - 1.606).abs() / 1.606 < 0.04,
+        (drag - 1.606).abs() / 1.606 < 0.025,
+        "drag {drag} against OpenFOAM's 1.606 in the same box"
+    );
+}
+
+#[test]
+#[ignore = "61 million cells, about 10 GB of GPU memory and ten minutes"]
+fn sphere_drag_re50_fine() {
+    let (_device, gpu) = device();
+    let drag = sphere_drag(&gpu, 40.0);
+    eprintln!("sphere drag at 40 cells across {drag:.4}");
+    assert!(
+        (drag - 1.606).abs() / 1.606 < 0.015,
         "drag {drag} against OpenFOAM's 1.606 in the same box"
     );
 }
@@ -425,5 +458,119 @@ fn pipe_flow_with_curved_walls() {
     assert!(
         (flow - exact).abs() / exact < 0.005,
         "{flow} against {exact}"
+    );
+}
+
+struct Bluff {
+    drag: f64,
+    strouhal: f64,
+    lift: f64,
+}
+
+fn square_cylinder(gpu: &Gpu, d: usize, reynolds: f64, smagorinsky: f64) -> Bluff {
+    let size = [22 * d, 14 * d, 4 * d];
+    let mut domain = Domain::new(size);
+    let (front, low) = (6 * d, 7 * d - d / 2);
+    for x in front..front + d {
+        for y in low..low + d {
+            for z in 0..size[2] {
+                let cell = domain.at(x, y, z);
+                domain.flags[cell] = WALL;
+                domain.body[cell] = 1;
+            }
+        }
+    }
+    let speed = 0.04;
+    let mut seed = 0x2545_f491_4f6c_dd1du64;
+    let mut noise = || {
+        seed ^= seed << 13;
+        seed ^= seed >> 7;
+        seed ^= seed << 17;
+        (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+    };
+    for y in 0..size[1] {
+        for z in 0..size[2] {
+            let (inlet, outlet) = (domain.at(0, y, z), domain.at(size[0] - 1, y, z));
+            domain.flags[inlet] = INLET;
+            domain.flags[outlet] = OUTLET;
+            let stir = 0.02 * speed;
+            let velocity = [
+                speed * (1.0 + 0.02 * noise()),
+                stir * noise(),
+                stir * noise(),
+            ];
+            domain.inflow.push((inlet, domain.at(1, y, z), velocity));
+            domain.outflow.push((outlet, domain.at(size[0] - 2, y, z)));
+        }
+    }
+    let mut settings = Settings {
+        sponge: 2.0 * d as f64,
+        stream: [speed, 0.0, 0.0],
+        smagorinsky,
+        bulk: 0.1,
+        ..Settings::laminar(speed * d as f64 / reynolds)
+    };
+    let mut lattice = Lattice::new(gpu, &domain).expect("lattice");
+    let period = (d as f64 / (0.13 * speed)) as usize;
+    for k in 1..=20 {
+        settings.inflow = k as f64 / 20.0;
+        lattice.run(&settings, period / 20).expect("runs");
+    }
+    lattice.run(&settings, 8 * period).expect("runs");
+    let every = 50;
+    let norm = 0.5 * speed * speed * (d * size[2]) as f64;
+    let mut history = Vec::new();
+    for _ in 0..20 * period / every {
+        lattice.run(&settings, every).expect("runs");
+        let force = lattice.forces(1).expect("forces")[0];
+        history.push((force[0] / norm, force[1] / norm));
+    }
+    let count = history.len() as f64;
+    let drag = history.iter().map(|h| h.0).sum::<f64>() / count;
+    let mean_lift = history.iter().map(|h| h.1).sum::<f64>() / count;
+    let lift = (history
+        .iter()
+        .map(|h| (h.1 - mean_lift).powi(2))
+        .sum::<f64>()
+        / count)
+        .sqrt();
+    let band = 0.5 * lift;
+    let mut below = false;
+    let mut ups = Vec::new();
+    for (k, h) in history.iter().enumerate() {
+        if h.1 < mean_lift - band {
+            below = true;
+        } else if below && h.1 > mean_lift + band {
+            ups.push(k);
+            below = false;
+        }
+    }
+    let strouhal = (ups.len() - 1) as f64 * d as f64
+        / ((ups[ups.len() - 1] - ups[0]) as f64 * every as f64 * speed);
+    Bluff {
+        drag,
+        strouhal,
+        lift,
+    }
+}
+
+#[test]
+#[ignore = "17 million cells for 150,000 steps, about five minutes"]
+fn square_cylinder_re22000() {
+    let (_device, gpu) = device();
+    let run = square_cylinder(&gpu, 24, 22_000.0, 0.14);
+    eprintln!(
+        "square cylinder drag {:.3} strouhal {:.4} lift rms {:.3}",
+        run.drag, run.strouhal, run.lift
+    );
+    assert!(
+        (run.drag - 2.1).abs() < 0.15,
+        "drag {} against Lyn's 2.1",
+        run.drag
+    );
+    assert!(
+        (run.strouhal - 0.132).abs() < 0.02,
+        "Strouhal {} against Lyn's 0.132",
+        run.strouhal
     );
 }

@@ -53,6 +53,9 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "convect",
     "source",
     "modes",
+    "wind",
+    "air",
+    "average",
 ];
 
 impl Model {
@@ -308,6 +311,56 @@ impl Model {
                 self.spec().converge = Some(within);
                 Ok(format!(
                     "solves once more on a mesh 1.5 times coarser and flags readings that move more than {within}%"
+                ))
+            }
+            "wind" => {
+                let args = Args::new(line, &["speed"], &["toward", "about"], false)?;
+                let speed = positive(args.number("speed", &self.scope)?, "the wind speed")?;
+                let toward = if args.has("toward") {
+                    point3(args.text("toward")?, &self.scope)?.to_vec()
+                } else {
+                    Vector3::unit_x()
+                };
+                if toward.magnitude() < 1.0e-9 {
+                    bail!("`toward` is the direction the wind blows, like toward=1,0,0");
+                }
+                let about = if args.has("about") {
+                    point3(args.text("about")?, &self.scope)?
+                } else {
+                    Point3::origin()
+                };
+                self.spec().wind = Some(crate::sim::wind::Wind {
+                    speed,
+                    toward: toward.normalize(),
+                    about,
+                });
+                Ok(format!(
+                    "{speed} m/s toward {},{},{}; moments about {},{},{}",
+                    toward.x, toward.y, toward.z, about.x, about.y, about.z
+                ))
+            }
+            "air" => {
+                let args = Args::new(line, &[], &["density", "viscosity"], false)?;
+                let (density, viscosity) = crate::sim::wind::AIR;
+                let density = positive(
+                    args.optional_number("density", &self.scope)?
+                        .unwrap_or(density),
+                    "the air density",
+                )?;
+                let viscosity = positive(
+                    args.optional_number("viscosity", &self.scope)?
+                        .unwrap_or(viscosity),
+                    "the kinematic viscosity",
+                )?;
+                self.spec().air = Some((density, viscosity));
+                Ok(format!("{density} kg/m³, {viscosity} m²/s"))
+            }
+            "average" => {
+                let args = Args::new(line, &["passes"], &[], false)?;
+                let passes = positive(args.number("passes", &self.scope)?, "`average`")?;
+                self.spec().average = Some(passes);
+                Ok(format!(
+                    "forces averaged while the wind travels {passes} times the width it meets"
                 ))
             }
             "mesh" => {

@@ -662,7 +662,10 @@ fn positions_shift(d: &[f64; 3], scale: f64) -> Vector3 {
 }
 
 pub fn render(spec: &Spec, outcome: &Outcome, path: &str) -> Result<()> {
-    let view = field_view(spec, outcome)?;
+    draw(&field_view(spec, outcome)?, path)
+}
+
+pub fn draw(view: &FieldView, path: &str) -> Result<()> {
     let positions = &view.positions;
     let (low, span, scale) = (view.low, view.high - view.low, view.scale);
     let triangles: Vec<([usize; 3], [[f64; 3]; 3])> = view

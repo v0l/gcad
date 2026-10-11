@@ -1205,3 +1205,44 @@ fn contact_presses_but_lets_go() {
             .any(|n| n.contains("frictionless contact"))
     );
 }
+
+const CUBE: &str = "plane XY\nrect 100 100\nextrude 100\n";
+
+#[test]
+fn wind_on_a_cube() {
+    let outcome = simulated(
+        "wind_on_a_cube",
+        &[("cube.gcad", CUBE)],
+        "sim flow\npart cube.gcad\nwind 10 toward=1,0,0\nmesh 5",
+    );
+    let q = 0.5 * 1.204 * 10.0 * 10.0;
+    let drag = reading(&outcome, "drag");
+    close(reading(&outcome, "cda"), 1.05 * 0.01, 0.08);
+    close(reading(&outcome, "pressure"), q, 0.03);
+    assert!(reading(&outcome, "side").abs() < 0.05 * drag);
+    assert!(reading(&outcome, "lift").abs() < 0.05 * drag);
+    close(reading(&outcome, "moment.y"), 0.05 * drag, 0.1);
+    let turned = simulated(
+        "wind_on_a_cube_turned",
+        &[("cube.gcad", CUBE)],
+        "sim flow\npart cube.gcad\nwind 10 toward=0,-1,0\nmesh 5",
+    );
+    close(reading(&turned, "drag"), drag, 0.03);
+    close(reading(&turned, "moment.x"), 0.05 * drag, 0.1);
+}
+
+#[test]
+fn wind_shelters_a_part_behind() {
+    let pair = "part front cube.gcad\npart back cube.gcad\nmove back 250,0,0\n";
+    let outcome = simulated(
+        "wind_shelters_a_part_behind",
+        &[("cube.gcad", CUBE), ("pair.gasm", pair)],
+        "sim flow\npart pair.gasm\nwind 10 toward=1,0,0\nmesh 5",
+    );
+    let (front, back) = (
+        reading(&outcome, "front.drag"),
+        reading(&outcome, "back.drag"),
+    );
+    close(front + back, reading(&outcome, "drag"), 1.0e-9);
+    assert!(back < 0.5 * front, "front {front} back {back}");
+}
