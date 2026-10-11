@@ -944,7 +944,7 @@ fn bonded_joint_carries_moment() {
 
 #[test]
 fn leave_parts_out() {
-    let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10\npart loose_1 block.gcad\nmove loose_1 50,0,0\n";
+    let stack = "part loose_1 block.gcad\nmove loose_1 50,0,0\npart a block.gcad\npart b block.gcad\nmove b 0,0,10\n";
     let outcome = simulated(
         "leave_parts_out",
         &[("block.gcad", SLAB), ("stack.gasm", stack)],
