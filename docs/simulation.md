@@ -130,9 +130,10 @@ than a cell along every axis) is noted and reads no force. Forces are gauge forc
 pressed against each other do not feel the lattice's reference pressure on one side only.
 
 What it gets wrong: a round member a few cells across is a square bar to the lattice, and
-reads close to a square bar's drag (Cd near 2 instead of 1.2). Members need about 10 cells
-across before their drag means much, and cells that fine over a whole assembly may not fit
-on the GPU. The flow is a large-eddy simulation that does not resolve boundary layers, so
+reads close to a square bar's drag. A 25 mm tube 500 mm long across a 33 m/s wind reads Cd
+1.89 at 2.8 cells across, 1.36 at 5 and 1.03 at 10 (Hoerner gives about 0.98 for a free-ended
+cylinder of that length). Members need about 10 cells across, and cells that fine over a
+whole assembly may not fit on the GPU. The flow is a large-eddy simulation that does not resolve boundary layers, so
 drag on sharp-edged parts, where the separation points are fixed, is more certain than on
 smooth rounded ones. Pockets of air in holes left by parts that were left out keep whatever
 pressure they settle to and can set the `pressure` and `suction` readings.
