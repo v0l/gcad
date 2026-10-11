@@ -82,6 +82,9 @@ pub struct Settings {
     pub wall: [f64; 3],
     pub collision: Collision,
     pub smagorinsky: f64,
+    pub inflow: f64,
+    pub sponge: f64,
+    pub stream: [f64; 3],
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -98,6 +101,9 @@ impl Settings {
             wall: [0.0; 3],
             collision: Collision::Regularized,
             smagorinsky: 0.0,
+            inflow: 1.0,
+            sponge: 0.0,
+            stream: [0.0; 3],
         }
     }
 }
@@ -118,14 +124,17 @@ struct Params {
     wz: f32,
     regular: f32,
     smagorinsky: f32,
+    sponge: f32,
     pad0: f32,
+    sx: f32,
+    sy: f32,
+    sz: f32,
     pad1: f32,
-    pad2: f32,
 }
 
 fn shader() -> String {
     let mut s = String::new();
-    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, pad0: f32, pad1: f32, pad2: f32 }\n";
+    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, sponge: f32, pad0: f32, sx: f32, sy: f32, sz: f32, pad1: f32 }\n";
     s += "@group(0) @binding(0) var<uniform> p: Params;\n";
     s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
     s += "@group(0) @binding(2) var<storage, read> cuts: array<f32>;\n";
@@ -196,7 +205,7 @@ fn shader() -> String {
         let u = ["ux", "uy", "uz"];
         let iso = if a == b { " - (rho - 1.0) / 3.0" } else { "" };
         s += &format!(
-            "  let p{name} = 0.0 {}{iso} - rho * {} * {} + 0.5 * ({} * p.f{} + {} * p.f{});\n",
+            "  let p{name} = 0.0 {}{iso} - rho * {} * {} - 0.5 * ({} * p.f{} + {} * p.f{});\n",
             terms.join(" "),
             u[a],
             u[b],
@@ -212,6 +221,10 @@ fn shader() -> String {
     s += "  let tau = 0.5 * (tau0 + sqrt(tau0 * tau0 + 18.0 * 1.4142135 * cs2 * pnorm / rho));\n";
     s += "  let omega = 1.0 / tau;\n";
     s += "  let keep = 1.0 - 0.5 * omega;\n";
+    s += "  let edge = min(f32(x), f32(p.nx - 1u) - f32(x));\n";
+    s += "  var damp = 0.0;\n";
+    s += "  if (p.sponge > 0.0 && edge < p.sponge) { let r = 1.0 - edge / p.sponge; damp = 0.5 * r * r; }\n";
+    s += "  let su = p.sx * p.sx + p.sy * p.sy + p.sz * p.sz;\n";
     for (i, c) in C.iter().enumerate() {
         let w = weight(i);
         let q = |a: usize, b: usize| -> f64 {
@@ -227,7 +240,7 @@ fn shader() -> String {
             q(1, 2)
         );
         s += &format!(
-            "  {{ let cu = ({}.0) * ux + ({}.0) * uy + ({}.0) * uz;\n    let eq = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu));\n    let push = keep * {w:.17} * ((3.0 * (({}.0) - ux) + 9.0 * cu * ({}.0)) * p.fx + (3.0 * (({}.0) - uy) + 9.0 * cu * ({}.0)) * p.fy + (3.0 * (({}.0) - uz) + 9.0 * cu * ({}.0)) * p.fz);\n    let free = select(g{i} - eq, {:.17} * {projection}, p.regular > 0.5);\n    b{i}[index] = eq + (1.0 - omega) * free + push; }}\n",
+            "  {{ let cu = ({}.0) * ux + ({}.0) * uy + ({}.0) * uz;\n    let eq = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu));\n    let push = keep * {w:.17} * ((3.0 * (({}.0) - ux) + 9.0 * cu * ({}.0)) * p.fx + (3.0 * (({}.0) - uy) + 9.0 * cu * ({}.0)) * p.fy + (3.0 * (({}.0) - uz) + 9.0 * cu * ({}.0)) * p.fz);\n    let free = select(g{i} - eq, {:.17} * {projection} - {w:.17} * 1.5 * (({sx}.0) * p.fx + ({sy}.0) * p.fy + ({sz}.0) * p.fz), p.regular > 0.5);\n    let next = eq + (1.0 - omega) * free + push;\n    let cs = ({sx}.0) * p.sx + ({sy}.0) * p.sy + ({sz}.0) * p.sz;\n    let far = {w:.17} * (3.0 * cs + 4.5 * cs * cs - 1.5 * su);\n    b{i}[index] = next - damp * (next - far); }}\n",
             c[0],
             c[1],
             c[2],
@@ -237,7 +250,10 @@ fn shader() -> String {
             c[1],
             c[2],
             c[2],
-            4.5 * w
+            4.5 * w,
+            sx = c[0],
+            sy = c[1],
+            sz = c[2]
         );
     }
     s += "}\n";
@@ -257,7 +273,7 @@ fn populations(group: u32, name: &str) -> String {
 fn edge_shader() -> String {
     let mut s = String::new();
     s += "struct Edge { cell: u32, inner: u32, inlet: u32, pad: u32, vx: f32, vy: f32, vz: f32, pad2: f32 }\n";
-    s += "struct Count { n: u32, p0: u32, p1: u32, p2: u32 }\n";
+    s += "struct Count { n: u32, scale: f32, p1: u32, p2: u32 }\n";
     s += "@group(0) @binding(0) var<uniform> count: Count;\n";
     s += "@group(0) @binding(1) var<storage, read> edges: array<Edge>;\n";
     s += &populations(1, "b");
@@ -280,7 +296,7 @@ fn edge_shader() -> String {
         s += &format!("  let n{name} = (0.0 {}) / rn;\n", terms.join(" "));
     }
     s += "  var rho = 1.0; var ux = nx; var uy = ny; var uz = nz;\n";
-    s += "  if (e.inlet == 1u) { rho = rn; ux = e.vx; uy = e.vy; uz = e.vz; }\n";
+    s += "  if (e.inlet == 1u) { rho = rn; ux = count.scale * e.vx; uy = count.scale * e.vy; uz = count.scale * e.vz; }\n";
     s += "  let uu = ux * ux + uy * uy + uz * uz;\n";
     for (i, c) in C.iter().enumerate() {
         let w = weight(i);
@@ -352,6 +368,7 @@ struct Pass {
     common: wgpu::BindGroup,
     sides: [wgpu::BindGroup; 2],
     count: u32,
+    header: wgpu::Buffer,
 }
 
 pub struct Lattice<'a> {
@@ -557,8 +574,8 @@ impl<'a> Lattice<'a> {
             let n = edges.len() as u32;
             let counter = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
                 label: Some("edge count"),
-                contents: bytemuck::cast_slice(&[n, 0, 0, 0]),
-                usage: wgpu::BufferUsages::UNIFORM,
+                contents: bytemuck::cast_slice(&[n, 1.0f32.to_bits(), 0, 0]),
+                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             });
             let edge_layout = layout(&[entry(0, uniform), entry(1, read)]);
             Pass {
@@ -566,6 +583,7 @@ impl<'a> Lattice<'a> {
                 common: group(&edge_layout, &[&counter, &list]),
                 sides: [side(1), side(0)],
                 count: n,
+                header: counter,
             }
         });
         let mut links: Vec<[u32; 2]> = Vec::new();
@@ -629,6 +647,7 @@ impl<'a> Lattice<'a> {
                 common: group(&force_layout, &[&header, &flags, &list, &out, &cuts]),
                 sides: [side(0), side(1)],
                 count: n,
+                header: header.clone(),
             };
             let bodies = links.iter().map(|l| l[1]).collect();
             (pass, out, bodies)
@@ -667,13 +686,23 @@ impl<'a> Lattice<'a> {
                 0.0
             },
             smagorinsky: settings.smagorinsky as f32,
+            sponge: settings.sponge as f32,
             pad0: 0.0,
+            sx: settings.stream[0] as f32,
+            sy: settings.stream[1] as f32,
+            sz: settings.stream[2] as f32,
             pad1: 0.0,
-            pad2: 0.0,
         };
         self.gpu
             .queue
             .write_buffer(&self.params, 0, bytemuck::bytes_of(&params));
+        if let Some(edges) = &self.edges {
+            self.gpu.queue.write_buffer(
+                &edges.header,
+                4,
+                bytemuck::bytes_of(&(settings.inflow as f32)),
+            );
+        }
         let (gx, gy) = dispatch(count);
         let mut left = steps;
         while left > 0 {

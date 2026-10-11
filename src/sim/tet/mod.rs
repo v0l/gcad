@@ -1,7 +1,7 @@
 mod delaunay;
 mod fixed;
 mod flip;
-mod sizing;
+pub mod sizing;
 pub mod surface;
 
 use anyhow::{Result, bail};

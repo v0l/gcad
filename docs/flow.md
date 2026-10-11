@@ -79,5 +79,26 @@ within 0.4% of 5.5795. At Re 100 (case 2D-2, same grid) the shedding gives peak 
 (published 3.22 to 3.24), Strouhal 0.302 (0.295 to 0.305) and peak lift 0.963, 3% under the
 published 0.99 to 1.01. Lattice speeds stay at or under about 0.04 for force work.
 
+The regularized collision kept only the second-order stress of the non-equilibrium part and so
+dropped its first moment, which under Guo forcing is -F/2: each step added (1 - omega) F/2 of
+momentum, and at tau 0.6 plates and a pipe carried exactly 2/3 of the right flow. The first
+moment is now kept (-1.5 w c.F per direction). The plates test was at tau 1, where that term is
+multiplied by zero, which is how it got through; it now runs at tau 0.6, and a round pipe with
+interpolated walls matches Hagen-Poiseuille within 0.15%.
+
+gcad solids go into the lattice with `flow::voxel::place`: cell centres inside the triangulated
+surface (crossings along x per column, the rays nudged off the cell centres) become wall cells
+of that body, and each link from a fluid cell into it gets its wall fraction from a ray cast
+against the same triangles. A sphere 20 cells across voxelizes to 4,145 cells against 4,189.
+Inlets ramp up over the first few thousand steps and sponge layers at the inlet and outlet pull
+the flow toward the free stream, because an impulsive start in a low-viscosity box leaves
+pressure waves sloshing between them for tens of thousands of steps (drag swung between +3.6
+and -3.6 around a steady 1.65).
+
+Open: the sphere at Re 50 reads 1.654 against about 1.57 (Clift's correlation 1.574), and it is
+5% high at Re 20 and 100 as well. It is steady, the same with exact sphere wall fractions, the
+same with BGK, and no better in a wider or longer box. It has not been resolved finer, because
+the GPU has 3 GB free next to the vLLM server; OpenFOAM is to settle it.
+
 The GPU on this machine is shared with a vLLM server holding 92 of its 96 GB, so runs are
 capped at about 3 GB (some 20 million cells) while that is up.
