@@ -95,10 +95,11 @@ the flow toward the free stream, because an impulsive start in a low-viscosity b
 pressure waves sloshing between them for tens of thousands of steps (drag swung between +3.6
 and -3.6 around a steady 1.65).
 
-Open: the sphere at Re 50 reads 1.654 against about 1.57 (Clift's correlation 1.574), and it is
-5% high at Re 20 and 100 as well. It is steady, the same with exact sphere wall fractions, the
-same with BGK, and no better in a wider or longer box. It has not been resolved finer, because
-the GPU has 3 GB free next to the vLLM server; OpenFOAM is to settle it.
-
-The GPU on this machine is shared with a vLLM server holding 92 of its 96 GB, so runs are
-capped at about 3 GB (some 20 million cells) while that is up.
+The sphere at Re 50 reads 1.654 against Clift's free-stream 1.574, 5% high at Re 20 and 100 as
+well. Most of that is the box: `tools/foam/run.sh sphere` runs the same case in OpenFOAM v2412
+(Docker, `snappyHexMesh` with four prism layers, steady laminar `simpleFoam`), with symmetry
+planes 4D off the axis, which mirror the sphere at the same 8D spacing as the lattice's
+periodic sides. It gives 1.6048 on 313,000 cells and 1.6060 on 1.72 million, so the lattice is
+3.0% high in the same box. The likeliest cause is resolution: 20 cells across leaves the
+boundary layer about three cells thick, and a finer sphere does not fit next to the vLLM
+server. The test checks against OpenFOAM's 1.606 within 4%.

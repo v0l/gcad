@@ -292,7 +292,6 @@ fn solid_from(name: &str, source: &str) -> monstertruck::modeling::Solid {
 }
 
 #[test]
-#[ignore = "reads 1.654 against 1.57 at every Re tried, steady and with exact walls; to be settled against OpenFOAM"]
 fn sphere_drag_re50() {
     use gcad::flow::voxel::{Grid, place};
     use monstertruck::modeling::Point3;
