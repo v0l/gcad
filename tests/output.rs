@@ -219,6 +219,34 @@ fn stl() {
 }
 
 #[test]
+fn simulation_parts_export() {
+    let dir = std::path::PathBuf::from(scratch("simulation_parts_export"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join("block.gcad"), "rect 10 10\nextrude 10\n").expect("part");
+    std::fs::write(
+        dir.join("pair.gasm"),
+        "part a block.gcad\npart b_screw block.gcad\nmove b_screw 20,0,0\n",
+    )
+    .expect("assembly");
+    let spec = dir.join("wind.gsim");
+    std::fs::write(&spec, "sim flow\npart pair.gasm\nleave *screw\nwind 10\n").expect("spec");
+    let run = gcad::model::run_path(&spec, &[], None).expect("runs");
+    let out = dir.join("parts.stl");
+    export::export_model(&run.model, &spec, out.to_str().expect("utf-8")).expect("exports");
+    let bytes = std::fs::read(&out).expect("written");
+    let triangles = u32::from_le_bytes(bytes[80..84].try_into().expect("header")) as usize;
+    let xs: Vec<f32> = (0..triangles)
+        .flat_map(|t| (0..3).map(move |k| 84 + t * 50 + 12 + k * 12))
+        .map(|at| f32::from_le_bytes(bytes[at..at + 4].try_into().expect("float")))
+        .collect();
+    assert!(triangles > 0);
+    assert!(
+        xs.iter().all(|&x| x < 10.5),
+        "the left-out part was exported"
+    );
+}
+
+#[test]
 fn png() {
     let model = build(&part("plate"));
     let path = scratch("plate.png");

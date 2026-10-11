@@ -178,6 +178,14 @@ pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
     let name = name.as_str();
+    if let Some(spec) = model.sim.as_deref() {
+        let parts: Vec<_> = spec
+            .named()?
+            .into_iter()
+            .map(|(_, solid)| (solid, None))
+            .collect();
+        return export_coloured(&parts, path);
+    }
     let step = path.to_ascii_lowercase();
     if model.assembly && step.ends_with(".svg") {
         let exploded = model.exploded_parts(if model.explode.is_empty() { 0.0 } else { 1.0 });

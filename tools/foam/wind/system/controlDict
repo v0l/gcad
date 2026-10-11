@@ -1,0 +1,13 @@
+FoamFile { version 2.0; format ascii; class dictionary; object controlDict; }
+application simpleFoam;
+startFrom latestTime; startTime 0; stopAt endTime; endTime ITERATIONS; deltaT 1;
+writeControl timeStep; writeInterval ITERATIONS; purgeWrite 1; writeFormat binary; writePrecision 8;
+writeCompression off; timeFormat general; timePrecision 6; runTimeModifiable true;
+functions
+{
+    forces
+    {
+        type forces; libs (forces); writeControl timeStep; writeInterval 1;
+        patches (part); rho rhoInf; rhoInf DENSITY; CofR (0 0 0);
+    }
+}
