@@ -73,6 +73,43 @@ impl Domain {
     pub fn at(&self, x: usize, y: usize, z: usize) -> usize {
         x + (y + z * self.size[1]) * self.size[0]
     }
+
+    pub fn seal(&mut self, from: &[usize]) -> usize {
+        let [nx, ny, nz] = self.size;
+        let open = |flag: u8| matches!(flag, FLUID | INLET | OUTLET);
+        let mut reached = vec![false; self.flags.len()];
+        let mut queue: Vec<usize> = Vec::new();
+        for &cell in from {
+            if open(self.flags[cell]) && !reached[cell] {
+                reached[cell] = true;
+                queue.push(cell);
+            }
+        }
+        while let Some(cell) = queue.pop() {
+            let (x, y, z) = (cell % nx, (cell / nx) % ny, cell / (nx * ny));
+            for c in C.iter().skip(1) {
+                let w = |v: usize, d: i32, n: usize| {
+                    (v as i64 + d as i64).rem_euclid(n as i64) as usize
+                };
+                let next = self.at(w(x, c[0], nx), w(y, c[1], ny), w(z, c[2], nz));
+                if !reached[next] && open(self.flags[next]) {
+                    reached[next] = true;
+                    queue.push(next);
+                }
+            }
+        }
+        let mut sealed = 0;
+        for (cell, flag) in self.flags.iter_mut().enumerate() {
+            if *flag == FLUID && !reached[cell] {
+                *flag = WALL;
+                self.body[cell] = 0;
+                sealed += 1;
+            }
+        }
+        let flags = &self.flags;
+        self.cuts.retain(|&(cell, ..)| flags[cell] == FLUID);
+        sealed
+    }
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -163,7 +200,7 @@ fn shader() -> String {
         );
         s += "  fs = flags[s] & 255u;\n";
         s += &format!(
-            "  var g{i}: f32 = a{i}[s];\n  if (fs == 1u || fs == 2u) {{ g{i} = a{o}[index]; if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {i}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x + ({cx}), p.nx) + (wrap(y + ({cy}), p.ny) + wrap(z + ({cz}), p.nz) * p.ny) * p.nx; g{i} = 2.0 * q * a{o}[index] + (1.0 - 2.0 * q) * a{o}[n]; }} else {{ g{i} = (0.5 / q) * a{o}[index] + (1.0 - 0.5 / q) * a{i}[index]; }} }} }} if (fs == 2u) {{ g{i} = g{i} + {:.17} * (({}.0) * p.wx + ({}.0) * p.wy + ({}.0) * p.wz); }} }}\n",
+            "  var g{i}: f32 = a{i}[s];\n  if (fs == 1u || fs == 2u) {{ g{i} = a{o}[index]; if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {i}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x + ({cx}), p.nx) + (wrap(y + ({cy}), p.ny) + wrap(z + ({cz}), p.nz) * p.ny) * p.nx; let kn = flags[n] & 255u; if (kn == 0u || kn == 3u || kn == 4u) {{ g{i} = 2.0 * q * a{o}[index] + (1.0 - 2.0 * q) * a{o}[n]; }} }} else {{ g{i} = (0.5 / q) * a{o}[index] + (1.0 - 0.5 / q) * a{i}[index]; }} }} }} if (fs == 2u) {{ g{i} = g{i} + {:.17} * (({}.0) * p.wx + ({}.0) * p.wy + ({}.0) * p.wz); }} }}\n",
             6.0 * w,
             c[0],
             c[1],
@@ -333,20 +370,10 @@ fn force_shader() -> String {
     s += "  var f = vec3<f32>(0.0, 0.0, 0.0); var s: u32; var fs: u32; var back: f32;\n";
     s += "  let slot = flags[l.cell] >> 8u;\n";
     for (i, c) in C.iter().enumerate().skip(1) {
-        let w = weight(i);
         let o = opposite(i);
         s += &format!(
-            "  s = wrap(x + ({}), p.nx) + (wrap(y + ({}), p.ny) + wrap(z + ({}), p.nz) * p.ny) * p.nx;\n  fs = flags[s];\n  if (((fs & 255u) == 1u || (fs & 255u) == 2u) && (fs >> 8u) == l.body) {{\n    back = a{i}[l.cell];\n    if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {o}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x - ({}), p.nx) + (wrap(y - ({}), p.ny) + wrap(z - ({}), p.nz) * p.ny) * p.nx; back = 2.0 * q * a{i}[l.cell] + (1.0 - 2.0 * q) * a{i}[n]; }} else {{ back = (0.5 / q) * a{i}[l.cell] + (1.0 - 0.5 / q) * a{o}[l.cell]; }} }} }}\n    f = f + (a{i}[l.cell] + back + {:.17}) * vec3<f32>({}.0, {}.0, {}.0);\n  }}\n",
-            c[0],
-            c[1],
-            c[2],
-            c[0],
-            c[1],
-            c[2],
-            2.0 * w,
-            c[0],
-            c[1],
-            c[2]
+            "  s = wrap(x + ({}), p.nx) + (wrap(y + ({}), p.ny) + wrap(z + ({}), p.nz) * p.ny) * p.nx;\n  fs = flags[s];\n  if (((fs & 255u) == 1u || (fs & 255u) == 2u) && (fs >> 8u) == l.body) {{\n    back = a{i}[l.cell];\n    if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {o}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x - ({}), p.nx) + (wrap(y - ({}), p.ny) + wrap(z - ({}), p.nz) * p.ny) * p.nx; let kn = flags[n] & 255u; if (kn == 0u || kn == 3u || kn == 4u) {{ back = 2.0 * q * a{i}[l.cell] + (1.0 - 2.0 * q) * a{i}[n]; }} }} else {{ back = (0.5 / q) * a{i}[l.cell] + (1.0 - 0.5 / q) * a{o}[l.cell]; }} }} }}\n    f = f + (a{i}[l.cell] + back) * vec3<f32>({}.0, {}.0, {}.0);\n  }}\n",
+            c[0], c[1], c[2], c[0], c[1], c[2], c[0], c[1], c[2]
         );
     }
     s += &format!(

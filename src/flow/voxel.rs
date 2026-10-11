@@ -50,38 +50,74 @@ pub fn place_surface(
     if points.is_empty() || xs.is_empty() || ys.is_empty() || zs.is_empty() {
         return 0;
     }
-    let start = grid.origin.x - 2.0 * h;
-    let nudge = Vector3::new(0.0, h * 1.234_567e-6, h * 2.345_678e-6);
-    let wide = ys.len();
-    let columns: Vec<Vec<usize>> = (0..ys.len() * zs.len())
-        .into_par_iter()
-        .map(|column| {
-            let (y, z) = (ys.start + column % wide, zs.start + column / wide);
-            let from = Point3::new(start, grid.centre(0, y, z).y, grid.centre(0, y, z).z) + nudge;
-            let mut crossings = Vec::new();
-            let mut last = 0.0;
-            loop {
-                let t = bvh.ray(from, Vector3::unit_x(), usize::MAX, last + h * 1.0e-9);
-                if !t.is_finite() {
-                    break;
+    let spans = [xs.clone(), ys.clone(), zs.clone()];
+    let mut columns: Vec<Vec<usize>> = Vec::new();
+    let mut thin: Vec<usize> = Vec::new();
+    for axis in 0..3 {
+        let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
+        let (us, vs) = (spans[u].clone(), spans[v].clone());
+        let start = grid.origin[axis] - 2.0 * h;
+        let mut direction = Vector3::zero();
+        direction[axis] = 1.0;
+        let mut nudge = Vector3::zero();
+        nudge[u] = h * 1.234_567e-6;
+        nudge[v] = h * 2.345_678e-6;
+        let wide = us.len();
+        let filled: Vec<(Vec<usize>, Vec<usize>)> = (0..us.len() * vs.len())
+            .into_par_iter()
+            .map(|column| {
+                let mut cell = [0usize; 3];
+                cell[u] = us.start + column % wide;
+                cell[v] = vs.start + column / wide;
+                let mut from = grid.centre(cell[0], cell[1], cell[2]) + nudge;
+                from[axis] = start;
+                let mut crossings = Vec::new();
+                let mut last = 0.0;
+                loop {
+                    let t = bvh.ray(from, direction, usize::MAX, last + h * 1.0e-9);
+                    if !t.is_finite() {
+                        break;
+                    }
+                    crossings.push(start + t);
+                    last = t;
                 }
-                crossings.push(start + t);
-                last = t;
-            }
-            let mut inside = Vec::new();
-            for pair in crossings.chunks(2) {
-                let [a, b] = [pair[0], *pair.get(1).unwrap_or(&f64::INFINITY)];
-                let first = ((a - grid.origin.x) / h).ceil().max(0.0) as usize;
-                let last = (((b - grid.origin.x) / h).floor()).min(nx as f64 - 1.0);
-                if last < 0.0 {
-                    continue;
+                let n = grid.size[axis] as f64;
+                let mut inside = Vec::new();
+                let mut skins = Vec::new();
+                let mut index = |k: usize| {
+                    let mut at = cell;
+                    at[axis] = k;
+                    domain_index(grid, at[0], at[1], at[2])
+                };
+                for pair in crossings.chunks(2) {
+                    let [a, b] = [pair[0], *pair.get(1).unwrap_or(&f64::INFINITY)];
+                    let (a, b) = ((a - grid.origin[axis]) / h, (b - grid.origin[axis]) / h);
+                    let (first, last) = (a.ceil().max(0.0), b.floor().min(n - 1.0));
+                    if axis == 0 && first <= last {
+                        inside.extend((first as usize..=last as usize).map(&mut index));
+                    } else if first > last && b.is_finite() {
+                        let middle = (0.5 * (a + b)).round();
+                        if (0.0..n).contains(&middle) {
+                            skins.push(index(middle as usize));
+                        }
+                    }
                 }
-                inside.extend((first..=last as usize).map(|x| domain_index(grid, x, y, z)));
-            }
-            inside
-        })
-        .collect();
+                (inside, skins)
+            })
+            .collect();
+        for (inside, skins) in filled {
+            columns.push(inside);
+            thin.extend(skins);
+        }
+    }
     let mut solid_cells = 0;
+    let mut cored = std::collections::HashSet::new();
+    for cells in &columns {
+        cored.extend(cells.iter().copied());
+    }
+    let thin: std::collections::HashSet<usize> =
+        thin.into_iter().filter(|c| !cored.contains(c)).collect();
+    columns.push(thin.iter().copied().collect());
     for cells in columns {
         for cell in cells {
             if domain.flags[cell] == FLUID {
@@ -108,6 +144,7 @@ pub fn place_surface(
             let flags = &domain.flags;
             let bodies = &domain.body;
             let bvh = &bvh;
+            let thin = &thin;
             C.iter().enumerate().skip(1).filter_map(move |(j, c)| {
                 let (sx, sy, sz) = (
                     x as i64 - c[0] as i64,
@@ -124,7 +161,7 @@ pub fn place_surface(
                     return None;
                 }
                 let s = domain_index(grid, sx as usize, sy as usize, sz as usize);
-                if flags[s] != WALL || bodies[s] != body {
+                if flags[s] != WALL || bodies[s] != body || thin.contains(&s) {
                     return None;
                 }
                 let step = Vector3::new(-c[0] as f64, -c[1] as f64, -c[2] as f64) * h;

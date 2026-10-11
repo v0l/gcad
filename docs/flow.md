@@ -133,3 +133,19 @@ The Schaefer-Turek pressure difference at Re 20 checks the lattice pressure: 2.9
 stagnation pressure of 1.00 q once the inlet is 4 widths upstream and the sides 3 widths away;
 2 and 1.5 read Cd 1.30 and 1.16 q. The default box is therefore large, (L + 9H) x 7H x 7H, and
 the default cell puts 32 cells across H.
+
+Assemblies broke three things. The force pass added each link's share of the reference
+density (the `2w` of the shifted storage), which sums to zero over a closed surface but not
+over one part pressed against another: per-part forces came out in multiples of 3.7 N, the
+lattice's 232 kPa reference on a single link, and the mast clamp read 1,707 N of lift in a
+60 N wind. Forces are now gauge. Walls thinner than a cell came out porous, so `place` now
+casts rays along all three axes and marks the nearest cell between two close crossings.
+Interpolated walls on an assembly drove some cells to 2.4 q (a box corner, the inside of a
+boom clamp) and no rule tried (one-cell gaps, a second fluid node, cells only reached through
+narrow passages, skipping cells from the thin-wall pass) removed it, so `sim flow` uses
+staircase walls and the benchmarks keep the interpolated ones.
+
+The rotator head (`~/git/rotator/sims/wind.gsim`, 120 km/h side wind, no antennas) at 9 mm
+cells reads 79.9 N of drag, 16 N on the el box and lid, 14.7 N on the az box and lid, and
+18 N on each 25 mm boom tube, which at three cells across is a square bar (a round tube
+would take about 10 N).

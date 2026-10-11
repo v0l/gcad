@@ -32,6 +32,7 @@ struct Setup {
     axes: [Vector3; 3],
     grid: Grid,
     across: f64,
+    frontal: f64,
     parts: Vec<Part>,
 }
 
@@ -60,6 +61,52 @@ impl Setup {
     fn reynolds(&self, air: (f64, f64)) -> f64 {
         self.wind.speed * self.across * 1.0e-3 / air.1
     }
+}
+
+fn frontal_area(setup: &Setup, low: Point3, high: Point3) -> f64 {
+    let pixel = (high.y - low.y).max(high.z - low.z) / 1024.0;
+    if pixel <= 0.0 {
+        return 0.0;
+    }
+    let (w, h) = (
+        ((high.y - low.y) / pixel).ceil() as usize + 1,
+        ((high.z - low.z) / pixel).ceil() as usize + 1,
+    );
+    let mut covered = vec![false; w * h];
+    for part in &setup.parts {
+        let flat: Vec<[f64; 2]> = part
+            .points
+            .iter()
+            .map(|&p| {
+                let q = setup.to_lattice(p);
+                [(q.y - low.y) / pixel, (q.z - low.z) / pixel]
+            })
+            .collect();
+        for t in &part.triangles {
+            let [a, b, c] = t.map(|v| flat[v]);
+            let twice = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+            if twice.abs() < 1.0e-12 {
+                continue;
+            }
+            let x0 = a[0].min(b[0]).min(c[0]).floor().max(0.0) as usize;
+            let x1 = (a[0].max(b[0]).max(c[0]).ceil() as usize).min(w - 1);
+            let y0 = a[1].min(b[1]).min(c[1]).floor().max(0.0) as usize;
+            let y1 = (a[1].max(b[1]).max(c[1]).ceil() as usize).min(h - 1);
+            for y in y0..=y1 {
+                for x in x0..=x1 {
+                    let p = [x as f64 + 0.5, y as f64 + 0.5];
+                    let edge = |u: [f64; 2], v: [f64; 2]| {
+                        ((v[0] - u[0]) * (p[1] - u[1]) - (p[0] - u[0]) * (v[1] - u[1]))
+                            * twice.signum()
+                    };
+                    if edge(a, b) >= 0.0 && edge(b, c) >= 0.0 && edge(c, a) >= 0.0 {
+                        covered[x + y * w] = true;
+                    }
+                }
+            }
+        }
+    }
+    covered.iter().filter(|&&c| c).count() as f64 * pixel * pixel
 }
 
 fn axes(toward: Vector3) -> [Vector3; 3] {
@@ -99,6 +146,7 @@ fn setup(spec: &Spec) -> Result<Setup> {
             size: [1, 1, 1],
         },
         across: 0.0,
+        frontal: 0.0,
         parts,
     };
     let mut low = Point3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
@@ -112,16 +160,18 @@ fn setup(spec: &Spec) -> Result<Setup> {
             }
         }
     }
-    let across = (high.y - low.y).max(high.z - low.z).max(1.0e-6);
+    let frontal = frontal_area(&setup, low, high);
+    let across = frontal.sqrt().max(1.0e-6);
     let spacing = spec.mesh.unwrap_or(across / ACROSS);
     let margin = Vector3::new(UPSTREAM, ASIDE, ASIDE) * across;
-    let origin = low - margin;
+    let origin = low - margin - Vector3::new(0.5, 0.5, 0.5) * spacing;
     let extent = Vector3::new(
         high.x - low.x + (UPSTREAM + DOWNSTREAM) * across,
         high.y - low.y + 2.0 * ASIDE * across,
         high.z - low.z + 2.0 * ASIDE * across,
     );
     setup.across = across;
+    setup.frontal = frontal;
     setup.grid = Grid {
         origin,
         spacing,
@@ -136,10 +186,11 @@ pub fn plan(spec: &Spec) -> Result<String> {
     let [nx, ny, nz] = setup.grid.size;
     let steps = steps(&setup, spec);
     Ok(format!(
-        "{nx} x {ny} x {nz} cells of {} mm, {:.1} million, about {:.1} GB of GPU memory\n{:.0} cells across the {} mm the wind meets, Reynolds number {:.3e}\n{} steps, {:.3} s of air",
+        "{nx} x {ny} x {nz} cells of {} mm, {:.1} million, about {:.1} GB of GPU memory\nfrontal area {:.4} m², {:.0} cells across its square root of {} mm, Reynolds number {:.3e}\n{} steps, {:.3} s of air",
         crate::plot::label(setup.grid.spacing),
         setup.cells() as f64 / 1.0e6,
         setup.cells() as f64 * BYTES_PER_CELL / 1.0e9,
+        setup.frontal * 1.0e-6,
         setup.across / setup.grid.spacing,
         crate::plot::label(setup.across),
         setup.reynolds(air),
@@ -169,22 +220,22 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let gpu = Gpu::open()?;
     let size = setup.grid.size;
     let mut domain = Domain::new(size);
+    let mut unseen = Vec::new();
     for (k, part) in setup.parts.iter().enumerate() {
         let points: Vec<Point3> = part.points.iter().map(|&p| setup.to_lattice(p)).collect();
-        if place_surface(
+        let placed = place_surface(
             &mut domain,
             &setup.grid,
             &points,
             &part.triangles,
             k as u16 + 1,
-        ) == 0
-        {
-            bail!(
-                "`{}` is thinner than a cell and does not show in the flow; use a finer `mesh` or `leave {}`",
-                part.name,
-                part.name
-            );
+        );
+        if placed == 0 {
+            unseen.push(part.name.clone());
         }
+    }
+    if unseen.len() == setup.parts.len() {
+        bail!("every part is thinner than a cell; use a finer `mesh`");
     }
     let speed = LATTICE_SPEED;
     let mut seed = 0x2545_f491_4f6c_dd1du64;
@@ -208,6 +259,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             domain.outflow.push((outlet, domain.at(size[0] - 2, y, z)));
         }
     }
+    let inlets: Vec<usize> = domain.inflow.iter().map(|i| i.0).collect();
+    let sealed = domain.seal(&inlets);
+    domain.cuts.clear();
     let dx = setup.grid.spacing * 1.0e-3;
     let viscosity = air.1 * speed / (setup.wind.speed * dx);
     let mut settings = Settings {
@@ -319,7 +373,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         "lowest mean pressure on the surface",
     ));
     let total_steps = ramp + settle + samples * every;
-    let notes = vec![
+    let mut notes = vec![
         format!(
             "{} x {} x {} cells of {} mm, {} steps; forces averaged over {:.3} s of air after {:.3} s to settle",
             size[0],
@@ -336,6 +390,18 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             crate::plot::label(setup.across)
         ),
     ];
+    if sealed > 0 {
+        notes.push(format!(
+            "{:.0} cm³ of air sealed inside the parts is left out of the flow",
+            sealed as f64 * setup.grid.spacing.powi(3) * 1.0e-3
+        ));
+    }
+    if !unseen.is_empty() {
+        notes.push(format!(
+            "{} take no cells of their own, being inside other parts or thinner than a cell, and read no force",
+            unseen.join(", ")
+        ));
+    }
     Ok(Outcome {
         kind: "flow".into(),
         readings,

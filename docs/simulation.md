@@ -103,10 +103,10 @@ expect drag<400
 
 - `wind speed toward=x,y,z about=x,y,z` is in m/s; `toward` is the way the air moves and
   `about` is where moments are taken (default the origin).
-- `mesh` is the cell size in mm. The default puts 32 cells across the widest side the wind
-  meets.
-- `average passes` is how long the forces are averaged, in the time the wind takes to cross
-  that side (default 40, about five shedding cycles behind a bluff body).
+- `mesh` is the cell size in mm. The default puts 32 cells across H, the square root of the
+  frontal area (the parts' shadow on a plane facing the wind).
+- `average passes` is how long the forces are averaged, in the time the wind takes to travel
+  H (default 40, about five shedding cycles behind a bluff body).
 - `air density= viscosity=` overrides air at 20 °C (1.204 kg/m³, 1.516e-5 m²/s).
 
 Readings: `drag` along the wind, `side` across it and level, `lift` across it and up, `cda`
@@ -115,12 +115,27 @@ Readings: `drag` along the wind, `side` across it and level, `lift` across it an
 `part.drag`, `part.side` and `part.lift`. The field is the mean surface pressure. `--dry-run`
 prints the grid, the GPU memory it needs and the number of steps.
 
-The box runs 4 widths upstream, 5 downstream and 3 to each side. Nearer sides and inlet were
-measured to read high: a 100 mm cube at 20 cells across reads Cd 1.30 and a stagnation pressure
-of 1.16 q with the inlet 2 widths away and the sides 1.5, and 1.01 and 1.00 q in this box
-(Hoerner gives 1.05). The flow is a large-eddy simulation that does not resolve boundary
-layers, so drag on sharp-edged parts, where the separation points are fixed, is more certain
-than on smooth rounded ones.
+The box runs 4 H upstream, 5 H downstream and 3 H to each side of the parts, which keeps the
+blockage near 2% whatever their shape (a long thin part does not inflate the box). Nearer
+sides and inlet were measured to read high: a 100 mm cube at 20 cells across reads Cd 1.30
+and a stagnation pressure of 1.16 q with the inlet 2 widths away and the sides 1.5, and 1.01
+and 1.00 q in this box (Hoerner gives 1.05). The grid is offset half a cell so that faces on
+round numbers fall between cell centres.
+
+Parts are voxelized with plain (staircase) walls. A wall thinner than a cell still blocks the
+flow: rays along all three axes mark the nearest cell wherever two surface crossings have no
+cell centre between them, so enclosure walls stay airtight. Air the inlet cannot reach is
+taken out of the flow and noted. A part with no cells of its own (inside another, or thinner
+than a cell along every axis) is noted and reads no force. Forces are gauge forces, so parts
+pressed against each other do not feel the lattice's reference pressure on one side only.
+
+What it gets wrong: a round member a few cells across is a square bar to the lattice, and
+reads close to a square bar's drag (Cd near 2 instead of 1.2). Members need about 10 cells
+across before their drag means much, and cells that fine over a whole assembly may not fit
+on the GPU. The flow is a large-eddy simulation that does not resolve boundary layers, so
+drag on sharp-edged parts, where the separation points are fixed, is more certain than on
+smooth rounded ones. Pockets of air in holes left by parts that were left out keep whatever
+pressure they settle to and can set the `pressure` and `suction` readings.
 
 `wind flow.gsim` in a static (or buckling) simulation loads its parts with the mean surface
 pressure from that flow result: each boundary face of the mesh takes the pressure of the
