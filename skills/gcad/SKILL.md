@@ -187,7 +187,7 @@ sits on the path.
 A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`. It prints
 readings, writes `x.result.json`, and fails when an `expect` line does not hold. Kinds:
 `torque`, `static`, `thermal`, `modal`, `buckling` (load factor before buckling under the
-`static` lines; keep it above about 3); the plan and limits are in `docs/simulation.md`.
+`static` lines; keep it above about 3), `flow` (wind on the GPU); the plan and limits are in `docs/simulation.md`.
 
 ```
 sim torque
@@ -240,6 +240,24 @@ readings that moved more than 5%; trust the ones it does not name.
 
 `sim modal` with `fix` lines and `modes 6`: readings `mode1`... in Hz, each with its effective
 mass share along x, y, z. No supports means free-free (rigid modes dropped).
+
+`sim flow` blows wind past a part or assembly on the GPU (lattice Boltzmann):
+
+```
+sim flow
+part head.gasm
+leave *screw* *nut*
+wind 33.3 toward=0,1,0 about=0,0,0
+mesh 5
+```
+
+Speed in m/s, `toward` is where the air goes, moments are about `about`. `mesh` is the cell in
+mm (default: 32 cells across the square root of the frontal area); run `--dry-run` first, it
+prints cells, GPU memory and steps. Readings: `drag`, `side`, `lift` (N), `cda` (m²),
+`moment.x/y/z` (N·m), `part.drag` per part, `pressure`/`suction` (Pa). Round members under
+about 10 cells across read like square bars (drag up to 1.8x too high); sharp-edged boxes read
+well. Then `wind flow.gsim` in a `sim static` loads the parts with that surface pressure; it
+needs the flow's result to be fresh.
 
 ## Output
 
