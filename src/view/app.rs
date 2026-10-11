@@ -73,11 +73,6 @@ struct Pick {
     vertex: bool,
 }
 
-struct Browser {
-    dir: PathBuf,
-    typed: String,
-}
-
 #[derive(Clone, Copy, PartialEq, Default)]
 enum Mode {
     #[default]
@@ -241,7 +236,7 @@ impl App {
         };
         match path {
             Some(path) => app.open(path, &cc.egui_ctx),
-            None => app.browser = Some(Browser::at(std::env::current_dir().unwrap_or_default())),
+            None => app.browser = Some(browser_at(std::env::current_dir().unwrap_or_default())),
         }
         app
     }
@@ -485,7 +480,7 @@ impl App {
             if toggle(ui, "open", self.browser.is_some()).clicked() {
                 self.browser = match self.browser {
                     Some(_) => None,
-                    None => Some(Browser::at(
+                    None => Some(browser_at(
                         self.path
                             .as_ref()
                             .and_then(|p| p.parent())
@@ -1472,121 +1467,13 @@ impl App {
         let Some(browser) = &mut self.browser else {
             return;
         };
-        let mut chosen: Option<PathBuf> = None;
-        let mut close = false;
-        let mut go: Option<PathBuf> = None;
-        let mut open = true;
-        egui::Window::new("open a part or assembly")
-            .open(&mut open)
-            .collapsible(false)
-            .resizable(false)
-            .fixed_size([560.0, 420.0])
-            .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-            .show(ctx, |ui| {
-                Line::new()
-                    .legend("folder")
-                    .value(browser.dir.display().to_string())
-                    .show(ui);
-                let (entered, pressed) = ui
-                    .horizontal(|ui| {
-                        let typed = ui.add(
-                            egui::TextEdit::singleline(&mut browser.typed)
-                                .hint_text("path to a file or folder")
-                                .desired_width(480.0),
-                        );
-                        let entered =
-                            typed.lost_focus() && ui.input(|i| i.key_pressed(egui::Key::Enter));
-                        (entered, toggle(ui, "go", false).clicked())
-                    })
-                    .inner;
-                if entered || pressed {
-                    let target = PathBuf::from(browser.typed.trim());
-                    let target = if target.is_relative() {
-                        browser.dir.join(target)
-                    } else {
-                        target
-                    };
-                    if target.is_dir() {
-                        go = Some(target);
-                    } else if target.is_file() {
-                        chosen = Some(target);
-                    }
-                }
-                ui.add_space(6.0);
-                let mut entries: Vec<(bool, PathBuf)> = std::fs::read_dir(&browser.dir)
-                    .map(|read| {
-                        read.filter_map(|e| e.ok().map(|e| e.path()))
-                            .filter(|p| {
-                                let hidden = p
-                                    .file_name()
-                                    .and_then(|n| n.to_str())
-                                    .is_some_and(|n| n.starts_with('.'));
-                                !hidden
-                                    && (p.is_dir()
-                                        || p.extension().is_some_and(|e| {
-                                            e == "gcad" || e == "gasm" || e == "gsim"
-                                        }))
-                            })
-                            .map(|p| (p.is_dir(), p))
-                            .collect()
-                    })
-                    .unwrap_or_default();
-                entries.sort_by(|a, b| b.0.cmp(&a.0).then(a.1.cmp(&b.1)));
-                egui::ScrollArea::vertical()
-                    .auto_shrink([false, false])
-                    .max_height(320.0)
-                    .show(ui, |ui| {
-                        if let Some(parent) = browser.dir.parent()
-                            && ui
-                                .selectable_label(false, egui::RichText::new("..").monospace())
-                                .clicked()
-                        {
-                            go = Some(parent.to_path_buf());
-                        }
-                        for (is_dir, path) in &entries {
-                            let name = path
-                                .file_name()
-                                .and_then(|n| n.to_str())
-                                .unwrap_or_default();
-                            let text = if *is_dir {
-                                format!("{name}/")
-                            } else {
-                                name.to_string()
-                            };
-                            let colour = if *is_dir { LEGEND } else { VALUE };
-                            if ui
-                                .selectable_label(
-                                    false,
-                                    egui::RichText::new(text).monospace().color(colour),
-                                )
-                                .clicked()
-                            {
-                                if *is_dir {
-                                    go = Some(path.clone());
-                                } else {
-                                    chosen = Some(path.clone());
-                                }
-                            }
-                        }
-                        if entries.is_empty() {
-                            hint(ui, "no folders, .gcad or .gasm files here");
-                        }
-                    });
-                ui.add_space(6.0);
-                if toggle(ui, "cancel", false).clicked() {
-                    close = true;
-                }
-            });
-        if let Some(dir) = go {
-            browser.dir = dir;
-            browser.typed.clear();
-        }
-        if !open || close {
-            self.browser = None;
-        }
-        if let Some(path) = chosen {
-            self.browser = None;
-            self.open(path, ctx);
+        match browser.show(ctx) {
+            Picked::Browsing => {}
+            Picked::Cancelled => self.browser = None,
+            Picked::File(path) | Picked::Folder(path) => {
+                self.browser = None;
+                self.open(path, ctx);
+            }
         }
     }
 
@@ -1599,7 +1486,7 @@ impl App {
             self.focus = None;
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
-            self.browser = Some(Browser::at(std::env::current_dir().unwrap_or_default()));
+            self.browser = Some(browser_at(std::env::current_dir().unwrap_or_default()));
         }
         let count = self.program.lines.len();
         if count == 0 {
@@ -1628,13 +1515,8 @@ impl App {
     }
 }
 
-impl Browser {
-    fn at(dir: PathBuf) -> Browser {
-        Browser {
-            dir,
-            typed: String::new(),
-        }
-    }
+fn browser_at(dir: PathBuf) -> Browser {
+    Browser::new("open a part or assembly", dir).suffixes(&[".gcad", ".gasm", ".gsim"])
 }
 
 fn field_marks(
