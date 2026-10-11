@@ -350,8 +350,8 @@ fn sphere_drag_re50() {
     }
     let drag = drags.iter().sum::<f64>() / drags.len() as f64;
     assert!(
-        (drag - 1.57).abs() / 1.57 < 0.05,
-        "drag {drag} against 1.57"
+        (drag - 1.606).abs() / 1.606 < 0.04,
+        "drag {drag} against OpenFOAM's 1.606 in the same box"
     );
 }
 
