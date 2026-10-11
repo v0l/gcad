@@ -509,3 +509,52 @@ fn creases(points: &[Point3], triangles: &[[usize; 3]]) -> Vec<[usize; 2]> {
         .map(|((a, b), _)| [a, b])
         .collect()
 }
+
+pub fn surface_pressure(file: &std::path::Path) -> Result<super::fem::elastic::SurfacePressure> {
+    let run = crate::model::run_path(file, &[], None)?;
+    if let Some((line, Err(error))) = run.steps.last() {
+        bail!("{}:{}: {error:#}", file.display(), line.number);
+    }
+    let Some(spec) = run.model.sim.as_deref() else {
+        bail!("{} is not a simulation", file.display());
+    };
+    if spec.kind != Some(super::Kind::Flow) {
+        bail!("{} is not a `sim flow`", file.display());
+    }
+    let result = super::result_path(file);
+    if !result.is_file() {
+        bail!(
+            "{} has no result yet; run `gcad sim {}` first",
+            file.display(),
+            file.display()
+        );
+    }
+    if let Some(why) = super::stale(file, &[]) {
+        bail!(
+            "the result of {} is stale ({why}); run `gcad sim {}` again",
+            file.display(),
+            file.display()
+        );
+    }
+    let outcome = Outcome::read(&result)?;
+    let Some(field) = outcome.field else {
+        bail!("{} has no pressure field; run it again", file.display());
+    };
+    let setup = setup(spec)?;
+    let mut samples = Vec::new();
+    for part in &setup.parts {
+        samples.extend(sampled(&part.points, &part.triangles, setup.grid.spacing).0);
+    }
+    if samples.len() != field.values.len() {
+        bail!(
+            "the result of {} does not match its parts; run it again",
+            file.display()
+        );
+    }
+    Ok(super::fem::elastic::SurfacePressure::new(
+        samples
+            .into_iter()
+            .zip(field.values.iter().map(|pa| pa * 1.0e-6)),
+        2.0 * setup.grid.spacing,
+    ))
+}

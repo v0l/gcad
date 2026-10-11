@@ -122,6 +122,12 @@ of 1.16 q with the inlet 2 widths away and the sides 1.5, and 1.01 and 1.00 q in
 layers, so drag on sharp-edged parts, where the separation points are fixed, is more certain
 than on smooth rounded ones.
 
+`wind flow.gsim` in a static (or buckling) simulation loads its parts with the mean surface
+pressure from that flow result: each boundary face of the mesh takes the pressure of the
+nearest surface sample within two cells, and faces further than that from any sample take
+none. The flow must have a fresh result. Wall shear is left out: on the cube it is 3% of the
+drag and, acting on the top face, 10% of the moment about the base.
+
 ## Meshing
 
 Tetrahedra that follow the surface, written in Rust (`src/sim/tet/`). Built in phase 2:

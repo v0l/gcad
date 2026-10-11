@@ -1232,6 +1232,33 @@ fn wind_on_a_cube() {
 }
 
 #[test]
+fn wind_loads_a_static_part() {
+    let path = written(
+        "wind_loads_a_static_part",
+        &[("cube.gcad", CUBE)],
+        "sim flow\npart cube.gcad\nwind 10 toward=0,1,0\nmesh 5",
+    );
+    let flow = path.with_file_name("flow.gsim");
+    std::fs::rename(&path, &flow).expect("rename");
+    std::fs::remove_file(gcad::sim::result_path(&flow)).ok();
+    let load =
+        "sim static\npart cube.gcad\nmaterial aluminium\nbase: fix <Z\nwind flow.gsim\nmesh 15";
+    std::fs::write(&path, load).expect("write spec");
+    let early = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"));
+    assert!(format!("{:#}", early.expect_err("no flow result yet")).contains("no result yet"),);
+    let outcome = gcad::sim::simulate(spec_of(&flow).sim.as_deref().expect("sim")).expect("flows");
+    let json = outcome.to_json(&gcad::sim::stamp(&flow, &[]));
+    std::fs::write(gcad::sim::result_path(&flow), json.to_string()).expect("write result");
+    let statics = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("loads");
+    close(reading(&statics, "base"), reading(&outcome, "drag"), 0.06);
+    close(
+        reading(&statics, "base.moment"),
+        reading(&outcome, "moment.x").abs(),
+        0.12,
+    );
+}
+
+#[test]
 fn wind_shelters_a_part_behind() {
     let pair = "part front cube.gcad\npart back cube.gcad\nmove back 250,0,0\n";
     let outcome = simulated(

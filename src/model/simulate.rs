@@ -313,6 +313,26 @@ impl Model {
                     "solves once more on a mesh 1.5 times coarser and flags readings that move more than {within}%"
                 ))
             }
+            "wind"
+                if line
+                    .positional
+                    .first()
+                    .is_some_and(|a| crate::sim::is_sim(std::path::Path::new(a))) =>
+            {
+                let args = Args::new(line, &["file"], &[], false)?;
+                let name = args.text("file")?;
+                let file = self.relative(name);
+                if !file.is_file() {
+                    bail!("no file {}", file.display());
+                }
+                if self.spec().kind == Some(crate::sim::Kind::Flow) {
+                    bail!(
+                        "`wind flow.gsim` loads a static simulation; a flow simulation takes `wind speed toward=x,y,z`"
+                    );
+                }
+                self.spec().wind_load = Some(file);
+                Ok(format!("the mean surface pressure from {name}"))
+            }
             "wind" => {
                 let args = Args::new(line, &["speed"], &["toward", "about"], false)?;
                 let speed = positive(args.number("speed", &self.scope)?, "the wind speed")?;

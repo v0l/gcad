@@ -329,6 +329,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             .map(|p| g * (p.density * 1.0e-6))
             .collect()
     });
+    let wind = spec
+        .wind_load
+        .as_deref()
+        .map(super::wind::surface_pressure)
+        .transpose()?;
     let answer = solve(&Problem {
         mesh,
         materials: &materials,
@@ -336,9 +341,19 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         loads: &spec.loads,
         body_force,
         expansion: prepared.expansion(spec.warming.as_ref())?,
+        wind: wind.as_ref(),
     })?;
     let mut readings = Vec::new();
     let mut notes = Vec::new();
+    if let (Some(wind), Some(file)) = (&wind, &spec.wind_load) {
+        let f = super::fem::elastic::wind_force(mesh, wind);
+        notes.push(format!(
+            "wind from {}: {} N ({}) of surface pressure on the parts",
+            file.display(),
+            short(f.magnitude()),
+            triple(f)
+        ));
+    }
     let (peak, where_peak) = answer
         .von_mises
         .iter()
@@ -760,9 +775,18 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
             .map(|p| g * (p.density * 1.0e-6))
             .collect()
     });
-    if spec.loads.is_empty() && body_force.is_none() && spec.warming.is_none() {
-        bail!("buckling needs a `load`, `pressure`, `torque` or `warm` to scale");
+    if spec.loads.is_empty()
+        && body_force.is_none()
+        && spec.warming.is_none()
+        && spec.wind_load.is_none()
+    {
+        bail!("buckling needs a `load`, `pressure`, `torque`, `warm` or `wind` to scale");
     }
+    let wind = spec
+        .wind_load
+        .as_deref()
+        .map(super::wind::surface_pressure)
+        .transpose()?;
     let wanted = spec.modes.unwrap_or(3);
     let buckles = super::fem::buckling::solve(
         &Problem {
@@ -772,6 +796,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
             loads: &spec.loads,
             body_force,
             expansion: prepared.expansion(spec.warming.as_ref())?,
+            wind: wind.as_ref(),
         },
         wanted,
     )?;

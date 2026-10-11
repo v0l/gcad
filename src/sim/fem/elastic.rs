@@ -70,6 +70,44 @@ pub struct Load {
     pub push: Push,
 }
 
+pub struct SurfacePressure {
+    reach: f64,
+    buckets: std::collections::HashMap<[i64; 3], Vec<(Point3, f64)>>,
+}
+
+impl SurfacePressure {
+    pub fn new(samples: impl IntoIterator<Item = (Point3, f64)>, reach: f64) -> SurfacePressure {
+        let mut buckets: std::collections::HashMap<[i64; 3], Vec<(Point3, f64)>> =
+            Default::default();
+        for (p, v) in samples {
+            buckets
+                .entry([p.x, p.y, p.z].map(|c| (c / reach).floor() as i64))
+                .or_default()
+                .push((p, v));
+        }
+        SurfacePressure { reach, buckets }
+    }
+
+    pub fn at(&self, p: Point3) -> Option<f64> {
+        let base = [p.x, p.y, p.z].map(|c| (c / self.reach).floor() as i64);
+        let mut best = (self.reach * self.reach, None);
+        for dz in -1..=1 {
+            for dy in -1..=1 {
+                for dx in -1..=1 {
+                    let key = [base[0] + dx, base[1] + dy, base[2] + dz];
+                    for (q, v) in self.buckets.get(&key).into_iter().flatten() {
+                        let d = (q - p).magnitude2();
+                        if d < best.0 {
+                            best = (d, Some(*v));
+                        }
+                    }
+                }
+            }
+        }
+        best.1
+    }
+}
+
 pub struct Problem<'a> {
     pub mesh: &'a Quadratic,
     pub materials: &'a [(f64, f64)],
@@ -77,6 +115,7 @@ pub struct Problem<'a> {
     pub loads: &'a [Load],
     pub body_force: Option<Vec<Vector3>>,
     pub expansion: Option<Vec<f64>>,
+    pub wind: Option<&'a SurfacePressure>,
 }
 
 pub struct Answer {
@@ -327,6 +366,20 @@ pub fn area(mesh: &Quadratic, faces: &[usize]) -> f64 {
         .sum()
 }
 
+pub fn wind_force(mesh: &Quadratic, wind: &SurfacePressure) -> Vector3 {
+    let mut total = Vector3::zero();
+    for (face, _) in &mesh.boundary {
+        let p = six(mesh, *face);
+        let middle = Point3::from_vec((p[0].to_vec() + p[1].to_vec() + p[2].to_vec()) / 3.0);
+        if let Some(pressure) = wind.at(middle) {
+            for (l, w) in triangle_gauss() {
+                total -= triangle_area_vector(&p, l) * (pressure * w);
+            }
+        }
+    }
+    total
+}
+
 pub fn loads(problem: &Problem) -> Result<Vec<f64>> {
     let mesh = problem.mesh;
     let mut f = vec![0.0; mesh.nodes.len() * 3];
@@ -373,6 +426,21 @@ pub fn loads(problem: &Problem) -> Result<Vec<f64>> {
                             * (moment / polar_moment * normal.magnitude())
                     }
                 };
+                for (k, n) in triangle_shape(l).iter().enumerate() {
+                    add(face[k], traction * (n * w));
+                }
+            }
+        }
+    }
+    if let Some(wind) = problem.wind {
+        for (face, _) in &mesh.boundary {
+            let p = six(mesh, *face);
+            let middle = Point3::from_vec((p[0].to_vec() + p[1].to_vec() + p[2].to_vec()) / 3.0);
+            let Some(pressure) = wind.at(middle) else {
+                continue;
+            };
+            for (l, w) in triangle_gauss() {
+                let traction = -triangle_area_vector(&p, l) * pressure;
                 for (k, n) in triangle_shape(l).iter().enumerate() {
                     add(face[k], traction * (n * w));
                 }
