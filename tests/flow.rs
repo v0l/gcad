@@ -1,6 +1,13 @@
 use gcad::flow::gpu::Gpu;
 use gcad::flow::lattice::{C, Collision, Domain, INLET, Lattice, MOVING, OUTLET, Settings, WALL};
 
+static DEVICE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn device() -> (std::sync::MutexGuard<'static, ()>, Gpu) {
+    let guard = DEVICE.lock().unwrap_or_else(|e| e.into_inner());
+    (guard, Gpu::open().expect("a compute device"))
+}
+
 fn at(size: [usize; 3], x: usize, y: usize, z: usize) -> usize {
     x + (y + z * size[1]) * size[0]
 }
@@ -14,7 +21,7 @@ fn domain(size: [usize; 3], flags: Vec<u8>) -> Domain {
 
 #[test]
 fn poiseuille_between_plates() {
-    let gpu = Gpu::open().expect("a compute device");
+    let (_device, gpu) = device();
     let size = [4, 34, 4];
     let mut flags = vec![0u8; size.iter().product()];
     for x in 0..size[0] {
@@ -49,7 +56,7 @@ fn poiseuille_between_plates() {
 }
 
 fn cavity(side: usize, reynolds: f64, steps: usize) -> impl Fn(f64) -> f64 {
-    let gpu = Gpu::open().expect("a compute device");
+    let (_device, gpu) = device();
     let size = [side + 2, side + 2, 1];
     let mut flags = vec![0u8; size.iter().product()];
     for i in 0..size[0] {
@@ -136,7 +143,7 @@ fn lid_driven_cavity_re1000() {
 #[test]
 #[ignore = "throughput on the GPU, run with --ignored --nocapture"]
 fn throughput() {
-    let gpu = Gpu::open().expect("a compute device");
+    let (_device, gpu) = device();
     let size = [128, 128, 128];
     let flags = vec![0u8; size.iter().product()];
     let settings = Settings {
@@ -164,7 +171,7 @@ fn schaefer_turek(
     samples: usize,
     every: usize,
 ) -> Channel {
-    let gpu = Gpu::open().expect("a compute device");
+    let (_device, gpu) = device();
     let d = diameter as f64;
     let height = (4.1 * d).round() as usize;
     let length = 22 * diameter;
@@ -295,7 +302,7 @@ fn solid_from(name: &str, source: &str) -> monstertruck::modeling::Solid {
 fn sphere_drag_re50() {
     use gcad::flow::voxel::{Grid, place};
     use monstertruck::modeling::Point3;
-    let gpu = Gpu::open().expect("a compute device");
+    let (_device, gpu) = device();
     let d: f64 = 20.0;
     let sphere = solid_from(
         "sphere",
@@ -357,7 +364,7 @@ fn sphere_drag_re50() {
 
 #[test]
 fn pipe_flow_with_curved_walls() {
-    let gpu = Gpu::open().expect("a compute device");
+    let (_device, gpu) = device();
     let radius = 10.3;
     let n = 26;
     let size = [4, n, n];
