@@ -16,21 +16,38 @@ pub struct Part {
 pub struct Prepared {
     pub mesh: Quadratic,
     pub parts: Vec<Part>,
+    pub original: Vec<usize>,
 }
 
 impl Prepared {
     pub fn elastic(&self) -> Result<Vec<(f64, f64)>> {
-        self.parts
+        let missing: Vec<String> = self
+            .parts
             .iter()
-            .map(|p| match (p.mechanics.young, p.mechanics.poisson) {
-                (Some(e), Some(nu)) => Ok((e * 1000.0, nu)),
-                _ => bail!(
-                    "`{}` is {}, which has no stiffness; give it `E=` (GPa) and `nu=` on its `material` line",
-                    p.name,
-                    p.material
-                ),
+            .filter(|p| p.mechanics.young.is_none() || p.mechanics.poisson.is_none())
+            .map(|p| format!("`{}` ({})", p.name, p.material))
+            .collect();
+        match missing.as_slice() {
+            [] => {}
+            [one] => bail!(
+                "{one} has no stiffness; give it `E=` (GPa) and `nu=` on its `material` line, or in the simulation with `material part name E= nu=`"
+            ),
+            many => bail!(
+                "{} parts have no stiffness: {}; give each `E=` (GPa) and `nu=` on its `material` line, or in the simulation with `material part name E= nu=`",
+                many.len(),
+                many.join(", ")
+            ),
+        }
+        Ok(self
+            .parts
+            .iter()
+            .map(|p| {
+                (
+                    p.mechanics.young.unwrap_or(0.0) * 1000.0,
+                    p.mechanics.poisson.unwrap_or(0.0),
+                )
             })
-            .collect()
+            .collect())
     }
 
     pub fn conductivity(&self) -> Result<Vec<f64>> {
@@ -137,7 +154,14 @@ impl Prepared {
         }
         let mut anchored = vec![false; count];
         for &face in faces {
-            let r = root(&mut parent, (face / super::fem::STRIDE).min(count - 1));
+            let Some(body) = self
+                .original
+                .iter()
+                .position(|&o| o == face / super::fem::STRIDE)
+            else {
+                continue;
+            };
+            let r = root(&mut parent, body);
             anchored[r] = true;
         }
         let loose: Vec<String> = (0..count)
@@ -173,6 +197,30 @@ impl Prepared {
             .collect();
         (!pairs.is_empty()).then(|| format!("bonded {}", pairs.join(", ")))
     }
+}
+
+pub fn stiff(spec: &Spec) -> Result<()> {
+    let model = spec.target()?;
+    let parts: Vec<Part> = spec
+        .named()?
+        .into_iter()
+        .filter_map(|(name, _)| {
+            let m = model.materials.get(&name)?;
+            Some(Part {
+                name,
+                material: m.name.clone(),
+                mechanics: m.mechanics,
+                density: m.density,
+            })
+        })
+        .collect();
+    Prepared {
+        mesh: Quadratic::empty(),
+        parts,
+        original: Vec::new(),
+    }
+    .elastic()
+    .map(|_| ())
 }
 
 pub fn prepare(spec: &Spec) -> Result<Prepared> {
@@ -228,7 +276,28 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
             .collect::<Result<Vec<_>>>()?;
         super::fem::merge(meshes, &gaps, &touching)
     };
-    Ok(Prepared { mesh, parts })
+    let mut mesh = mesh;
+    let everything: Vec<String> = model.named_solids().into_iter().map(|(n, _)| n).collect();
+    let original: Vec<usize> = named
+        .iter()
+        .map(|(n, _)| everything.iter().position(|m| m == n).unwrap_or(0))
+        .collect();
+    let stride = super::fem::STRIDE;
+    for (_, tag) in &mut mesh.boundary {
+        *tag = original[*tag / stride] * stride + *tag % stride;
+    }
+    mesh.faces = mesh
+        .boundary
+        .iter()
+        .map(|(_, tag)| tag + 1)
+        .max()
+        .unwrap_or(0)
+        .max(mesh.faces);
+    Ok(Prepared {
+        mesh,
+        parts,
+        original,
+    })
 }
 
 pub fn at(p: Point3) -> String {
@@ -241,6 +310,7 @@ pub fn at(p: Point3) -> String {
 }
 
 pub fn run(spec: &Spec) -> Result<Outcome> {
+    stiff(spec)?;
     let prepared = prepare(spec)?;
     prepared.held(
         &spec
@@ -498,6 +568,7 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
     let Some(field) = &outcome.field else {
         bail!("the result has no field to draw; rerun `gcad sim`");
     };
+    stiff(spec)?;
     let prepared = prepare(spec)?;
     let mesh = &prepared.mesh;
     if mesh.nodes.len() != field.values.len() || field.displacement.len() != field.values.len() {

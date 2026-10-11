@@ -49,18 +49,33 @@ pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
         .collect()
 }
 
+const FLATTEST: f64 = 2.0;
+
 pub fn mesh_part(solid: &Solid, size: f64) -> Result<(TetMesh, f64)> {
     let own = size.min(geometry::bounds(solid).diameter() / 6.0);
     let mut tried = own;
+    let mut best: Option<(TetMesh, f64, f64)> = None;
     let mut last = None;
-    for _ in 0..3 {
+    for _ in 0..5 {
         match mesh_solid(solid, tried) {
-            Ok(mesh) => return Ok((mesh, tried)),
+            Ok(mesh) => {
+                let worst = mesh.quality().min_dihedral;
+                if worst >= FLATTEST {
+                    return Ok((mesh, tried));
+                }
+                if best.as_ref().is_none_or(|b| worst > b.2) {
+                    best = Some((mesh, tried, worst));
+                }
+            }
             Err(error) => last = Some(error),
         }
         tried *= 0.6;
     }
-    Err(last.expect("tried at least once"))
+    match (best, last) {
+        (Some((mesh, used, _)), _) => Ok((mesh, used)),
+        (None, Some(error)) => Err(error),
+        (None, None) => unreachable!("five tries"),
+    }
 }
 
 pub fn plan(spec: &Spec) -> Result<String> {

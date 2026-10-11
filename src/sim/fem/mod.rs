@@ -191,6 +191,20 @@ fn edge_key(a: u32, b: u32) -> (u32, u32) {
 }
 
 impl Quadratic {
+    pub fn empty() -> Quadratic {
+        Quadratic {
+            nodes: Vec::new(),
+            corners: 0,
+            tets: Vec::new(),
+            boundary: Vec::new(),
+            faces: 0,
+            body: Vec::new(),
+            bodies: Vec::new(),
+            ties: Vec::new(),
+            bonds: Vec::new(),
+        }
+    }
+
     pub fn coarse(&self) -> solve::Coarse {
         let mut index: Vec<Option<u32>> = vec![None; self.nodes.len()];
         let mut count = 0u32;
@@ -493,17 +507,7 @@ pub fn merge(
     gaps: &[f64],
     touching: &[(usize, usize, f64)],
 ) -> Quadratic {
-    let mut out = Quadratic {
-        nodes: Vec::new(),
-        corners: 0,
-        tets: Vec::new(),
-        boundary: Vec::new(),
-        faces: 0,
-        body: Vec::new(),
-        bodies: Vec::new(),
-        ties: Vec::new(),
-        bonds: Vec::new(),
-    };
+    let mut out = Quadratic::empty();
     let mut skins: Vec<Vec<[u32; 6]>> = Vec::new();
     for (index, (name, part)) in parts.into_iter().enumerate() {
         let offset = out.nodes.len() as u32;
@@ -527,38 +531,32 @@ pub fn merge(
         out.bodies.push(name);
         skins.push(skin);
     }
-    for master in 0..skins.len() {
-        let gap = gaps[master];
-        let cell = gap.max(1.0e-9) * 8.0;
-        let key = |p: Point3| [p.x, p.y, p.z].map(|v| (v / cell).floor() as i64);
-        let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::default();
-        for (t, f) in skins[master].iter().enumerate() {
-            let corners = [f[0], f[1], f[2]].map(|v| out.nodes[v as usize]);
-            let lo = corners.iter().fold(corners[0], |m, p| {
-                Point3::new(m.x.min(p.x), m.y.min(p.y), m.z.min(p.z))
-            });
-            let hi = corners.iter().fold(corners[0], |m, p| {
-                Point3::new(m.x.max(p.x), m.y.max(p.y), m.z.max(p.z))
-            });
-            let (a, b) = (
-                key(lo - Vector3::new(gap, gap, gap)),
-                key(hi + Vector3::new(gap, gap, gap)),
-            );
-            for x in a[0]..=b[0] {
-                for y in a[1]..=b[1] {
-                    for z in a[2]..=b[2] {
-                        grid.entry([x, y, z]).or_default().push(t);
-                    }
-                }
-            }
-        }
-        for slave in (0..skins.len()).filter(|&s| s != master) {
-            let gap = gap.min(gaps[slave]);
-            let pair = (master.min(slave), master.max(slave));
-            let contact = touching.iter().find(|t| (t.0, t.1) == pair);
+    use rayon::prelude::*;
+    let nodes = &out.nodes;
+    let bounds: Vec<(Point3, Point3)> = skins
+        .par_iter()
+        .map(|skin| {
+            skin.iter().flatten().fold(
+                (
+                    Point3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY),
+                    Point3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY),
+                ),
+                |(lo, hi), &v| {
+                    let p = nodes[v as usize];
+                    (
+                        Point3::new(lo.x.min(p.x), lo.y.min(p.y), lo.z.min(p.z)),
+                        Point3::new(hi.x.max(p.x), hi.y.max(p.y), hi.z.max(p.z)),
+                    )
+                },
+            )
+        })
+        .collect();
+    let facings: Vec<HashMap<u32, Vec<Vector3>>> = skins
+        .par_iter()
+        .map(|skin| {
             let mut facing: HashMap<u32, Vec<Vector3>> = HashMap::default();
-            for f in &skins[slave] {
-                let [a, b, c] = [f[0], f[1], f[2]].map(|v| out.nodes[v as usize]);
+            for f in skin {
+                let [a, b, c] = [f[0], f[1], f[2]].map(|v| nodes[v as usize]);
                 let n = (b - a).cross(c - a);
                 if n.magnitude() > 0.0 {
                     for &v in f {
@@ -566,14 +564,73 @@ pub fn merge(
                     }
                 }
             }
+            facing
+        })
+        .collect();
+    let keys = |gap: f64| {
+        let cell = gap.max(1.0e-9) * 8.0;
+        move |p: Point3| [p.x, p.y, p.z].map(|v| (v / cell).floor() as i64)
+    };
+    let grids: Vec<HashMap<[i64; 3], Vec<usize>>> = skins
+        .par_iter()
+        .enumerate()
+        .map(|(master, skin)| {
+            let gap = gaps[master];
+            let key = keys(gap);
+            let mut grid: HashMap<[i64; 3], Vec<usize>> = HashMap::default();
+            for (t, f) in skin.iter().enumerate() {
+                let corners = [f[0], f[1], f[2]].map(|v| nodes[v as usize]);
+                let lo = corners.iter().fold(corners[0], |m, p| {
+                    Point3::new(m.x.min(p.x), m.y.min(p.y), m.z.min(p.z))
+                });
+                let hi = corners.iter().fold(corners[0], |m, p| {
+                    Point3::new(m.x.max(p.x), m.y.max(p.y), m.z.max(p.z))
+                });
+                let (a, b) = (
+                    key(lo - Vector3::new(gap, gap, gap)),
+                    key(hi + Vector3::new(gap, gap, gap)),
+                );
+                for x in a[0]..=b[0] {
+                    for y in a[1]..=b[1] {
+                        for z in a[2]..=b[2] {
+                            grid.entry([x, y, z]).or_default().push(t);
+                        }
+                    }
+                }
+            }
+            grid
+        })
+        .collect();
+    let near = |a: usize, b: usize, gap: f64| {
+        let ((la, ha), (lb, hb)) = (bounds[a], bounds[b]);
+        la.x <= hb.x + gap
+            && lb.x <= ha.x + gap
+            && la.y <= hb.y + gap
+            && lb.y <= ha.y + gap
+            && la.z <= hb.z + gap
+            && lb.z <= ha.z + gap
+    };
+    let pairs: Vec<(usize, usize)> = (0..skins.len())
+        .flat_map(|m| (0..skins.len()).map(move |s| (m, s)))
+        .filter(|&(m, s)| m != s && near(m, s, gaps[m].min(gaps[s])))
+        .collect();
+    let found: Vec<(usize, usize, Vec<Tie>)> = pairs
+        .par_iter()
+        .map(|&(master, slave)| {
+            let gap = gaps[master].min(gaps[slave]);
+            let key = keys(gaps[master]);
+            let grid = &grids[master];
+            let facing = &facings[slave];
+            let pair = (master.min(slave), master.max(slave));
+            let contact = touching.iter().find(|t| (t.0, t.1) == pair);
             let mut seen = std::collections::BTreeSet::new();
-            let mut tied = 0;
+            let mut ties = Vec::new();
             for f in &skins[slave] {
                 for &v in f {
                     if !seen.insert(v) {
                         continue;
                     }
-                    let p = out.nodes[v as usize];
+                    let p = nodes[v as usize];
                     let Some(list) = grid.get(&key(p)) else {
                         continue;
                     };
@@ -581,7 +638,7 @@ pub fn merge(
                         .iter()
                         .filter(|&&t| {
                             let m = skins[master][t];
-                            let [a, b, c] = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
+                            let [a, b, c] = [m[0], m[1], m[2]].map(|n| nodes[n as usize]);
                             let n = (b - a).cross(c - a);
                             facing.get(&v).is_some_and(|list| {
                                 list.iter().any(|s| s.dot(n) < -0.7 * n.magnitude())
@@ -589,13 +646,13 @@ pub fn merge(
                         })
                         .filter_map(|&t| {
                             let m = skins[master][t];
-                            let corners = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
+                            let corners = [m[0], m[1], m[2]].map(|n| nodes[n as usize]);
                             let (_, l) = closest_on_triangle(p, corners);
                             let q = m
                                 .iter()
                                 .zip(triangle_shape(l))
                                 .fold(Vector3::zero(), |a, (&v, w)| {
-                                    a + out.nodes[v as usize].to_vec() * w
+                                    a + nodes[v as usize].to_vec() * w
                                 });
                             let n = (corners[1] - corners[0])
                                 .cross(corners[2] - corners[0])
@@ -606,28 +663,29 @@ pub fn merge(
                             (d <= gap && along <= gap * SLIP).then_some((d, t, l))
                         })
                         .min_by(|a, b| a.0.total_cmp(&b.0));
-                    if let Some((d, t, l)) = best
-                        && d <= gap
-                    {
+                    if let Some((_, t, l)) = best {
                         let shape = triangle_shape(l);
                         let m = skins[master][t];
-                        let [a, b, c] = [m[0], m[1], m[2]].map(|n| out.nodes[n as usize]);
-                        out.ties.push(Tie {
+                        let [a, b, c] = [m[0], m[1], m[2]].map(|n| nodes[n as usize]);
+                        ties.push(Tie {
                             slave: v,
                             masters: m,
                             weights: shape,
-                            turn: turning(p, m.map(|n| out.nodes[n as usize]), shape),
+                            turn: turning(p, m.map(|n| nodes[n as usize]), shape),
                             normal: contact.map(|_| (b - a).cross(c - a).normalize()),
                             friction: contact.map_or(0.0, |t| t.2),
                         });
-                        tied += 1;
                     }
                 }
             }
-            if tied > 0 && master < slave {
-                out.bonds.push((master, slave, tied));
-            }
+            (master, slave, ties)
+        })
+        .collect();
+    for (master, slave, ties) in found {
+        if !ties.is_empty() && master < slave {
+            out.bonds.push((master, slave, ties.len()));
         }
+        out.ties.extend(ties);
     }
     out
 }

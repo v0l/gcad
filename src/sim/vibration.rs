@@ -4,6 +4,7 @@ use super::{Field, Outcome, Reading, Spec};
 use anyhow::Result;
 
 pub fn run(spec: &Spec) -> Result<Outcome> {
+    super::statics::stiff(spec)?;
     let prepared = prepare(spec)?;
     if !spec.supports.is_empty() {
         prepared.held(

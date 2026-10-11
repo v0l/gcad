@@ -137,6 +137,7 @@ fn assemble_with(mesh: &Quadratic, materials: &[(f64, f64)], all: bool) -> Resul
     let constants: Vec<(f64, f64)> = materials.iter().map(|&(e, nu)| lame(e, nu)).collect();
     let groups: Vec<[u32; 7]> = mesh.ties.iter().map(|t| t.group()).collect();
     let mut blocks = Blocks::pattern_with(mesh.nodes.len(), &mesh.tets, &groups);
+    let flat = spacing(mesh).powi(3) * 1.0e-6;
     let batch = 4096;
     for start in (0..mesh.tets.len()).step_by(batch) {
         let end = (start + batch).min(mesh.tets.len());
@@ -149,7 +150,22 @@ fn assemble_with(mesh: &Quadratic, materials: &[(f64, f64)], all: bool) -> Resul
             .collect();
         for (t, matrix) in (start..end).zip(matrices) {
             let Some(matrix) = matrix else {
-                bail!("element {t} is inverted; try another `mesh` size");
+                let p = mesh.points(t);
+                let volume = (p[1] - p[0]).dot((p[2] - p[0]).cross(p[3] - p[0])) / 6.0;
+                if volume.abs() <= flat {
+                    continue;
+                }
+                let centre = (p[0].to_vec() + p[1].to_vec() + p[2].to_vec() + p[3].to_vec()) / 4.0;
+                let body = mesh
+                    .bodies
+                    .get(mesh.body[t] as usize)
+                    .map_or(String::new(), |b| format!(" in `{b}`"));
+                bail!(
+                    "an element{body} near {:.2},{:.2},{:.2} is inverted; try another `mesh` size",
+                    centre.x,
+                    centre.y,
+                    centre.z
+                );
             };
             let tet = mesh.tets[t];
             for a in 0..10 {

@@ -1,4 +1,4 @@
-use super::solve::{Block, Blocks, block_jacobi, project, times};
+use super::solve::{Block, Blocks, SPREAD_AIM, SPREAD_ROUNDS, block_jacobi, project, times};
 use rayon::prelude::*;
 
 pub struct Rigid {
@@ -153,7 +153,7 @@ impl Rigid {
             count,
             llt,
         };
-        rigid.weight = (1.2 / rigid.spread()).min(0.6);
+        rigid.weight = (SPREAD_AIM / rigid.spread()).min(0.6);
         Ok(rigid)
     }
 
@@ -189,7 +189,7 @@ impl Rigid {
         project(&self.projectors, &mut x);
         let mut largest = 1.0;
         let mut ax = vec![0.0; n];
-        for _ in 0..12 {
+        for _ in 0..SPREAD_ROUNDS {
             let norm = x.iter().map(|v| v * v).sum::<f64>().sqrt().max(1.0e-300);
             x.iter_mut().for_each(|v| *v /= norm);
             self.a.multiply(&x, &mut ax);

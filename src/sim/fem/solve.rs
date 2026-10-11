@@ -346,7 +346,7 @@ impl<'a> TwoLevel<'a> {
             rigid,
             weight: 0.6,
         };
-        level.weight = (1.2 / level.spread()).min(0.6);
+        level.weight = (SPREAD_AIM / level.spread()).min(0.6);
         Ok(level)
     }
 
@@ -426,7 +426,7 @@ impl<'a> TwoLevel<'a> {
         project(self.projectors, &mut x);
         let mut largest = 1.0;
         let mut ax = vec![0.0; n];
-        for _ in 0..12 {
+        for _ in 0..SPREAD_ROUNDS {
             let norm = dot(&x, &x).sqrt().max(1.0e-300);
             x.iter_mut().for_each(|v| *v /= norm);
             self.a.multiply(&x, &mut ax);
@@ -776,3 +776,7 @@ impl<'a> Factored<'a> {
         }
     }
 }
+
+pub const SPREAD_ROUNDS: usize = 12;
+
+pub const SPREAD_AIM: f64 = 1.2;
