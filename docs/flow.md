@@ -10,7 +10,9 @@ Decisions:
   local, so every cell updates independently and the GPU stays busy. A finite-volume RANS
   solver (pressure projection, k-omega SST) comes after it as a second answer to check it with.
 - **Large-eddy simulation for turbulence.** Lattice Boltzmann is unsteady by nature, so it
-  resolves the large eddies and models the small ones (WALE subgrid viscosity), and gives the
+  resolves the large eddies and models the small ones (Smagorinsky subgrid viscosity from the
+  cell's own non-equilibrium stress, so it needs no neighbours; WALE later if it is too
+  dissipative near walls), and gives the
   mean force and the gusts. A wall model covers boundary layers thinner than a cell.
 - **Benchmarks before the rotator.** Every step is checked on a case with a published answer,
   and each benchmark is also run in OpenFOAM so the two solvers are compared on known ground
@@ -54,11 +56,13 @@ spend on the constant part.
 
 ## Status
 
-Phase 1 core is built (`src/flow/`): D3Q19 with two copies and pull streaming, BGK with Guo
-forcing, halfway bounce-back, moving walls. Poiseuille flow matches the parabola within 0.2% of
+Phase 1 is built (`src/flow/`): D3Q19 with two copies and pull streaming, BGK or a
+regularized collision (the non-equilibrium part projected onto its second-order stress), Guo
+forcing, Smagorinsky subgrid viscosity, halfway bounce-back, moving walls. Poiseuille flow matches the parabola within 0.2% of
 the peak; the Re 100 cavity on 128 x 128 matches Ghia et al. within 0.004 of the lid speed at
-every tabulated point. On the RTX PRO 6000 it does 8,200 million cell updates a second (128³,
-f32), about 1.25 TB/s of memory traffic.
+every tabulated point, and the Re 1000 cavity on 256 x 256 (regularized, tau 0.577) within
+0.015. On the RTX PRO 6000 it does 8,300 million cell updates a second (128³,
+f32, either collision), about 1.25 TB/s of memory traffic.
 
 Traps: a moving-wall flag on the cavity's corner cells pumps mass in at one corner and out at
 the other (the diagonal next to it gets the wall's momentum and its mirror does not), so the

@@ -51,6 +51,26 @@ pub struct Settings {
     pub viscosity: f64,
     pub force: [f64; 3],
     pub wall: [f64; 3],
+    pub collision: Collision,
+    pub smagorinsky: f64,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Collision {
+    Bgk,
+    Regularized,
+}
+
+impl Settings {
+    pub fn laminar(viscosity: f64) -> Settings {
+        Settings {
+            viscosity,
+            force: [0.0; 3],
+            wall: [0.0; 3],
+            collision: Collision::Regularized,
+            smagorinsky: 0.0,
+        }
+    }
 }
 
 #[repr(C)]
@@ -67,12 +87,16 @@ struct Params {
     wx: f32,
     wy: f32,
     wz: f32,
-    pad: f32,
+    regular: f32,
+    smagorinsky: f32,
+    pad0: f32,
+    pad1: f32,
+    pad2: f32,
 }
 
 fn shader() -> String {
     let mut s = String::new();
-    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, pad: f32 }\n";
+    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, pad0: f32, pad1: f32, pad2: f32 }\n";
     s += "@group(0) @binding(0) var<uniform> p: Params;\n";
     s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
     for i in 0..Q {
@@ -119,12 +143,66 @@ fn shader() -> String {
     }
     s += "  let ux = (mx + 0.5 * p.fx) / rho; let uy = (my + 0.5 * p.fy) / rho; let uz = (mz + 0.5 * p.fz) / rho;\n";
     s += "  let uu = ux * ux + uy * uy + uz * uz;\n";
-    s += "  let keep = 1.0 - 0.5 * p.omega;\n";
+    let pairs = [
+        (0, 0, "xx"),
+        (1, 1, "yy"),
+        (2, 2, "zz"),
+        (0, 1, "xy"),
+        (0, 2, "xz"),
+        (1, 2, "yz"),
+    ];
+    for (a, b, name) in pairs {
+        let terms: Vec<String> = C
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c[a] * c[b] != 0)
+            .map(|(i, c)| format!("{}g{i}", if c[a] * c[b] > 0 { "+" } else { "-" }))
+            .collect();
+        let u = ["ux", "uy", "uz"];
+        let iso = if a == b { " - (rho - 1.0) / 3.0" } else { "" };
+        s += &format!(
+            "  let p{name} = 0.0 {}{iso} - rho * {} * {} + 0.5 * ({} * p.f{} + {} * p.f{});\n",
+            terms.join(" "),
+            u[a],
+            u[b],
+            u[a],
+            ["x", "y", "z"][b],
+            u[b],
+            ["x", "y", "z"][a]
+        );
+    }
+    s += "  let pnorm = sqrt(pxx * pxx + pyy * pyy + pzz * pzz + 2.0 * (pxy * pxy + pxz * pxz + pyz * pyz));\n";
+    s += "  let tau0 = 1.0 / p.omega;\n";
+    s += "  let cs2 = p.smagorinsky * p.smagorinsky;\n";
+    s += "  let tau = 0.5 * (tau0 + sqrt(tau0 * tau0 + 18.0 * 1.4142135 * cs2 * pnorm / rho));\n";
+    s += "  let omega = 1.0 / tau;\n";
+    s += "  let keep = 1.0 - 0.5 * omega;\n";
     for (i, c) in C.iter().enumerate() {
         let w = weight(i);
+        let q = |a: usize, b: usize| -> f64 {
+            (c[a] * c[b]) as f64 - if a == b { 1.0 / 3.0 } else { 0.0 }
+        };
+        let projection = format!(
+            "({:.17} * pxx + {:.17} * pyy + {:.17} * pzz + 2.0 * ({:.17} * pxy + {:.17} * pxz + {:.17} * pyz))",
+            q(0, 0),
+            q(1, 1),
+            q(2, 2),
+            q(0, 1),
+            q(0, 2),
+            q(1, 2)
+        );
         s += &format!(
-            "  {{ let cu = ({}.0) * ux + ({}.0) * uy + ({}.0) * uz;\n    let eq = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu));\n    let push = keep * {w:.17} * ((3.0 * (({}.0) - ux) + 9.0 * cu * ({}.0)) * p.fx + (3.0 * (({}.0) - uy) + 9.0 * cu * ({}.0)) * p.fy + (3.0 * (({}.0) - uz) + 9.0 * cu * ({}.0)) * p.fz);\n    b{i}[index] = g{i} + p.omega * (eq - g{i}) + push; }}\n",
-            c[0], c[1], c[2], c[0], c[0], c[1], c[1], c[2], c[2]
+            "  {{ let cu = ({}.0) * ux + ({}.0) * uy + ({}.0) * uz;\n    let eq = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu));\n    let push = keep * {w:.17} * ((3.0 * (({}.0) - ux) + 9.0 * cu * ({}.0)) * p.fx + (3.0 * (({}.0) - uy) + 9.0 * cu * ({}.0)) * p.fy + (3.0 * (({}.0) - uz) + 9.0 * cu * ({}.0)) * p.fz);\n    let free = select(g{i} - eq, {:.17} * {projection}, p.regular > 0.5);\n    b{i}[index] = eq + (1.0 - omega) * free + push; }}\n",
+            c[0],
+            c[1],
+            c[2],
+            c[0],
+            c[0],
+            c[1],
+            c[1],
+            c[2],
+            c[2],
+            4.5 * w
         );
     }
     s += "}\n";
@@ -297,7 +375,15 @@ impl<'a> Lattice<'a> {
             wx: settings.wall[0] as f32,
             wy: settings.wall[1] as f32,
             wz: settings.wall[2] as f32,
-            pad: 0.0,
+            regular: if settings.collision == Collision::Regularized {
+                1.0
+            } else {
+                0.0
+            },
+            smagorinsky: settings.smagorinsky as f32,
+            pad0: 0.0,
+            pad1: 0.0,
+            pad2: 0.0,
         };
         self.gpu
             .queue
