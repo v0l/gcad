@@ -25,6 +25,9 @@ spade = "2.15"
 robust = "1.2"
 faer = "0.24"
 ttf-parser = "0.25"
+wgpu = "29"
+pollster = "0.4"
+bytemuck = "1"
 
 [patch.crates-io]
 monstertruck = { git = "https://github.com/v0l/monstertruck", rev = "6f6e0766c74ab73c91c819d66eb74c6882a3b4d6" }
