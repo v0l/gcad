@@ -45,6 +45,35 @@ pub fn opposite(i: usize) -> usize {
 pub const FLUID: u8 = 0;
 pub const WALL: u8 = 1;
 pub const MOVING: u8 = 2;
+pub const INLET: u8 = 3;
+pub const OUTLET: u8 = 4;
+
+pub struct Domain {
+    pub size: [usize; 3],
+    pub flags: Vec<u8>,
+    pub body: Vec<u16>,
+    pub inflow: Vec<(usize, usize, [f64; 3])>,
+    pub outflow: Vec<(usize, usize)>,
+    pub cuts: Vec<(usize, usize, f64)>,
+}
+
+impl Domain {
+    pub fn new(size: [usize; 3]) -> Domain {
+        let count = size.iter().product();
+        Domain {
+            size,
+            flags: vec![FLUID; count],
+            body: vec![0; count],
+            inflow: Vec::new(),
+            outflow: Vec::new(),
+            cuts: Vec::new(),
+        }
+    }
+
+    pub fn at(&self, x: usize, y: usize, z: usize) -> usize {
+        x + (y + z * self.size[1]) * self.size[0]
+    }
+}
 
 #[derive(Clone, Copy, Debug)]
 pub struct Settings {
@@ -99,6 +128,7 @@ fn shader() -> String {
     s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, pad0: f32, pad1: f32, pad2: f32 }\n";
     s += "@group(0) @binding(0) var<uniform> p: Params;\n";
     s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
+    s += "@group(0) @binding(2) var<storage, read> cuts: array<f32>;\n";
     for i in 0..Q {
         s += &format!("@group(1) @binding({i}) var<storage, read_write> a{i}: array<f32>;\n");
         s += &format!("@group(2) @binding({i}) var<storage, read_write> b{i}: array<f32>;\n");
@@ -108,7 +138,9 @@ fn shader() -> String {
     s += "fn step(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {\n";
     s += "  let index = id.x + id.y * groups.x * 64u;\n";
     s += "  if (index >= p.count) { return; }\n";
-    s += "  if (flags[index] != 0u) { return; }\n";
+    s += "  let own = flags[index];\n";
+    s += "  if ((own & 255u) != 0u) { return; }\n";
+    s += "  let slot = own >> 8u;\n";
     s += "  let x = i32(index % p.nx); let y = i32((index / p.nx) % p.ny); let z = i32(index / (p.nx * p.ny));\n";
     s += "  var s: u32; var fs: u32;\n";
     for (i, c) in C.iter().enumerate() {
@@ -118,13 +150,16 @@ fn shader() -> String {
             "  s = wrap(x - ({}), p.nx) + (wrap(y - ({}), p.ny) + wrap(z - ({}), p.nz) * p.ny) * p.nx;\n",
             c[0], c[1], c[2]
         );
-        s += "  fs = flags[s];\n";
+        s += "  fs = flags[s] & 255u;\n";
         s += &format!(
-            "  var g{i}: f32 = a{i}[s];\n  if (fs != 0u) {{ g{i} = a{o}[index]; if (fs == 2u) {{ g{i} = g{i} + {:.17} * (({}.0) * p.wx + ({}.0) * p.wy + ({}.0) * p.wz); }} }}\n",
+            "  var g{i}: f32 = a{i}[s];\n  if (fs == 1u || fs == 2u) {{ g{i} = a{o}[index]; if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {i}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x + ({cx}), p.nx) + (wrap(y + ({cy}), p.ny) + wrap(z + ({cz}), p.nz) * p.ny) * p.nx; g{i} = 2.0 * q * a{o}[index] + (1.0 - 2.0 * q) * a{o}[n]; }} else {{ g{i} = (0.5 / q) * a{o}[index] + (1.0 - 0.5 / q) * a{i}[index]; }} }} }} if (fs == 2u) {{ g{i} = g{i} + {:.17} * (({}.0) * p.wx + ({}.0) * p.wy + ({}.0) * p.wz); }} }}\n",
             6.0 * w,
             c[0],
             c[1],
-            c[2]
+            c[2],
+            cx = c[0],
+            cy = c[1],
+            cz = c[2]
         );
     }
     let sum = (0..Q)
@@ -209,6 +244,116 @@ fn shader() -> String {
     s
 }
 
+fn populations(group: u32, name: &str) -> String {
+    (0..Q)
+        .map(|i| {
+            format!(
+                "@group({group}) @binding({i}) var<storage, read_write> {name}{i}: array<f32>;\n"
+            )
+        })
+        .collect()
+}
+
+fn edge_shader() -> String {
+    let mut s = String::new();
+    s += "struct Edge { cell: u32, inner: u32, inlet: u32, pad: u32, vx: f32, vy: f32, vz: f32, pad2: f32 }\n";
+    s += "struct Count { n: u32, p0: u32, p1: u32, p2: u32 }\n";
+    s += "@group(0) @binding(0) var<uniform> count: Count;\n";
+    s += "@group(0) @binding(1) var<storage, read> edges: array<Edge>;\n";
+    s += &populations(1, "b");
+    s += "@compute @workgroup_size(64)\n";
+    s += "fn edge(@builtin(global_invocation_id) id: vec3<u32>) {\n";
+    s += "  if (id.x >= count.n) { return; }\n";
+    s += "  let e = edges[id.x];\n";
+    let sum = (0..Q)
+        .map(|i| format!("b{i}[e.inner]"))
+        .collect::<Vec<_>>()
+        .join(" + ");
+    s += &format!("  let rn = 1.0 + {sum};\n");
+    for (axis, name) in ["x", "y", "z"].iter().enumerate() {
+        let terms: Vec<String> = C
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c[axis] != 0)
+            .map(|(i, c)| format!("{}b{i}[e.inner]", if c[axis] > 0 { "+" } else { "-" }))
+            .collect();
+        s += &format!("  let n{name} = (0.0 {}) / rn;\n", terms.join(" "));
+    }
+    s += "  var rho = 1.0; var ux = nx; var uy = ny; var uz = nz;\n";
+    s += "  if (e.inlet == 1u) { rho = rn; ux = e.vx; uy = e.vy; uz = e.vz; }\n";
+    s += "  let uu = ux * ux + uy * uy + uz * uz;\n";
+    for (i, c) in C.iter().enumerate() {
+        let w = weight(i);
+        s += &format!(
+            "  {{ let cu = ({}.0) * ux + ({}.0) * uy + ({}.0) * uz; b{i}[e.cell] = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu)); }}\n",
+            c[0], c[1], c[2]
+        );
+    }
+    s += "}\n";
+    s
+}
+
+fn force_shader() -> String {
+    let mut s = String::new();
+    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32 }\n";
+    s += "struct Link { cell: u32, body: u32 }\n";
+    s += "@group(0) @binding(0) var<uniform> p: Params;\n";
+    s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
+    s += "@group(0) @binding(2) var<storage, read> links: array<Link>;\n";
+    s += "@group(0) @binding(3) var<storage, read_write> out: array<vec4<f32>>;\n";
+    s += "@group(0) @binding(4) var<storage, read> cuts: array<f32>;\n";
+    s += &populations(1, "a");
+    s += "fn wrap(v: i32, n: u32) -> u32 { let m = i32(n); return u32(((v % m) + m) % m); }\n";
+    s += "@compute @workgroup_size(64)\n";
+    s += "fn force(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {\n";
+    s += "  let k = id.x + id.y * groups.x * 64u;\n";
+    s += "  if (k >= p.count) { return; }\n";
+    s += "  let l = links[k];\n";
+    s += "  let x = i32(l.cell % p.nx); let y = i32((l.cell / p.nx) % p.ny); let z = i32(l.cell / (p.nx * p.ny));\n";
+    s += "  var f = vec3<f32>(0.0, 0.0, 0.0); var s: u32; var fs: u32; var back: f32;\n";
+    s += "  let slot = flags[l.cell] >> 8u;\n";
+    for (i, c) in C.iter().enumerate().skip(1) {
+        let w = weight(i);
+        let o = opposite(i);
+        s += &format!(
+            "  s = wrap(x + ({}), p.nx) + (wrap(y + ({}), p.ny) + wrap(z + ({}), p.nz) * p.ny) * p.nx;\n  fs = flags[s];\n  if (((fs & 255u) == 1u || (fs & 255u) == 2u) && (fs >> 8u) == l.body) {{\n    back = a{i}[l.cell];\n    if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {o}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x - ({}), p.nx) + (wrap(y - ({}), p.ny) + wrap(z - ({}), p.nz) * p.ny) * p.nx; back = 2.0 * q * a{i}[l.cell] + (1.0 - 2.0 * q) * a{i}[n]; }} else {{ back = (0.5 / q) * a{i}[l.cell] + (1.0 - 0.5 / q) * a{o}[l.cell]; }} }} }}\n    f = f + (a{i}[l.cell] + back + {:.17}) * vec3<f32>({}.0, {}.0, {}.0);\n  }}\n",
+            c[0],
+            c[1],
+            c[2],
+            c[0],
+            c[1],
+            c[2],
+            2.0 * w,
+            c[0],
+            c[1],
+            c[2]
+        );
+    }
+    s += "  out[k] = vec4<f32>(f, 0.0);\n";
+    s += "}\n";
+    s
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Edge {
+    cell: u32,
+    inner: u32,
+    inlet: u32,
+    pad: u32,
+    vx: f32,
+    vy: f32,
+    vz: f32,
+    pad2: f32,
+}
+
+struct Pass {
+    pipeline: wgpu::ComputePipeline,
+    common: wgpu::BindGroup,
+    sides: [wgpu::BindGroup; 2],
+    count: u32,
+}
+
 pub struct Lattice<'a> {
     gpu: &'a Gpu,
     pub size: [usize; 3],
@@ -217,6 +362,8 @@ pub struct Lattice<'a> {
     pipeline: wgpu::ComputePipeline,
     common: wgpu::BindGroup,
     sides: [[wgpu::BindGroup; 2]; 2],
+    edges: Option<Pass>,
+    forces: Option<(Pass, wgpu::Buffer, Vec<u32>)>,
     parity: usize,
 }
 
@@ -225,11 +372,25 @@ pub struct Fields {
     pub velocity: Vec<[f64; 3]>,
 }
 
+fn dispatch(count: u32) -> (u32, u32) {
+    let groups = count.div_ceil(64).max(1);
+    if groups <= 65535 {
+        (groups, 1)
+    } else {
+        (65535, groups.div_ceil(65535))
+    }
+}
+
 impl<'a> Lattice<'a> {
-    pub fn new(gpu: &'a Gpu, size: [usize; 3], flags: &[u8]) -> Result<Lattice<'a>> {
+    pub fn new(gpu: &'a Gpu, domain: &Domain) -> Result<Lattice<'a>> {
+        let size = domain.size;
         let count = size[0] * size[1] * size[2];
-        if flags.len() != count {
-            bail!("{} flags for {count} cells", flags.len());
+        if domain.flags.len() != count || domain.body.len() != count {
+            bail!(
+                "{} flags and {} bodies for {count} cells",
+                domain.flags.len(),
+                domain.body.len()
+            );
         }
         let bytes = count as u64 * 4;
         if bytes > gpu.max_binding() {
@@ -255,10 +416,36 @@ impl<'a> Lattice<'a> {
                 .collect()
         };
         let copies = [make("lattice a"), make("lattice b")];
-        let flag_words: Vec<u32> = flags.iter().map(|&f| f as u32).collect();
+        let mut words: Vec<u32> = domain
+            .flags
+            .iter()
+            .zip(&domain.body)
+            .map(|(&f, &b)| f as u32 | (b as u32) << 8)
+            .collect();
+        let mut table: Vec<f32> = Vec::new();
+        let mut slots: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        for &(cell, direction, q) in &domain.cuts {
+            if domain.flags[cell] != FLUID || direction >= Q || !(0.0..=1.0).contains(&q) {
+                continue;
+            }
+            let slot = *slots.entry(cell).or_insert_with(|| {
+                table.extend(std::iter::repeat_n(-1.0, Q));
+                (table.len() / Q) as u32
+            });
+            table[(slot as usize - 1) * Q + direction] = q as f32;
+            words[cell] = FLUID as u32 | slot << 8;
+        }
+        if table.is_empty() {
+            table.extend(std::iter::repeat_n(-1.0, Q));
+        }
+        let cuts = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("cuts"),
+            contents: bytemuck::cast_slice(&table),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
         let flags = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("flags"),
-            contents: bytemuck::cast_slice(&flag_words),
+            contents: bytemuck::cast_slice(&words),
             usage: wgpu::BufferUsages::STORAGE,
         });
         let params = device.create_buffer(&wgpu::BufferDescriptor {
@@ -267,70 +454,26 @@ impl<'a> Lattice<'a> {
             usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
-            label: Some("lattice"),
-            source: wgpu::ShaderSource::Wgsl(shader().into()),
-        });
-        let storage = |binding: u32, read_only: bool| wgpu::BindGroupLayoutEntry {
+        let entry = |binding: u32, ty: wgpu::BufferBindingType| wgpu::BindGroupLayoutEntry {
             binding,
             visibility: wgpu::ShaderStages::COMPUTE,
             ty: wgpu::BindingType::Buffer {
-                ty: wgpu::BufferBindingType::Storage { read_only },
+                ty,
                 has_dynamic_offset: false,
                 min_binding_size: None,
             },
             count: None,
         };
-        let common_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("common"),
-            entries: &[
-                wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::COMPUTE,
-                    ty: wgpu::BindingType::Buffer {
-                        ty: wgpu::BufferBindingType::Uniform,
-                        has_dynamic_offset: false,
-                        min_binding_size: None,
-                    },
-                    count: None,
-                },
-                storage(1, true),
-            ],
-        });
-        let side_entries: Vec<wgpu::BindGroupLayoutEntry> =
-            (0..Q as u32).map(|i| storage(i, false)).collect();
-        let side_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
-            label: Some("populations"),
-            entries: &side_entries,
-        });
-        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
-            label: Some("lattice"),
-            bind_group_layouts: &[Some(&common_layout), Some(&side_layout), Some(&side_layout)],
-            immediate_size: 0,
-        });
-        let pipeline = device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
-            label: Some("lattice"),
-            layout: Some(&layout),
-            module: &module,
-            entry_point: Some("step"),
-            compilation_options: Default::default(),
-            cache: None,
-        });
-        let common = device.create_bind_group(&wgpu::BindGroupDescriptor {
-            label: Some("common"),
-            layout: &common_layout,
-            entries: &[
-                wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: params.as_entire_binding(),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
-                    resource: flags.as_entire_binding(),
-                },
-            ],
-        });
-        let side = |buffers: &Vec<wgpu::Buffer>| {
+        let read = wgpu::BufferBindingType::Storage { read_only: true };
+        let write = wgpu::BufferBindingType::Storage { read_only: false };
+        let uniform = wgpu::BufferBindingType::Uniform;
+        let layout = |entries: &[wgpu::BindGroupLayoutEntry]| {
+            device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+                label: None,
+                entries,
+            })
+        };
+        let group = |layout: &wgpu::BindGroupLayout, buffers: &[&wgpu::Buffer]| {
             let entries: Vec<wgpu::BindGroupEntry> = buffers
                 .iter()
                 .enumerate()
@@ -340,23 +483,166 @@ impl<'a> Lattice<'a> {
                 })
                 .collect();
             device.create_bind_group(&wgpu::BindGroupDescriptor {
-                label: Some("populations"),
-                layout: &side_layout,
+                label: None,
+                layout,
                 entries: &entries,
             })
         };
-        let sides = [
-            [side(&copies[0]), side(&copies[1])],
-            [side(&copies[1]), side(&copies[0])],
-        ];
+        let pipeline = |source: String, entry_point: &str, layouts: &[&wgpu::BindGroupLayout]| {
+            let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+                label: Some(entry_point),
+                source: wgpu::ShaderSource::Wgsl(source.into()),
+            });
+            let groups: Vec<Option<&wgpu::BindGroupLayout>> =
+                layouts.iter().map(|l| Some(*l)).collect();
+            let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some(entry_point),
+                bind_group_layouts: &groups,
+                immediate_size: 0,
+            });
+            device.create_compute_pipeline(&wgpu::ComputePipelineDescriptor {
+                label: Some(entry_point),
+                layout: Some(&layout),
+                module: &module,
+                entry_point: Some(entry_point),
+                compilation_options: Default::default(),
+                cache: None,
+            })
+        };
+        let side_entries: Vec<wgpu::BindGroupLayoutEntry> =
+            (0..Q as u32).map(|i| entry(i, write)).collect();
+        let side_layout = layout(&side_entries);
+        let side = |which: usize| -> wgpu::BindGroup {
+            let refs: Vec<&wgpu::Buffer> = copies[which].iter().collect();
+            group(&side_layout, &refs)
+        };
+        let common_layout = layout(&[entry(0, uniform), entry(1, read), entry(2, read)]);
+        let step = pipeline(
+            shader(),
+            "step",
+            &[&common_layout, &side_layout, &side_layout],
+        );
+        let common = group(&common_layout, &[&params, &flags, &cuts]);
+        let sides = [[side(0), side(1)], [side(1), side(0)]];
+        let mut edges: Vec<Edge> = domain
+            .inflow
+            .iter()
+            .map(|&(cell, inner, v)| Edge {
+                cell: cell as u32,
+                inner: inner as u32,
+                inlet: 1,
+                pad: 0,
+                vx: v[0] as f32,
+                vy: v[1] as f32,
+                vz: v[2] as f32,
+                pad2: 0.0,
+            })
+            .collect();
+        edges.extend(domain.outflow.iter().map(|&(cell, inner)| Edge {
+            cell: cell as u32,
+            inner: inner as u32,
+            inlet: 0,
+            pad: 0,
+            vx: 0.0,
+            vy: 0.0,
+            vz: 0.0,
+            pad2: 0.0,
+        }));
+        let edges = (!edges.is_empty()).then(|| {
+            let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("edges"),
+                contents: bytemuck::cast_slice(&edges),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+            let n = edges.len() as u32;
+            let counter = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("edge count"),
+                contents: bytemuck::cast_slice(&[n, 0, 0, 0]),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+            let edge_layout = layout(&[entry(0, uniform), entry(1, read)]);
+            Pass {
+                pipeline: pipeline(edge_shader(), "edge", &[&edge_layout, &side_layout]),
+                common: group(&edge_layout, &[&counter, &list]),
+                sides: [side(1), side(0)],
+                count: n,
+            }
+        });
+        let mut links: Vec<[u32; 2]> = Vec::new();
+        for cell in 0..count {
+            if domain.flags[cell] != FLUID {
+                continue;
+            }
+            let (x, y, z) = (
+                (cell % size[0]) as i64,
+                ((cell / size[0]) % size[1]) as i64,
+                (cell / (size[0] * size[1])) as i64,
+            );
+            let mut bodies: Vec<u16> = C
+                .iter()
+                .skip(1)
+                .filter_map(|c| {
+                    let w = |v: i64, n: usize| v.rem_euclid(n as i64) as usize;
+                    let s = w(x + c[0] as i64, size[0])
+                        + (w(y + c[1] as i64, size[1]) + w(z + c[2] as i64, size[2]) * size[1])
+                            * size[0];
+                    (matches!(domain.flags[s], WALL | MOVING) && domain.body[s] > 0)
+                        .then_some(domain.body[s])
+                })
+                .collect();
+            bodies.sort_unstable();
+            bodies.dedup();
+            links.extend(bodies.into_iter().map(|b| [cell as u32, b as u32]));
+        }
+        let forces = (!links.is_empty()).then(|| {
+            let n = links.len() as u32;
+            let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("links"),
+                contents: bytemuck::cast_slice(&links),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+            let out = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("link forces"),
+                size: n as u64 * 16,
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                mapped_at_creation: false,
+            });
+            let header = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("force params"),
+                contents: bytemuck::cast_slice(&[
+                    size[0] as u32,
+                    size[1] as u32,
+                    size[2] as u32,
+                    n,
+                ]),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+            let force_layout = layout(&[
+                entry(0, uniform),
+                entry(1, read),
+                entry(2, read),
+                entry(3, write),
+                entry(4, read),
+            ]);
+            let pass = Pass {
+                pipeline: pipeline(force_shader(), "force", &[&force_layout, &side_layout]),
+                common: group(&force_layout, &[&header, &flags, &list, &out, &cuts]),
+                sides: [side(0), side(1)],
+                count: n,
+            };
+            let bodies = links.iter().map(|l| l[1]).collect();
+            (pass, out, bodies)
+        });
         Ok(Lattice {
             gpu,
             size,
             copies,
             params,
-            pipeline,
+            pipeline: step,
             common,
             sides,
+            edges,
+            forces,
             parity: 0,
         })
     }
@@ -388,12 +674,7 @@ impl<'a> Lattice<'a> {
         self.gpu
             .queue
             .write_buffer(&self.params, 0, bytemuck::bytes_of(&params));
-        let groups = count.div_ceil(64);
-        let (gx, gy) = if groups <= 65535 {
-            (groups, 1)
-        } else {
-            (65535, groups.div_ceil(65535))
-        };
+        let (gx, gy) = dispatch(count);
         let mut left = steps;
         while left > 0 {
             let batch = left.min(200);
@@ -405,6 +686,12 @@ impl<'a> Lattice<'a> {
                 pass.set_bind_group(1, &self.sides[self.parity][0], &[]);
                 pass.set_bind_group(2, &self.sides[self.parity][1], &[]);
                 pass.dispatch_workgroups(gx, gy, 1);
+                if let Some(edges) = &self.edges {
+                    pass.set_pipeline(&edges.pipeline);
+                    pass.set_bind_group(0, &edges.common, &[]);
+                    pass.set_bind_group(1, &edges.sides[self.parity], &[]);
+                    pass.dispatch_workgroups(edges.count.div_ceil(64), 1, 1);
+                }
                 drop(pass);
                 self.parity ^= 1;
             }
@@ -416,6 +703,32 @@ impl<'a> Lattice<'a> {
             left -= batch;
         }
         Ok(())
+    }
+
+    pub fn forces(&self, bodies: usize) -> Result<Vec<[f64; 3]>> {
+        let mut out = vec![[0.0; 3]; bodies];
+        let Some((pass, buffer, owners)) = &self.forces else {
+            return Ok(out);
+        };
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        {
+            let mut compute = encoder.begin_compute_pass(&Default::default());
+            compute.set_pipeline(&pass.pipeline);
+            compute.set_bind_group(0, &pass.common, &[]);
+            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
+            let (gx, gy) = dispatch(pass.count);
+            compute.dispatch_workgroups(gx, gy, 1);
+        }
+        self.gpu.queue.submit([encoder.finish()]);
+        let values = self.gpu.read(buffer)?;
+        for (k, &body) in owners.iter().enumerate() {
+            if let Some(total) = out.get_mut(body as usize - 1) {
+                for d in 0..3 {
+                    total[d] += values[4 * k + d] as f64;
+                }
+            }
+        }
+        Ok(out)
     }
 
     pub fn fields(&self, force: [f64; 3]) -> Result<Fields> {

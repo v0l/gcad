@@ -67,5 +67,15 @@ f32, either collision), about 1.25 TB/s of memory traffic.
 Traps: a moving-wall flag on the cavity's corner cells pumps mass in at one corner and out at
 the other (the diagonal next to it gets the wall's momentum and its mirror does not), so the
 flow never settles and drifts 7% to 18% high; the lid stops a cell short of each side wall.
+Parts in the flow so far: a velocity inlet (equilibrium at the cell's own velocity, density
+from the cell inside it) and a pressure outlet (equilibrium at density 1, velocity from the cell
+inside it), applied by a second pass after each step; body numbers in the upper bits of solid
+cells' flag words, and forces by momentum exchange summed per body; interpolated (Bouzidi)
+bounce-back where a link's wall fraction is known, kept in a table that a fluid cell's flag
+word points into. The Schaefer-Turek cylinder at Re 20, 40 cells across: staircase walls gave
+drag 5.744 (2.9% high), interpolated walls 5.703, then 5.685 at 60 cells, so the rest was not
+resolution: at a peak inlet speed of 0.075 the Mach number is 0.13, and halving it gave 5.602,
+within 0.4% of 5.5795. Lattice speeds stay at or under about 0.04 for force work.
+
 The GPU on this machine is shared with a vLLM server holding 92 of its 96 GB, so runs are
 capped at about 3 GB (some 20 million cells) while that is up.
