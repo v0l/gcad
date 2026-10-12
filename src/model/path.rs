@@ -455,13 +455,56 @@ pub(crate) fn skin_frames(
                 super::skin::skin(&wires, true)
             };
             let mut solid = skin_of(region[0])?;
-            for &hole in &region[1..] {
-                solid = monstertruck::solid::difference_normalized(&solid, &skin_of(hole)?)
+            let holes = region[1..]
+                .iter()
+                .map(|&hole| skin_of(hole))
+                .collect::<Result<Vec<_>>>()?;
+            if let Some(holed) = with_holes(&solid, &holes) {
+                return Ok(holed);
+            }
+            for hole in &holes {
+                solid = monstertruck::solid::difference_normalized(&solid, hole)
                     .map_err(|e| anyhow!("cutting a hole through the sweep: {e}"))?;
             }
             Ok(solid)
         })
         .collect()
+}
+
+fn with_holes(outer: &Solid, holes: &[Solid]) -> Option<Solid> {
+    let split = |solid: &Solid| -> (Vec<Face>, Vec<Face>) {
+        crate::select::faces(solid)
+            .into_iter()
+            .partition(|face| matches!(face.oriented_surface(), Surface::Plane(_)))
+    };
+    let (mut caps, mut faces) = split(outer);
+    if caps.len() != 2 {
+        return None;
+    }
+    for hole in holes {
+        let (hole_caps, sides) = split(hole);
+        if hole_caps.len() != 2 {
+            return None;
+        }
+        for hole_cap in hole_caps {
+            let Surface::Plane(plane) = hole_cap.oriented_surface() else {
+                return None;
+            };
+            let cap = caps.iter_mut().find(|cap| match cap.oriented_surface() {
+                Surface::Plane(other) => {
+                    other.normal().dot(plane.normal()) > 1.0 - 1.0e-9
+                        && (other.origin() - plane.origin()).dot(plane.normal()).abs() < 1.0e-6
+                }
+                _ => false,
+            })?;
+            let mut wires = cap.boundaries();
+            wires.push(hole_cap.boundaries()[0].inverse());
+            *cap = Face::try_new(wires, cap.oriented_surface()).ok()?;
+        }
+        faces.extend(sides.iter().map(Face::inverse));
+    }
+    faces.extend(caps);
+    Solid::try_new(vec![faces.into()]).ok()
 }
 
 fn sweep_face(wires: Vec<Wire>, direction: Vector3, parts: &[Piece]) -> Result<Solid> {
