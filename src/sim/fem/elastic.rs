@@ -14,7 +14,15 @@ use rayon::prelude::*;
 pub enum Hold {
     Fixed,
     Slide,
-    Pin { point: Point3, axis: Vector3 },
+    Pin {
+        point: Point3,
+        axis: Vector3,
+    },
+    Bearing {
+        point: Point3,
+        axis: Vector3,
+        axial: bool,
+    },
 }
 
 #[derive(Clone, Debug)]
@@ -489,12 +497,27 @@ pub fn projectors(mesh: &Quadratic, supports: &[Support]) -> (Vec<Block>, Vec<Op
     let mut fixed = vec![false; mesh.nodes.len()];
     let mut owner: Vec<Option<usize>> = vec![None; mesh.nodes.len()];
     for (s, support) in supports.iter().enumerate() {
+        if let Hold::Bearing { point, axis, axial } = support.hold {
+            let ring = bearing_ring(mesh, &support.faces, point, axis);
+            for &node in &ring {
+                owner[node as usize].get_or_insert(s);
+                let r = off_axis(mesh.nodes[node as usize], point, axis);
+                if r.magnitude() > 0.0 {
+                    normals[node as usize].push(r.normalize());
+                }
+            }
+            if let Some(&node) = ring.first().filter(|_| axial) {
+                normals[node as usize].push(axis);
+            }
+            continue;
+        }
         for face in faces_of(mesh, &support.faces) {
             let p = six(mesh, face);
             for (k, &node) in face.iter().enumerate() {
                 owner[node as usize].get_or_insert(s);
                 match support.hold {
                     Hold::Fixed => fixed[node as usize] = true,
+                    Hold::Bearing { .. } => {}
                     Hold::Pin { point, axis } => {
                         normals[node as usize].push(axis);
                         let r = off_axis(mesh.nodes[node as usize], point, axis);
@@ -547,6 +570,53 @@ pub fn projectors(mesh: &Quadratic, supports: &[Support]) -> (Vec<Block>, Vec<Op
         })
         .collect();
     (blocks, owner)
+}
+
+fn bearing_ring(mesh: &Quadratic, faces: &[usize], point: Point3, axis: Vector3) -> Vec<u32> {
+    let mut nodes: Vec<u32> = faces_of(mesh, faces).flatten().collect();
+    nodes.sort_unstable();
+    nodes.dedup();
+    if nodes.is_empty() {
+        return Vec::new();
+    }
+    let along = |v: u32| (mesh.nodes[v as usize] - point).dot(axis);
+    let radius = nodes
+        .iter()
+        .map(|&v| off_axis(mesh.nodes[v as usize], point, axis).magnitude())
+        .fold(0.0, f64::max)
+        .max(1.0e-9);
+    let step = radius * 1.0e-6;
+    let mut stations: std::collections::BTreeMap<i64, Vec<u32>> = Default::default();
+    for &v in &nodes {
+        stations
+            .entry((along(v) / step).round() as i64)
+            .or_default()
+            .push(v);
+    }
+    let body = mesh
+        .tets
+        .iter()
+        .zip(&mesh.body)
+        .find_map(|(tet, &b)| tet.contains(&nodes[0]).then_some(b));
+    let (sum, count) = mesh
+        .tets
+        .iter()
+        .zip(&mesh.body)
+        .filter(|(_, b)| Some(**b) == body)
+        .flat_map(|(tet, _)| &tet[..4])
+        .fold((0.0, 0usize), |(s, n), &v| (s + along(v), n + 1));
+    let middle = sum / count.max(1) as f64;
+    let most = stations.values().map(Vec::len).max().unwrap_or(0);
+    stations
+        .into_iter()
+        .filter(|(_, ring)| 2 * ring.len() >= most)
+        .min_by(|a, b| {
+            (a.0 as f64 * step - middle)
+                .abs()
+                .total_cmp(&(b.0 as f64 * step - middle).abs())
+        })
+        .map(|(_, ring)| ring)
+        .unwrap_or_default()
 }
 
 fn loose(mesh: &Quadratic, projectors: &[Block]) -> bool {
@@ -804,7 +874,10 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
         if let Some(s) = o {
             let i = 3 * v;
             let r = Vector3::new(ku[i] - f[i], ku[i + 1] - f[i + 1], ku[i + 2] - f[i + 2]);
-            let centre = centres[*s].0 / centres[*s].1;
+            let mut centre = centres[*s].0 / centres[*s].1;
+            if let Hold::Bearing { point, axis, .. } = problem.supports[*s].hold {
+                centre = point.to_vec() + axis * (centre - point.to_vec()).dot(axis);
+            }
             moments[*s] += (mesh.nodes[v].to_vec() - centre).cross(r);
         }
     }

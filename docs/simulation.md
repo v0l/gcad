@@ -77,7 +77,7 @@ No mesh. Runs in seconds.
 ### static
 
 Linear elastic stress. Supports: `fix faces`, `slide faces` (held only along their normal),
-`pin faces` (a round face held but free to turn). Loads: `load faces force=x,y,z` (spread over
+`pin faces` (a round face held but free to turn), `bearing faces axial` (a band held sideways at one ring, free to turn and tilt). Loads: `load faces force=x,y,z` (spread over
 the faces), `pressure faces p`, `gravity`, `torque faces n axis=`. Readings: peak von Mises
 stress and where (more than one mesh size from supports and bonds, with the peak inside that band
 as `support_stress`), peak displacement and where, minimum safety factor against yield, reaction
@@ -333,7 +333,12 @@ the element size), in both directions, which keeps interface stresses within a f
 on a matching pair. Checked on a bonded stack in tension, a two-material wall in series and a
 stacked block whose first mode matches the solid one.
 
-`pin` holds the radial and axial directions of a round face's nodes; `torque` spreads a
+`pin` holds the radial and axial directions of a round face's nodes, so the face cannot tilt:
+on a bearing band 2 mm wide it reacted 14 and 29 N·m of moment. `bearing` holds only the radial
+direction, on the one ring of nodes at the band's edge nearer the middle of the body, so the
+section tilts and turns freely about it; `axial` adds the axial direction at one node of that
+ring. A shaft on two bearings under a central load reads half the load at each, no moment, and
+the beam-theory deflection within 1%. `torque` spreads a
 moment as tangential traction proportional to the distance from the axis. Checked against a
 shaft in torsion (stress and twist within 1%) and a link on two pins. Before solving, the six
 rigid-body motions are projected through the supports, and a part they leave free is refused.

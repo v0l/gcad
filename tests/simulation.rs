@@ -232,7 +232,9 @@ fn peak_stress_leaves_out_the_fixed_edge() {
         simulated(
             &format!("peak_stress_fixed_edge_{mesh}"),
             &[("beam.gcad", BEAM)],
-            &format!("sim static\npart beam.gcad\nroot: fix <X\nload >X force=0,0,-100\nmesh {mesh}"),
+            &format!(
+                "sim static\npart beam.gcad\nroot: fix <X\nload >X force=0,0,-100\nmesh {mesh}"
+            ),
         )
     };
     let (coarse, fine) = (run(4.0), run(2.0));
@@ -1110,7 +1112,10 @@ fn torque_about_a_named_axis() {
 
 #[test]
 fn probe_on_a_curved_face_snaps_to_the_mesh() {
-    let disc = [("disc.gcad", "material steel\nc: circle 100\nrod: extrude 20\n")];
+    let disc = [(
+        "disc.gcad",
+        "material steel\nc: circle 100\nrod: extrude 20\n",
+    )];
     let spec = |at: &str| {
         format!(
             "sim static\npart disc.gcad\nfix rod.start\nload rod.end force=0,0,-10\nrim: probe {at}\nmesh 40"
@@ -1128,7 +1133,64 @@ fn probe_on_a_curved_face_snaps_to_the_mesh() {
     assert!(rim.value > 0.0);
     let model = spec_of(&written("probe_off_the_part", &disc, &spec("60,0,10")));
     let error = gcad::sim::simulate(model.sim.as_deref().expect("sim")).expect_err("too far");
-    assert!(format!("{error:#}").contains("not inside the part"), "{error:#}");
+    assert!(
+        format!("{error:#}").contains("not inside the part"),
+        "{error:#}"
+    );
+}
+
+const SHAFT: &str = "circle 20\na: extrude 10\nplane a.end\ncircle 24\nl: extrude 6\nplane l.end\ncircle 20\nm1: extrude 84\nplane m1.end\ncircle 24\nc: extrude 6\nplane c.end\ncircle 20\nm2: extrude 84\nplane m2.end\ncircle 24\nr: extrude 6\nplane r.end\nrect 14 14\nsq: extrude 10\nmaterial steel\n";
+
+fn shaft_on(left: &str, right: &str) -> Outcome {
+    simulated(
+        &format!("shaft_on_{}", left.replace(' ', "_")),
+        &[("shaft.gcad", SHAFT)],
+        &format!(
+            "sim static\npart shaft.gcad\nleft: {left}\nright: {right}\nkey: slide >X\nload c.side force=0,-1000,0\nmid: probe 0,0,103\nmesh 3"
+        ),
+    )
+}
+
+#[test]
+fn bearings_carry_force_and_no_moment() {
+    let outcome = shaft_on("bearing l.side axial", "bearing r.side");
+    close(reading(&outcome, "left"), 500.0, 0.01);
+    close(reading(&outcome, "right"), 500.0, 0.01);
+    for side in ["left.moment", "right.moment"] {
+        assert!(
+            outcome.reading(side).is_none_or(|r| r.value < 0.01),
+            "{}",
+            outcome.table()
+        );
+    }
+    let inertia = std::f64::consts::PI * 20.0_f64.powi(4) / 64.0;
+    let span: f64 = 174.0;
+    let bending = 1000.0 * span.powi(3) / (48.0 * 200.0e3 * inertia);
+    let shear = 1000.0 * span / (4.0 * 0.9 * 77.5e3 * std::f64::consts::PI * 100.0);
+    close(reading(&outcome, "mid.displacement"), bending + shear, 0.06);
+    let pinned = shaft_on("pin l.side", "pin r.side");
+    assert!(reading(&pinned, "left.moment") > 10.0, "{}", pinned.table());
+}
+
+#[test]
+fn bearings_need_one_held_along_the_axis() {
+    let path = written(
+        "bearings_need_one_held_along_the_axis",
+        &[("shaft.gcad", SHAFT)],
+        "sim static\npart shaft.gcad\nleft: bearing l.side\nright: bearing r.side\nkey: slide >X\nload c.side force=0,-1000,0\nmesh 3",
+    );
+    let model = spec_of(&path);
+    let error = gcad::sim::simulate(model.sim.as_deref().expect("sim")).expect_err("slides");
+    assert!(format!("{error:#}").contains("free to move"), "{error:#}");
+    let pinned = written(
+        "short_pin_suggests_a_bearing",
+        &[("shaft.gcad", SHAFT)],
+        "sim static\npart shaft.gcad\npin l.side",
+    );
+    let run = gcad::model::run_path(&pinned, &[], None).expect("runs");
+    let (_, summary) = run.steps.last().expect("a line");
+    let summary = summary.as_ref().expect("pins");
+    assert!(summary.contains("`bearing`"), "{summary}");
 }
 
 #[test]

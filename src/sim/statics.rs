@@ -1270,6 +1270,8 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
             Hold::Fixed => "fixed",
             Hold::Slide => "slides on its face",
             Hold::Pin { .. } => "pinned, free to turn",
+            Hold::Bearing { axial: true, .. } => "in a bearing, free to turn and tilt",
+            Hold::Bearing { .. } => "in a bearing, free to turn, tilt and slide",
         };
         let reaction = outcome
             .and_then(|o| o.reading(&support.label))

@@ -439,7 +439,8 @@ expect shoulder<15 sun_s_turn<4
 | `sweep` | `joint ... steps=` | runs every pose of the listed joints across their ranges in `steps` (24 unless given) equal steps; a joint that turns all the way round goes from -180 to 180. Several joints on one line make a grid of poses; separate lines make separate sweeps |
 | `fix` | `faces` | holds the faces still (static). Its reaction force is a reading named after the line's label, or `fix1`, `fix2`, ... |
 | `slide` | `faces` | holds the faces only along their normal, free to slide along them (static); a symmetry plane, or a part resting on a flat. Reading as for `fix` |
-| `pin` | `faces` | holds a round face on its axis, free to turn about it, like a shaft in a bearing or a link on a pin (static). Reading as for `fix` |
+| `pin` | `faces` | holds every point of a round face on its axis, free to turn about it, like a link on a pin; the face cannot tilt, so a short band acts as a clamp (static). Reading as for `fix` |
+| `bearing` | `faces` `axial` | holds a round band sideways at one ring of nodes, on the edge nearer the middle of the part, free to turn and tilt, like a shaft in a ball bearing: it carries force and no moment. With `axial` it also holds the band along its axis at one node; give that to one bearing of a shaft (static). Reading as for `fix` |
 | `torque` | `faces moment` `axis=x,y,z` `at=x,y,z` | twists the faces by `moment` N·m about their axis: the axis of a round face, or the normal through the middle of a flat one, unless `axis=` and `at=` say; `axis=` also takes `x`, `y`, `z` or `-z` (static) |
 | `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
 | `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |

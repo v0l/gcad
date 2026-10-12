@@ -222,7 +222,7 @@ top: probe 18,12,12
 expect stress<80 safety>2
 ```
 
-`slide faces` holds only the normal (symmetry planes), `pin h.side` holds a round face free to
+`slide faces` holds only the normal (symmetry planes), `bearing seat.side` holds a shaft's bearing band sideways but free to tilt (add `axial` on one of them), `pin h.side` holds a round face free to
 turn, `pressure faces 10` pushes in MPa, `torque shaft.end 5` twists in N·m, `warm 40` heats the whole part (thermal expansion stress); `warm -100 part=bolt` cools one part, which preloads a bolted joint.
 Readings: `stress`, `displacement`, `safety`, each support's reaction, `probe.stress`. `stress`
 and `safety` leave out one mesh size around supports and bonds, whose singular peak reads as

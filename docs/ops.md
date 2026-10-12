@@ -300,6 +300,7 @@ The plan for the rest is in `docs/simulation.md`.
 | static stress | supported | `sim static`, `fix faces`, `load faces force=x,y,z`; `stress` leaves out the band around supports | `simulation::bar_in_tension`, `simulation::cantilever_stress`, `simulation::peak_stress_leaves_out_the_fixed_edge`, `simulation::static_needs_supports_and_stiffness` |
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::torque_about_a_named_axis`, `simulation::pinned_link` |
+| bearings | supported | `left: bearing seat.side axial`, `right: bearing seat2.side` | `simulation::bearings_carry_force_and_no_moment`, `simulation::bearings_need_one_held_along_the_axis` |
 | leaving parts out | supported | `leave ctl* *screw*` | `simulation::leave_parts_out` |
 | mesh convergence check | supported | `converge`, `converge within=2` | `simulation::mesh_convergence_check` |
 | probes | supported | `top: probe 100,0,10`; a point on a curved face just outside the mesh reads on its surface | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure`, `simulation::probe_on_a_curved_face_snaps_to_the_mesh` |

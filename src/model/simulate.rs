@@ -116,8 +116,40 @@ impl Model {
             "slide" => self.op_support(line, Hold::Slide),
             "pin" => {
                 let args = Args::new(line, &["faces"], &[], false)?;
+                let selector = args.text("faces")?;
+                let (point, axis) = self.target_axis(selector)?;
+                let short = self
+                    .target_band(selector, point, axis)?
+                    .filter(|(length, radius)| length < radius);
+                let summary = self.op_support(line, Hold::Pin { point, axis })?;
+                Ok(match short {
+                    Some((length, _)) => format!(
+                        "{summary}; the band is {} mm long, shorter than its radius, and a pin holds every point of it so the part cannot tilt there: a bearing seat wants `bearing`",
+                        crate::plot::label(length)
+                    ),
+                    None => summary,
+                })
+            }
+            "bearing" => {
+                let args = Args::new(line, &["faces", "axial"], &[], false)?;
+                let axial = match args.values.get("axial").copied() {
+                    None => false,
+                    Some("axial") => true,
+                    Some(other) => {
+                        bail!(
+                            "`bearing faces` takes `axial` to hold it along its axis, not `{other}`"
+                        )
+                    }
+                };
                 let (point, axis) = self.target_axis(args.text("faces")?)?;
-                self.op_support(line, Hold::Pin { point, axis })
+                let summary = self.op_support(line, Hold::Bearing { point, axis, axial })?;
+                Ok(if axial {
+                    format!("{summary}; holds sideways and along its axis, free to turn and tilt")
+                } else {
+                    format!(
+                        "{summary}; holds sideways, free to turn, tilt and slide along its axis"
+                    )
+                })
             }
             "torque" => self.op_torque(line),
             "load" => self.op_load(line),
@@ -465,6 +497,44 @@ impl Model {
         Ok(faces.into_iter().map(|f| index * STRIDE + f).collect())
     }
 
+    fn target_band(
+        &mut self,
+        selector: &str,
+        point: Point3,
+        axis: Vector3,
+    ) -> Result<Option<(f64, f64)>> {
+        let target = self.target_mut()?;
+        let (solid, faces) = if target.assembly || selector.contains(':') {
+            let (_, solid, faces) = target.reference(selector)?;
+            (solid, faces)
+        } else {
+            let tolerance = target.tolerance();
+            let solid = target
+                .solid
+                .clone()
+                .ok_or_else(|| anyhow!("the part has no solid"))?;
+            let faces = crate::select::select_faces(selector, &solid, &target.groups, tolerance)?;
+            (solid, faces)
+        };
+        let Some(radius) = super::mate::cylinders(&solid, &faces)
+            .first()
+            .map(|c| c.radius)
+        else {
+            return Ok(None);
+        };
+        let all = crate::select::faces(&solid);
+        let along: Vec<f64> = faces
+            .iter()
+            .filter_map(|&f| all.get(f))
+            .flat_map(|face| face.edge_iter().collect::<Vec<_>>())
+            .flat_map(|edge| crate::geometry::curve_samples(&edge.curve()))
+            .map(|p| (p - point).dot(axis))
+            .collect();
+        let low = along.iter().copied().fold(f64::INFINITY, f64::min);
+        let high = along.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        Ok((high > low).then_some((high - low, radius)))
+    }
+
     fn target_axis(&mut self, selector: &str) -> Result<(Point3, Vector3)> {
         let target = self.target_mut()?;
         let (solid, faces) = if target.assembly || selector.contains(':') {
@@ -541,7 +611,12 @@ impl Model {
     }
 
     fn op_support(&mut self, line: &Line, hold: Hold) -> Result<String> {
-        let args = Args::new(line, &["faces"], &[], false)?;
+        let words = if matches!(hold, Hold::Bearing { .. }) {
+            &["faces", "axial"][..]
+        } else {
+            &["faces"][..]
+        };
+        let args = Args::new(line, words, &[], false)?;
         let faces = self.target_faces(args.text("faces")?)?;
         let count = self.spec().supports.len() + 1;
         let label = line

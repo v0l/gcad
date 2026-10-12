@@ -11,6 +11,8 @@ All notable changes to gcad are listed here. The format follows
 - Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
   or for flow the parts in their duct or air box, the wind and the heated faces.
 
+- `bearing faces axial`: a round band held sideways at one ring, free to turn and tilt, so it carries
+  force and no moment. `pin` on a short band suggests it.
 - `support_stress` reading: the peak von Mises stress within one mesh size of supports and bonds.
 - `torque axis=` and `wind toward=` take `x`, `y`, `z` and `-z`.
 

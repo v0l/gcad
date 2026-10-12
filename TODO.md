@@ -3,11 +3,6 @@
 Problems found while sizing the rotator (`~/git/rotator`, `sims/`) with `gcad sim`. Each
 item has a way to reproduce it. Take one, fix it, delete it from this file.
 
-## `pin` on a short cylinder band acts as a clamp
-
-In `sims/elshaft.gsim` the 2 mm bearing bands are `pin`ned, yet the reaction moments are
-14 and 29 N·m. A bearing seat should carry force and almost no moment.
-
 ## Importing a KiCad/agentee board STEP
 
 Importing the STEP from `agentee export ctl -o ctl.step` (run in `~/git/rotator/board`)
@@ -23,3 +18,18 @@ points within 1e-6 of it, and the recovery loop keeps splitting the slivers ther
 Welding interior CDT points and collapsing points within 1e-6 of each other did not help,
 because the splits add new ones. Mesh planar faces in their own plane instead of the
 surface's uv. Until then, `leave *screw*` keeps such parts out of a sim.
+
+## Stacked cylinders of one radius blow up the mesh
+
+Extruding `circle 20` several times end to end (a shaft with bearing and load bands, like
+`~/git/rotator/sims/elshaft_fea.gcad`) meshes slowly and far too finely, and a coarser `mesh`
+can make it worse. Five segments of 10, 4, 86, 4 and 86 mm give about 1.2 million tetrahedra at
+`mesh 4` and 1.6 million at `mesh 6`, against 22 thousand for the same shaft with the bands at
+`circle 24`, and two to two and a half minutes of meshing against a quarter of a second.
+
+## `elbox.gsim` meshes 30 times finer than it did
+
+`~/git/rotator/sims/elbox.gsim` at `mesh 3` made 526 thousand nodes on gcad 0.2.0 and makes
+15.7 million now (about 8 minutes and 50 GB). The box has a 0.05 mm deep `seat` cut, which the
+mesh has to resolve; whether the growth comes from that or from the stacked-cylinder fault above
+is not known yet.
