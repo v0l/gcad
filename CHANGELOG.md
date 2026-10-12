@@ -17,6 +17,7 @@ All notable changes to gcad are listed here. The format follows
 - Gear and worm losses on couples: `efficiency=` and `back=`, or a worm's `lead=` and `friction=`,
   with `joint.back` readings and worms that lock.
 - `torque joint value` in `sim torque`: a steady torque on a joint, like wind.
+- `joint ... drag=`: bearing and seal friction on a joint, added to the torque to drive it.
 - A boss glued onto a face, including twisted faces and over an edge; twisted extrudes with holes.
 
 ### Changed
