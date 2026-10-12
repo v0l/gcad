@@ -447,7 +447,7 @@ expect shoulder<15 sun_s_turn<4
 | `probe` | `x,y,z`, with a label | reads the von Mises stress and displacement at a point inside the part as `label.stress` and `label.displacement` |
 | `temperature` | `faces value` | holds the faces at that temperature in °C (thermal). The heat leaving the part through them, in watts, is a reading named after the line's label (negative where heat comes in) |
 | `convect` | `faces h= ambient=` | the faces lose heat to air at `ambient` °C (20 unless given) with a film coefficient `h` in W/m²·K: about 5 to 10 for still air, 20 to 100 with a fan (thermal). The heat lost is a reading named after the label |
-| `heat` | `faces watts` | puts that much heat into the faces, spread by area (thermal) |
+| `heat` | `faces watts` | puts that much heat into the faces, spread by area (thermal, flow). In a flow simulation the air carries it away, and the line's label reads the mean temperature of those faces |
 | `source` | `watts` | makes that much heat evenly through the part's volume (thermal) |
 | `modes` | `count` | how many natural frequencies `modal` finds, 6 unless given |
 | `contact` | `part part` `friction=` | the two parts press on each other where they touch instead of being bonded, and may part (static). Without `friction` they slide freely, so give them supports that stop that; with it (a coefficient, 0.3 for dry steel) they hold until the sideways force passes `friction` times the pressing force, and the run reports how many node pairs slip. A load that friction cannot hold is an error that says the parts slide. Frequencies and buckling treat the pair as bonded |

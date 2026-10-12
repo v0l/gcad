@@ -1,6 +1,6 @@
 use super::{Field, Outcome, Reading, Spec, statics::FieldView};
 use crate::flow::gpu::Gpu;
-use crate::flow::lattice::{Domain, INLET, Lattice, OUTLET, Settings};
+use crate::flow::lattice::{Domain, Heat, INLET, Lattice, OUTLET, Settings, WALL};
 use crate::flow::voxel::{Grid, place_surface, surface};
 use anyhow::{Result, bail};
 use monstertruck::modeling::*;
@@ -191,7 +191,10 @@ fn setup(spec: &Spec) -> Result<Setup> {
     setup.centre[UP] = middle[1];
     setup.centre[WIND] = 0.5 * (low[WIND] + high[WIND]);
     setup.bounds = (low, high);
-    let across = frontal.sqrt().max(1.0e-6);
+    let across = match spec.duct {
+        Some([w, h]) => 2.0 * w * h / (w + h),
+        None => frontal.sqrt().max(1.0e-6),
+    };
     let spacing = spec.mesh.unwrap_or(across / ACROSS);
     {
         use rayon::prelude::*;
@@ -211,15 +214,24 @@ fn setup(spec: &Spec) -> Result<Setup> {
     }
     let mut margin = Vector3::new(ASIDE, ASIDE, ASIDE) * across;
     margin[WIND] = UPSTREAM * across;
-    let origin = low - margin - Vector3::new(0.5, 0.5, 0.5) * spacing;
+    let mut origin = low - margin - Vector3::new(0.5, 0.5, 0.5) * spacing;
     let mut extent = high - low + Vector3::new(2.0, 2.0, 2.0) * (ASIDE * across);
     extent[WIND] = high[WIND] - low[WIND] + (UPSTREAM + DOWNSTREAM) * across;
+    let mut size = [0, 1, 2].map(|d| (extent[d] / spacing).ceil() as usize + 1);
+    if let Some(duct) = spec.duct {
+        for (axis, width) in [(SIDE, duct[0]), (UP, duct[1])] {
+            let middle = 0.5 * (low[axis] + high[axis]);
+            origin[axis] = middle - 0.5 * width - 0.5 * spacing;
+            size[axis] = (width / spacing).round() as usize + 2;
+            setup.centre[axis] = middle;
+        }
+    }
     setup.across = across;
     setup.frontal = frontal;
     setup.grid = Grid {
         origin,
         spacing,
-        size: [0, 1, 2].map(|d| (extent[d] / spacing).ceil() as usize + 1),
+        size,
     };
     Ok(setup)
 }
@@ -310,6 +322,19 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         bail!("every part is thinner than a cell; use a finer `mesh`");
     }
     domain.close_diagonals();
+    if spec.duct.is_some() {
+        for z in 0..size[WIND] {
+            for y in 0..size[UP] {
+                for x in 0..size[SIDE] {
+                    if x == 0 || y == 0 || x == size[SIDE] - 1 || y == size[UP] - 1 {
+                        let cell = domain.at(x, y, z);
+                        domain.flags[cell] = WALL;
+                        domain.body[cell] = 0;
+                    }
+                }
+            }
+        }
+    }
     let speed = LATTICE_SPEED;
     let mut seed = 0x2545_f491_4f6c_dd1du64;
     let mut noise = || {
@@ -322,6 +347,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     for y in 0..size[1] {
         for x in 0..size[0] {
             let (inlet, outlet) = (domain.at(x, y, 0), domain.at(x, y, last));
+            if domain.flags[inlet] == WALL {
+                continue;
+            }
             domain.flags[inlet] = INLET;
             domain.flags[outlet] = OUTLET;
             let velocity = [
@@ -338,6 +366,15 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     domain.cuts.clear();
     let dx = setup.grid.spacing * 1.0e-3;
     let viscosity = air.1 * speed / (setup.wind.speed * dx);
+    let ambient = spec.ambient.unwrap_or(20.0);
+    let heating = heating(
+        spec,
+        &setup,
+        &mut domain,
+        viscosity,
+        step_seconds(&setup),
+        air,
+    )?;
     let mut settings = Settings {
         sponge: (0.5 * setup.across / setup.grid.spacing).min(40.0),
         stream: [0.0, 0.0, speed],
@@ -403,6 +440,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let to_speed = setup.wind.speed / speed;
     let mut pending: Option<Ticked> = None;
     let mut drags: Vec<f64> = Vec::new();
+    let mut temperatures: Vec<f64> = Vec::new();
     let mut requested_ticks = 0;
     let mut converged = None;
     loop {
@@ -410,6 +448,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             .then(|| -> Result<Ticked> {
                 lattice.run(&settings, every)?;
                 lattice.accumulate();
+                lattice.accumulate_temperature();
                 let framed = requested_ticks % frame_every == 0;
                 Ok(Ticked {
                     planes: planes
@@ -418,6 +457,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                         .collect(),
                     snapshot: (framed && !seeds.is_empty()).then(|| lattice.request_snapshot()),
                     links: lattice.request_links(),
+                    probes: lattice.request_probes(),
                     framed,
                 })
             })
@@ -476,6 +516,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                 sum[d] += value[d] as f64;
             }
         }
+        if let Some(heating) = &heating {
+            temperatures.push(heating.mean(&lattice.take_probes(ready.probes)?));
+        }
         if converged.is_none()
             && spec.average.is_none()
             && drags.len().is_multiple_of(batch)
@@ -483,6 +526,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             && let Some(error) = standard_error(&drags, batch)
             && error <= TARGET_ERROR
             && settled(&drags)
+            && (heating.is_none()
+                || standard_error(&temperatures, batch).is_some_and(|e| e <= TARGET_ERROR)
+                    && settled(&temperatures))
         {
             converged = Some(error);
         }
@@ -686,6 +732,101 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         "Pa",
         "lowest mean pressure on the surface",
     ));
+    let mut field = Field {
+        title: "mean surface pressure".into(),
+        unit: "Pa".into(),
+        values,
+        displacement: Vec::new(),
+    };
+    let mut balance = None;
+    if let Some(heating) = &heating {
+        let mean: Vec<f64> = lattice
+            .temperature_sums()?
+            .iter()
+            .map(|&v| v as f64 / samples.max(1) as f64)
+            .collect();
+        let watts = heating.watts();
+        let mut heated = 0.0;
+        for source in &heating.sources {
+            let rise: f64 = source.cells.iter().map(|&(c, w)| w * mean[c]).sum();
+            heated += rise * source.watts / watts;
+            readings.push(reading(
+                &source.label,
+                ambient + rise,
+                "°C",
+                "mean temperature of the heated faces",
+            ));
+        }
+        let mut peaks = vec![f64::NEG_INFINITY; n];
+        let mut body_cells: Vec<HashMap<usize, f64>> = vec![HashMap::new(); n];
+        for (cell, &rise) in mean.iter().enumerate() {
+            let body = domain.body[cell] as usize;
+            if domain.flags[cell] == WALL && body > 0 {
+                peaks[body - 1] = peaks[body - 1].max(rise);
+                body_cells[body - 1].insert(cell, ambient + rise);
+            }
+        }
+        let peak = peaks.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+        readings.push(reading(
+            "temperature",
+            ambient + peak,
+            "°C",
+            "hottest part, mean over the run",
+        ));
+        if n > 1 {
+            for (part, peak) in setup.parts.iter().zip(&peaks) {
+                if peak.is_finite() {
+                    readings.push(reading(
+                        &format!("{}.temperature", part.name),
+                        ambient + peak,
+                        "°C",
+                        "",
+                    ));
+                }
+            }
+        }
+        readings.push(reading(
+            "resistance",
+            heated / watts,
+            "K/W",
+            "heated faces above the inlet air, per watt",
+        ));
+        let (_, plane) = lattice.plane(WIND, size[WIND] - 2)?;
+        let capacity = air.0 * AIR_HEAT_CAPACITY;
+        let carried: f64 = plane
+            .iter()
+            .enumerate()
+            .filter(|(_, v)| v[3] > 0.0)
+            .map(|(k, v)| {
+                let cell = k + (size[WIND] - 2) * size[SIDE] * size[UP];
+                v[2] as f64 * velocity_scale * mean[cell] * capacity * dx * dx
+            })
+            .sum();
+        balance = Some((carried, watts));
+        use rayon::prelude::*;
+        field = Field {
+            title: "mean surface temperature".into(),
+            unit: "°C".into(),
+            values: setup
+                .parts
+                .par_iter()
+                .enumerate()
+                .map(|(k, part)| {
+                    part.skin
+                        .0
+                        .iter()
+                        .map(|&p| {
+                            let p = setup.to_lattice(p);
+                            nearest_cell(&setup, p, |c| body_cells[k].contains_key(&c))
+                                .map_or(ambient, |c| body_cells[k][&c])
+                        })
+                        .collect::<Vec<f64>>()
+                })
+                .collect::<Vec<_>>()
+                .concat(),
+            displacement: Vec::new(),
+        };
+    }
     let total_steps = ramp + settle + samples * every;
     let mut notes = vec![
         format!(
@@ -704,6 +845,12 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             crate::plot::label(setup.across)
         ),
     ];
+    if let Some((carried, watts)) = balance {
+        notes.push(format!(
+            "the air carries {carried:.2} W of the {watts} W out of the box ({:.0}%); the rest is still warming the parts or crossing the outlet in eddies",
+            100.0 * carried / watts
+        ));
+    }
     if spec.half {
         notes.push("populations stored as 16-bit floats (`precision half`), a preview: drag on the test cube moved 1.3%, laminar benchmarks read up to 25% off".into());
     }
@@ -737,12 +884,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         movie: Some(movie),
         readings,
         notes,
-        field: Some(Field {
-            title: "mean surface pressure".into(),
-            unit: "Pa".into(),
-            values,
-            displacement: Vec::new(),
-        }),
+        field: Some(field),
         ..Default::default()
     })
 }
@@ -951,7 +1093,204 @@ struct Ticked {
     planes: Vec<crate::flow::lattice::PendingPlane>,
     snapshot: Option<crate::flow::lattice::PendingSnapshot>,
     links: crate::flow::lattice::PendingLinks,
+    probes: crate::flow::lattice::PendingProbes,
     framed: bool,
+}
+
+const PRANDTL: f64 = 0.71;
+const AIR_HEAT_CAPACITY: f64 = 1006.0;
+
+struct Source {
+    label: String,
+    watts: f64,
+    cells: Vec<(usize, f64)>,
+}
+
+struct Heating {
+    sources: Vec<Source>,
+    weights: Vec<f64>,
+}
+
+impl Heating {
+    fn watts(&self) -> f64 {
+        self.sources.iter().map(|s| s.watts).sum()
+    }
+
+    fn mean(&self, theta: &[f32]) -> f64 {
+        let total: f64 = self.weights.iter().sum();
+        self.weights
+            .iter()
+            .zip(theta)
+            .map(|(w, t)| w * *t as f64)
+            .sum::<f64>()
+            / total.max(f64::MIN_POSITIVE)
+    }
+}
+
+fn heating(
+    spec: &Spec,
+    setup: &Setup,
+    domain: &mut Domain,
+    viscosity: f64,
+    seconds: f64,
+    air: (f64, f64),
+) -> Result<Option<Heating>> {
+    use super::fem::thermal::Boundary;
+    let mut fluxes = Vec::new();
+    for boundary in &spec.thermal {
+        match boundary {
+            Boundary::Flux {
+                label,
+                faces,
+                watts,
+            } => fluxes.push((label.clone(), faces.clone(), *watts)),
+            _ => bail!(
+                "a flow simulation takes `heat` lines; `temperature` and `convect` belong to `sim thermal`, the air here does the convecting"
+            ),
+        }
+    }
+    if fluxes.is_empty() {
+        return Ok(None);
+    }
+    let model = spec.target()?;
+    let names: Vec<String> = model.named_solids().into_iter().map(|(n, _)| n).collect();
+    let solids = spec.named()?;
+    let dx = setup.grid.spacing * 1.0e-3;
+    let capacity = air.0 * AIR_HEAT_CAPACITY;
+    let air_alpha = viscosity / PRANDTL;
+    let mut alphas = Vec::new();
+    for part in &setup.parts {
+        let conductivity = model
+            .materials
+            .get(&part.name)
+            .and_then(|m| m.mechanics.conductivity)
+            .ok_or_else(|| {
+                anyhow::anyhow!(
+                    "give `{}` a material with a conductivity, like `material aluminium`, so heat can flow through it",
+                    part.name
+                )
+            })?;
+        alphas.push(conductivity / capacity * seconds / (dx * dx));
+    }
+    let mut cells: Vec<[f32; 2]> = domain
+        .flags
+        .iter()
+        .zip(&domain.body)
+        .map(|(&flag, &body)| match (flag, body as usize) {
+            (WALL, body) if body > 0 => [alphas[body - 1] as f32, 0.0],
+            _ => [air_alpha as f32, 0.0],
+        })
+        .collect();
+    let mut sources = Vec::new();
+    for (label, faces, watts) in fluxes {
+        let mut weights: HashMap<usize, f64> = HashMap::new();
+        for tag in faces {
+            let (index, face) = (tag / super::fem::STRIDE, tag % super::fem::STRIDE);
+            let name = &names[index];
+            let Some(k) = setup.parts.iter().position(|p| &p.name == name) else {
+                bail!("`{label}` heats `{name}`, which the simulation leaves out");
+            };
+            let Some((_, solid)) = solids.iter().find(|(n, _)| n == name) else {
+                continue;
+            };
+            use monstertruck::meshing::prelude::*;
+            let meshed = solid.robust_triangulation(0.2 * setup.grid.spacing);
+            let Some(mesh) = meshed
+                .boundaries()
+                .iter()
+                .flat_map(|shell| shell.face_iter().cloned())
+                .nth(face)
+                .and_then(|f| f.surface())
+            else {
+                continue;
+            };
+            let positions = mesh.positions();
+            let body = k as u16 + 1;
+            let keep = |c: usize| domain.flags[c] == WALL && domain.body[c] == body;
+            for triangle in mesh.faces().triangle_iter() {
+                let [a, b, c] = triangle.map(|v| positions[v.pos]);
+                let area = (b - a).cross(c - a).magnitude() / 2.0;
+                let longest = [(b - a), (c - b), (a - c)]
+                    .iter()
+                    .map(|e| e.magnitude())
+                    .fold(0.0, f64::max);
+                let n = (longest / (0.5 * setup.grid.spacing)).ceil().max(1.0) as usize;
+                for i in 0..n {
+                    for j in 0..n - i {
+                        let (u, v) = (
+                            (i as f64 + 1.0 / 3.0) / n as f64,
+                            (j as f64 + 1.0 / 3.0) / n as f64,
+                        );
+                        let p = a + (b - a) * u + (c - a) * v;
+                        if let Some(cell) = nearest_cell(setup, setup.to_lattice(p), keep) {
+                            *weights.entry(cell).or_default() += area / (n * n) as f64;
+                        }
+                    }
+                }
+            }
+        }
+        let total: f64 = weights.values().sum();
+        if total <= 0.0 {
+            bail!("`{label}` heats faces that have no cells; use a finer `mesh`");
+        }
+        let mut list: Vec<(usize, f64)> =
+            weights.into_iter().map(|(c, w)| (c, w / total)).collect();
+        list.sort_by_key(|&(c, _)| c);
+        for &(cell, share) in &list {
+            cells[cell][1] += (watts * share * seconds / (capacity * dx * dx * dx)) as f32;
+        }
+        sources.push(Source {
+            label,
+            watts,
+            cells: list,
+        });
+    }
+    let probes: Vec<usize> = sources
+        .iter()
+        .flat_map(|s| s.cells.iter().map(|c| c.0))
+        .collect();
+    let weights: Vec<f64> = sources
+        .iter()
+        .flat_map(|s| s.cells.iter().map(move |c| c.1 * s.watts))
+        .collect();
+    domain.heat = Some(Heat { cells, probes });
+    Ok(Some(Heating { sources, weights }))
+}
+
+fn nearest_cell(setup: &Setup, p: Point3, keep: impl Fn(usize) -> bool) -> Option<usize> {
+    let grid = &setup.grid;
+    let at = (p - grid.origin) / grid.spacing;
+    let base = [
+        at.x.round() as i64,
+        at.y.round() as i64,
+        at.z.round() as i64,
+    ];
+    let [nx, ny, nz] = grid.size.map(|n| n as i64);
+    let mut best: Option<(f64, usize)> = None;
+    for reach in 1..=3i64 {
+        for dz in -reach..=reach {
+            for dy in -reach..=reach {
+                for dx in -reach..=reach {
+                    let c = [base[0] + dx, base[1] + dy, base[2] + dz];
+                    if c[0] < 0 || c[1] < 0 || c[2] < 0 || c[0] >= nx || c[1] >= ny || c[2] >= nz {
+                        continue;
+                    }
+                    let cell = (c[0] + (c[1] + c[2] * ny) * nx) as usize;
+                    if keep(cell) {
+                        let d =
+                            (Vector3::new(c[0] as f64, c[1] as f64, c[2] as f64) - at).magnitude2();
+                        if best.is_none_or(|(b, _)| d < b) {
+                            best = Some((d, cell));
+                        }
+                    }
+                }
+            }
+        }
+        if best.is_some() {
+            break;
+        }
+    }
+    best.map(|(_, cell)| cell)
 }
 
 const FRAMES: usize = 240;
@@ -992,39 +1331,7 @@ fn centre(setup: &Setup, cell: usize) -> Point3 {
 }
 
 fn nearest(setup: &Setup, links: &HashMap<usize, f64>, p: Point3) -> f64 {
-    let grid = &setup.grid;
-    let at = (p - grid.origin) / grid.spacing;
-    let base = [
-        at.x.round() as i64,
-        at.y.round() as i64,
-        at.z.round() as i64,
-    ];
-    let [nx, ny, nz] = grid.size.map(|n| n as i64);
-    let mut best = (f64::INFINITY, 0.0);
-    for reach in 1..=3i64 {
-        for dz in -reach..=reach {
-            for dy in -reach..=reach {
-                for dx in -reach..=reach {
-                    let c = [base[0] + dx, base[1] + dy, base[2] + dz];
-                    if c[0] < 0 || c[1] < 0 || c[2] < 0 || c[0] >= nx || c[1] >= ny || c[2] >= nz {
-                        continue;
-                    }
-                    let cell = (c[0] + (c[1] + c[2] * ny) * nx) as usize;
-                    if let Some(&value) = links.get(&cell) {
-                        let d =
-                            (Vector3::new(c[0] as f64, c[1] as f64, c[2] as f64) - at).magnitude2();
-                        if d < best.0 {
-                            best = (d, value);
-                        }
-                    }
-                }
-            }
-        }
-        if best.0.is_finite() {
-            break;
-        }
-    }
-    best.1
+    nearest_cell(setup, p, |c| links.contains_key(&c)).map_or(0.0, |c| links[&c])
 }
 
 pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {

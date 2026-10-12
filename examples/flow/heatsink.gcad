@@ -1,0 +1,10 @@
+let w=40 l=50 t=5 fins=8 fin=1.5 h=20
+plane YZ
+rect w t at=0,t/2
+base: extrude l
+plane XY offset=t
+let pitch=(w-fin)/(fins-1)
+rect l fin at=l/2,-w/2+fin/2
+fins: extrude h
+repeat fins count=fins step=0,pitch
+material aluminium

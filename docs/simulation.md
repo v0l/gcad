@@ -119,7 +119,20 @@ expect drag<400
   about 1% in drag, but the laminar benchmarks drift (Poiseuille 2% low, the Re 1000 cavity 3%,
   the Schaefer-Turek peak lift 0.74 against 0.99), so results carry a note. `precision single`
   is the default.
-- `air density= viscosity=` overrides air at 20 °C (1.204 kg/m³, 1.516e-5 m²/s).
+- `air density= viscosity= temperature=` overrides air at 20 °C (1.204 kg/m³, 1.516e-5 m²/s);
+  `temperature` is the air coming in, 20 °C unless given.
+- `duct width height` closes the box into a duct of that cross-section in mm, centred on the
+  parts, with walls that neither slip nor pass heat. The wind is the speed of the air entering
+  it, as a fan in a duct would push it. Without it the parts stand in open air.
+- `label: heat faces watts` heats the faces. The air carries the heat away: the parts conduct
+  it with their materials' conductivity (`k`), so every part needs a material, and the air
+  takes it on with the flow. Readings: `label` is the mean temperature of the heated faces,
+  `temperature` the hottest part cell, `part.temperature` per part of an assembly, and
+  `resistance` the heated faces' rise over the inlet air per watt (K/W). The field becomes the
+  mean surface temperature, and a note says how much of the heat the air carries out of the box.
+  Averaging also waits for the heated faces' temperature to be known to 1%. Only the steady
+  state is meaningful: the parts are given the air's heat capacity so they warm in step with
+  the flow.
 
 Readings: `drag` along the wind, `side` across it and level, `lift` across it and up, `cda`
 (drag over the dynamic pressure, m²), `moment.x`, `.y` and `.z` about the `about` point in N·m,

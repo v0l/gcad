@@ -56,6 +56,12 @@ pub struct Domain {
     pub outflow: Vec<(usize, usize)>,
     pub cuts: Vec<(usize, usize, f64)>,
     pub half: bool,
+    pub heat: Option<Heat>,
+}
+
+pub struct Heat {
+    pub cells: Vec<[f32; 2]>,
+    pub probes: Vec<usize>,
 }
 
 impl Domain {
@@ -69,6 +75,7 @@ impl Domain {
             outflow: Vec::new(),
             cuts: Vec::new(),
             half: false,
+            heat: None,
         }
     }
 
@@ -263,7 +270,56 @@ fn offset(c: &[i32; 3], sign: i32) -> String {
     )
 }
 
-fn shader() -> String {
+pub const TQ: usize = 7;
+
+fn thermal_populations(group: u32) -> String {
+    let mut s = String::new();
+    for i in 0..TQ {
+        s +=
+            &format!("@group({group}) @binding({i}) var<storage, read_write> ta{i}: array<f32>;\n");
+        s += &format!(
+            "@group({group}) @binding({}) var<storage, read_write> tb{i}: array<f32>;\n",
+            i + TQ
+        );
+    }
+    s
+}
+
+fn thermal_update(alpha: &str, source: &str, still: bool) -> String {
+    let mut s = String::new();
+    s += "  {\n";
+    s += &format!("    let tm = 0.5 + 4.0 * ({alpha});\n");
+    s += "    let wm = 1.0 / tm; let wp = 1.0 / (0.5 + 0.25 / (tm - 0.5));\n";
+    s += &format!("    let tq = {source};\n");
+    for (i, c) in C.iter().enumerate().take(TQ) {
+        let o = opposite(i);
+        s += &format!(
+            "    var h{i}: f32; {{ let n = {}; let k = flags[n]; let kk = k & KIND; if ((kk == 1u || kk == 2u) && (k >> 8u) == 0u) {{ h{i} = ta{o}[index]; }} else if (kk == 3u) {{ h{i} = -ta{o}[index]; }} else {{ h{i} = ta{i}[n]; }} }}\n",
+            offset(c, -1)
+        );
+    }
+    s += "    let theta = h0 + h1 + h2 + h3 + h4 + h5 + h6;\n";
+    s += "    tb0[index] = h0 - wp * (h0 - 0.25 * theta) + 0.25 * tq;\n";
+    for i in (1..TQ).step_by(2) {
+        let o = opposite(i);
+        let c = C[i];
+        let cu = if still {
+            "0.0".to_string()
+        } else {
+            format!(
+                "(({}.0) * ux + ({}.0) * uy + ({}.0) * uz)",
+                c[0], c[1], c[2]
+            )
+        };
+        s += &format!(
+            "    {{ let plus = 0.5 * (h{i} + h{o}) - 0.125 * theta; let minus = 0.5 * (h{i} - h{o}) - 0.5 * theta * {cu}; tb{i}[index] = h{i} - wp * plus - wm * minus + 0.125 * tq; tb{o}[index] = h{o} - wp * plus + wm * minus + 0.125 * tq; }}\n"
+        );
+    }
+    s += "  }\n";
+    s
+}
+
+fn shader(heat: bool) -> String {
     let mut s = String::new();
     s += "const KIND: u32 = 255u;\n";
     s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, sponge: f32, bulk: f32, sx: f32, sy: f32, sz: f32, axis: u32 }\n";
@@ -274,14 +330,27 @@ fn shader() -> String {
         s += &format!("@group(1) @binding({i}) var<storage, read_write> a{i}: array<P>;\n");
         s += &format!("@group(2) @binding({i}) var<storage, read_write> b{i}: array<P>;\n");
     }
+    if heat {
+        s += "@group(0) @binding(3) var<storage, read> heat: array<vec2<f32>>;\n";
+        s += &thermal_populations(3);
+    }
     s += "@compute @workgroup_size(64)\n";
     s += "fn step(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {\n";
     s += "  let index = id.x + id.y * groups.x * 64u;\n";
     s += "  if (index >= p.count) { return; }\n";
     s += "  let own = flags[index];\n";
-    s += "  if ((own & KIND) != 0u) { return; }\n";
+    if heat {
+        s += &neighbours("index");
+        s += "  let kind = own & KIND;\n";
+        s += "  if (kind != 0u) {\n";
+        s += "    if ((kind == 1u || kind == 2u) && (own >> 8u) != 0u) {\n";
+        s += &thermal_update("heat[index].x", "heat[index].y", true);
+        s += "    }\n    return;\n  }\n";
+    } else {
+        s += "  if ((own & KIND) != 0u) { return; }\n";
+        s += &neighbours("index");
+    }
     s += "  let slot = own >> 8u;\n";
-    s += &neighbours("index");
     for i in 0..Q {
         s += &format!("  var g{i}: f32;\n");
     }
@@ -389,6 +458,9 @@ fn shader() -> String {
             sz = c[2]
         );
     }
+    if heat {
+        s += &thermal_update("heat[index].x", "heat[index].y", false);
+    }
     s += "}\n";
     s
 }
@@ -492,13 +564,16 @@ fn mean_shader(add: bool) -> String {
     s
 }
 
-fn edge_shader() -> String {
+fn edge_shader(heat: bool) -> String {
     let mut s = String::new();
     s += "struct Edge { cell: u32, inner: u32, inlet: u32, pad: u32, vx: f32, vy: f32, vz: f32, pad2: f32 }\n";
     s += "struct Count { n: u32, scale: f32, p1: u32, p2: u32 }\n";
     s += "@group(0) @binding(0) var<uniform> count: Count;\n";
     s += "@group(0) @binding(1) var<storage, read> edges: array<Edge>;\n";
     s += &populations(1, "b");
+    if heat {
+        s += &thermal_populations(2);
+    }
     s += "@compute @workgroup_size(64)\n";
     s += "fn edge(@builtin(global_invocation_id) id: vec3<u32>) {\n";
     s += "  if (id.x >= count.n) { return; }\n";
@@ -527,6 +602,39 @@ fn edge_shader() -> String {
             c[0], c[1], c[2]
         );
     }
+    if heat {
+        for i in 0..TQ {
+            s += &format!("  tb{i}[e.cell] = select(tb{i}[e.inner], 0.0, e.inlet == 1u);\n");
+        }
+    }
+    s += "}\n";
+    s
+}
+
+fn theta_shader(name: &str, add: bool) -> String {
+    let mut s = String::new();
+    s += "struct Count { n: u32, p1: u32, p2: u32, p3: u32 }\n";
+    s += "@group(0) @binding(0) var<uniform> count: Count;\n";
+    s += "@group(0) @binding(1) var<storage, read> cells: array<u32>;\n";
+    s += "@group(0) @binding(2) var<storage, read_write> out: array<f32>;\n";
+    s += &thermal_populations(1);
+    s += "@compute @workgroup_size(64)\n";
+    s += &format!(
+        "fn {name}(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {{\n"
+    );
+    s += "  let k = id.x + id.y * groups.x * 64u;\n";
+    s += "  if (k >= count.n) { return; }\n";
+    s += if add {
+        "  let cell = k;\n"
+    } else {
+        "  let cell = cells[k];\n"
+    };
+    s += "  let theta = ta0[cell] + ta1[cell] + ta2[cell] + ta3[cell] + ta4[cell] + ta5[cell] + ta6[cell];\n";
+    s += if add {
+        "  out[k] = out[k] + theta;\n"
+    } else {
+        "  out[k] = theta;\n"
+    };
     s += "}\n";
     s
 }
@@ -588,11 +696,19 @@ struct Pass {
     header: wgpu::Buffer,
 }
 
+struct Thermal {
+    groups: [wgpu::BindGroup; 2],
+    copies: [Vec<wgpu::Buffer>; 2],
+    mean: (Pass, wgpu::Buffer),
+    probes: Option<(Pass, wgpu::Buffer)>,
+}
+
 pub struct Lattice<'a> {
     gpu: &'a Gpu,
     pub size: [usize; 3],
     copies: [Vec<wgpu::Buffer>; 2],
     params: wgpu::Buffer,
+    thermal: Option<Thermal>,
     pipeline: wgpu::ComputePipeline,
     common: wgpu::BindGroup,
     sides: [[wgpu::BindGroup; 2]; 2],
@@ -838,13 +954,82 @@ impl<'a> Lattice<'a> {
             let refs: Vec<&wgpu::Buffer> = copies[which].iter().collect();
             group(&side_layout, &refs)
         };
-        let common_layout = layout(&[entry(0, uniform), entry(1, read), entry(2, read)]);
-        let step = pipeline(
-            shader(),
-            "step",
-            &[&common_layout, &side_layout, &side_layout],
+        let heat = domain.heat.as_ref().map(|h| -> Result<_> {
+            if h.cells.len() != count {
+                bail!("{} heat cells for {count} cells", h.cells.len());
+            }
+            let needed = 3 * Q as u32 + 4;
+            if gpu.device.limits().max_storage_buffers_per_shader_stage < needed {
+                bail!(
+                    "{} cannot bind the {needed} buffers a heated flow needs",
+                    gpu.name
+                );
+            }
+            let cells = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("heat"),
+                contents: bytemuck::cast_slice(&h.cells),
+                usage: wgpu::BufferUsages::STORAGE,
+            });
+            let make = || -> Vec<wgpu::Buffer> {
+                (0..TQ)
+                    .map(|_| {
+                        device.create_buffer(&wgpu::BufferDescriptor {
+                            label: Some("temperature"),
+                            size: count as u64 * 4,
+                            usage: wgpu::BufferUsages::STORAGE
+                                | wgpu::BufferUsages::COPY_SRC
+                                | wgpu::BufferUsages::COPY_DST,
+                            mapped_at_creation: false,
+                        })
+                    })
+                    .collect()
+            };
+            Ok((cells, [make(), make()]))
+        });
+        let heat = heat.transpose()?;
+        let thermal_layout = layout(
+            &(0..2 * TQ as u32)
+                .map(|i| entry(i, write))
+                .collect::<Vec<_>>(),
         );
-        let common = group(&common_layout, &[&params, &flags, &cuts]);
+        let thermal_group = |copies: &[Vec<wgpu::Buffer>; 2], parity: usize| {
+            let refs: Vec<&wgpu::Buffer> = copies[parity]
+                .iter()
+                .chain(copies[1 - parity].iter())
+                .collect();
+            group(&thermal_layout, &refs)
+        };
+        let thermal_groups = heat
+            .as_ref()
+            .map(|(_, copies)| [thermal_group(copies, 0), thermal_group(copies, 1)]);
+        let (common_layout, step, common) = match &heat {
+            None => {
+                let common_layout = layout(&[entry(0, uniform), entry(1, read), entry(2, read)]);
+                let step = pipeline(
+                    shader(false),
+                    "step",
+                    &[&common_layout, &side_layout, &side_layout],
+                );
+                let common = group(&common_layout, &[&params, &flags, &cuts]);
+                (common_layout, step, common)
+            }
+            Some((cells, _)) => {
+                let common_layout = layout(&[
+                    entry(0, uniform),
+                    entry(1, read),
+                    entry(2, read),
+                    entry(3, read),
+                ]);
+                let step = pipeline(
+                    shader(true),
+                    "step",
+                    &[&common_layout, &side_layout, &side_layout, &thermal_layout],
+                );
+                let common = group(&common_layout, &[&params, &flags, &cuts, cells]);
+                (common_layout, step, common)
+            }
+        };
+        drop(common_layout);
         let sides = [[side(0), side(1)], [side(1), side(0)]];
         let mut edges: Vec<Edge> = domain
             .inflow
@@ -884,7 +1069,14 @@ impl<'a> Lattice<'a> {
             });
             let edge_layout = layout(&[entry(0, uniform), entry(1, read)]);
             Pass {
-                pipeline: pipeline(edge_shader(), "edge", &[&edge_layout, &side_layout]),
+                pipeline: match heat {
+                    None => pipeline(edge_shader(false), "edge", &[&edge_layout, &side_layout]),
+                    Some(_) => pipeline(
+                        edge_shader(true),
+                        "edge",
+                        &[&edge_layout, &side_layout, &thermal_layout],
+                    ),
+                },
                 common: group(&edge_layout, &[&counter, &list]),
                 sides: [side(1), side(0)],
                 count: n,
@@ -1033,11 +1225,66 @@ impl<'a> Lattice<'a> {
             },
             now_out,
         );
+        let thermal = match (heat, thermal_groups) {
+            (Some((_, copies)), Some(groups)) => {
+                let theta_layout = layout(&[entry(0, uniform), entry(1, read), entry(2, write)]);
+                let theta_pass = |name: &str, add: bool, n: usize, cells: &[u32]| {
+                    let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("theta cells"),
+                        contents: bytemuck::cast_slice(if cells.is_empty() {
+                            &[0u32]
+                        } else {
+                            cells
+                        }),
+                        usage: wgpu::BufferUsages::STORAGE,
+                    });
+                    let out = device.create_buffer(&wgpu::BufferDescriptor {
+                        label: Some(name),
+                        size: n.max(1) as u64 * 4,
+                        usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+                        mapped_at_creation: false,
+                    });
+                    let header = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                        label: Some("theta count"),
+                        contents: bytemuck::cast_slice(&[n as u32, 0, 0, 0]),
+                        usage: wgpu::BufferUsages::UNIFORM,
+                    });
+                    (
+                        Pass {
+                            pipeline: pipeline(
+                                theta_shader(name, add),
+                                name,
+                                &[&theta_layout, &thermal_layout],
+                            ),
+                            common: group(&theta_layout, &[&header, &list, &out]),
+                            sides: [thermal_group(&copies, 0), thermal_group(&copies, 1)],
+                            count: n as u32,
+                            header,
+                        },
+                        out,
+                    )
+                };
+                let probes: Vec<u32> = domain
+                    .heat
+                    .as_ref()
+                    .map(|h| h.probes.iter().map(|&c| c as u32).collect())
+                    .unwrap_or_default();
+                Some(Thermal {
+                    mean: theta_pass("tmean", true, count, &[]),
+                    probes: (!probes.is_empty())
+                        .then(|| theta_pass("tprobe", false, probes.len(), &probes)),
+                    groups,
+                    copies,
+                })
+            }
+            _ => None,
+        };
         Ok(Lattice {
             gpu,
             size,
             copies,
             params,
+            thermal,
             pipeline: step,
             common,
             sides,
@@ -1101,11 +1348,17 @@ impl<'a> Lattice<'a> {
                 pass.set_bind_group(0, &self.common, &[]);
                 pass.set_bind_group(1, &self.sides[self.parity][0], &[]);
                 pass.set_bind_group(2, &self.sides[self.parity][1], &[]);
+                if let Some(thermal) = &self.thermal {
+                    pass.set_bind_group(3, &thermal.groups[self.parity], &[]);
+                }
                 pass.dispatch_workgroups(gx, gy, 1);
                 if let Some(edges) = &self.edges {
                     pass.set_pipeline(&edges.pipeline);
                     pass.set_bind_group(0, &edges.common, &[]);
                     pass.set_bind_group(1, &edges.sides[self.parity], &[]);
+                    if let Some(thermal) = &self.thermal {
+                        pass.set_bind_group(2, &thermal.groups[self.parity], &[]);
+                    }
                     pass.dispatch_workgroups(edges.count.div_ceil(64), 1, 1);
                 }
                 drop(pass);
@@ -1198,6 +1451,49 @@ impl<'a> Lattice<'a> {
         self.gpu.queue.submit([encoder.finish()]);
     }
 
+    pub fn accumulate_temperature(&self) {
+        if let Some(thermal) = &self.thermal {
+            let encoder = self.encode(&thermal.mean.0, thermal.mean.0.count);
+            self.gpu.queue.submit([encoder.finish()]);
+        }
+    }
+
+    pub fn temperature_sums(&self) -> Result<Vec<f32>> {
+        match &self.thermal {
+            Some(thermal) => self.gpu.read(&thermal.mean.1),
+            None => Ok(Vec::new()),
+        }
+    }
+
+    pub fn temperatures(&self) -> Result<Vec<f32>> {
+        let Some(thermal) = &self.thermal else {
+            return Ok(Vec::new());
+        };
+        let mut total = vec![0.0f32; self.size.iter().product()];
+        for buffer in &thermal.copies[self.parity] {
+            for (t, v) in total.iter_mut().zip(self.gpu.read(buffer)?) {
+                *t += v;
+            }
+        }
+        Ok(total)
+    }
+
+    pub fn request_probes(&self) -> PendingProbes {
+        PendingProbes(self.thermal.as_ref().and_then(|t| t.probes.as_ref()).map(
+            |(pass, buffer)| {
+                let encoder = self.encode(pass, pass.count);
+                self.gpu.fetch(encoder, buffer)
+            },
+        ))
+    }
+
+    pub fn take_probes(&self, pending: PendingProbes) -> Result<Vec<f32>> {
+        match pending.0 {
+            Some(reading) => self.gpu.take(reading),
+            None => Ok(Vec::new()),
+        }
+    }
+
     pub fn snapshot(&self) -> Result<MeanField> {
         self.take_snapshot(self.request_snapshot())
     }
@@ -1247,6 +1543,8 @@ pub struct PendingPlane {
 pub struct PendingSnapshot(Reading);
 
 pub struct PendingLinks(Option<Reading>);
+
+pub struct PendingProbes(Option<Reading>);
 
 impl<'a> Lattice<'a> {
     pub fn link_samples(&self) -> Result<Vec<[f32; 4]>> {

@@ -1,0 +1,7 @@
+sim flow
+part heatsink.gcad
+wind 2 toward=1,0,0
+duct 40 25
+mesh 0.5
+air temperature=25
+chip: heat <Z 10

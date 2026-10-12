@@ -168,6 +168,35 @@ are stored as `f - w` scaled by 2^15 into f16's normal range; the scale did not 
 errors, which come from the 11-bit mantissa (a body force of 1e-6 per step is below one step of
 a population near 1e-3).
 
+### Heat
+
+`heat` lines in a `sim flow` add a second lattice for temperature: D3Q7, two-relaxation-time
+(the antisymmetric rate sets the diffusivity, `tau- = 1/2 + 4 alpha`, and the symmetric one the
+magic `Lambda = 1/4`, which keeps it stable at the cell Peclet numbers of air near 80). It runs
+in the same kernel as the flow, after the collision, with that cell's velocity, so it costs
+seven populations each way (56 B a cell) and no second read of the flow. Part cells conduct
+with their material's conductivity, with the air's heat capacity, so only the steady state is
+right but a 167 W/m K fin settles as fast as the air around it. Walls that belong to no part
+(duct walls, sealed pockets) bounce the temperature back, so no heat crosses them; the inlet is
+an anti-bounce-back Dirichlet at 0 (the air's own temperature), the outlet copies the cell
+inside it. Heat goes into the part cells nearest the heated faces, by area.
+
+Checks: conduction through two materials 1:4 in conductivity with a source in one matches the
+piecewise quadratic within 0.3% of the peak; a channel 20 cells high between heated walls at
+Re 50 reaches Nu 8.232 and 8.239 at two stations against 8.235 for uniform flux (the wall
+temperature taken at the interface, weighting the two cells by conductivity). The heatsink in
+`examples/flow/heatsink.gsim` (eight 1.5 mm fins 20 mm tall on a 40 x 50 mm base, shrouded,
+2 m/s, 10 W) reads 1.93 K/W at 0.5 mm cells and 1.85 at 0.33, against 1.89 from Teertstra,
+Yovanovich and Culham's composite model for shrouded plate fin heat sinks (which leaves out
+the base between the fins). It runs in 36 s.
+
+The thermal lattice uses the air's molecular diffusivity only. Adding Smagorinsky's eddy
+viscosity over a turbulent Prandtl number of 0.85, as LES usually does, read the heatsink 1.22
+K/W at 0.5 mm and 1.41 at 0.33: in a laminar channel the eddy viscosity is a stabiliser for
+the flow (tau is 0.5018 there and it diverges without it), not turbulence, and as a heat flux it
+is simply wrong. Wind on parts that is truly turbulent therefore carries heat only through the
+eddies the grid resolves.
+
 `sim flow` blows the wind along lattice z. With the inlet on an x face the edge pass touched
 one cell every nx along each of 38 population buffers, and at 547 x 571 x 471 that cost about
 150 ms a step (throughput fell from 9.1 to 0.9 billion updates a second); the z faces are

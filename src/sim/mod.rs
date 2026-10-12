@@ -107,6 +107,8 @@ pub struct Spec {
     pub air: Option<(f64, f64)>,
     pub average: Option<f64>,
     pub half: bool,
+    pub ambient: Option<f64>,
+    pub duct: Option<[f64; 2]>,
     pub wind_load: Option<PathBuf>,
 }
 

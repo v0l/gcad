@@ -1,5 +1,5 @@
 use gcad::flow::gpu::Gpu;
-use gcad::flow::lattice::{C, Collision, Domain, INLET, Lattice, MOVING, OUTLET, Settings, WALL};
+use gcad::flow::lattice::{C, Collision, Domain, Heat, INLET, Lattice, MOVING, OUTLET, Settings, WALL};
 
 static DEVICE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -581,4 +581,118 @@ fn square_cylinder_re22000() {
         "Strouhal {} against Lyn's 0.132",
         run.strouhal
     );
+}
+
+#[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+fn conduction_through_two_materials() {
+    let (_device, gpu) = device();
+    let size = [43, 1, 1];
+    let last = size[0] - 1;
+    let (split, a, b, q) = (20, 0.3, 1.2, 1.0e-4);
+    let mut domain = Domain::new(size);
+    let mut cells = vec![[0.0f32; 2]; size[0]];
+    for x in 1..last {
+        domain.flags[x] = WALL;
+        domain.body[x] = if x <= split { 1 } else { 2 };
+        cells[x] = if x <= split {
+            [a as f32, q as f32]
+        } else {
+            [b as f32, 0.0]
+        };
+    }
+    for (cell, inner) in [(0, 1), (last, last - 1)] {
+        domain.flags[cell] = INLET;
+        domain.inflow.push((cell, inner, [0.0; 3]));
+    }
+    domain.heat = Some(Heat {
+        cells,
+        probes: Vec::new(),
+    });
+    let mut lattice = Lattice::new(&gpu, &domain).expect("lattice");
+    lattice
+        .run(&Settings::laminar(0.1), 60_000)
+        .expect("runs");
+    let theta = lattice.temperatures().expect("temperatures");
+    let (l, s) = (last as f64 - 1.0, split as f64);
+    let c = q * s * s / (2.0 * a) / ((l - s) + s * b / a);
+    let d = (q * s - b * c) / a;
+    let exact = |x: f64| {
+        if x <= s {
+            -q * x * x / (2.0 * a) + d * x
+        } else {
+            c * (l - x)
+        }
+    };
+    let peak = (1..last).map(|x| exact(x as f64 - 0.5)).fold(0.0, f64::max);
+    for x in 1..last {
+        let want = exact(x as f64 - 0.5);
+        assert!(
+            (theta[x] as f64 - want).abs() <= 0.01 * peak,
+            "x {x}: {} against {want}",
+            theta[x]
+        );
+    }
+}
+
+#[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+fn heated_channel_reaches_its_nusselt_number() {
+    let (_device, gpu) = device();
+    let height = 20;
+    let size = [240, height + 4, 1];
+    let (u0, reynolds, prandtl, q) = (0.05, 50.0, 0.71, 1.0e-5);
+    let hydraulic = 2.0 * height as f64;
+    let viscosity = u0 * hydraulic / reynolds;
+    let alpha = viscosity / prandtl;
+    let mut domain = Domain::new(size);
+    let mut cells = vec![[alpha as f32, 0.0]; domain.flags.len()];
+    let wall = |y: usize| y < 2 || y >= size[1] - 2;
+    for x in 0..size[0] {
+        for y in 0..size[1] {
+            let cell = domain.at(x, y, 0);
+            if wall(y) {
+                domain.flags[cell] = WALL;
+                if x > 0 && x < size[0] - 1 {
+                    domain.body[cell] = 1;
+                    cells[cell] = [(10.0 * alpha) as f32, q as f32];
+                }
+            }
+        }
+    }
+    for y in 2..size[1] - 2 {
+        let (inlet, outlet) = (domain.at(0, y, 0), domain.at(size[0] - 1, y, 0));
+        domain.flags[inlet] = INLET;
+        domain.flags[outlet] = OUTLET;
+        domain.inflow.push((inlet, domain.at(1, y, 0), [u0, 0.0, 0.0]));
+        domain.outflow.push((outlet, domain.at(size[0] - 2, y, 0)));
+    }
+    domain.heat = Some(Heat {
+        cells,
+        probes: Vec::new(),
+    });
+    let settings = Settings::laminar(viscosity);
+    let mut lattice = Lattice::new(&gpu, &domain).expect("lattice");
+    lattice.run(&settings, 40_000).expect("runs");
+    let theta = lattice.temperatures().expect("temperatures");
+    let fields = lattice.fields(settings.force).expect("fields");
+    let flux = 2.0 * q;
+    for x in [150, 180] {
+        let (mut carried, mut flow) = (0.0, 0.0);
+        for y in 2..size[1] - 2 {
+            let cell = domain.at(x, y, 0);
+            let u = fields.velocity[cell][0];
+            carried += u * theta[cell] as f64;
+            flow += u;
+        }
+        let bulk = carried / flow;
+        let at = |y: usize| theta[domain.at(x, y, 0)] as f64;
+        let interface = |wall: usize, fluid: usize| (10.0 * at(wall) + at(fluid)) / 11.0;
+        let surface = 0.5 * (interface(1, 2) + interface(size[1] - 2, size[1] - 3));
+        let nusselt = flux / (surface - bulk) * hydraulic / alpha;
+        assert!(
+            (nusselt - 8.235).abs() < 0.01 * 8.235,
+            "Nu {nusselt} at x {x} against 8.235"
+        );
+    }
 }

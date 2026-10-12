@@ -1633,3 +1633,67 @@ fn material_files_import() {
         "{listed}"
     );
 }
+
+const FINNED: &str = "let w=40 l=50 t=5 fins=8 fin=1.5 h=20
+plane YZ
+rect w t at=0,t/2
+base: extrude l
+plane XY offset=t
+let pitch=(w-fin)/(fins-1)
+rect l fin at=l/2,-w/2+fin/2
+fins: extrude h
+repeat fins count=fins step=0,pitch
+material aluminium
+";
+
+#[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+fn fan_cools_a_ducted_heatsink() {
+    let outcome = simulated(
+        "fan_cools_a_ducted_heatsink",
+        &[("sink.gcad", FINNED)],
+        "sim flow\npart sink.gcad\nwind 2 toward=1,0,0\nduct 40 25\nmesh 0.5\nair temperature=25\nchip: heat <Z 10",
+    );
+    let (density, viscosity) = gcad::sim::wind::AIR;
+    let conductivity = density * 1006.0 * viscosity / 0.71;
+    let (b, l, h, t, fin, channels) = (4.0e-3, 50.0e-3, 20.0e-3, 1.5e-3, 167.0, 7.0);
+    let speed = 2.0 * (40.0 * 25.0) / (channels * 4.0 * 20.0);
+    let reynolds = speed * b / viscosity * b / l;
+    let prandtl: f64 = 0.71;
+    let developed = reynolds * prandtl / 2.0;
+    let developing = 0.664
+        * reynolds.sqrt()
+        * prandtl.cbrt()
+        * (1.0 + 3.65 / reynolds.sqrt()).sqrt();
+    let nusselt = (developed.powi(-3) + developing.powi(-3)).powf(-1.0 / 3.0);
+    let m = (2.0 * nusselt * (conductivity / fin) * (h / b) * (h / t) * (t / l + 1.0)).sqrt();
+    let efficiency = m.tanh() / m;
+    let teertstra = b / (channels * conductivity * 2.0 * l * h * efficiency * nusselt);
+    close(reading(&outcome, "resistance"), teertstra, 0.05);
+    close(reading(&outcome, "chip"), 25.0 + 10.0 * reading(&outcome, "resistance"), 1.0e-6);
+    assert!(reading(&outcome, "temperature") >= reading(&outcome, "chip"));
+    let carried = outcome
+        .notes
+        .iter()
+        .find(|n| n.contains("the air carries"))
+        .expect("an energy balance note");
+    let share: f64 = carried
+        .split_once("box (")
+        .and_then(|(_, rest)| rest.split_once('%'))
+        .and_then(|(number, _)| number.parse().ok())
+        .expect("a share");
+    assert!((95.0..=101.0).contains(&share), "{carried}");
+}
+
+#[test]
+fn flow_heat_lines_parse() {
+    let model = spec_of(&written(
+        "flow_heat_lines_parse",
+        &[("sink.gcad", FINNED)],
+        "sim flow\npart sink.gcad\nwind 2 toward=1,0,0\nduct 40 25\nair temperature=30\nchip: heat <Z 5",
+    ));
+    let spec = model.sim.as_deref().expect("a simulation");
+    assert_eq!(spec.duct, Some([40.0, 25.0]));
+    assert_eq!(spec.ambient, Some(30.0));
+    assert_eq!(spec.thermal.len(), 1);
+}

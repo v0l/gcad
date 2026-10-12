@@ -57,6 +57,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "air",
     "average",
     "precision",
+    "duct",
     "materials",
 ];
 
@@ -367,7 +368,7 @@ impl Model {
                 ))
             }
             "air" => {
-                let args = Args::new(line, &[], &["density", "viscosity"], false)?;
+                let args = Args::new(line, &[], &["density", "viscosity", "temperature"], false)?;
                 let (density, viscosity) = crate::sim::wind::AIR;
                 let density = positive(
                     args.optional_number("density", &self.scope)?
@@ -380,7 +381,12 @@ impl Model {
                     "the kinematic viscosity",
                 )?;
                 self.spec().air = Some((density, viscosity));
-                Ok(format!("{density} kg/m³, {viscosity} m²/s"))
+                let ambient = args.optional_number("temperature", &self.scope)?;
+                self.spec().ambient = ambient;
+                Ok(match ambient {
+                    Some(t) => format!("{density} kg/m³, {viscosity} m²/s, {t} °C"),
+                    None => format!("{density} kg/m³, {viscosity} m²/s"),
+                })
             }
             "average" => {
                 let args = Args::new(line, &["passes"], &[], false)?;
@@ -388,6 +394,15 @@ impl Model {
                 self.spec().average = Some(passes);
                 Ok(format!(
                     "forces averaged while the wind travels {passes} times the width it meets"
+                ))
+            }
+            "duct" => {
+                let args = Args::new(line, &["width", "height"], &[], false)?;
+                let width = positive(args.number("width", &self.scope)?, "the duct width")?;
+                let height = positive(args.number("height", &self.scope)?, "the duct height")?;
+                self.spec().duct = Some([width, height]);
+                Ok(format!(
+                    "the air runs in a {width} x {height} mm duct with closed walls, centred on the parts"
                 ))
             }
             "precision" => {

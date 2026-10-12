@@ -315,4 +315,5 @@ The plan for the rest is in `docs/simulation.md`.
 | wind pressure in a static simulation | supported | `wind flow.gsim` | `simulation::wind_loads_a_static_part` |
 | air sealed inside parts | supported | a closed box in a `sim flow` is airtight even with walls thinner than a cell | `simulation::wind_seals_a_closed_box` |
 | flow slices, streamlines and playback | supported | `gcad render wind.gsim flow.png --flow`; the viewer draws 3D streamlines, particles along them and the slices moving through time, from `wind.frames.bin` | `simulation::wind_draws_the_flow` |
+| heat carried off by the air | supported | `heat <Z 10` in a `sim flow`, `air temperature=25`, `duct 40 25`; reads the heated faces' temperature, the hottest part and the resistance in K/W | `simulation::fan_cools_a_ducted_heatsink`, `simulation::flow_heat_lines_parse` |
 | wind on an assembly | supported | `part pair.gasm` in a `sim flow` reads `front.drag`, `back.drag` | `simulation::wind_shelters_a_part_behind` |
