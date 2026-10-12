@@ -26,12 +26,9 @@ fn tests_in(category: &str) -> BTreeMap<String, Option<String>> {
         .enumerate()
         .filter(|(_, line)| line.trim() == "#[test]")
         .filter_map(|(i, _)| {
-            let attributes: Vec<&str> = lines[i + 1..]
-                .iter()
-                .take_while(|l| l.trim().starts_with("#["))
-                .copied()
-                .collect();
-            let signature = lines.get(i + 1 + attributes.len())?;
+            let rest = &lines[i + 1..];
+            let at = rest.iter().position(|l| l.trim().starts_with("fn "))?;
+            let (attributes, signature) = (&rest[..at], rest[at]);
             let name = signature
                 .trim()
                 .strip_prefix("fn ")?
