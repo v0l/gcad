@@ -20,7 +20,7 @@ sed -i "s/PROCS/$procs/" "$work/system/decomposeParDict"
 sed -i "s/LEVEL/$level/g; s/NEAR/$near/; s/WAKE/$wake/; s/LAYERS/$layers/" "$work/system/snappyHexMeshDict"
 mkdir -p "$work/constant/triSurface"
 cp "${STL:?STL file of the part}" "$work/constant/triSurface/$case.stl"
-docker run --rm -v "$work:/case" -w /case opencfd/openfoam-default:2412 bash -lc "cd /case &&
+docker run --rm --shm-size=16g -v "$work:/case" -w /case opencfd/openfoam-default:2412 bash -lc "cd /case &&
   blockMesh > log.blockMesh 2>&1 &&
   decomposePar -force > log.decompose 2>&1 &&
   mpirun --allow-run-as-root --oversubscribe -np $procs snappyHexMesh -parallel -overwrite > log.snappy 2>&1 &&

@@ -45,7 +45,7 @@ sed -i "s/VISCOSITY/$viscosity/" "$work/constant/transportProperties"
 sed -i "s/SPEED/$speed/g" "$work/0.orig/U"
 sed -i "s/KIN/$KIN/g" "$work/0.orig/k"
 sed -i "s/OMEGA/$OMEGA/g" "$work/0.orig/omega"
-docker run --rm -v "$work:/case" opencfd/openfoam-default:2412 bash -lc "cd /case &&
+docker run --rm --shm-size=16g -v "$work:/case" opencfd/openfoam-default:2412 bash -lc "cd /case &&
   . \$WM_PROJECT_DIR/bin/tools/RunFunctions &&
   blockMesh > log.blockMesh 2>&1 &&
   decomposePar -force > log.decompose 2>&1 &&
