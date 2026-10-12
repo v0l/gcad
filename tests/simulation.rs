@@ -1369,6 +1369,18 @@ fn wind_draws_the_flow() {
             .any(|w| w[0].iter().zip(&w[1]).any(|(a, b)| a.points != b.points)),
         "the lines move from frame to frame"
     );
+    for line in movie.streams.iter().flatten() {
+        let mut buckets = std::collections::HashMap::<[i64; 3], usize>::new();
+        for p in &line.points {
+            *buckets
+                .entry(p.map(|v| (v / 10.0).floor() as i64))
+                .or_default() += 1;
+        }
+        assert!(
+            buckets.values().all(|&n| n <= 12),
+            "a line circles in place"
+        );
+    }
     let frames = gcad::sim::movie_path(&path);
     movie.write(&frames).expect("writes");
     let back = gcad::sim::Movie::read(&frames).expect("reads");

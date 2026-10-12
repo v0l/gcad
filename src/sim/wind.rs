@@ -393,7 +393,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             moving.push(
                 streamlines(&setup, &now, velocity_scale, &seeds)
                     .into_iter()
-                    .flatten()
+                    .map(Option::unwrap_or_default)
                     .collect(),
             );
         }
@@ -757,12 +757,21 @@ fn streamlines(
         .map(|&start| {
             let mut p = start;
             let mut stream = super::Stream::default();
+            let mut visited: HashMap<[i64; 3], usize> = HashMap::new();
             for n in 0..limit {
                 let Some(v) = velocity(p) else { break };
                 let speed = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
                 if n % 2 == 0 {
                     stream.points.push(world(p));
                     stream.speed.push((speed * scale * 100.0).round() / 100.0);
+                    let cell = p.map(|v| (v / stride).floor() as i64);
+                    let here = stream.points.len();
+                    if visited
+                        .insert(cell, here)
+                        .is_some_and(|then| here - then > 3)
+                    {
+                        break;
+                    }
                 }
                 if speed < calm {
                     break;

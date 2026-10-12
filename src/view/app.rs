@@ -1780,10 +1780,19 @@ impl App {
                 );
             }
             if self.flow.particles.on && !field.streams.is_empty() {
+                let frame = field
+                    .movie
+                    .as_ref()
+                    .filter(|m| !m.streams.is_empty() && self.flow.lines_moving)
+                    .map(|m| {
+                        let k = (self.flow.clock * REEL_RATE) as usize % m.streams.len();
+                        m.streams[k].as_slice()
+                    });
                 particles(
                     &p,
                     &projector,
                     &field,
+                    frame,
                     self.flow.clock,
                     self.flow.particles.opacity,
                 );
@@ -2022,11 +2031,16 @@ fn particles(
     p: &egui::Painter,
     projector: &Projector,
     field: &crate::sim::statics::FieldView,
+    frame: Option<&[crate::sim::Stream]>,
     time: f64,
     opacity: f32,
 ) {
-    let travel = field.travel();
-    let mut longest: Vec<f64> = travel.iter().filter_map(|t| t.last().copied()).collect();
+    use crate::sim::statics::{position_at, travel_times};
+    let mut longest: Vec<f64> = field
+        .travel()
+        .iter()
+        .filter_map(|t| t.last().copied())
+        .collect();
     if longest.is_empty() {
         return;
     }
@@ -2037,14 +2051,19 @@ fn particles(
     let tail = gap * 0.3;
     let fastest = crate::plot::flow_scale(&field.slices);
     let project = |x: [f64; 3]| projector.project(x.map(|v| v as f32));
-    for (k, t) in travel.iter().enumerate() {
+    let lines = frame.unwrap_or(&field.streams);
+    let travel: Vec<Vec<f64>> = match frame {
+        Some(lines) => lines.iter().map(travel_times).collect(),
+        None => field.travel().to_vec(),
+    };
+    for (k, (line, t)) in lines.iter().zip(&travel).enumerate() {
         let Some(&end) = t.last() else { continue };
         let offset = (k as f64 * 0.618_034).fract() * gap;
         let mut release = (time * pace + offset) % gap;
         while release < end {
             if let (Some((head, speed)), Some((back, _))) = (
-                field.particle(k, release),
-                field.particle(k, (release - tail).max(0.0)),
+                position_at(line, t, release),
+                position_at(line, t, (release - tail).max(0.0)),
             ) && let (Some(a), Some(b)) = (project(back), project(head))
             {
                 let c = crate::plot::heat(speed / fastest).map(|v| (v * 255.0) as u8);

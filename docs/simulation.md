@@ -130,7 +130,9 @@ a cell, and at each frame traces the same seeds through the velocity of that mom
 lines themselves move with the wake. Both go in `x.frames.bin` beside the result (79 MB for
 the rotator at 9 mm, points in 16 bits across the lattice box). The seeds are picked once,
 from a mean taken over the last third of the settling time, so a line does not come and go
-between frames. The viewer's
+between frames. A line stops where it closes a loop (it re-enters a cell it left a few
+points earlier), so a line caught in an eddy is drawn once round the eddy rather than circling
+until the step limit. With moving lines, the particles ride the lines of the frame shown. The viewer's
 flow display replaces the parts list for a flow result: surface pressure, streamlines (mean or
 moving) and particles each with an opacity, each slice off, mean, one moment or moving (the frames played
 in a loop, with the seconds of air shown), and play, pause, speed and a scrubber for time.
