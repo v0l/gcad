@@ -1,0 +1,3 @@
+sim flow
+part arm.gasm
+wind 20 toward=1,0,0

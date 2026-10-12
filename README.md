@@ -52,6 +52,21 @@ explode slider and the section tool show the gears inside.
 ![The robot arm example in the viewer](docs/robot-arm.png)
 ![A section through the shoulder reducer](docs/robot-arm-section.png)
 
+`examples/robot/wind.gsim` puts the arm in a 20 m/s wind. The flow is solved on the GPU
+with a lattice Boltzmann solver (21 million cells in about two minutes), then the viewer
+plays the streamlines back through the wake and `gcad render --flow` draws slices of the air
+speed. The other simulations (torque, static, thermal, modal and buckling) are in
+[docs/simulation.md](docs/simulation.md).
+
+```
+gcad sim examples/robot/wind.gsim
+gcad examples/robot/wind.gsim
+gcad render examples/robot/wind.gsim wind.png --flow
+```
+
+![Streamlines past the robot arm, ranked by turbulence](docs/robot-arm-wind.png)
+![Air speed on slices through the arm and its wake](docs/robot-arm-wind-slices.png)
+
 With no command, `gcad` opens the viewer: a live view of the file that rebuilds on
 save, with a view cube, measuring, and sliders for an assembly's joints. Each part has its own
 show, ghost and opacity controls, and the LINES and PARTS buttons fold away the side columns.

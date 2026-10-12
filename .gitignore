@@ -1,3 +1,4 @@
 /target
 *.result.json
 .wrangler
+*.frames.bin
