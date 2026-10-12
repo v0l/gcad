@@ -70,6 +70,8 @@ in the browser's local storage, and you can drop `.gcad` and `.gasm` files on th
 python3 web/serve.py 8080
 ```
 
+`./web/deploy.sh` builds it and publishes it to Cloudflare Pages at https://gcad-8oy.pages.dev.
+
 The part after `#` in the address says what to open, so a link opens a project straight
 from GitHub. The page fetches the file and every file it names (parts, includes, imports):
 
