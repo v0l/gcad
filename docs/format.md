@@ -55,7 +55,7 @@ Variables, conditions and other files:
 |---|---|---|
 | `let` | `name=expr ...` | sets variables, in order, so later pairs can use earlier ones; a variable given with `--set` keeps its outside value |
 | `if` | `condition operation ...` | runs the rest of the line only when the condition is not zero; `< > <= >= == !=` give 1 or 0 |
-| `include` | `file.gcad` `name=value ...` | runs another file's lines here, with those variables fixed; the file is relative to this one |
+| `include` | `file.gcad` `name=value ...` | runs another file's lines here, with those variables fixed; the file is relative to this one, and a `let` in it for a name not yet set here is set here too |
 
 Sketch:
 

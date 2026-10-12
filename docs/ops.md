@@ -276,7 +276,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | wall thickness | supported | `measure thickness` | `inspect::wall_thickness` |
 | draft analysis | supported | `measure draft pull=z` | `inspect::draft_analysis` |
 | variables from outside the file | supported | `gcad check part.gcad --set w=20` | `inspect::outside_variables` |
-| include another file | supported | `include part.gcad d=10` | `inspect::include_file` |
+| include another file | supported | `include part.gcad d=10`; its new `let` names carry over | `inspect::include_file`, `inspect::include_brings_in_let` |
 | conditional lines | supported | `if w>30 chamfer 1 edges` | `inspect::conditional` |
 
 ## Simulation

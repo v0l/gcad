@@ -16,16 +16,6 @@ that peak separately.
 In `sims/elshaft.gsim` the 2 mm bearing bands are `pin`ned, yet the reaction moments are
 14 and 29 N·m. A bearing seat should carry force and almost no moment.
 
-## `include` does not bring in `let`
-
-```
-inc.gsim:  let F=10
-t.gsim:    sim static / include inc.gsim / ... / load b.end force=F,0,0
-```
-
-This fails with "`F` is not defined". Every rotator gsim repeats the same load `let`
-block for this reason.
-
 ## `torque ... axis=z`
 
 "`z` is not a 3D point, write it as x,y,z". Accept `x`, `y` and `z` as axes, the same way

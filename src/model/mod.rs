@@ -544,7 +544,14 @@ impl Model {
                 .map_err(|e| anyhow!("{}:{}: {e:#}", path.display(), inner.number))
         });
         self.depth -= 1;
+        let defined: Vec<(String, f64)> = std::mem::take(&mut self.scope)
+            .into_iter()
+            .filter(|(name, _)| {
+                !saved_scope.contains_key(name) && !line.named.iter().any(|(n, _)| n == name)
+            })
+            .collect();
         (self.fixed, self.scope, self.dir) = (saved_fixed, saved_scope, saved_dir);
+        self.scope.extend(defined);
         result?;
         Ok(format!(
             "ran {} line(s) from {}; {}",

@@ -132,6 +132,17 @@ fn include_file() {
 }
 
 #[test]
+fn include_brings_in_let() {
+    let path = scratch("sizes.gcad");
+    std::fs::write(&path, "let w=20 h=d+1").expect("writes");
+    assert_volume(
+        &build(&format!("let w=5\ninclude {path} d=4\nrect w h\nextrude 2")),
+        5.0 * 5.0 * 2.0,
+        1.0e-9,
+    );
+}
+
+#[test]
 fn conditional() {
     assert_volume(
         &build("let w=40\nrect w 10\nbase: extrude 5\nif w>30 chamfer 1 base.end&>Y"),
