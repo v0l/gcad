@@ -111,6 +111,10 @@ pub struct App {
     section: Option<(usize, f32, bool)>,
     joint_key: Vec<String>,
     modes: std::collections::HashMap<String, Mode>,
+    opacities: std::collections::HashMap<String, f32>,
+    lines_open: bool,
+    parts_open: bool,
+    animate: bool,
     opacity: f32,
     focus: Option<Focus>,
     clashes: Option<Result<Vec<String>, ()>>,
@@ -227,6 +231,10 @@ impl App {
             section: None,
             joint_key: Vec::new(),
             modes: Default::default(),
+            opacities: Default::default(),
+            lines_open: true,
+            parts_open: true,
+            animate: true,
             opacity: 0.25,
             focus: None,
             clashes: None,
@@ -465,7 +473,7 @@ impl App {
                 Look {
                     placement: flat(m),
                     opacity: match self.mode(&part.name) {
-                        Mode::Solid => 1.0,
+                        Mode::Solid => self.opacities.get(&part.name).copied().unwrap_or(1.0),
                         Mode::Ghost => self.opacity,
                         Mode::Hidden => 0.0,
                     },
@@ -510,6 +518,20 @@ impl App {
             }
             if toggle(ui, "ortho", self.cam.ortho).clicked() {
                 self.cam.ortho = !self.cam.ortho;
+            }
+            let streaming = self
+                .shown
+                .as_ref()
+                .and_then(|s| s.field.as_ref())
+                .is_some_and(|f| !f.streams.is_empty());
+            if streaming && toggle(ui, "animate", self.animate).clicked() {
+                self.animate = !self.animate;
+            }
+            if toggle(ui, "lines", self.lines_open).clicked() {
+                self.lines_open = !self.lines_open;
+            }
+            if toggle(ui, "parts", self.parts_open).clicked() {
+                self.parts_open = !self.parts_open;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.path.is_none() {
@@ -765,7 +787,15 @@ impl App {
                         if swatch.clicked() {
                             focus = Some((body, part.name.clone()));
                         }
-                        if toggle(ui, &part.name, mode != Mode::Hidden).clicked() {
+                        let short = if part.name.chars().count() > 28 {
+                            format!("{}…", part.name.chars().take(27).collect::<String>())
+                        } else {
+                            part.name.clone()
+                        };
+                        if toggle(ui, &short, mode != Mode::Hidden)
+                            .on_hover_text(&part.name)
+                            .clicked()
+                        {
                             let next = if mode == Mode::Hidden {
                                 Mode::Solid
                             } else {
@@ -780,6 +810,18 @@ impl App {
                                 Mode::Ghost
                             };
                             self.set_mode(&part.name, next);
+                        }
+                        let mut opacity = self.opacities.get(&part.name).copied().unwrap_or(1.0);
+                        ui.spacing_mut().slider_width = 56.0;
+                        if ui
+                            .add(egui::Slider::new(&mut opacity, 0.05..=1.0).show_value(false))
+                            .on_hover_text("opacity")
+                            .changed()
+                        {
+                            self.opacities.insert(part.name.clone(), opacity);
+                            if mode == Mode::Ghost {
+                                self.set_mode(&part.name, Mode::Solid);
+                            }
                         }
                         Line::new()
                             .measured(format!("{:.1}", part.volume))
@@ -1366,6 +1408,14 @@ impl App {
         let mut viewer = self.viewer(shown);
         viewer.paint(ui, rect);
         let projector = viewer.projector(rect);
+        if self.animate
+            && let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
+            && !field.streams.is_empty()
+        {
+            let time = ui.input(|i| i.time);
+            particles(&p, &projector, &field, time);
+            ui.ctx().request_repaint();
+        }
         let on_cube = self.view_cube(ui, rect, &projector);
         if !on_cube {
             viewer.navigate(ui, &resp, &mut self.orbit);
@@ -1545,6 +1595,44 @@ impl App {
 
 fn browser_at(dir: PathBuf) -> Browser {
     Browser::new("open a part or assembly", dir).suffixes(&[".gcad", ".gasm", ".gsim"])
+}
+
+fn particles(
+    p: &egui::Painter,
+    projector: &Projector,
+    field: &crate::sim::statics::FieldView,
+    time: f64,
+) {
+    let travel = field.travel();
+    let mut longest: Vec<f64> = travel.iter().filter_map(|t| t.last().copied()).collect();
+    if longest.is_empty() {
+        return;
+    }
+    longest.sort_by(f64::total_cmp);
+    let crossing = longest[longest.len() / 2].max(1.0e-6);
+    let pace = crossing / 4.0;
+    let gap = crossing / 8.0;
+    let tail = gap * 0.3;
+    let fastest = crate::plot::flow_scale(&field.slices);
+    let project = |x: [f64; 3]| projector.project(x.map(|v| v as f32));
+    for (k, t) in travel.iter().enumerate() {
+        let Some(&end) = t.last() else { continue };
+        let offset = (k as f64 * 0.618_034).fract() * gap;
+        let mut release = (time * pace + offset) % gap;
+        while release < end {
+            if let (Some((head, speed)), Some((back, _))) = (
+                field.particle(k, release),
+                field.particle(k, (release - tail).max(0.0)),
+            ) && let (Some(a), Some(b)) = (project(back), project(head))
+            {
+                let c = crate::plot::heat(speed / fastest).map(|v| (v * 255.0) as u8);
+                let colour = Color32::from_rgb(c[0], c[1], c[2]);
+                p.line_segment([a, b], Stroke::new(2.5, colour));
+                p.circle_filled(b, 1.6, Color32::WHITE.gamma_multiply(0.7));
+            }
+            release += gap;
+        }
+    }
 }
 
 fn field_marks(
@@ -1809,26 +1897,30 @@ impl eframe::App for App {
                 bottom: 2,
             }))
             .show(ui, |ui| self.header(ui, &ctx));
+        let mut lines_open = self.lines_open;
         egui::Panel::left("lines")
             .resizable(true)
             .default_size(360.0)
-            .min_size(220.0)
+            .min_size(160.0)
             .frame(
                 egui::Frame::NONE
                     .fill(CHASSIS)
                     .inner_margin(egui::Margin::symmetric(6, 8)),
             )
-            .show(ui, |ui| self.lines(ui));
+            .show_collapsible(ui, &mut lines_open, |ui| self.lines(ui));
+        self.lines_open = lines_open;
+        let mut parts_open = self.parts_open;
         egui::Panel::right("inspector")
             .resizable(true)
             .default_size(320.0)
-            .min_size(260.0)
+            .min_size(200.0)
             .frame(
                 egui::Frame::NONE
                     .fill(CHASSIS)
                     .inner_margin(egui::Margin::symmetric(10, 8)),
             )
-            .show(ui, |ui| self.inspector(ui));
+            .show_collapsible(ui, &mut parts_open, |ui| self.inspector(ui));
+        self.parts_open = parts_open;
         egui::CentralPanel::no_frame().show(ui, |ui| {
             let r = ui.max_rect();
             ui.painter()

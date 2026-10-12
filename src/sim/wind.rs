@@ -831,6 +831,7 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         moved: vec![Vector3::zero(); positions.len()],
         slices: outcome.slices.clone(),
         streams: outcome.streams.clone(),
+        travel: Default::default(),
         rest: positions.clone(),
         positions,
         marks: Vec::new(),

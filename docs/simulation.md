@@ -123,8 +123,11 @@ centre of the frontal area, the mean with streamlines and one moment of the wake
 draws streamlines of the mean flow in 3D, coloured by speed: the velocity is averaged over the
 whole box on the GPU (on cells up to a few lattice cells across, at most 16 million of them),
 lines are seeded on a grid a little upstream across the frontal area and traced through it,
-and the ones the parts slow below 85% of the wind are kept. The same slices are there as
-parts to switch on, and hovering one reads the mean speed and the speed at one moment.
+and the ones the parts slow below 85% of the wind are kept. Particles run along them at the
+local speed of the mean flow (ANIMATE in the header), so the air is seen to race past edges
+and stall in the wake; they are drawn over the scene, so they show through parts. The same
+slices are there as parts to switch on, and hovering one reads the mean speed and the speed
+at one moment.
 
 The box runs 4 H upstream, 5 H downstream and 3 H to each side of the parts, which keeps the
 blockage near 2% whatever their shape (a long thin part does not inflate the box). Nearer

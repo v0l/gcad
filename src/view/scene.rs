@@ -416,11 +416,18 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
     let bounds: BoundingBox<Point3> = view.positions.iter().copied().collect();
     let low = bounds.min();
     let high = bounds.max();
+    let short = |v: f64| {
+        if v.abs() >= 100.0 {
+            crate::plot::label(v.round())
+        } else {
+            crate::plot::label((v * 100.0).round() / 100.0)
+        }
+    };
     let name = format!(
-        "{} {} to {} {}",
-        view.title,
-        crate::plot::label(view.low),
-        crate::plot::label(view.high),
+        "{} ({} to {} {})",
+        view.title.trim_start_matches("mean "),
+        short(view.low),
+        short(view.high),
         view.unit
     );
     let point = |v: u32| v3(view.positions[v as usize]);
@@ -488,7 +495,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         lines.extend(bands);
         parts.push(Part {
             name: format!(
-                "air streamlines, mean flow (0 to {} m/s)",
+                "streamlines (0 to {} m/s)",
                 crate::plot::label(fastest.round())
             ),
             colour: crate::plot::heat(0.8).map(|v| v as f32),
@@ -521,10 +528,9 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
             surfaces.push(slice_quad(slice, images.len() - 1, group));
             parts.push(Part {
                 name: format!(
-                    "air speed, {}, {} (0 to {} m/s)",
-                    slice.title,
-                    if moment { "one moment" } else { "mean" },
-                    crate::plot::label(fastest.round())
+                    "{}, {}",
+                    slice.title.trim_end_matches(" along the wind"),
+                    if moment { "moment" } else { "mean" }
                 ),
                 colour: crate::plot::heat(0.5).map(|v| v as f32),
                 volume: 0.0,

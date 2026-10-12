@@ -548,6 +548,45 @@ pub struct FieldView {
     pub index: std::sync::Arc<std::sync::OnceLock<TriangleGrid>>,
     pub slices: Vec<crate::sim::Slice>,
     pub streams: Vec<crate::sim::Stream>,
+    pub travel: std::sync::Arc<std::sync::OnceLock<Vec<Vec<f64>>>>,
+}
+
+impl FieldView {
+    pub fn travel(&self) -> &[Vec<f64>] {
+        self.travel.get_or_init(|| {
+            self.streams
+                .iter()
+                .map(|s| {
+                    let mut t = vec![0.0];
+                    for (pair, speed) in s.points.windows(2).zip(s.speed.windows(2)) {
+                        let d = (0..3)
+                            .map(|k| (pair[1][k] - pair[0][k]).powi(2))
+                            .sum::<f64>()
+                            .sqrt()
+                            * 1.0e-3;
+                        let v = (0.5 * (speed[0] + speed[1])).max(0.05);
+                        t.push(t.last().copied().unwrap_or(0.0) + d / v);
+                    }
+                    t
+                })
+                .collect()
+        })
+    }
+
+    pub fn particle(&self, stream: usize, time: f64) -> Option<([f64; 3], f64)> {
+        let s = self.streams.get(stream)?;
+        let t = self.travel().get(stream)?;
+        let k = t.partition_point(|v| *v <= time);
+        if k == 0 || k >= t.len() {
+            return None;
+        }
+        let f = (time - t[k - 1]) / (t[k] - t[k - 1]).max(1.0e-12);
+        let (a, b) = (s.points[k - 1], s.points[k]);
+        Some((
+            [0, 1, 2].map(|i| a[i] + f * (b[i] - a[i])),
+            s.speed[k - 1] + f * (s.speed[k] - s.speed[k - 1]),
+        ))
+    }
 }
 
 pub struct SliceProbe {
@@ -766,6 +805,7 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         index: Default::default(),
         slices: Vec::new(),
         streams: Vec::new(),
+        travel: Default::default(),
     })
 }
 

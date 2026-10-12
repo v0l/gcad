@@ -53,7 +53,8 @@ explode slider and the section tool show the gears inside.
 ![A section through the shoulder reducer](docs/robot-arm-section.png)
 
 With no command, `gcad` opens the viewer: a live view of the file that rebuilds on
-save, with a view cube, measuring, and sliders for an assembly's joints.
+save, with a view cube, measuring, and sliders for an assembly's joints. Each part has its own
+show, ghost and opacity controls, and the LINES and PARTS buttons fold away the side columns.
 
 The format, operations and selectors are in [docs/format.md](docs/format.md), which
 `gcad docs` prints. Which CAD
