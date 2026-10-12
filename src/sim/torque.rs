@@ -113,11 +113,56 @@ struct Root {
     ratio: f64,
     efficiency: f64,
     back: f64,
+    drag: f64,
+    held: f64,
 }
 
 impl Root {
     fn lossy(&self) -> bool {
-        self.efficiency < 1.0 || self.back < 1.0
+        self.efficiency < 1.0 || self.back < 1.0 || self.drag > 0.0
+    }
+}
+
+fn chain(rig: &Rig, joint: usize) -> Vec<usize> {
+    let index = |name: &str| rig.joints.iter().position(|j| j.name == name);
+    let mut path = vec![joint];
+    while path.len() <= rig.couples.len() {
+        let at = *path.last().expect("non-empty");
+        match rig
+            .driver_of(&rig.joints[at].name)
+            .and_then(|c| index(&c.driver))
+        {
+            Some(driver) => path.push(driver),
+            None => break,
+        }
+    }
+    path
+}
+
+fn reflect_drag(rig: &Rig, roots: &mut [Root]) {
+    let reflected: Vec<(f64, f64)> = (0..roots.len())
+        .map(|i| {
+            let path = chain(rig, i);
+            (0..roots.len())
+                .filter(|&k| rig.joints[k].drag > 0.0 && roots[k].driver == roots[i].driver)
+                .map(|k| {
+                    let lever = (roots[k].ratio / roots[i].ratio * per_unit(rig, i)
+                        / per_unit(rig, k))
+                    .abs();
+                    let through = if path.contains(&k) {
+                        roots[i].efficiency / roots[k].efficiency
+                    } else {
+                        1.0
+                    };
+                    let drag = rig.joints[k].drag * lever;
+                    (drag / through, drag)
+                })
+                .fold((0.0, 0.0), |(a, b), (c, d)| (a + c, b + d))
+        })
+        .collect();
+    for (root, (drag, held)) in roots.iter_mut().zip(reflected) {
+        root.drag = drag;
+        root.held = held;
     }
 }
 
@@ -128,6 +173,8 @@ fn root(rig: &Rig, joint: usize) -> Root {
         ratio: 1.0,
         efficiency: 1.0,
         back: 1.0,
+        drag: 0.0,
+        held: 0.0,
     };
     for _ in 0..rig.couples.len() {
         let Some((driver, couple)) = rig
@@ -215,11 +262,13 @@ impl Setup {
                     driver,
                     ratio,
                     efficiency,
+                    drag,
                     ..
                 } = self.roots[joint];
                 let q = *raw.entry(driver).or_insert_with(|| derivative(driver));
                 let load = q / ratio * per_unit(&self.rig, joint) / efficiency;
-                if load.abs() < 1.0e-9 { 0.0 } else { load }
+                let load = if load.abs() < 1.0e-9 { 0.0 } else { load };
+                if load < 0.0 { load - drag } else { load + drag }
             })
             .collect()
     }
@@ -257,7 +306,8 @@ fn setup(spec: &Spec, model: &Model) -> Result<(Setup, Vec<String>)> {
     }
     let rig = model.rig();
     let (lumps, notes) = lumps(spec, model)?;
-    let roots: Vec<Root> = (0..rig.joints.len()).map(|i| root(&rig, i)).collect();
+    let mut roots: Vec<Root> = (0..rig.joints.len()).map(|i| root(&rig, i)).collect();
+    reflect_drag(&rig, &mut roots);
     let pushes = spec
         .joint_torques
         .iter()
@@ -279,6 +329,8 @@ fn setup(spec: &Spec, model: &Model) -> Result<(Setup, Vec<String>)> {
                 && (a.ratio - b.ratio).abs() <= b.ratio.abs() * 1.0e-12
                 && a.efficiency == b.efficiency
                 && a.back == b.back
+                && a.drag == b.drag
+                && a.held == b.held
                 && unit(&rig, k) == unit(&rig, i)
         });
         match twin {
@@ -455,7 +507,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         .collect();
     if !lossy.is_empty() {
         notes.push(
-            "through lossy couples a joint reads the torque to drive its load, and `.back` the torque the load turns it back with"
+            "with gear losses and joint drag a joint reads the torque to drive its load, and `.back` the torque the load turns it back with"
                 .to_string(),
         );
     }
@@ -486,7 +538,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         let root = setup.roots[j];
         let back = root.lossy().then(|| Reading {
             name: format!("{name}.back"),
-            value: value.abs() * root.efficiency * root.back,
+            value: ((value.abs() - root.drag) * root.efficiency * root.back - root.held).max(0.0),
             unit: unit.clone(),
             at: at.clone(),
         });

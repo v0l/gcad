@@ -294,7 +294,7 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 | `move` | `part x,y,z` | moves a part and everything jointed to it |
 | `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it |
 | `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
-| `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` | joins two parts; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now |
+| `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` `drag=` | joins two parts; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now; `drag` is the friction that resists it, in N·m (N on a slide): bearings and seals, which `sim torque` adds to the torque to drive it |
 | `pose` | `joint value` | moves a joint to a new value |
 | `couple` | `driven driver` `ratio=` `efficiency=` `back=`, or `lead=` `friction=` | makes one joint follow another: `driven` moves `ratio` of its units (degrees or millimetres) for each unit `driver` moves, from where both are now. Gears turn at `ratio=-teeth_a/teeth_b`; a rack slides `ratio=pi*d/360` mm per degree of its pinion. A driven joint cannot be posed itself. `efficiency` is the share of power that gets through when `driven` turns `driver` (a motor driving its load), `back` when `driver` turns `driven` (the load turning the motor), the same unless given, and 0 for a pair that locks. For a worm give its `lead` angle in degrees and the mesh `friction` instead (about 0.05 to 0.15 greased): efficiency is tan(lead)/tan(lead+atan(friction)), back tan(lead-atan(friction))/tan(lead), and a worm whose friction is over tan(lead) locks |
 | `concentric` | `moving:faces fixed:faces` `near=x,y,z` `flip` | turns and moves the moving part so its round faces share an axis with a hole in the fixed one; `near` picks the hole nearest a point, otherwise the one nearest where the part is; it can still slide along and spin about that axis |
@@ -467,7 +467,9 @@ where it was seen. Couples carry the load: a joint driven by another through
 the torque the motor needs. Through couples with an `efficiency` or a worm's `lead` and
 `friction`, that reading is the torque to drive the load, divided by the efficiencies on the
 way, and a second reading `joint.back` is the torque the load turns the joint back with,
-0 where a pair locks; a note names the joints that lock. Joints that would read the same as another, like the copies a
+0 where a pair locks; a note names the joints that lock. A joint's `drag` and the drag of
+every joint it moves add to the torque to drive it, through the same ratios and losses, and
+take away from the torque the load turns it back with. Joints that would read the same as another, like the copies a
 `pattern` makes, are listed in a note instead, and their names still work in `expect`.
 Parts with no material weigh nothing, and a note lists them.
 

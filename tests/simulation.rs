@@ -140,6 +140,38 @@ fn torque_through_lossy_gears() {
 }
 
 #[test]
+fn drag_on_joints() {
+    let dragged = LIFT
+        .replace("min=0 max=50", "min=0 max=50 drag=0.1")
+        .replace("turn about=spin", "turn about=spin drag=0.0002")
+        .replace("ratio=360/(pi*20)", "ratio=360/(pi*20) efficiency=0.5 back=0.25");
+    let outcome = simulated(
+        "drag_on_joints",
+        &[
+            ("base.gcad", BASE),
+            ("block.gcad", BLOCK),
+            ("pinion.gcad", PINION),
+            ("lift.gasm", &dragged),
+        ],
+        "sim torque\npart lift.gasm",
+    );
+    let force = 20.0 * 20.0 * 20.0 * 7.85 / 1.0e6 * G;
+    let held = force * 0.01;
+    close(
+        reading(&outcome, "drive"),
+        held / 0.5 + 0.1 * 0.01 / 0.5 + 0.0002,
+        1.0e-6,
+    );
+    close(
+        reading(&outcome, "drive.back"),
+        held * 0.25 - 0.1 * 0.01 - 0.0002,
+        1.0e-6,
+    );
+    close(reading(&outcome, "lift"), force + 0.1 + 0.0002 / 0.01, 1.0e-6);
+    close(reading(&outcome, "lift.back"), force - 0.1 - 0.0002 / 0.01, 1.0e-6);
+}
+
+#[test]
 fn worm_that_locks() {
     let worm = LIFT.replace("ratio=360/(pi*20)", "ratio=360/(pi*20) lead=3.58 friction=0.1");
     let outcome = simulated(
