@@ -904,9 +904,9 @@ dependencies = [
 
 [[package]]
 name = "egui_bench"
-version = "0.2.2"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2c78e968455721b42444a52ad79c1dd60d3a1b7c381c3c6d257cadc4316d6f5"
+checksum = "07e62928ebfe3cd7bd4a6976064f28288565a9e6ca1c43935b3198573bac3eb9"
 dependencies = [
  "egui",
  "egui_glow",
@@ -2301,7 +2301,7 @@ dependencies = [
 [[package]]
 name = "monstertruck"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-fillet",
@@ -2319,7 +2319,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-assembly"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "monstertruck-core",
  "rayon",
@@ -2328,7 +2328,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-core"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "cgmath",
  "matext4cgmath",
@@ -2340,7 +2340,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-derive"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -2351,7 +2351,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-fillet"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2369,7 +2369,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-geometry"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2382,7 +2382,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-healing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "ahash",
  "getrandom 0.3.4",
@@ -2398,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-io"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "chrono",
  "derive_more",
@@ -2419,7 +2419,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-mesh"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "array-macro",
  "bytemuck",
@@ -2435,7 +2435,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-meshing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "array-macro",
  "derive_more",
@@ -2454,7 +2454,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-modeling"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "derive_more",
  "itertools 0.14.0",
@@ -2475,7 +2475,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-solid"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2496,7 +2496,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-topology"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2511,7 +2511,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-traits"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
+source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
 dependencies = [
  "getrandom 0.4.3",
  "monstertruck-core",

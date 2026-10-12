@@ -534,6 +534,13 @@ pub fn mesh_tolerance(solid: &Solid) -> f64 {
     (bounds(solid).diameter() * 2.0e-4).max(1.0e-4)
 }
 
+pub fn clash_tolerance(solid: &Solid) -> f64 {
+    let size = bounds(solid).diagonal();
+    let mut sides = [size.x, size.y, size.z];
+    sides.sort_by(f64::total_cmp);
+    (sides[1] * 2.0e-4).max(1.0e-4)
+}
+
 pub fn volume(solid: &Solid) -> f64 {
     volume_at(solid, mesh_tolerance(solid))
 }
@@ -684,7 +691,7 @@ pub fn meshed_all(solids: &[&Solid]) -> Vec<Meshed> {
 
 impl Meshed {
     pub fn new(solid: &Solid) -> Meshed {
-        let mesh = mesh(solid, mesh_tolerance(solid));
+        let mesh = mesh(solid, clash_tolerance(solid));
         let positions = mesh.positions();
         Meshed::from_triangles(
             mesh.faces()
