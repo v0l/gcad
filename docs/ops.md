@@ -311,7 +311,7 @@ The plan for the rest is in `docs/simulation.md`.
 | contact | supported | `contact a b` | `simulation::contact_presses_but_lets_go`, `simulation::contact_vibrates_as_bonded` |
 | friction | supported | `contact a b friction=0.3` | `simulation::friction_holds_until_it_slides` |
 | natural frequencies | supported | `sim modal`, `modes 3` | `simulation::cantilever_modes`, `simulation::free_beam_modes` |
-| wind loads | supported | `sim flow`, `wind 30 toward=1,0,0 about=0,0,0`, `mesh 5`, `average 40`, `air density=1.2 viscosity=1.5e-5` | `simulation::wind_on_a_cube` |
+| wind loads | supported | `sim flow`, `wind 30 toward=1,0,0 about=0,0,0`, `mesh 5`, `average 40`, `precision half`, `air density=1.2 viscosity=1.5e-5` | `simulation::wind_on_a_cube`, `simulation::wind_in_half_precision` |
 | wind pressure in a static simulation | supported | `wind flow.gsim` | `simulation::wind_loads_a_static_part` |
 | air sealed inside parts | supported | a closed box in a `sim flow` is airtight even with walls thinner than a cell | `simulation::wind_seals_a_closed_box` |
 | flow slices, streamlines and playback | supported | `gcad render wind.gsim flow.png --flow`; the viewer draws 3D streamlines, particles along them and the slices moving through time, from `wind.frames.bin` | `simulation::wind_draws_the_flow` |

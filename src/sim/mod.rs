@@ -106,6 +106,7 @@ pub struct Spec {
     pub wind: Option<wind::Wind>,
     pub air: Option<(f64, f64)>,
     pub average: Option<f64>,
+    pub half: bool,
     pub wind_load: Option<PathBuf>,
 }
 

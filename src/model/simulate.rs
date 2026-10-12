@@ -56,6 +56,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "wind",
     "air",
     "average",
+    "precision",
     "materials",
 ];
 
@@ -388,6 +389,20 @@ impl Model {
                 Ok(format!(
                     "forces averaged while the wind travels {passes} times the width it meets"
                 ))
+            }
+            "precision" => {
+                let args = Args::new(line, &["storage"], &[], false)?;
+                let half = match args.text("storage")? {
+                    "half" => true,
+                    "single" => false,
+                    other => bail!("`precision` is `half` or `single`, not `{other}`"),
+                };
+                self.spec().half = half;
+                Ok(if half {
+                    "populations stored as 16-bit floats: about twice as fast, a few percent less accurate".into()
+                } else {
+                    "populations stored as 32-bit floats".into()
+                })
             }
             "mesh" => {
                 let args = Args::new(line, &["size"], &[], false)?;

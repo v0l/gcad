@@ -1,4 +1,4 @@
-use super::gpu::Gpu;
+use super::gpu::{Gpu, Reading};
 use anyhow::{Result, bail};
 use wgpu::util::DeviceExt;
 
@@ -55,6 +55,7 @@ pub struct Domain {
     pub inflow: Vec<(usize, usize, [f64; 3])>,
     pub outflow: Vec<(usize, usize)>,
     pub cuts: Vec<(usize, usize, f64)>,
+    pub half: bool,
 }
 
 impl Domain {
@@ -67,6 +68,7 @@ impl Domain {
             inflow: Vec::new(),
             outflow: Vec::new(),
             cuts: Vec::new(),
+            half: false,
         }
     }
 
@@ -239,43 +241,63 @@ struct Params {
     axis: u32,
 }
 
+fn neighbours(index: &str) -> String {
+    let mut s = String::new();
+    s += &format!(
+        "  let x = {index} % p.nx; let row = {index} / p.nx; let y = row % p.ny; let z = row / p.ny;\n"
+    );
+    s += "  let xm = select(x - 1u, p.nx - 1u, x == 0u); let xp = select(x + 1u, 0u, x + 1u == p.nx);\n";
+    s += "  let ym = select(y - 1u, p.ny - 1u, y == 0u) * p.nx; let y0 = y * p.nx; let yp = select(y + 1u, 0u, y + 1u == p.ny) * p.nx;\n";
+    s += "  let layer = p.nx * p.ny;\n";
+    s += "  let zm = select(z - 1u, p.nz - 1u, z == 0u) * layer; let z0 = z * layer; let zp = select(z + 1u, 0u, z + 1u == p.nz) * layer;\n";
+    s
+}
+
+fn offset(c: &[i32; 3], sign: i32) -> String {
+    let pick = |v: i32, names: [&'static str; 3]| names[(v * sign + 1) as usize];
+    format!(
+        "{} + {} + {}",
+        pick(c[0], ["xm", "x", "xp"]),
+        pick(c[1], ["ym", "y0", "yp"]),
+        pick(c[2], ["zm", "z0", "zp"])
+    )
+}
+
 fn shader() -> String {
     let mut s = String::new();
+    s += "const KIND: u32 = 255u;\n";
     s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, sponge: f32, bulk: f32, sx: f32, sy: f32, sz: f32, axis: u32 }\n";
     s += "@group(0) @binding(0) var<uniform> p: Params;\n";
     s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
     s += "@group(0) @binding(2) var<storage, read> cuts: array<f32>;\n";
     for i in 0..Q {
-        s += &format!("@group(1) @binding({i}) var<storage, read_write> a{i}: array<f32>;\n");
-        s += &format!("@group(2) @binding({i}) var<storage, read_write> b{i}: array<f32>;\n");
+        s += &format!("@group(1) @binding({i}) var<storage, read_write> a{i}: array<P>;\n");
+        s += &format!("@group(2) @binding({i}) var<storage, read_write> b{i}: array<P>;\n");
     }
-    s += "fn wrap(v: i32, n: u32) -> u32 { let m = i32(n); return u32(((v % m) + m) % m); }\n";
     s += "@compute @workgroup_size(64)\n";
     s += "fn step(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {\n";
     s += "  let index = id.x + id.y * groups.x * 64u;\n";
     s += "  if (index >= p.count) { return; }\n";
     s += "  let own = flags[index];\n";
-    s += "  if ((own & 255u) != 0u) { return; }\n";
+    s += "  if ((own & KIND) != 0u) { return; }\n";
     s += "  let slot = own >> 8u;\n";
-    s += "  let x = i32(index % p.nx); let y = i32((index / p.nx) % p.ny); let z = i32(index / (p.nx * p.ny));\n";
-    s += "  var s: u32; var fs: u32;\n";
+    s += &neighbours("index");
+    for i in 0..Q {
+        s += &format!("  var g{i}: f32;\n");
+    }
+    s += "  var fs: u32;\n";
     for (i, c) in C.iter().enumerate() {
         let w = weight(i);
         let o = opposite(i);
+        s += &format!("  let s{i} = {};\n", offset(c, -1));
+        s += &format!("  fs = flags[s{i}] & KIND;\n");
         s += &format!(
-            "  s = wrap(x - ({}), p.nx) + (wrap(y - ({}), p.ny) + wrap(z - ({}), p.nz) * p.ny) * p.nx;\n",
-            c[0], c[1], c[2]
-        );
-        s += "  fs = flags[s] & 255u;\n";
-        s += &format!(
-            "  var g{i}: f32 = a{i}[s];\n  if (fs == 1u || fs == 2u) {{ g{i} = a{o}[index]; if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {i}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x + ({cx}), p.nx) + (wrap(y + ({cy}), p.ny) + wrap(z + ({cz}), p.nz) * p.ny) * p.nx; let kn = flags[n] & 255u; if (kn == 0u || kn == 3u || kn == 4u) {{ g{i} = 2.0 * q * a{o}[index] + (1.0 - 2.0 * q) * a{o}[n]; }} }} else {{ g{i} = (0.5 / q) * a{o}[index] + (1.0 - 0.5 / q) * a{i}[index]; }} }} }} if (fs == 2u) {{ g{i} = g{i} + {:.17} * (({}.0) * p.wx + ({}.0) * p.wy + ({}.0) * p.wz); }} }}\n",
+            "  g{i} = a{i}[s{i}];\n  if (fs == 1u || fs == 2u) {{ g{i} = a{o}[index]; if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {i}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = {}; let kn = flags[n] & KIND; if (kn == 0u || kn == 3u || kn == 4u) {{ g{i} = 2.0 * q * a{o}[index] + (1.0 - 2.0 * q) * a{o}[n]; }} }} else {{ g{i} = (0.5 / q) * a{o}[index] + (1.0 - 0.5 / q) * a{i}[index]; }} }} }} if (fs == 2u) {{ g{i} = g{i} + {:.17} * (({}.0) * p.wx + ({}.0) * p.wy + ({}.0) * p.wz); }} }}\n",
+            offset(c, 1),
             6.0 * w,
             c[0],
             c[1],
             c[2],
-            cx = c[0],
-            cy = c[1],
-            cz = c[2]
         );
     }
     let sum = (0..Q)
@@ -374,9 +396,7 @@ fn shader() -> String {
 fn populations(group: u32, name: &str) -> String {
     (0..Q)
         .map(|i| {
-            format!(
-                "@group({group}) @binding({i}) var<storage, read_write> {name}{i}: array<f32>;\n"
-            )
+            format!("@group({group}) @binding({i}) var<storage, read_write> {name}{i}: array<P>;\n")
         })
         .collect()
 }
@@ -582,6 +602,8 @@ pub struct Lattice<'a> {
     mean: (Pass, wgpu::Buffer, usize, [usize; 3]),
     now: (Pass, wgpu::Buffer),
     parity: usize,
+    last: Option<wgpu::SubmissionIndex>,
+    half: bool,
     pub links: Vec<[u32; 2]>,
 }
 
@@ -595,6 +617,60 @@ pub struct MeanField {
 pub struct Fields {
     pub density: Vec<f64>,
     pub velocity: Vec<[f64; 3]>,
+}
+
+fn half_to_f32(bits: u16) -> f32 {
+    let sign = if bits & 0x8000 != 0 { -1.0 } else { 1.0 };
+    let exponent = ((bits >> 10) & 0x1f) as i32;
+    let fraction = (bits & 0x3ff) as f32;
+    sign * match exponent {
+        0 => fraction * 2f32.powi(-24),
+        31 if fraction == 0.0 => f32::INFINITY,
+        31 => f32::NAN,
+        e => (1.0 + fraction / 1024.0) * 2f32.powi(e - 15),
+    }
+}
+
+fn typed(source: &str, half: bool) -> String {
+    let mut out = String::from(if half {
+        "enable f16;\nalias P = f16;\nconst SCALE: f32 = 32768.0;\n"
+    } else {
+        "alias P = f32;\nconst SCALE: f32 = 1.0;\n"
+    });
+    let bytes = source.as_bytes();
+    let mut i = 0;
+    let mut wrap_until_semicolon = false;
+    while i < bytes.len() {
+        let starts = (bytes[i] == b'a' || bytes[i] == b'b')
+            && (i == 0 || !(bytes[i - 1].is_ascii_alphanumeric() || bytes[i - 1] == b'_'));
+        let digits = bytes[i + 1..]
+            .iter()
+            .take_while(|b| b.is_ascii_digit())
+            .count();
+        if starts && digits > 0 && bytes.get(i + 1 + digits) == Some(&b'[') {
+            let close = i + 1 + digits + source[i + 1 + digits..].find(']').unwrap_or(0);
+            let access = &source[i..=close];
+            if source[close + 1..].starts_with(" = ") {
+                out.push_str(access);
+                out.push_str(" = P(SCALE * (");
+                i = close + 4;
+                wrap_until_semicolon = true;
+            } else {
+                out.push_str("(f32(");
+                out.push_str(access);
+                out.push_str(") / SCALE)");
+                i = close + 1;
+            }
+            continue;
+        }
+        if wrap_until_semicolon && bytes[i] == b';' {
+            out.push_str("))");
+            wrap_until_semicolon = false;
+        }
+        out.push(bytes[i] as char);
+        i += 1;
+    }
+    out
 }
 
 fn dispatch(count: u32) -> (u32, u32) {
@@ -634,7 +710,11 @@ impl<'a> Lattice<'a> {
                 domain.body.len()
             );
         }
-        let bytes = count as u64 * 4;
+        let half = domain.half;
+        if half && !gpu.device.features().contains(wgpu::Features::SHADER_F16) {
+            bail!("{} has no 16-bit floats for `precision half`", gpu.name);
+        }
+        let bytes = (count as u64 * if half { 2 } else { 4 }).next_multiple_of(4);
         if bytes > gpu.max_binding() {
             bail!(
                 "{count} cells need {} MB per direction, over the device's {} MB per buffer",
@@ -733,7 +813,7 @@ impl<'a> Lattice<'a> {
         let pipeline = |source: String, entry_point: &str, layouts: &[&wgpu::BindGroupLayout]| {
             let module = device.create_shader_module(wgpu::ShaderModuleDescriptor {
                 label: Some(entry_point),
-                source: wgpu::ShaderSource::Wgsl(source.into()),
+                source: wgpu::ShaderSource::Wgsl(typed(&source, half).into()),
             });
             let groups: Vec<Option<&wgpu::BindGroupLayout>> =
                 layouts.iter().map(|l| Some(*l)).collect();
@@ -967,6 +1047,8 @@ impl<'a> Lattice<'a> {
             mean,
             now,
             parity: 0,
+            last: None,
+            half,
             links,
         })
     }
@@ -1029,14 +1111,30 @@ impl<'a> Lattice<'a> {
                 drop(pass);
                 self.parity ^= 1;
             }
-            self.gpu.queue.submit([encoder.finish()]);
-            self.gpu
-                .device
-                .poll(wgpu::PollType::wait_indefinitely())
-                .map_err(|e| anyhow::anyhow!("{e:?}"))?;
+            let index = self.gpu.queue.submit([encoder.finish()]);
+            if let Some(previous) = self.last.replace(index) {
+                self.gpu.wait(previous)?;
+            }
             left -= batch;
         }
         Ok(())
+    }
+
+    pub fn finish(&self) -> Result<()> {
+        self.gpu.finish()
+    }
+
+    fn encode(&self, pass: &Pass, count: u32) -> wgpu::CommandEncoder {
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        {
+            let mut compute = encoder.begin_compute_pass(&Default::default());
+            compute.set_pipeline(&pass.pipeline);
+            compute.set_bind_group(0, &pass.common, &[]);
+            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
+            let (gx, gy) = dispatch(count);
+            compute.dispatch_workgroups(gx, gy, 1);
+        }
+        encoder
     }
 
     pub fn forces(&self, bodies: usize) -> Result<Vec<[f64; 3]>> {
@@ -1053,6 +1151,10 @@ impl<'a> Lattice<'a> {
     }
 
     pub fn plane(&self, axis: usize, index: usize) -> Result<(usize, Vec<[f32; 4]>)> {
+        self.take_plane(self.request_plane(axis, index))
+    }
+
+    pub fn request_plane(&self, axis: usize, index: usize) -> PendingPlane {
         let others: Vec<usize> = (0..3).filter(|&a| a != axis).collect();
         let (width, height) = (self.size[others[0]], self.size[others[1]]);
         let count = width * height;
@@ -1070,22 +1172,21 @@ impl<'a> Lattice<'a> {
         self.gpu
             .queue
             .write_buffer(&pass.header, 0, bytemuck::cast_slice(&header));
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        {
-            let mut compute = encoder.begin_compute_pass(&Default::default());
-            compute.set_pipeline(&pass.pipeline);
-            compute.set_bind_group(0, &pass.common, &[]);
-            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
-            let (gx, gy) = dispatch(count as u32);
-            compute.dispatch_workgroups(gx, gy, 1);
-        }
-        self.gpu.queue.submit([encoder.finish()]);
-        let values = self.gpu.read(buffer)?;
-        Ok((
+        let encoder = self.encode(pass, count as u32);
+        PendingPlane {
             width,
+            count,
+            reading: self.gpu.fetch(encoder, buffer),
+        }
+    }
+
+    pub fn take_plane(&self, pending: PendingPlane) -> Result<(usize, Vec<[f32; 4]>)> {
+        let values = self.gpu.take(pending.reading)?;
+        Ok((
+            pending.width,
             values
                 .chunks_exact(4)
-                .take(count)
+                .take(pending.count)
                 .map(|v| [v[0], v[1], v[2], v[3]])
                 .collect(),
         ))
@@ -1093,81 +1194,79 @@ impl<'a> Lattice<'a> {
 
     pub fn accumulate(&self) {
         let (pass, ..) = &self.mean;
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        {
-            let mut compute = encoder.begin_compute_pass(&Default::default());
-            compute.set_pipeline(&pass.pipeline);
-            compute.set_bind_group(0, &pass.common, &[]);
-            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
-            let (gx, gy) = dispatch(pass.count);
-            compute.dispatch_workgroups(gx, gy, 1);
-        }
+        let encoder = self.encode(pass, pass.count);
         self.gpu.queue.submit([encoder.finish()]);
     }
 
     pub fn snapshot(&self) -> Result<MeanField> {
+        self.take_snapshot(self.request_snapshot())
+    }
+
+    pub fn request_snapshot(&self) -> PendingSnapshot {
         let (pass, buffer) = &self.now;
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        {
-            let mut compute = encoder.begin_compute_pass(&Default::default());
-            compute.set_pipeline(&pass.pipeline);
-            compute.set_bind_group(0, &pass.common, &[]);
-            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
-            let (gx, gy) = dispatch(pass.count);
-            compute.dispatch_workgroups(gx, gy, 1);
-        }
-        self.gpu.queue.submit([encoder.finish()]);
+        let encoder = self.encode(pass, pass.count);
+        PendingSnapshot(self.gpu.fetch(encoder, buffer))
+    }
+
+    pub fn take_snapshot(&self, pending: PendingSnapshot) -> Result<MeanField> {
         let (_, _, stride, size) = &self.mean;
-        self.field(buffer, *stride, *size, false)
+        Ok(field(self.gpu.take(pending.0)?, *stride, *size, false))
     }
 
     pub fn mean_field(&self) -> Result<MeanField> {
         let (_, buffer, stride, size) = &self.mean;
-        self.field(buffer, *stride, *size, true)
+        Ok(field(self.gpu.read(buffer)?, *stride, *size, true))
     }
+}
 
-    fn field(
-        &self,
-        buffer: &wgpu::Buffer,
-        stride: usize,
-        size: [usize; 3],
-        with_density: bool,
-    ) -> Result<MeanField> {
-        let values = self.gpu.read(buffer)?;
-        let width = if with_density { 8 } else { 4 };
-        let mut velocity = Vec::with_capacity(values.len() / width);
-        let mut density = Vec::new();
-        for v in values.chunks_exact(width) {
-            let fluid = v[3] > 0.0;
-            velocity.push(fluid.then(|| [v[0] / v[3], v[1] / v[3], v[2] / v[3]]));
-            if with_density {
-                density.push(fluid.then(|| v[4] / v[3]));
-            }
+fn field(values: Vec<f32>, stride: usize, size: [usize; 3], with_density: bool) -> MeanField {
+    let width = if with_density { 8 } else { 4 };
+    let mut velocity = Vec::with_capacity(values.len() / width);
+    let mut density = Vec::new();
+    for v in values.chunks_exact(width) {
+        let fluid = v[3] > 0.0;
+        velocity.push(fluid.then(|| [v[0] / v[3], v[1] / v[3], v[2] / v[3]]));
+        if with_density {
+            density.push(fluid.then(|| v[4] / v[3]));
         }
-        Ok(MeanField {
-            stride,
-            size,
-            velocity,
-            density,
-        })
+    }
+    MeanField {
+        stride,
+        size,
+        velocity,
+        density,
+    }
+}
+
+pub struct PendingPlane {
+    width: usize,
+    count: usize,
+    reading: Reading,
+}
+
+pub struct PendingSnapshot(Reading);
+
+pub struct PendingLinks(Option<Reading>);
+
+impl<'a> Lattice<'a> {
+    pub fn link_samples(&self) -> Result<Vec<[f32; 4]>> {
+        self.take_links(self.request_links())
     }
 
-    pub fn link_samples(&self) -> Result<Vec<[f32; 4]>> {
-        let Some((pass, buffer)) = &self.forces else {
+    pub fn request_links(&self) -> PendingLinks {
+        PendingLinks(self.forces.as_ref().map(|(pass, buffer)| {
+            let encoder = self.encode(pass, pass.count);
+            self.gpu.fetch(encoder, buffer)
+        }))
+    }
+
+    pub fn take_links(&self, pending: PendingLinks) -> Result<Vec<[f32; 4]>> {
+        let Some(reading) = pending.0 else {
             return Ok(Vec::new());
         };
-        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-        {
-            let mut compute = encoder.begin_compute_pass(&Default::default());
-            compute.set_pipeline(&pass.pipeline);
-            compute.set_bind_group(0, &pass.common, &[]);
-            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
-            let (gx, gy) = dispatch(pass.count);
-            compute.dispatch_workgroups(gx, gy, 1);
-        }
-        self.gpu.queue.submit([encoder.finish()]);
-        let values = self.gpu.read(buffer)?;
-        Ok(values
+        Ok(self
+            .gpu
+            .take(reading)?
             .chunks_exact(4)
             .map(|v| [v[0], v[1], v[2], v[3]])
             .collect())
@@ -1177,7 +1276,19 @@ impl<'a> Lattice<'a> {
         let current = &self.copies[self.parity];
         let populations: Vec<Vec<f32>> = current
             .iter()
-            .map(|b| self.gpu.read(b))
+            .map(|b| {
+                let words = self.gpu.read(b)?;
+                Ok(match self.half {
+                    false => words,
+                    true => words
+                        .iter()
+                        .flat_map(|w| {
+                            let bits = w.to_bits();
+                            [bits as u16, (bits >> 16) as u16].map(|h| half_to_f32(h) / 32768.0)
+                        })
+                        .collect(),
+                })
+            })
             .collect::<Result<_>>()?;
         let count = self.size.iter().product::<usize>();
         let mut density = vec![0.0; count];

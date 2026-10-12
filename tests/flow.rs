@@ -158,6 +158,7 @@ fn throughput() {
     let start = std::time::Instant::now();
     let steps = 400;
     lattice.run(&settings, steps).expect("runs");
+    lattice.finish().expect("finishes");
     let seconds = start.elapsed().as_secs_f64();
     let cells = size.iter().product::<usize>() as f64;
     println!(

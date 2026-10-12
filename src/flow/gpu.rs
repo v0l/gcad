@@ -45,7 +45,7 @@ impl Gpu {
         let name = adapter.get_info().name;
         let (device, queue) = pollster::block_on(adapter.request_device(&wgpu::DeviceDescriptor {
             label: Some("flow"),
-            required_features: wgpu::Features::empty(),
+            required_features: adapter.features() & wgpu::Features::SHADER_F16,
             required_limits: adapter.limits(),
             ..Default::default()
         }))
@@ -62,6 +62,11 @@ impl Gpu {
     }
 
     pub fn read(&self, buffer: &wgpu::Buffer) -> Result<Vec<f32>> {
+        let encoder = self.device.create_command_encoder(&Default::default());
+        self.take(self.fetch(encoder, buffer))
+    }
+
+    pub fn fetch(&self, mut encoder: wgpu::CommandEncoder, buffer: &wgpu::Buffer) -> Reading {
         let size = buffer.size();
         let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("read"),
@@ -69,20 +74,43 @@ impl Gpu {
             usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
             mapped_at_creation: false,
         });
-        let mut encoder = self.device.create_command_encoder(&Default::default());
         encoder.copy_buffer_to_buffer(buffer, 0, &staging, 0, size);
-        self.queue.submit([encoder.finish()]);
-        let slice = staging.slice(..);
+        let index = self.queue.submit([encoder.finish()]);
+        Reading { staging, index }
+    }
+
+    pub fn take(&self, reading: Reading) -> Result<Vec<f32>> {
+        let slice = reading.staging.slice(..);
         let (send, receive) = std::sync::mpsc::channel();
         slice.map_async(wgpu::MapMode::Read, move |r| {
             let _ = send.send(r);
         });
-        self.device
-            .poll(wgpu::PollType::wait_indefinitely())
-            .map_err(|e| anyhow!("{e:?}"))?;
+        self.wait(reading.index)?;
         receive.recv()?.map_err(|e| anyhow!("{e:?}"))?;
         let data = bytemuck::cast_slice(&slice.get_mapped_range()).to_vec();
-        staging.unmap();
+        reading.staging.unmap();
         Ok(data)
     }
+
+    pub fn wait(&self, index: wgpu::SubmissionIndex) -> Result<()> {
+        self.device
+            .poll(wgpu::PollType::Wait {
+                submission_index: Some(index),
+                timeout: None,
+            })
+            .map(|_| ())
+            .map_err(|e| anyhow!("{e:?}"))
+    }
+
+    pub fn finish(&self) -> Result<()> {
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map(|_| ())
+            .map_err(|e| anyhow!("{e:?}"))
+    }
+}
+
+pub struct Reading {
+    staging: wgpu::Buffer,
+    index: wgpu::SubmissionIndex,
 }

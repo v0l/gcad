@@ -61,7 +61,7 @@ regularized collision (the non-equilibrium part projected onto its second-order 
 forcing, Smagorinsky subgrid viscosity, halfway bounce-back, moving walls. Poiseuille flow matches the parabola within 0.2% of
 the peak; the Re 100 cavity on 128 x 128 matches Ghia et al. within 0.004 of the lid speed at
 every tabulated point, and the Re 1000 cavity on 256 x 256 (regularized, tau 0.577) within
-0.015. On the RTX PRO 6000 it does 8,300 million cell updates a second (128³,
+0.015. On the RTX PRO 6000 it does 8,200 million cell updates a second (128³,
 f32, either collision), about 1.25 TB/s of memory traffic.
 
 Traps: a moving-wall flag on the cavity's corner cells pumps mass in at one corner and out at
@@ -144,6 +144,29 @@ Interpolated walls on an assembly drove some cells to 2.4 q (a box corner, the i
 boom clamp) and no rule tried (one-cell gaps, a second fluid node, cells only reached through
 narrow passages, skipping cells from the thin-wall pass) removed it, so `sim flow` uses
 staircase walls and the benchmarks keep the interpolated ones.
+
+`examples/flow/cube.gsim` is the quick benchmark: a 100 mm cube in 10 m/s air, 4 mm cells,
+7.8 million of them. It took 48 s and now takes 24 (Cd 1.08 then 1.07). The kernel itself
+was already at the memory limit: 8.2 billion updates a second is about 1.25 TB/s against the
+card's 1.8, and dropping the integer modulo from neighbour indexing, skipping the neighbour
+flag reads in cells with no wall beside them and wider workgroups all stayed inside the
+run-to-run spread (7.7 to 8.3 billion). Only the first is kept. The time went elsewhere:
+
+- Readbacks. Every sampling tick read two slices and the link forces, and every frame a
+  full-resolution velocity snapshot (125 MB here), each followed by a wait for the GPU, which
+  sat idle while the CPU traced streamlines. Reads are now requested with the tick's steps and
+  taken one tick later, so the CPU works while the GPU runs the next steps. 48 s to 39 s.
+- Averaging. The fixed 40 passes became an early stop once the mean drag is known to 1%,
+  borrowed from OpenFOAM's `residualControl`. The cube stops at 20. 39 s to 24 s.
+
+Two other OpenFOAM habits did not carry over. Starting the whole box at the free stream (as
+`internalField uniform` does) instead of ramping the inlet left a transient that was still
+lifting the cube's drag 5% forty passes later, against a flat history after the ramp. And f16
+storage, a mixed-precision build in OpenFOAM's sense, runs at 15.1 billion updates a second
+but is too coarse for the laminar benchmarks, so it is the opt-in `precision half`. Values
+are stored as `f - w` scaled by 2^15 into f16's normal range; the scale did not change the
+errors, which come from the 11-bit mantissa (a body force of 1e-6 per step is below one step of
+a population near 1e-3).
 
 `sim flow` blows the wind along lattice z. With the inlet on an x face the edge pass touched
 one cell every nx along each of 38 population buffers, and at 547 x 571 x 471 that cost about

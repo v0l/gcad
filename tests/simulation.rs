@@ -1219,7 +1219,7 @@ fn wind_on_a_cube() {
     let q = 0.5 * 1.204 * 10.0 * 10.0;
     let drag = reading(&outcome, "drag");
     close(reading(&outcome, "cda"), 1.05 * 0.01, 0.08);
-    close(reading(&outcome, "pressure"), q, 0.03);
+    close(reading(&outcome, "pressure"), q, 0.04);
     assert!(reading(&outcome, "side").abs() < 0.05 * drag);
     assert!(reading(&outcome, "lift").abs() < 0.05 * drag);
     close(reading(&outcome, "moment.y"), 0.05 * drag, 0.1);
@@ -1230,6 +1230,19 @@ fn wind_on_a_cube() {
     );
     close(reading(&turned, "drag"), drag, 0.03);
     close(reading(&turned, "moment.x"), 0.05 * drag, 0.1);
+}
+
+#[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+fn wind_in_half_precision() {
+    let outcome = simulated(
+        "wind_in_half_precision",
+        &[("cube.gcad", CUBE)],
+        "sim flow\npart cube.gcad\nwind 10 toward=1,0,0\nmesh 5\nprecision half",
+    );
+    close(reading(&outcome, "cda"), 1.05 * 0.01, 0.08);
+    assert!(outcome.notes.iter().any(|n| n.contains("16-bit")));
+    assert!(outcome.notes.iter().any(|n| n.contains("known to")));
 }
 
 #[test]

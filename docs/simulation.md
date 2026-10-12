@@ -109,7 +109,16 @@ expect drag<400
 - `mesh` is the cell size in mm. The default puts 32 cells across H, the square root of the
   frontal area (the parts' shadow on a plane facing the wind).
 - `average passes` is how long the forces are averaged, in the time the wind takes to travel
-  H (default 40, about five shedding cycles behind a bluff body).
+  H. Without it the run averages until the mean drag is known to 1%: at least 20 passes, then
+  after each batch of 4 it stops once the standard error of the batch means is 1% of the mean
+  and the two halves of the run agree within 2%, and never past 40 (about five shedding
+  cycles behind a bluff body). A note gives the error and where it stopped. With `average`
+  the run takes exactly that many passes.
+- `precision half` stores the populations as 16-bit floats (the arithmetic stays 32-bit):
+  about 1.8 times the cell updates a second, for a preview. The cube in `examples/flow` moves
+  about 1% in drag, but the laminar benchmarks drift (Poiseuille 2% low, the Re 1000 cavity 3%,
+  the Schaefer-Turek peak lift 0.74 against 0.99), so results carry a note. `precision single`
+  is the default.
 - `air density= viscosity=` overrides air at 20 °C (1.204 kg/m³, 1.516e-5 m²/s).
 
 Readings: `drag` along the wind, `side` across it and level, `lift` across it and up, `cda`

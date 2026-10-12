@@ -22,7 +22,9 @@ const ACROSS: f64 = 32.0;
 const UPSTREAM: f64 = 4.0;
 const DOWNSTREAM: f64 = 5.0;
 const ASIDE: f64 = 3.0;
-const BYTES_PER_CELL: f64 = 160.0;
+fn bytes_per_cell(spec: &Spec) -> f64 {
+    if spec.half { 84.0 } else { 160.0 }
+}
 
 struct Part {
     name: String,
@@ -228,10 +230,10 @@ pub fn plan(spec: &Spec) -> Result<String> {
     let [nx, ny, nz] = setup.grid.size;
     let steps = steps(&setup, spec);
     Ok(format!(
-        "{nx} x {ny} x {nz} cells of {} mm, {:.1} million, about {:.1} GB of GPU memory\nfrontal area {:.4} m², {:.0} cells across its square root of {} mm, Reynolds number {:.3e}\n{} steps, {:.3} s of air",
+        "{nx} x {ny} x {nz} cells of {} mm, {:.1} million, about {:.1} GB of GPU memory\nfrontal area {:.4} m², {:.0} cells across its square root of {} mm, Reynolds number {:.3e}\nat most {} steps, {:.3} s of air",
         crate::plot::label(setup.grid.spacing),
         setup.cells() as f64 / 1.0e6,
-        setup.cells() as f64 * BYTES_PER_CELL / 1.0e9,
+        setup.cells() as f64 * bytes_per_cell(spec) / 1.0e9,
         setup.frontal * 1.0e-6,
         setup.across / setup.grid.spacing,
         crate::plot::label(setup.across),
@@ -256,12 +258,40 @@ fn steps(setup: &Setup, spec: &Spec) -> (usize, usize, usize) {
     (2 * pass, through, average.max(1))
 }
 
+const BATCH_PASSES: usize = 4;
+const MIN_BATCHES: usize = 5;
+const TARGET_ERROR: f64 = 0.01;
+
+fn settled(series: &[f64]) -> bool {
+    let (early, late) = series.split_at(series.len() / 2);
+    let mean = |s: &[f64]| s.iter().sum::<f64>() / s.len().max(1) as f64;
+    let whole = mean(series).abs();
+    whole > 0.0 && (mean(early) - mean(late)).abs() <= 2.0 * TARGET_ERROR * whole
+}
+
+fn standard_error(series: &[f64], batch: usize) -> Option<f64> {
+    let means: Vec<f64> = series
+        .chunks_exact(batch)
+        .map(|c| c.iter().sum::<f64>() / batch as f64)
+        .collect();
+    let n = means.len();
+    if n < 2 {
+        return None;
+    }
+    let mean = means.iter().sum::<f64>() / n as f64;
+    let spread = means.iter().map(|m| (m - mean).powi(2)).sum::<f64>() / (n - 1) as f64;
+    (mean.abs() > 0.0).then(|| (spread / n as f64).sqrt() / mean.abs())
+}
+
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let setup = setup(spec)?;
     let air = spec.air.unwrap_or(AIR);
     let gpu = Gpu::open()?;
     let size = setup.grid.size;
-    let mut domain = Domain::new(size);
+    let mut domain = Domain {
+        half: spec.half,
+        ..Domain::new(size)
+    };
     let mut unseen = Vec::new();
     for (k, part) in setup.parts.iter().enumerate() {
         let points: Vec<Point3> = part.points.iter().map(|&p| setup.to_lattice(p)).collect();
@@ -319,7 +349,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let mut lattice = Lattice::new(&gpu, &domain).map_err(|e| {
         anyhow::anyhow!(
             "{e}; they need about {:.1} GB, so use a coarser `mesh`",
-            setup.cells() as f64 * BYTES_PER_CELL / 1.0e9
+            setup.cells() as f64 * bytes_per_cell(spec) / 1.0e9
         )
     })?;
     let (ramp, settle, average) = steps(&setup, spec);
@@ -353,6 +383,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let mut moving: Vec<Vec<super::Stream>> = Vec::new();
     let every = (setup.pass() / 20).clamp(1, 200);
     let samples = average.div_ceil(every);
+    let batch = (BATCH_PASSES * setup.pass()).div_ceil(every).max(1);
     let links = lattice.links.clone();
     let mut sums = vec![[0.0f64; 4]; links.len()];
     let cut = |axis: usize| {
@@ -370,11 +401,38 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let frame_every = samples.div_ceil(FRAMES).max(1);
     let top = 1.6 * setup.wind.speed;
     let to_speed = setup.wind.speed / speed;
-    for tick in 0..samples {
-        lattice.run(&settings, every)?;
-        lattice.accumulate();
-        for watch in planes.iter_mut() {
-            let (width, values) = lattice.plane(watch.axis, watch.index)?;
+    let mut pending: Option<Ticked> = None;
+    let mut drags: Vec<f64> = Vec::new();
+    let mut requested_ticks = 0;
+    let mut converged = None;
+    loop {
+        let requested = (converged.is_none() && requested_ticks < samples)
+            .then(|| -> Result<Ticked> {
+                lattice.run(&settings, every)?;
+                lattice.accumulate();
+                let framed = requested_ticks % frame_every == 0;
+                Ok(Ticked {
+                    planes: planes
+                        .iter()
+                        .map(|w| lattice.request_plane(w.axis, w.index))
+                        .collect(),
+                    snapshot: (framed && !seeds.is_empty()).then(|| lattice.request_snapshot()),
+                    links: lattice.request_links(),
+                    framed,
+                })
+            })
+            .transpose()?;
+        if requested.is_some() {
+            requested_ticks += 1;
+        }
+        let Some(ready) = std::mem::replace(&mut pending, requested) else {
+            if converged.is_some() || requested_ticks >= samples {
+                break;
+            }
+            continue;
+        };
+        for (watch, plane) in planes.iter_mut().zip(ready.planes) {
+            let (width, values) = lattice.take_plane(plane)?;
             if watch.mean.is_empty() {
                 watch.mean = vec![[0.0; 3]; values.len()];
             }
@@ -384,15 +442,15 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                 }
             }
             watch.width = width;
-            if tick % frame_every == 0 {
+            if ready.framed {
                 watch
                     .frames
                     .push(frame_bytes(&values, width, to_speed, top));
             }
             watch.last = values;
         }
-        if tick % frame_every == 0 && !seeds.is_empty() {
-            let now = lattice.snapshot()?;
+        if let Some(snapshot) = ready.snapshot {
+            let now = lattice.take_snapshot(snapshot)?;
             for (sums, points) in churn.iter_mut().zip(&probes) {
                 for (a, p) in sums.iter_mut().zip(points) {
                     if let Some((v, _)) = sample(&now, *p) {
@@ -411,12 +469,26 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                     .collect(),
             );
         }
-        for (sum, value) in sums.iter_mut().zip(lattice.link_samples()?) {
+        let values = lattice.take_links(ready.links)?;
+        drags.push(values.iter().map(|v| v[WIND] as f64).sum());
+        for (sum, value) in sums.iter_mut().zip(values) {
             for d in 0..4 {
                 sum[d] += value[d] as f64;
             }
         }
+        if converged.is_none()
+            && spec.average.is_none()
+            && drags.len().is_multiple_of(batch)
+            && drags.len() >= MIN_BATCHES * batch
+            && let Some(error) = standard_error(&drags, batch)
+            && error <= TARGET_ERROR
+            && settled(&drags)
+        {
+            converged = Some(error);
+        }
     }
+    let samples = drags.len();
+    let error = converged.or_else(|| standard_error(&drags, batch));
     let mean = lattice.mean_field()?;
     let gauge = air.0 * velocity_scale * velocity_scale / 3.0;
     let streams: Vec<super::Stream> = streamlines(&setup, &mean, velocity_scale, &seeds)
@@ -632,6 +704,20 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             crate::plot::label(setup.across)
         ),
     ];
+    if spec.half {
+        notes.push("populations stored as 16-bit floats (`precision half`), a preview: drag on the test cube moved 1.3%, laminar benchmarks read up to 25% off".into());
+    }
+    if let Some(error) = error {
+        notes.push(format!(
+            "the mean drag is known to {:.1}% (standard error over batches of {BATCH_PASSES} passes){}",
+            100.0 * error,
+            if converged.is_some() {
+                format!(", so averaging stopped after {:.0} passes", (samples * every) as f64 / setup.pass() as f64)
+            } else {
+                String::new()
+            }
+        ));
+    }
     if sealed > 0 {
         notes.push(format!(
             "{:.0} cm³ of air sealed inside the parts is left out of the flow",
@@ -859,6 +945,13 @@ struct Watch {
     mean: Vec<[f64; 3]>,
     last: Vec<[f32; 4]>,
     frames: Vec<Vec<u8>>,
+}
+
+struct Ticked {
+    planes: Vec<crate::flow::lattice::PendingPlane>,
+    snapshot: Option<crate::flow::lattice::PendingSnapshot>,
+    links: crate::flow::lattice::PendingLinks,
+    framed: bool,
 }
 
 const FRAMES: usize = 240;

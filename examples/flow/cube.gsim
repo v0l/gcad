@@ -1,0 +1,4 @@
+sim flow
+part cube.gcad
+wind 10 toward=1,0,0
+mesh 4
