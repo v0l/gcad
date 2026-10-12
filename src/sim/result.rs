@@ -59,6 +59,8 @@ impl Slice {
 pub struct Stream {
     pub points: Vec<[f64; 3]>,
     pub speed: Vec<f64>,
+    pub turbulence: f64,
+    pub pressure: f64,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -309,6 +311,7 @@ impl Outcome {
             })).collect::<Vec<_>>(),
             "streams": self.streams.iter().map(|s| json!({
                 "points": s.points, "speed": s.speed,
+                "turbulence": s.turbulence, "pressure": s.pressure,
             })).collect::<Vec<_>>(),
             "expect": self.checks.iter().map(|(t, v, p)| json!({
                 "text": t, "value": v, "pass": p,
@@ -387,6 +390,8 @@ impl Outcome {
                 .map(|s| Stream {
                     points: list(&s["points"]).iter().map(triple).collect(),
                     speed: numbers(&s["speed"]),
+                    turbulence: s["turbulence"].as_f64().unwrap_or(0.0),
+                    pressure: s["pressure"].as_f64().unwrap_or(0.0),
                 })
                 .collect(),
             field: value["field"].as_object().map(|_| {

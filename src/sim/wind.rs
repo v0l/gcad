@@ -338,15 +338,18 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         lattice.accumulate();
         left -= chunk;
     }
-    let seeds: Vec<[f64; 3]> = {
+    let (seeds, probes): (Vec<[f64; 3]>, Vec<Vec<[f64; 3]>>) = {
         let all = stream_seeds(&setup);
         let traced = streamlines(&setup, &lattice.mean_field()?, velocity_scale, &all);
         all.into_iter()
             .zip(traced)
-            .filter(|(_, line)| line.as_ref().is_some_and(|l| disturbed(l, &setup)))
-            .map(|(seed, _)| seed)
-            .collect()
+            .filter_map(|(seed, line)| {
+                let (stream, along) = line?;
+                disturbed(&stream, &setup).then_some((seed, along))
+            })
+            .unzip()
     };
+    let mut churn: Vec<Vec<[f64; 5]>> = probes.iter().map(|p| vec![[0.0; 5]; p.len()]).collect();
     let mut moving: Vec<Vec<super::Stream>> = Vec::new();
     let every = (setup.pass() / 20).clamp(1, 200);
     let samples = average.div_ceil(every);
@@ -367,7 +370,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let frame_every = samples.div_ceil(FRAMES).max(1);
     let top = 1.6 * setup.wind.speed;
     let to_speed = setup.wind.speed / speed;
-    for sample in 0..samples {
+    for tick in 0..samples {
         lattice.run(&settings, every)?;
         lattice.accumulate();
         for watch in planes.iter_mut() {
@@ -381,19 +384,30 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                 }
             }
             watch.width = width;
-            if sample % frame_every == 0 {
+            if tick % frame_every == 0 {
                 watch
                     .frames
                     .push(frame_bytes(&values, width, to_speed, top));
             }
             watch.last = values;
         }
-        if sample % frame_every == 0 && !seeds.is_empty() {
+        if tick % frame_every == 0 && !seeds.is_empty() {
             let now = lattice.snapshot()?;
+            for (sums, points) in churn.iter_mut().zip(&probes) {
+                for (a, p) in sums.iter_mut().zip(points) {
+                    if let Some((v, _)) = sample(&now, *p) {
+                        for k in 0..3 {
+                            a[k] += v[k];
+                        }
+                        a[3] += v[0] * v[0] + v[1] * v[1] + v[2] * v[2];
+                        a[4] += 1.0;
+                    }
+                }
+            }
             moving.push(
                 streamlines(&setup, &now, velocity_scale, &seeds)
                     .into_iter()
-                    .map(Option::unwrap_or_default)
+                    .map(|line| line.map(|(s, _)| s).unwrap_or_default())
                     .collect(),
             );
         }
@@ -403,11 +417,38 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             }
         }
     }
-    let streams: Vec<super::Stream> =
-        streamlines(&setup, &lattice.mean_field()?, velocity_scale, &seeds)
-            .into_iter()
-            .flatten()
-            .collect();
+    let mean = lattice.mean_field()?;
+    let gauge = air.0 * velocity_scale * velocity_scale / 3.0;
+    let streams: Vec<super::Stream> = streamlines(&setup, &mean, velocity_scale, &seeds)
+        .into_iter()
+        .zip(&churn)
+        .map(|(line, sums)| {
+            let Some((mut stream, along)) = line else {
+                return super::Stream::default();
+            };
+            stream.pressure = along
+                .iter()
+                .filter_map(|p| sample(&mean, *p)?.1)
+                .map(|rho| (rho - 1.0) * gauge)
+                .fold(
+                    0.0,
+                    |best: f64, p| if p.abs() > best.abs() { p } else { best },
+                );
+            stream.pressure = (stream.pressure * 10.0).round() / 10.0;
+            stream.turbulence = sums
+                .iter()
+                .filter(|a| a[4] > 0.0)
+                .map(|a| {
+                    let n = a[4];
+                    let m = [a[0] / n, a[1] / n, a[2] / n];
+                    let spread = a[3] / n - (m[0] * m[0] + m[1] * m[1] + m[2] * m[2]);
+                    spread.max(0.0).sqrt() * velocity_scale / setup.wind.speed
+                })
+                .fold(0.0, f64::max);
+            stream.turbulence = (stream.turbulence * 1000.0).round() / 1000.0;
+            stream
+        })
+        .collect();
     let movie = super::Movie {
         top,
         seconds: (every * frame_every) as f64 * step_seconds(&setup),
@@ -690,59 +731,70 @@ fn stream_seeds(setup: &Setup) -> Vec<[f64; 3]> {
     seeds
 }
 
+fn sample(field: &crate::flow::lattice::MeanField, p: [f64; 3]) -> Option<([f64; 3], Option<f64>)> {
+    let stride = field.stride as f64;
+    let [cx, cy, _] = field.size;
+    let c = p.map(|v| (v - 0.5 * (stride - 1.0)) / stride);
+    let base = c.map(|v| v.floor());
+    if base
+        .iter()
+        .zip(field.size)
+        .any(|(b, n)| *b < 0.0 || *b + 1.0 >= n as f64)
+    {
+        return None;
+    }
+    let [bx, by, bz] = base.map(|v| v as usize);
+    let f = [c[0] - base[0], c[1] - base[1], c[2] - base[2]];
+    let mut total = [0.0; 3];
+    let mut mass = 0.0;
+    let mut weight = 0.0;
+    for (dx, dy, dz) in [
+        (0, 0, 0),
+        (1, 0, 0),
+        (0, 1, 0),
+        (1, 1, 0),
+        (0, 0, 1),
+        (1, 0, 1),
+        (0, 1, 1),
+        (1, 1, 1),
+    ] {
+        let w = [dx, dy, dz]
+            .iter()
+            .zip(f)
+            .map(|(d, t)| if *d == 1 { t } else { 1.0 - t })
+            .product::<f64>();
+        let at = (bx + dx) + ((by + dy) + (bz + dz) * cy) * cx;
+        match field.velocity[at] {
+            Some(v) => {
+                for k in 0..3 {
+                    total[k] += w * v[k] as f64;
+                }
+                mass += w * field.density.get(at).copied().flatten().unwrap_or(1.0) as f64;
+                weight += w;
+            }
+            None if w > 0.5 => return None,
+            None => {}
+        }
+    }
+    (weight > 0.0).then(|| {
+        let scale = weight.max(1.0);
+        (
+            total.map(|v| v / scale),
+            (!field.density.is_empty()).then(|| mass / weight),
+        )
+    })
+}
+
 fn streamlines(
     setup: &Setup,
     field: &crate::flow::lattice::MeanField,
     scale: f64,
     seeds: &[[f64; 3]],
-) -> Vec<Option<super::Stream>> {
+) -> Vec<Option<(super::Stream, Vec<[f64; 3]>)>> {
     use rayon::prelude::*;
     let stride = field.stride as f64;
     let size = setup.grid.size.map(|n| n as f64);
-    let [cx, cy, _] = field.size;
-    let node = |x: usize, y: usize, z: usize| field.velocity[x + (y + z * cy) * cx];
-    let velocity = |p: [f64; 3]| -> Option<[f64; 3]> {
-        let c = p.map(|v| (v - 0.5 * (stride - 1.0)) / stride);
-        let base = c.map(|v| v.floor());
-        if base
-            .iter()
-            .zip(field.size)
-            .any(|(b, n)| *b < 0.0 || *b + 1.0 >= n as f64)
-        {
-            return None;
-        }
-        let [bx, by, bz] = base.map(|v| v as usize);
-        let f = [c[0] - base[0], c[1] - base[1], c[2] - base[2]];
-        let mut total = [0.0; 3];
-        let mut weight = 0.0;
-        for (dx, dy, dz) in [
-            (0, 0, 0),
-            (1, 0, 0),
-            (0, 1, 0),
-            (1, 1, 0),
-            (0, 0, 1),
-            (1, 0, 1),
-            (0, 1, 1),
-            (1, 1, 1),
-        ] {
-            let w = [dx, dy, dz]
-                .iter()
-                .zip(f)
-                .map(|(d, t)| if *d == 1 { t } else { 1.0 - t })
-                .product::<f64>();
-            match node(bx + dx, by + dy, bz + dz) {
-                Some(v) => {
-                    for k in 0..3 {
-                        total[k] += w * v[k] as f64;
-                    }
-                    weight += w;
-                }
-                None if w > 0.5 => return None,
-                None => {}
-            }
-        }
-        (weight > 0.0).then(|| total.map(|v| v / weight.max(1.0)))
-    };
+    let velocity = |p: [f64; 3]| sample(field, p).map(|(v, _)| v);
     let spacing = setup.grid.spacing;
     let step = 0.5 * stride;
     let limit = (3.0 * size[WIND] / step) as usize;
@@ -757,11 +809,13 @@ fn streamlines(
         .map(|&start| {
             let mut p = start;
             let mut stream = super::Stream::default();
+            let mut along = Vec::new();
             let mut visited: HashMap<[i64; 3], usize> = HashMap::new();
             for n in 0..limit {
                 let Some(v) = velocity(p) else { break };
                 let speed = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
                 if n % 2 == 0 {
+                    along.push(p);
                     stream.points.push(world(p));
                     stream.speed.push((speed * scale * 100.0).round() / 100.0);
                     let cell = p.map(|v| (v / stride).floor() as i64);
@@ -787,7 +841,7 @@ fn streamlines(
                     break;
                 }
             }
-            (stream.points.len() > 2).then_some(stream)
+            (stream.points.len() > 2).then_some((stream, along))
         })
         .collect()
 }

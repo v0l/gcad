@@ -89,6 +89,37 @@ enum SliceShow {
     Moving,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum Rank {
+    All,
+    Turbulence,
+    Pressure,
+}
+
+fn chosen(lines: &[crate::sim::Stream], rank: Rank, most: bool, share: f32) -> Option<Vec<bool>> {
+    let score = |s: &crate::sim::Stream| match rank {
+        Rank::All => 0.0,
+        Rank::Turbulence => s.turbulence,
+        Rank::Pressure => s.pressure,
+    };
+    if rank == Rank::All {
+        return None;
+    }
+    let mut order: Vec<usize> = (0..lines.len())
+        .filter(|&k| lines[k].points.len() > 1)
+        .collect();
+    order.sort_by(|&a, &b| score(&lines[a]).total_cmp(&score(&lines[b])));
+    if most {
+        order.reverse();
+    }
+    let keep = ((order.len() as f32 * share).ceil() as usize).min(order.len());
+    let mut mask = vec![false; lines.len()];
+    for &k in order.iter().take(keep) {
+        mask[k] = true;
+    }
+    Some(mask)
+}
+
 #[derive(Clone, Copy)]
 struct Layer {
     on: bool,
@@ -102,6 +133,9 @@ struct Flow {
     slices: [(SliceShow, f32); 2],
     lines_moving: bool,
     lines_recorded: bool,
+    rank: Rank,
+    most: bool,
+    share: f32,
     playing: bool,
     clock: f64,
     drift: f64,
@@ -126,6 +160,9 @@ impl Default for Flow {
             slices: [(SliceShow::Off, 0.9); 2],
             lines_moving: true,
             lines_recorded: false,
+            rank: Rank::All,
+            most: true,
+            share: 0.2,
             playing: true,
             clock: 0.0,
             drift: 0.0,
@@ -147,7 +184,11 @@ impl Flow {
         Some(match role {
             scene::Role::Body => return None,
             scene::Role::Field => layer(self.surface),
-            scene::Role::Streams if self.lines_moving && self.lines_recorded => 0.0,
+            scene::Role::Streams
+                if (self.lines_moving && self.lines_recorded) || self.rank != Rank::All =>
+            {
+                0.0
+            }
             scene::Role::Streams => layer(self.streams),
             scene::Role::Slice { index, moment } => match (self.slice(index), moment) {
                 ((SliceShow::Mean, o), false) | ((SliceShow::Moment, o), true) => o,
@@ -890,6 +931,60 @@ impl App {
                         });
                     }
                     layer(ui, "particles", &mut flow.particles);
+                    Line::new().legend("rank lines by").size(11.0).show(ui);
+                    ui.horizontal(|ui| {
+                        for (label, value) in [
+                            ("all", Rank::All),
+                            ("turbulence", Rank::Turbulence),
+                            ("pressure", Rank::Pressure),
+                        ] {
+                            if toggle(ui, label, flow.rank == value).clicked() {
+                                flow.rank = value;
+                            }
+                        }
+                    });
+                    if flow.rank != Rank::All {
+                        ui.horizontal(|ui| {
+                            for (label, value) in [("most", true), ("least", false)] {
+                                if toggle(ui, label, flow.most == value).clicked() {
+                                    flow.most = value;
+                                }
+                            }
+                            ui.spacing_mut().slider_width = 90.0;
+                            ui.add(
+                                egui::Slider::new(&mut flow.share, 0.02..=1.0).show_value(false),
+                            )
+                            .on_hover_text("share of the lines shown");
+                            Line::new()
+                                .measured(format!("{:.0}%", flow.share * 100.0))
+                                .size(11.0)
+                                .show(ui);
+                        });
+                        let scores: Vec<f64> = field
+                            .streams
+                            .iter()
+                            .filter(|s| s.points.len() > 1)
+                            .map(|s| {
+                                if flow.rank == Rank::Turbulence {
+                                    s.turbulence * 100.0
+                                } else {
+                                    s.pressure
+                                }
+                            })
+                            .collect();
+                        let low = scores.iter().copied().fold(f64::INFINITY, f64::min);
+                        let high = scores.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+                        if low.is_finite() {
+                            Line::new()
+                                .legend(&if flow.rank == Rank::Turbulence {
+                                    format!("{low:.0} to {high:.0}% of the wind, peak along a line")
+                                } else {
+                                    format!("{low:.0} to {high:.0} Pa, strongest along a line")
+                                })
+                                .size(11.0)
+                                .show(ui);
+                        }
+                    }
                 }
                 for (k, title) in titles.iter().enumerate().take(flow.slices.len()) {
                     let (show, opacity) = &mut flow.slices[k];
@@ -1785,6 +1880,13 @@ impl App {
                 ui.ctx().request_repaint();
             }
             self.draw_reels(&p, &projector, &field, ui.ctx(), rect);
+            let mask = chosen(
+                &field.streams,
+                self.flow.rank,
+                self.flow.most,
+                self.flow.share,
+            );
+            let fastest = crate::plot::flow_scale(&field.slices);
             if self.flow.lines_recorded
                 && self.flow.lines_moving
                 && self.flow.streams.on
@@ -1795,7 +1897,17 @@ impl App {
                     &p,
                     &projector,
                     &movie.streams[frame],
-                    crate::plot::flow_scale(&field.slices),
+                    mask.as_deref(),
+                    fastest,
+                    self.flow.streams.opacity,
+                );
+            } else if mask.is_some() && self.flow.streams.on {
+                moving_lines(
+                    &p,
+                    &projector,
+                    &field.streams,
+                    mask.as_deref(),
+                    fastest,
                     self.flow.streams.opacity,
                 );
             }
@@ -1813,6 +1925,7 @@ impl App {
                     &projector,
                     &field,
                     frame,
+                    mask.as_deref(),
                     self.flow.drift,
                     self.flow.particles.opacity,
                 );
@@ -2003,12 +2116,16 @@ fn moving_lines(
     p: &egui::Painter,
     projector: &Projector,
     lines: &[crate::sim::Stream],
+    mask: Option<&[bool]>,
     fastest: f64,
     opacity: f32,
 ) {
     let mut mesh = egui::epaint::Mesh::default();
     let half = 0.8;
-    for line in lines {
+    for (k, line) in lines.iter().enumerate() {
+        if mask.is_some_and(|m| !m.get(k).copied().unwrap_or(false)) {
+            continue;
+        }
         let screen: Vec<Option<Pos2>> = line
             .points
             .iter()
@@ -2052,6 +2169,7 @@ fn particles(
     projector: &Projector,
     field: &crate::sim::statics::FieldView,
     frame: Option<&[crate::sim::Stream]>,
+    mask: Option<&[bool]>,
     time: f64,
     opacity: f32,
 ) {
@@ -2077,6 +2195,9 @@ fn particles(
         None => field.travel().to_vec(),
     };
     for (k, (line, t)) in lines.iter().zip(&travel).enumerate() {
+        if mask.is_some_and(|m| !m.get(k).copied().unwrap_or(false)) {
+            continue;
+        }
         let Some(&end) = t.last() else { continue };
         let offset = (k as f64 * 0.618_034).fract() * gap;
         let mut release = (time * pace + offset) % gap;

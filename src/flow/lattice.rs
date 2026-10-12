@@ -425,6 +425,7 @@ pub fn mean_stride(size: [usize; 3]) -> usize {
 }
 
 fn mean_shader(add: bool) -> String {
+    let width = if add { 2 } else { 1 };
     let mut s = String::new();
     s += "struct Mean { nx: u32, ny: u32, nz: u32, stride: u32, cx: u32, cy: u32, cz: u32, count: u32 }\n";
     s += "@group(0) @binding(0) var<uniform> m: Mean;\n";
@@ -437,6 +438,7 @@ fn mean_shader(add: bool) -> String {
     s += "  if (k >= m.count) { return; }\n";
     s += "  let bx = (k % m.cx) * m.stride; let by = ((k / m.cx) % m.cy) * m.stride; let bz = (k / (m.cx * m.cy)) * m.stride;\n";
     s += "  var total = vec4<f32>(0.0, 0.0, 0.0, 0.0);\n";
+    s += "  var mass = 0.0;\n";
     s += "  for (var dz = 0u; dz < m.stride; dz++) { for (var dy = 0u; dy < m.stride; dy++) { for (var dx = 0u; dx < m.stride; dx++) {\n";
     s += "    let x = bx + dx; let y = by + dy; let z = bz + dz;\n";
     s += "    if (x >= m.nx || y >= m.ny || z >= m.nz) { continue; }\n";
@@ -458,11 +460,13 @@ fn mean_shader(add: bool) -> String {
         s += &format!("    let m{name} = (0.0 {}) / rho;\n", terms.join(" "));
     }
     s += "    total = total + vec4<f32>(mx, my, mz, 1.0);\n";
+    s += "    mass = mass + rho;\n";
     s += "  } } }\n";
+    s += &format!("  let at = k * {width}u;\n");
     s += if add {
-        "  out[k] = out[k] + total;\n"
+        "  out[at] = out[at] + total;\n  out[at + 1u] = out[at + 1u] + vec4<f32>(mass, 0.0, 0.0, 0.0);\n"
     } else {
-        "  out[k] = total;\n"
+        "  out[at] = total;\n"
     };
     s += "}\n";
     s
@@ -585,6 +589,7 @@ pub struct MeanField {
     pub stride: usize,
     pub size: [usize; 3],
     pub velocity: Vec<Option<[f32; 3]>>,
+    pub density: Vec<Option<f32>>,
 }
 
 pub struct Fields {
@@ -902,7 +907,7 @@ impl<'a> Lattice<'a> {
         let coarse_count = coarse.iter().product::<usize>();
         let mean_out = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("mean"),
-            size: coarse_count as u64 * 16,
+            size: coarse_count as u64 * 32,
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
@@ -1113,29 +1118,37 @@ impl<'a> Lattice<'a> {
         }
         self.gpu.queue.submit([encoder.finish()]);
         let (_, _, stride, size) = &self.mean;
-        self.field(buffer, *stride, *size)
+        self.field(buffer, *stride, *size, false)
     }
 
     pub fn mean_field(&self) -> Result<MeanField> {
         let (_, buffer, stride, size) = &self.mean;
-        self.field(buffer, *stride, *size)
+        self.field(buffer, *stride, *size, true)
     }
 
-    fn field(&self, buffer: &wgpu::Buffer, stride: usize, size: [usize; 3]) -> Result<MeanField> {
+    fn field(
+        &self,
+        buffer: &wgpu::Buffer,
+        stride: usize,
+        size: [usize; 3],
+        with_density: bool,
+    ) -> Result<MeanField> {
         let values = self.gpu.read(buffer)?;
+        let width = if with_density { 8 } else { 4 };
+        let mut velocity = Vec::with_capacity(values.len() / width);
+        let mut density = Vec::new();
+        for v in values.chunks_exact(width) {
+            let fluid = v[3] > 0.0;
+            velocity.push(fluid.then(|| [v[0] / v[3], v[1] / v[3], v[2] / v[3]]));
+            if with_density {
+                density.push(fluid.then(|| v[4] / v[3]));
+            }
+        }
         Ok(MeanField {
             stride,
             size,
-            velocity: values
-                .chunks_exact(4)
-                .map(|v| {
-                    if v[3] > 0.0 {
-                        Some([v[0] / v[3], v[1] / v[3], v[2] / v[3]])
-                    } else {
-                        None
-                    }
-                })
-                .collect(),
+            velocity,
+            density,
         })
     }
 

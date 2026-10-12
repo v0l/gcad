@@ -1327,12 +1327,40 @@ fn wind_draws_the_flow() {
         let free = slice.speed[slice.width / 2];
         assert!((free - 10.0).abs() < 1.0, "free stream {free} m/s");
     }
+    let traced: Vec<&gcad::sim::Stream> = outcome
+        .streams
+        .iter()
+        .filter(|s| !s.points.is_empty())
+        .collect();
+    assert!(traced.len() > 20, "{} streamlines", traced.len());
+    let slowed = traced
+        .iter()
+        .filter(|s| s.speed.iter().any(|v| *v < 8.5))
+        .count();
     assert!(
-        outcome.streams.len() > 20,
-        "{} streamlines",
-        outcome.streams.len()
+        slowed * 10 >= traced.len() * 9,
+        "{slowed} of {} slowed by the cube",
+        traced.len()
     );
-    for stream in &outcome.streams {
+    let q = 0.5 * 1.204 * 10.0 * 10.0;
+    assert!(traced.iter().all(|s| (0.0..1.0).contains(&s.turbulence)));
+    assert!(
+        traced.iter().any(|s| s.turbulence > 0.05),
+        "the wake is unsteady"
+    );
+    assert!(
+        traced.iter().all(|s| s.pressure < 1.1 * q),
+        "no line above stagnation"
+    );
+    assert!(
+        traced.iter().any(|s| s.pressure > 0.3 * q),
+        "lines meeting the face"
+    );
+    assert!(
+        traced.iter().any(|s| s.pressure < -0.3 * q),
+        "lines through the suction at the edges"
+    );
+    for stream in &traced {
         assert!(stream.points[0][0] < -50.0, "seeded upstream");
         assert!(
             stream

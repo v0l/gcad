@@ -132,7 +132,13 @@ the rotator at 9 mm, points in 16 bits across the lattice box). The seeds are pi
 from a mean taken over the last third of the settling time, so a line does not come and go
 between frames. A line stops where it closes a loop (it re-enters a cell it left a few
 points earlier), so a line caught in an eddy is drawn once round the eddy rather than circling
-until the step limit. With moving lines, the particles ride the lines of the frame shown. The viewer's
+until the step limit. With moving lines, the particles ride the lines of the frame shown. Each line carries two scores for
+the viewer to rank by: turbulence, the largest root-mean-square swing of the velocity about its
+mean along the line, as a share of the wind (sampled at every frame), and pressure, the
+strongest mean gauge pressure it passes through, signed, from the mean density. "Rank lines
+by" shows the most or least turbulent, or highest or lowest pressure, share of the lines, and
+the particles follow the same lines. The rotator at 9 mm spans 1% to 50% turbulence and -616
+to +650 Pa, against a dynamic pressure of 668 Pa. The viewer's
 flow display replaces the parts list for a flow result: surface pressure, streamlines (mean or
 moving) and particles each with an opacity, each slice off, mean, one moment or moving (the frames played
 in a loop, with the seconds of air shown), and playback that holds or plays the frame (with back and next for single frames) while the particles keep moving, a speed and a scrubber for time.
