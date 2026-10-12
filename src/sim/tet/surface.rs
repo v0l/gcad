@@ -373,6 +373,9 @@ fn build(
         let Some(mesh) = piece else {
             bail!("face {index} could not be meshed");
         };
+        if area_of(mesh) <= diameter * diameter * 1.0e-12 {
+            continue;
+        }
         let seeded = seeds.map(|first| seed_points(first, index, face, field));
         mesh_face(
             &mut out,
@@ -399,6 +402,17 @@ fn build(
     out.tags = keep.iter().map(|&t| out.tags[t]).collect();
     out.triangles = keep.iter().map(|&t| out.triangles[t]).collect();
     Ok(out)
+}
+
+fn area_of(mesh: &PolygonMesh) -> f64 {
+    let p = mesh.positions();
+    mesh.faces()
+        .triangle_iter()
+        .map(|t| {
+            let [a, b, c] = t.map(|v| p[v.pos]);
+            (b - a).cross(c - a).magnitude() / 2.0
+        })
+        .sum()
 }
 
 fn seed_points(first: &SurfaceMesh, index: usize, face: &Face, field: &SizeField) -> Vec<Vector2> {

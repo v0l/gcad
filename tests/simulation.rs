@@ -1194,6 +1194,21 @@ fn bearings_need_one_held_along_the_axis() {
 }
 
 #[test]
+fn revolved_profile_on_its_axis_meshes() {
+    let bar = "plane XZ\npen 0,0\nline 5,0\nline 5,-100\nline 0,-100\nclose\nbar: revolve 360 axis=y\nmaterial steel\n";
+    let outcome = simulated(
+        "revolved_profile_on_its_axis_meshes",
+        &[("bar.gcad", bar)],
+        "sim static\npart bar.gcad\nfix >Z\nload <Z force=0,0,-1000\nmid: probe 0,0,-50\nmesh 2",
+    );
+    close(
+        reading(&outcome, "mid.stress"),
+        1000.0 / (std::f64::consts::PI * 25.0),
+        0.02,
+    );
+}
+
+#[test]
 fn pinned_link() {
     let link = "rect 100 10 at=50,0\nbar: extrude 10\nplane bar.end\na: hole 6 10,0\nb: hole 6 90,0\nmaterial steel\n";
     let outcome = simulated(

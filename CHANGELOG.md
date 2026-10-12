@@ -25,6 +25,8 @@ All notable changes to gcad are listed here. The format follows
 - Viewer reloads when a result is written.
 
 ### Fixed
+- Revolved parts whose profile runs along the axis mesh for simulation; the zero-area faces
+  the axis edge leaves are skipped.
 - Smooth lofts between sections with more than 240 matching edges.
 
 ## [0.3.1] - 2026-10-12
