@@ -290,6 +290,7 @@ The plan for the rest is in `docs/simulation.md`.
 | torque through gears and racks | supported | a `couple` carries the load to the joint it drives | `simulation::torque_through_gears`, `simulation::robot_arm_motor_torque` |
 | gear and worm losses | supported | `couple ... efficiency=0.9 back=0.8`, `couple ... lead=3.6 friction=0.1` | `simulation::torque_through_lossy_gears`, `simulation::worm_that_locks` |
 | torque on a joint | supported | `torque az 6.3` in `sim torque` | `simulation::torque_on_a_joint` |
+| joint friction | supported | `joint ... drag=0.05` | `simulation::drag_on_joints` |
 | payloads | supported | `payload hand 300 at=x,y,z` | `simulation::torque_of_a_pendulum`, `simulation::payload_follows_the_pose` |
 | expectations | supported | `expect shoulder<2 drive>0.5` | `simulation::torque_through_gears` |
 | stale results and charts | supported | `gcad check x.gsim`, `gcad render x.gsim x.png` | `simulation::result_goes_stale` |

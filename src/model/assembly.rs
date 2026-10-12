@@ -337,6 +337,7 @@ pub struct Joint {
     pub value: f64,
     pub range: (f64, f64),
     pub wraps: bool,
+    pub drag: f64,
 }
 
 impl Joint {
@@ -438,6 +439,7 @@ impl Model {
                         value: 0.0,
                         range: (0.0, 0.0),
                         wraps: false,
+                        drag: 0.0,
                     });
                 }
                 let held = broken(&self.mates, &std::collections::HashMap::new());
@@ -1049,7 +1051,7 @@ impl Model {
         let args = Args::new(
             line,
             &["name", "child", "parent", "kind"],
-            &["about", "along", "min", "max", "at"],
+            &["about", "along", "min", "max", "at", "drag"],
             false,
         )?;
         let name = args.text("name")?.to_string();
@@ -1142,6 +1144,10 @@ impl Model {
         let at = args
             .optional_number("at", &self.scope)?
             .unwrap_or(0.0_f64.clamp(low, high));
+        let drag = args.optional_number("drag", &self.scope)?.unwrap_or(0.0);
+        if drag < 0.0 {
+            bail!("`drag={drag}` is a friction torque or force and cannot be negative");
+        }
         self.joints.push(Joint {
             name: name.clone(),
             child,
@@ -1150,6 +1156,7 @@ impl Model {
             value: 0.0_f64.clamp(low, high),
             range: (low, high),
             wraps,
+            drag,
         });
         let index = self.joints.len() - 1;
         self.set_joint(index, at)?;
