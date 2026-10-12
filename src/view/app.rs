@@ -104,6 +104,7 @@ struct Flow {
     lines_recorded: bool,
     playing: bool,
     clock: f64,
+    drift: f64,
     speed: f32,
 }
 
@@ -127,6 +128,7 @@ impl Default for Flow {
             lines_recorded: false,
             playing: true,
             clock: 0.0,
+            drift: 0.0,
             speed: 1.0,
         }
     }
@@ -156,6 +158,14 @@ impl Flow {
 }
 
 const REEL_RATE: f64 = 24.0;
+
+fn frame_at(clock: f64, frames: usize) -> usize {
+    ((clock * REEL_RATE).floor() as i64).rem_euclid(frames.max(1) as i64) as usize
+}
+
+fn frame_middle(frame: f64) -> f64 {
+    (frame + 0.5) / REEL_RATE
+}
 
 struct Focus {
     part: String,
@@ -915,14 +925,19 @@ impl App {
                 ui.add_space(4.0);
                 Line::new().legend("playback").show(ui);
                 ui.horizontal(|ui| {
-                    if toggle(
-                        ui,
-                        if flow.playing { "pause" } else { "play" },
-                        flow.playing,
-                    )
-                    .clicked()
+                    if toggle(ui, "frames", flow.playing)
+                        .on_hover_text("play or hold the frame; particles keep moving")
+                        .clicked()
                     {
                         flow.playing = !flow.playing;
+                    }
+                    if toggle(ui, "back", false).clicked() {
+                        flow.playing = false;
+                        flow.clock = frame_middle((flow.clock * REEL_RATE).floor() - 1.0);
+                    }
+                    if toggle(ui, "next", false).clicked() {
+                        flow.playing = false;
+                        flow.clock = frame_middle((flow.clock * REEL_RATE).floor() + 1.0);
                     }
                     ui.spacing_mut().slider_width = 110.0;
                     ui.add(
@@ -1003,7 +1018,7 @@ impl App {
             if show != SliceShow::Moving || reel.frames.is_empty() {
                 continue;
             }
-            let frame = (self.flow.clock * REEL_RATE) as usize % reel.frames.len();
+            let frame = frame_at(self.flow.clock, reel.frames.len());
             shown_time = Some(frame as f64 * movie.seconds);
             let fresh = !matches!(&self.reels[k], Some((at, _)) if *at == frame);
             if fresh {
@@ -1759,9 +1774,14 @@ impl App {
             && is_flow(&field)
         {
             self.flow.lines_recorded = field.movie.as_ref().is_some_and(|m| !m.streams.is_empty());
+            let dt = ui.input(|i| i.stable_dt) as f64 * self.flow.speed as f64;
             if self.flow.playing {
-                let dt = ui.input(|i| i.stable_dt) as f64;
-                self.flow.clock += dt * self.flow.speed as f64;
+                self.flow.clock += dt;
+            }
+            if self.flow.particles.on {
+                self.flow.drift += dt;
+            }
+            if self.flow.playing || self.flow.particles.on {
                 ui.ctx().request_repaint();
             }
             self.draw_reels(&p, &projector, &field, ui.ctx(), rect);
@@ -1770,7 +1790,7 @@ impl App {
                 && self.flow.streams.on
                 && let Some(movie) = &field.movie
             {
-                let frame = (self.flow.clock * REEL_RATE) as usize % movie.streams.len();
+                let frame = frame_at(self.flow.clock, movie.streams.len());
                 moving_lines(
                     &p,
                     &projector,
@@ -1785,7 +1805,7 @@ impl App {
                     .as_ref()
                     .filter(|m| !m.streams.is_empty() && self.flow.lines_moving)
                     .map(|m| {
-                        let k = (self.flow.clock * REEL_RATE) as usize % m.streams.len();
+                        let k = frame_at(self.flow.clock, m.streams.len());
                         m.streams[k].as_slice()
                     });
                 particles(
@@ -1793,7 +1813,7 @@ impl App {
                     &projector,
                     &field,
                     frame,
-                    self.flow.clock,
+                    self.flow.drift,
                     self.flow.particles.opacity,
                 );
             }
@@ -2411,6 +2431,19 @@ fn exploded(
 #[cfg(test)]
 mod tests {
     use monstertruck::modeling::*;
+
+    #[test]
+    fn frames_step_and_wrap() {
+        use super::{frame_at, frame_middle};
+        assert_eq!(frame_at(frame_middle(0.0), 10), 0);
+        assert_eq!(frame_at(frame_middle(-1.0), 10), 9);
+        assert_eq!(frame_at(frame_middle(23.0), 10), 3);
+        let mut clock = frame_middle(4.0);
+        for want in [5, 6, 7] {
+            clock = frame_middle((clock * super::REEL_RATE).floor() + 1.0);
+            assert_eq!(frame_at(clock, 10), want);
+        }
+    }
 
     #[test]
     fn explode_offsets_do_not_turn_with_the_part() {

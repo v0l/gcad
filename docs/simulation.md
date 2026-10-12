@@ -135,7 +135,7 @@ points earlier), so a line caught in an eddy is drawn once round the eddy rather
 until the step limit. With moving lines, the particles ride the lines of the frame shown. The viewer's
 flow display replaces the parts list for a flow result: surface pressure, streamlines (mean or
 moving) and particles each with an opacity, each slice off, mean, one moment or moving (the frames played
-in a loop, with the seconds of air shown), and play, pause, speed and a scrubber for time.
+in a loop, with the seconds of air shown), and playback that holds or plays the frame (with back and next for single frames) while the particles keep moving, a speed and a scrubber for time.
 Particles and moving slices are drawn over the scene, so they show through parts; hovering a
 mean or moment slice reads the mean speed and the speed at that moment.
 
