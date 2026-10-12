@@ -344,7 +344,10 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             ..Default::default()
         })
         .collect();
-    for _ in 0..samples {
+    let frame_every = samples.div_ceil(FRAMES).max(1);
+    let top = 1.6 * setup.wind.speed;
+    let to_speed = setup.wind.speed / speed;
+    for sample in 0..samples {
         lattice.run(&settings, every)?;
         lattice.accumulate();
         for watch in planes.iter_mut() {
@@ -358,6 +361,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                 }
             }
             watch.width = width;
+            if sample % frame_every == 0 {
+                watch
+                    .frames
+                    .push(frame_bytes(&values, width, to_speed, top));
+            }
             watch.last = values;
         }
         for (sum, value) in sums.iter_mut().zip(lattice.link_samples()?) {
@@ -368,6 +376,18 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     }
     let velocity_scale = setup.wind.speed / speed;
     let streams = streamlines(&setup, &lattice.mean_field()?, velocity_scale);
+    let movie = super::Movie {
+        top,
+        seconds: (every * frame_every) as f64 * step_seconds(&setup),
+        planes: planes
+            .iter()
+            .map(|w| super::Reel {
+                width: w.mean.len() / w.width.max(1),
+                height: w.width,
+                frames: w.frames.clone(),
+            })
+            .collect(),
+    };
     let slices = planes
         .into_iter()
         .map(
@@ -377,6 +397,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                  width,
                  mean,
                  last,
+                 ..
              }| {
                 let other = if axis == SIDE { UP } else { SIDE };
                 let height = width;
@@ -553,6 +574,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         kind: "flow".into(),
         slices,
         streams,
+        movie: Some(movie),
         readings,
         notes,
         field: Some(Field {
@@ -734,6 +756,27 @@ struct Watch {
     width: usize,
     mean: Vec<[f64; 3]>,
     last: Vec<[f32; 4]>,
+    frames: Vec<Vec<u8>>,
+}
+
+const FRAMES: usize = 240;
+
+fn frame_bytes(values: &[[f32; 4]], width: usize, scale: f64, top: f64) -> Vec<u8> {
+    let long = values.len() / width.max(1);
+    let mut out = Vec::with_capacity(values.len());
+    for row in 0..width {
+        let a = width - 1 - row;
+        for c in 0..long {
+            let v = values[a + c * width];
+            out.push(if v[3] < 0.0 {
+                255
+            } else {
+                let speed = ((v[0] * v[0] + v[1] * v[1] + v[2] * v[2]) as f64).sqrt() * scale;
+                (speed / top * 254.0).round().min(254.0) as u8
+            });
+        }
+    }
+    out
 }
 
 fn reading(name: &str, value: f64, unit: &str, at: &str) -> Reading {
@@ -832,6 +875,22 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         slices: outcome.slices.clone(),
         streams: outcome.streams.clone(),
         travel: Default::default(),
+        movie: spec
+            .origin
+            .as_deref()
+            .map(super::movie_path)
+            .and_then(|path| super::Movie::read(&path).ok())
+            .filter(|movie| {
+                movie.planes.len() == outcome.slices.len()
+                    && movie
+                        .planes
+                        .iter()
+                        .zip(&outcome.slices)
+                        .all(|(reel, slice)| {
+                            reel.width == slice.width && reel.height == slice.height()
+                        })
+            })
+            .map(std::sync::Arc::new),
         rest: positions.clone(),
         positions,
         marks: Vec::new(),

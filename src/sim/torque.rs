@@ -410,6 +410,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         aliases: setup.aliases.clone(),
         slices: Vec::new(),
         streams: Vec::new(),
+        movie: None,
         field: None,
     })
 }

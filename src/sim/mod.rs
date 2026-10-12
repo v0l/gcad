@@ -8,7 +8,9 @@ mod torque;
 mod vibration;
 pub mod wind;
 
-pub use result::{Curve, Field, Outcome, Reading, Series, Slice, Stream, inputs, stale, stamp};
+pub use result::{
+    Curve, Field, Movie, Outcome, Reading, Reel, Series, Slice, Stream, inputs, stale, stamp,
+};
 
 use crate::model::Model;
 use anyhow::{Result, bail};
@@ -142,6 +144,10 @@ pub fn is_sim(path: &Path) -> bool {
 
 pub fn result_path(spec: &Path) -> PathBuf {
     spec.with_extension("result.json")
+}
+
+pub fn movie_path(spec: &Path) -> PathBuf {
+    spec.with_extension("frames.bin")
 }
 
 pub fn plan(spec: &Spec) -> Result<String> {

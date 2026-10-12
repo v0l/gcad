@@ -81,6 +81,77 @@ enum Mode {
     Hidden,
 }
 
+#[derive(Clone, Copy, PartialEq)]
+enum SliceShow {
+    Off,
+    Mean,
+    Moment,
+    Moving,
+}
+
+#[derive(Clone, Copy)]
+struct Layer {
+    on: bool,
+    opacity: f32,
+}
+
+struct Flow {
+    surface: Layer,
+    streams: Layer,
+    particles: Layer,
+    slices: [(SliceShow, f32); 2],
+    playing: bool,
+    clock: f64,
+    speed: f32,
+}
+
+impl Default for Flow {
+    fn default() -> Flow {
+        Flow {
+            surface: Layer {
+                on: true,
+                opacity: 1.0,
+            },
+            streams: Layer {
+                on: true,
+                opacity: 0.5,
+            },
+            particles: Layer {
+                on: true,
+                opacity: 1.0,
+            },
+            slices: [(SliceShow::Off, 0.9); 2],
+            playing: true,
+            clock: 0.0,
+            speed: 1.0,
+        }
+    }
+}
+
+impl Flow {
+    fn slice(&self, index: usize) -> (SliceShow, f32) {
+        self.slices
+            .get(index)
+            .copied()
+            .unwrap_or((SliceShow::Off, 1.0))
+    }
+
+    fn opacity(&self, role: scene::Role) -> Option<f32> {
+        let layer = |l: Layer| if l.on { l.opacity } else { 0.0 };
+        Some(match role {
+            scene::Role::Body => return None,
+            scene::Role::Field => layer(self.surface),
+            scene::Role::Streams => layer(self.streams),
+            scene::Role::Slice { index, moment } => match (self.slice(index), moment) {
+                ((SliceShow::Mean, o), false) | ((SliceShow::Moment, o), true) => o,
+                _ => 0.0,
+            },
+        })
+    }
+}
+
+const REEL_RATE: f64 = 24.0;
+
 struct Focus {
     part: String,
     at: V3,
@@ -114,7 +185,8 @@ pub struct App {
     opacities: std::collections::HashMap<String, f32>,
     lines_open: bool,
     parts_open: bool,
-    animate: bool,
+    flow: Flow,
+    reels: Vec<Option<(usize, egui::TextureHandle)>>,
     opacity: f32,
     focus: Option<Focus>,
     clashes: Option<Result<Vec<String>, ()>>,
@@ -234,7 +306,8 @@ impl App {
             opacities: Default::default(),
             lines_open: true,
             parts_open: true,
-            animate: true,
+            flow: Flow::default(),
+            reels: Vec::new(),
             opacity: 0.25,
             focus: None,
             clashes: None,
@@ -458,6 +531,7 @@ impl App {
         } else {
             shown.joints.iter().map(|j| j.value).collect()
         };
+        let flowing = shown.field.as_ref().is_some_and(|f| is_flow(f));
         let moved = posed(&shown.joints, &values);
         let offsets = explode_offsets(&shown.joints, &shown.explode, &moved);
         shown
@@ -470,13 +544,18 @@ impl App {
                     .copied()
                     .unwrap_or_else(Matrix4::identity);
                 let m = exploded(m, offsets.get(&part.name), self.explode);
+                let flow = if flowing {
+                    self.flow.opacity(part.role)
+                } else {
+                    None
+                };
                 Look {
                     placement: flat(m),
-                    opacity: match self.mode(&part.name) {
+                    opacity: flow.unwrap_or_else(|| match self.mode(&part.name) {
                         Mode::Solid => self.opacities.get(&part.name).copied().unwrap_or(1.0),
                         Mode::Ghost => self.opacity,
                         Mode::Hidden => 0.0,
-                    },
+                    }),
                     selected: self.focus.as_ref().is_some_and(|f| f.part == part.name),
                 }
             })
@@ -518,14 +597,6 @@ impl App {
             }
             if toggle(ui, "ortho", self.cam.ortho).clicked() {
                 self.cam.ortho = !self.cam.ortho;
-            }
-            let streaming = self
-                .shown
-                .as_ref()
-                .and_then(|s| s.field.as_ref())
-                .is_some_and(|f| !f.streams.is_empty());
-            if streaming && toggle(ui, "animate", self.animate).clicked() {
-                self.animate = !self.animate;
             }
             if toggle(ui, "lines", self.lines_open).clicked() {
                 self.lines_open = !self.lines_open;
@@ -741,6 +812,258 @@ impl App {
             self.picks.clear();
         }
         ui.add_space(8.0);
+    }
+
+    fn flow_card(&mut self, ui: &mut Ui) {
+        let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone()) else {
+            return;
+        };
+        let titles: Vec<String> = field
+            .slices
+            .iter()
+            .map(|s| s.title.trim_end_matches(" along the wind").to_string())
+            .collect();
+        let moving = field.movie.is_some();
+        let fastest = crate::plot::flow_scale(&field.slices);
+        let flow = &mut self.flow;
+        card(
+            ui,
+            None,
+            |ui| {
+                Line::new().legend("flow display").show(ui);
+            },
+            |ui| {
+                let slider = |ui: &mut Ui, value: &mut f32| {
+                    ui.spacing_mut().slider_width = 90.0;
+                    ui.add(egui::Slider::new(value, 0.05..=1.0).show_value(false))
+                        .on_hover_text("opacity");
+                };
+                let layer = |ui: &mut Ui, name: &str, l: &mut Layer| {
+                    ui.horizontal(|ui| {
+                        if toggle(ui, name, l.on).clicked() {
+                            l.on = !l.on;
+                        }
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            slider(ui, &mut l.opacity);
+                        });
+                    });
+                };
+                layer(
+                    ui,
+                    field.title.trim_start_matches("mean "),
+                    &mut flow.surface,
+                );
+                Line::new()
+                    .legend(&format!(
+                        "{} to {} {}",
+                        crate::plot::label(field.low.round()),
+                        crate::plot::label(field.high.round()),
+                        field.unit
+                    ))
+                    .size(11.0)
+                    .show(ui);
+                if !field.streams.is_empty() {
+                    layer(ui, "streamlines", &mut flow.streams);
+                    layer(ui, "particles", &mut flow.particles);
+                }
+                for (k, title) in titles.iter().enumerate().take(flow.slices.len()) {
+                    let (show, opacity) = &mut flow.slices[k];
+                    ui.horizontal(|ui| {
+                        Line::new().legend(title).size(11.0).show(ui);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            slider(ui, opacity);
+                        });
+                    });
+                    ui.horizontal(|ui| {
+                        let mut choices = vec![
+                            ("off", SliceShow::Off),
+                            ("mean", SliceShow::Mean),
+                            ("moment", SliceShow::Moment),
+                        ];
+                        if moving {
+                            choices.push(("moving", SliceShow::Moving));
+                        }
+                        for (label, value) in choices {
+                            if toggle(ui, label, *show == value).clicked() {
+                                *show = value;
+                            }
+                        }
+                    });
+                }
+                Line::new()
+                    .legend(&format!(
+                        "air speed 0 to {} m/s",
+                        crate::plot::label(fastest.round())
+                    ))
+                    .size(11.0)
+                    .show(ui);
+                ui.add_space(4.0);
+                Line::new().legend("playback").show(ui);
+                ui.horizontal(|ui| {
+                    if toggle(
+                        ui,
+                        if flow.playing { "pause" } else { "play" },
+                        flow.playing,
+                    )
+                    .clicked()
+                    {
+                        flow.playing = !flow.playing;
+                    }
+                    ui.spacing_mut().slider_width = 110.0;
+                    ui.add(
+                        egui::Slider::new(&mut flow.speed, 0.05..=4.0)
+                            .logarithmic(true)
+                            .show_value(false),
+                    )
+                    .on_hover_text("playback speed");
+                    Line::new()
+                        .measured(format!("{:.2}x", flow.speed))
+                        .size(11.0)
+                        .show(ui);
+                });
+                if let Some(movie) = &field.movie {
+                    let frames = movie
+                        .planes
+                        .iter()
+                        .map(|r| r.frames.len())
+                        .max()
+                        .unwrap_or(1)
+                        .max(1);
+                    let length = frames as f64 / REEL_RATE;
+                    let mut at = flow.clock.rem_euclid(length);
+                    ui.spacing_mut().slider_width = ui.available_width() - 10.0;
+                    if ui
+                        .add(egui::Slider::new(&mut at, 0.0..=length).show_value(false))
+                        .on_hover_text("time")
+                        .changed()
+                    {
+                        flow.clock = at;
+                    }
+                    let frame = (at * REEL_RATE) as usize % frames;
+                    Line::new()
+                        .measured(format!(
+                            "{:.4} s of air, frame {} of {}",
+                            frame as f64 * movie.seconds,
+                            frame + 1,
+                            frames
+                        ))
+                        .size(11.0)
+                        .show(ui);
+                }
+            },
+        );
+        ui.add_space(8.0);
+    }
+
+    fn draw_reels(
+        &mut self,
+        p: &egui::Painter,
+        projector: &Projector,
+        field: &crate::sim::statics::FieldView,
+        ctx: &egui::Context,
+        rect: Rect,
+    ) {
+        let Some(movie) = &field.movie else { return };
+        if self.reels.len() != movie.planes.len() {
+            self.reels = vec![None; movie.planes.len()];
+        }
+        let fastest = crate::plot::flow_scale(&field.slices);
+        let palette: Vec<Color32> = (0..256)
+            .map(|q| {
+                if q == 255 {
+                    Color32::from_gray(150)
+                } else {
+                    let c = crate::plot::heat(q as f64 / 254.0 * movie.top / fastest);
+                    Color32::from_rgb(
+                        (c[0] * 255.0) as u8,
+                        (c[1] * 255.0) as u8,
+                        (c[2] * 255.0) as u8,
+                    )
+                }
+            })
+            .collect();
+        let mut shown_time = None;
+        for (k, (reel, slice)) in movie.planes.iter().zip(&field.slices).enumerate() {
+            let (show, opacity) = self.flow.slice(k);
+            if show != SliceShow::Moving || reel.frames.is_empty() {
+                continue;
+            }
+            let frame = (self.flow.clock * REEL_RATE) as usize % reel.frames.len();
+            shown_time = Some(frame as f64 * movie.seconds);
+            let fresh = !matches!(&self.reels[k], Some((at, _)) if *at == frame);
+            if fresh {
+                let pixels: Vec<Color32> = reel.frames[frame]
+                    .iter()
+                    .map(|q| palette[*q as usize])
+                    .collect();
+                let image = egui::ColorImage::new([reel.width, reel.height], pixels);
+                match &mut self.reels[k] {
+                    Some((at, handle)) => {
+                        handle.set(image, egui::TextureOptions::LINEAR);
+                        *at = frame;
+                    }
+                    None => {
+                        let handle = ctx.load_texture(
+                            format!("reel {k}"),
+                            image,
+                            egui::TextureOptions::LINEAR,
+                        );
+                        self.reels[k] = Some((frame, handle));
+                    }
+                }
+            }
+            let Some((_, handle)) = &self.reels[k] else {
+                continue;
+            };
+            let n = 16;
+            let (w, h) = (slice.width as f64, slice.height() as f64);
+            let mut mesh = egui::epaint::Mesh::with_texture(handle.id());
+            let tint = Color32::WHITE.gamma_multiply(opacity);
+            let mut fine = true;
+            for j in 0..=n {
+                for i in 0..=n {
+                    let (u, v) = (i as f64 / n as f64, j as f64 / n as f64);
+                    let (c, r) = (-0.5 + w * u, -0.5 + h * v);
+                    let at = [0, 1, 2]
+                        .map(|d| (slice.origin[d] + c * slice.right[d] + r * slice.down[d]) as f32);
+                    match projector.project(at) {
+                        Some(screen) => mesh.vertices.push(egui::epaint::Vertex {
+                            pos: screen,
+                            uv: Pos2::new(u as f32, v as f32),
+                            color: tint,
+                        }),
+                        None => fine = false,
+                    }
+                }
+            }
+            if !fine {
+                continue;
+            }
+            let row = n as u32 + 1;
+            for j in 0..n as u32 {
+                for i in 0..n as u32 {
+                    let a = j * row + i;
+                    mesh.indices.extend_from_slice(&[
+                        a,
+                        a + 1,
+                        a + row,
+                        a + 1,
+                        a + row + 1,
+                        a + row,
+                    ]);
+                }
+            }
+            p.add(egui::Shape::mesh(mesh));
+        }
+        if let Some(t) = shown_time {
+            p.text(
+                rect.left_bottom() + Vec2::new(10.0, -28.0),
+                egui::Align2::LEFT_BOTTOM,
+                format!("{t:.4} s"),
+                egui::FontId::monospace(13.0),
+                Color32::from_gray(230),
+            );
+        }
     }
 
     fn parts_card(&mut self, ui: &mut Ui) {
@@ -1006,7 +1329,16 @@ impl App {
                 if self.measuring {
                     self.measure_card(ui);
                 }
-                self.parts_card(ui);
+                if self
+                    .shown
+                    .as_ref()
+                    .and_then(|s| s.field.as_ref())
+                    .is_some_and(|f| is_flow(f))
+                {
+                    self.flow_card(ui);
+                } else {
+                    self.parts_card(ui);
+                }
                 if !self.shown.as_ref().is_some_and(|s| s.assembly) {
                     self.select_card(ui);
                 }
@@ -1408,13 +1740,24 @@ impl App {
         let mut viewer = self.viewer(shown);
         viewer.paint(ui, rect);
         let projector = viewer.projector(rect);
-        if self.animate
-            && let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
-            && !field.streams.is_empty()
+        if let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
+            && is_flow(&field)
         {
-            let time = ui.input(|i| i.time);
-            particles(&p, &projector, &field, time);
-            ui.ctx().request_repaint();
+            if self.flow.playing {
+                let dt = ui.input(|i| i.stable_dt) as f64;
+                self.flow.clock += dt * self.flow.speed as f64;
+                ui.ctx().request_repaint();
+            }
+            self.draw_reels(&p, &projector, &field, ui.ctx(), rect);
+            if self.flow.particles.on && !field.streams.is_empty() {
+                particles(
+                    &p,
+                    &projector,
+                    &field,
+                    self.flow.clock,
+                    self.flow.particles.opacity,
+                );
+            }
         }
         let on_cube = self.view_cube(ui, rect, &projector);
         if !on_cube {
@@ -1597,11 +1940,16 @@ fn browser_at(dir: PathBuf) -> Browser {
     Browser::new("open a part or assembly", dir).suffixes(&[".gcad", ".gasm", ".gsim"])
 }
 
+fn is_flow(field: &crate::sim::statics::FieldView) -> bool {
+    !field.streams.is_empty() || !field.slices.is_empty()
+}
+
 fn particles(
     p: &egui::Painter,
     projector: &Projector,
     field: &crate::sim::statics::FieldView,
     time: f64,
+    opacity: f32,
 ) {
     let travel = field.travel();
     let mut longest: Vec<f64> = travel.iter().filter_map(|t| t.last().copied()).collect();
@@ -1626,9 +1974,9 @@ fn particles(
             ) && let (Some(a), Some(b)) = (project(back), project(head))
             {
                 let c = crate::plot::heat(speed / fastest).map(|v| (v * 255.0) as u8);
-                let colour = Color32::from_rgb(c[0], c[1], c[2]);
+                let colour = Color32::from_rgb(c[0], c[1], c[2]).gamma_multiply(opacity);
                 p.line_segment([a, b], Stroke::new(2.5, colour));
-                p.circle_filled(b, 1.6, Color32::WHITE.gamma_multiply(0.7));
+                p.circle_filled(b, 1.6, Color32::WHITE.gamma_multiply(0.7 * opacity));
             }
             release += gap;
         }

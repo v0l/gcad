@@ -1342,7 +1342,23 @@ fn wind_draws_the_flow() {
                 .all(|p| { p[0].abs() > 45.0 || p[1].abs() > 45.0 || p[2] < 5.0 || p[2] > 95.0 })
         );
     }
+    let movie = outcome.movie.as_ref().expect("frames");
+    assert_eq!(movie.planes.len(), outcome.slices.len());
+    for (reel, slice) in movie.planes.iter().zip(&outcome.slices) {
+        assert!(reel.frames.len() > 1);
+        assert!(reel
+            .frames
+            .iter()
+            .all(|f| f.len() == slice.width * slice.height()));
+        assert!(reel.frames.windows(2).any(|w| w[0] != w[1]), "the flow moves");
+    }
+    let frames = gcad::sim::movie_path(&path);
+    movie.write(&frames).expect("writes");
+    let back = gcad::sim::Movie::read(&frames).expect("reads");
+    assert_eq!(back.planes[1].frames, movie.planes[1].frames);
+    close(back.seconds, movie.seconds, 1.0e-6);
     let view = gcad::sim::wind::field_view(spec, &outcome).expect("view");
+    assert!(view.movie.is_some(), "the viewer finds the frames beside the spec");
     for (k, slice) in outcome.slices.iter().enumerate() {
         let at = |c: f64, r: f64| {
             monstertruck::modeling::Point3::new(

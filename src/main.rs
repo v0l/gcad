@@ -190,6 +190,12 @@ fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
         &out,
         serde_json::to_string_pretty(&outcome.to_json(&stamp))?,
     )?;
+    let frames = gcad::sim::movie_path(path);
+    match &outcome.movie {
+        Some(movie) => movie.write(&frames)?,
+        None if frames.is_file() => std::fs::remove_file(&frames)?,
+        None => {}
+    }
     print!("{}", outcome.table());
     println!("wrote {}", out.display());
     let failed = outcome.failed();

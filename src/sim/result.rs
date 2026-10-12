@@ -62,6 +62,88 @@ pub struct Stream {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct Movie {
+    pub top: f64,
+    pub seconds: f64,
+    pub planes: Vec<Reel>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Reel {
+    pub width: usize,
+    pub height: usize,
+    pub frames: Vec<Vec<u8>>,
+}
+
+const MOVIE: &[u8; 8] = b"GCADFRM1";
+
+impl Movie {
+    pub fn write(&self, path: &Path) -> Result<()> {
+        let mut out = Vec::new();
+        out.extend_from_slice(MOVIE);
+        out.extend_from_slice(&(self.planes.len() as u32).to_le_bytes());
+        out.extend_from_slice(&(self.top as f32).to_le_bytes());
+        out.extend_from_slice(&(self.seconds as f32).to_le_bytes());
+        for reel in &self.planes {
+            for v in [reel.width, reel.height, reel.frames.len()] {
+                out.extend_from_slice(&(v as u32).to_le_bytes());
+            }
+            for frame in &reel.frames {
+                out.extend_from_slice(frame);
+            }
+        }
+        std::fs::write(path, out)?;
+        Ok(())
+    }
+
+    pub fn read(path: &Path) -> Result<Movie> {
+        let bytes = std::fs::read(path)?;
+        if bytes.len() < 20 || &bytes[..8] != MOVIE {
+            return Err(anyhow!("{} is not a gcad frames file", path.display()));
+        }
+        let mut at = 8;
+        let word = |at: &mut usize| {
+            let v = u32::from_le_bytes(bytes[*at..*at + 4].try_into().unwrap_or([0; 4]));
+            *at += 4;
+            v
+        };
+        let count = word(&mut at) as usize;
+        let top = f32::from_bits(word(&mut at)) as f64;
+        let seconds = f32::from_bits(word(&mut at)) as f64;
+        let mut planes = Vec::new();
+        for _ in 0..count {
+            if at + 12 > bytes.len() {
+                return Err(anyhow!("{} is cut short", path.display()));
+            }
+            let (width, height, frames) = (
+                word(&mut at) as usize,
+                word(&mut at) as usize,
+                word(&mut at) as usize,
+            );
+            let size = width * height;
+            let end = at + size * frames;
+            if end > bytes.len() {
+                return Err(anyhow!("{} is cut short", path.display()));
+            }
+            planes.push(Reel {
+                width,
+                height,
+                frames: bytes[at..end]
+                    .chunks(size.max(1))
+                    .map(<[u8]>::to_vec)
+                    .collect(),
+            });
+            at = end;
+        }
+        Ok(Movie {
+            top,
+            seconds,
+            planes,
+        })
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Outcome {
     pub kind: String,
     pub readings: Vec<Reading>,
@@ -72,6 +154,7 @@ pub struct Outcome {
     pub field: Option<Field>,
     pub slices: Vec<Slice>,
     pub streams: Vec<Stream>,
+    pub movie: Option<Movie>,
 }
 
 impl Outcome {
@@ -211,6 +294,7 @@ impl Outcome {
                         .collect(),
                 })
                 .collect(),
+            movie: None,
             slices: list(&value["slices"])
                 .iter()
                 .map(|s| Slice {

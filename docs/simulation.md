@@ -124,10 +124,14 @@ draws streamlines of the mean flow in 3D, coloured by speed: the velocity is ave
 whole box on the GPU (on cells up to a few lattice cells across, at most 16 million of them),
 lines are seeded on a grid a little upstream across the frontal area and traced through it,
 and the ones the parts slow below 85% of the wind are kept. Particles run along them at the
-local speed of the mean flow (ANIMATE in the header), so the air is seen to race past edges
-and stall in the wake; they are drawn over the scene, so they show through parts. The same
-slices are there as parts to switch on, and hovering one reads the mean speed and the speed
-at one moment.
+local speed of the mean flow, so the air is seen to race past edges and stall in the wake.
+While averaging, the run also keeps up to 240 frames of the two slices, the speed in a byte
+a cell, in `x.frames.bin` beside the result (36 MB for the rotator at 9 mm). The viewer's
+flow display replaces the parts list for a flow result: surface pressure, streamlines and
+particles each with an opacity, each slice off, mean, one moment or moving (the frames played
+in a loop, with the seconds of air shown), and play, pause, speed and a scrubber for time.
+Particles and moving slices are drawn over the scene, so they show through parts; hovering a
+mean or moment slice reads the mean speed and the speed at that moment.
 
 The box runs 4 H upstream, 5 H downstream and 3 H to each side of the parts, which keeps the
 blockage near 2% whatever their shape (a long thin part does not inflate the box). Nearer

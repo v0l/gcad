@@ -44,6 +44,15 @@ pub struct Part {
     pub material: Option<(String, f64)>,
     pub size: [f64; 3],
     pub hidden: bool,
+    pub role: Role,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Role {
+    Body,
+    Field,
+    Streams,
+    Slice { index: usize, moment: bool },
 }
 
 #[derive(Clone)]
@@ -358,6 +367,7 @@ pub fn build(
                 .map(|m| (m.name.clone(), m.density)),
             size: [high.x - low.x, high.y - low.y, high.z - low.z],
             hidden: false,
+            role: Role::Body,
         });
     }
     let current_index = parts.iter().position(|p| p.current).unwrap_or(0);
@@ -469,6 +479,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         material: None,
         size: [high.x - low.x, high.y - low.y, high.z - low.z],
         hidden: false,
+        role: Role::Field,
     }];
     let fastest = crate::plot::flow_scale(&view.slices);
     if !view.streams.is_empty() {
@@ -505,9 +516,10 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
             material: None,
             size: [0.0; 3],
             hidden: false,
+            role: Role::Streams,
         });
     }
-    for slice in &view.slices {
+    for (index, slice) in view.slices.iter().enumerate() {
         for (moment, values) in [(false, &slice.speed), (true, &slice.snapshot)] {
             let mut rgba = Vec::with_capacity(values.len() * 4);
             for v in values.iter() {
@@ -539,6 +551,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
                 material: None,
                 size: [0.0; 3],
                 hidden: true,
+                role: Role::Slice { index, moment },
             });
         }
     }

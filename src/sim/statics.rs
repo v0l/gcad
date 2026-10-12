@@ -517,6 +517,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         aliases: Vec::new(),
         slices: Vec::new(),
         streams: Vec::new(),
+        movie: None,
         field: Some(Field {
             title: "von Mises stress".into(),
             unit: "MPa".into(),
@@ -549,6 +550,7 @@ pub struct FieldView {
     pub slices: Vec<crate::sim::Slice>,
     pub streams: Vec<crate::sim::Stream>,
     pub travel: std::sync::Arc<std::sync::OnceLock<Vec<Vec<f64>>>>,
+    pub movie: Option<std::sync::Arc<crate::sim::Movie>>,
 }
 
 impl FieldView {
@@ -806,6 +808,7 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         slices: Vec::new(),
         streams: Vec::new(),
         travel: Default::default(),
+        movie: None,
     })
 }
 
@@ -981,6 +984,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
         aliases: Vec::new(),
         slices: Vec::new(),
         streams: Vec::new(),
+        movie: None,
         field: Some(Field {
             title: format!("buckling mode, {} times the loads", short(first.factor)),
             unit: "relative".into(),
