@@ -246,7 +246,8 @@ fn loft_mixed_profiles() {
 
 #[test]
 fn loft_many_matching_edges() {
-    let model = build("ngon 20 250\nsection\nplane XY offset=10\nngon 10 250\nsection\nloft smooth");
+    let model =
+        build("ngon 20 250\nsection\nplane XY offset=10\nngon 10 250\nsection\nloft smooth");
     let v = volume(&model);
     let expected = frustum(PI * 100.0, PI * 25.0, 10.0);
     assert!(v > 0.98 * expected && v < 1.02 * expected, "{v}");
