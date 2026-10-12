@@ -778,6 +778,20 @@ fn tet_mesh_of_curved_parts() {
 }
 
 #[test]
+fn tet_mesh_of_stacked_cylinders() {
+    let mut source = String::from("circle 20\ns0: extrude 10");
+    for (k, length) in [4, 86, 4, 86].into_iter().enumerate() {
+        source += &format!("\nplane s{k}.end\ncircle 20\ns{}: extrude {length}", k + 1);
+    }
+    let solid = solid_of(&source);
+    for size in [3.0, 4.0, 5.0] {
+        let q = checked_mesh(&solid, size).quality();
+        close(q.volume, gcad::geometry::volume(&solid), 0.03);
+        assert!(q.min_dihedral > 1.0 && q.slivers < 10, "{size}: {q:?}");
+    }
+}
+
+#[test]
 fn tet_mesh_of_example_parts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/parts");
     for (name, size) in [
