@@ -126,9 +126,13 @@ lines are seeded on a grid a little upstream across the frontal area and traced 
 and the ones the parts slow below 85% of the wind are kept. Particles run along them at the
 local speed of the mean flow, so the air is seen to race past edges and stall in the wake.
 While averaging, the run also keeps up to 240 frames of the two slices, the speed in a byte
-a cell, in `x.frames.bin` beside the result (36 MB for the rotator at 9 mm). The viewer's
-flow display replaces the parts list for a flow result: surface pressure, streamlines and
-particles each with an opacity, each slice off, mean, one moment or moving (the frames played
+a cell, and at each frame traces the same seeds through the velocity of that moment, so the
+lines themselves move with the wake. Both go in `x.frames.bin` beside the result (79 MB for
+the rotator at 9 mm, points in 16 bits across the lattice box). The seeds are picked once,
+from a mean taken over the last third of the settling time, so a line does not come and go
+between frames. The viewer's
+flow display replaces the parts list for a flow result: surface pressure, streamlines (mean or
+moving) and particles each with an opacity, each slice off, mean, one moment or moving (the frames played
 in a loop, with the seconds of air shown), and play, pause, speed and a scrubber for time.
 Particles and moving slices are drawn over the scene, so they show through parts; hovering a
 mean or moment slice reads the mean speed and the speed at that moment.

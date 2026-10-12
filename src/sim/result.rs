@@ -66,6 +66,7 @@ pub struct Movie {
     pub top: f64,
     pub seconds: f64,
     pub planes: Vec<Reel>,
+    pub streams: Vec<Vec<Stream>>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -76,6 +77,7 @@ pub struct Reel {
 }
 
 const MOVIE: &[u8; 8] = b"GCADFRM1";
+const LINES: &[u8; 4] = b"LINE";
 
 impl Movie {
     pub fn write(&self, path: &Path) -> Result<()> {
@@ -90,6 +92,35 @@ impl Movie {
             }
             for frame in &reel.frames {
                 out.extend_from_slice(frame);
+            }
+        }
+        let points = self.streams.iter().flatten().flat_map(|s| s.points.iter());
+        let (low, high) = points.fold(([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]), |(l, h), p| {
+            (
+                [0, 1, 2].map(|k| l[k].min(p[k])),
+                [0, 1, 2].map(|k| h[k].max(p[k])),
+            )
+        });
+        if low[0].is_finite() {
+            out.extend_from_slice(LINES);
+            for v in low.iter().chain(&high) {
+                out.extend_from_slice(&(*v as f32).to_le_bytes());
+            }
+            out.extend_from_slice(&(self.streams.len() as u32).to_le_bytes());
+            let span = [0, 1, 2].map(|k| (high[k] - low[k]).max(1.0e-9));
+            for frame in &self.streams {
+                out.extend_from_slice(&(frame.len() as u32).to_le_bytes());
+                for line in frame {
+                    let count = line.points.len().min(u16::MAX as usize);
+                    out.extend_from_slice(&(count as u16).to_le_bytes());
+                    for (p, speed) in line.points.iter().zip(&line.speed).take(count) {
+                        for k in 0..3 {
+                            let q = ((p[k] - low[k]) / span[k] * 65535.0).round() as u16;
+                            out.extend_from_slice(&q.to_le_bytes());
+                        }
+                        out.push((speed / self.top * 254.0).round().clamp(0.0, 254.0) as u8);
+                    }
+                }
             }
         }
         std::fs::write(path, out)?;
@@ -135,10 +166,50 @@ impl Movie {
             });
             at = end;
         }
+        let mut streams = Vec::new();
+        if at + 4 <= bytes.len() && &bytes[at..at + 4] == LINES {
+            at += 4;
+            let float = |at: &mut usize| f32::from_bits(word(at)) as f64;
+            let low = [float(&mut at), float(&mut at), float(&mut at)];
+            let high = [float(&mut at), float(&mut at), float(&mut at)];
+            let frames = word(&mut at) as usize;
+            let short = || anyhow!("{} is cut short", path.display());
+            for _ in 0..frames {
+                if at + 4 > bytes.len() {
+                    return Err(short());
+                }
+                let lines = word(&mut at) as usize;
+                let mut frame = Vec::with_capacity(lines);
+                for _ in 0..lines {
+                    if at + 2 > bytes.len() {
+                        return Err(short());
+                    }
+                    let count = u16::from_le_bytes([bytes[at], bytes[at + 1]]) as usize;
+                    at += 2;
+                    if at + count * 7 > bytes.len() {
+                        return Err(short());
+                    }
+                    let mut line = Stream::default();
+                    for _ in 0..count {
+                        let q = |k: usize| {
+                            u16::from_le_bytes([bytes[at + 2 * k], bytes[at + 2 * k + 1]]) as f64
+                                / 65535.0
+                        };
+                        line.points
+                            .push([0, 1, 2].map(|k| low[k] + q(k) * (high[k] - low[k])));
+                        line.speed.push(bytes[at + 6] as f64 / 254.0 * top);
+                        at += 7;
+                    }
+                    frame.push(line);
+                }
+                streams.push(frame);
+            }
+        }
         Ok(Movie {
             top,
             seconds,
             planes,
+            streams,
         })
     }
 }

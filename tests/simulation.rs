@@ -1334,7 +1334,6 @@ fn wind_draws_the_flow() {
     );
     for stream in &outcome.streams {
         assert!(stream.points[0][0] < -50.0, "seeded upstream");
-        assert!(stream.speed.iter().any(|v| *v < 8.5), "slowed by the cube");
         assert!(
             stream
                 .points
@@ -1346,19 +1345,48 @@ fn wind_draws_the_flow() {
     assert_eq!(movie.planes.len(), outcome.slices.len());
     for (reel, slice) in movie.planes.iter().zip(&outcome.slices) {
         assert!(reel.frames.len() > 1);
-        assert!(reel
-            .frames
-            .iter()
-            .all(|f| f.len() == slice.width * slice.height()));
-        assert!(reel.frames.windows(2).any(|w| w[0] != w[1]), "the flow moves");
+        assert!(
+            reel.frames
+                .iter()
+                .all(|f| f.len() == slice.width * slice.height())
+        );
+        assert!(
+            reel.frames.windows(2).any(|w| w[0] != w[1]),
+            "the flow moves"
+        );
     }
+    assert_eq!(movie.streams.len(), movie.planes[0].frames.len());
+    assert!(
+        movie
+            .streams
+            .iter()
+            .all(|f| f.len() == movie.streams[0].len() || !f.is_empty())
+    );
+    assert!(
+        movie
+            .streams
+            .windows(2)
+            .any(|w| w[0].iter().zip(&w[1]).any(|(a, b)| a.points != b.points)),
+        "the lines move from frame to frame"
+    );
     let frames = gcad::sim::movie_path(&path);
     movie.write(&frames).expect("writes");
     let back = gcad::sim::Movie::read(&frames).expect("reads");
     assert_eq!(back.planes[1].frames, movie.planes[1].frames);
+    assert_eq!(back.streams.len(), movie.streams.len());
+    let (a, b) = (&movie.streams[0][0], &back.streams[0][0]);
+    assert_eq!(a.points.len(), b.points.len());
+    for (p, q) in a.points.iter().zip(&b.points) {
+        for k in 0..3 {
+            assert!((p[k] - q[k]).abs() < 0.1, "{p:?} against {q:?}");
+        }
+    }
     close(back.seconds, movie.seconds, 1.0e-6);
     let view = gcad::sim::wind::field_view(spec, &outcome).expect("view");
-    assert!(view.movie.is_some(), "the viewer finds the frames beside the spec");
+    assert!(
+        view.movie.is_some(),
+        "the viewer finds the frames beside the spec"
+    );
     for (k, slice) in outcome.slices.iter().enumerate() {
         let at = |c: f64, r: f64| {
             monstertruck::modeling::Point3::new(

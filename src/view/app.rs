@@ -100,6 +100,8 @@ struct Flow {
     streams: Layer,
     particles: Layer,
     slices: [(SliceShow, f32); 2],
+    lines_moving: bool,
+    lines_recorded: bool,
     playing: bool,
     clock: f64,
     speed: f32,
@@ -121,6 +123,8 @@ impl Default for Flow {
                 opacity: 1.0,
             },
             slices: [(SliceShow::Off, 0.9); 2],
+            lines_moving: true,
+            lines_recorded: false,
             playing: true,
             clock: 0.0,
             speed: 1.0,
@@ -141,6 +145,7 @@ impl Flow {
         Some(match role {
             scene::Role::Body => return None,
             scene::Role::Field => layer(self.surface),
+            scene::Role::Streams if self.lines_moving && self.lines_recorded => 0.0,
             scene::Role::Streams => layer(self.streams),
             scene::Role::Slice { index, moment } => match (self.slice(index), moment) {
                 ((SliceShow::Mean, o), false) | ((SliceShow::Moment, o), true) => o,
@@ -824,6 +829,7 @@ impl App {
             .map(|s| s.title.trim_end_matches(" along the wind").to_string())
             .collect();
         let moving = field.movie.is_some();
+        let recorded = field.movie.as_ref().is_some_and(|m| !m.streams.is_empty());
         let fastest = crate::plot::flow_scale(&field.slices);
         let flow = &mut self.flow;
         card(
@@ -864,6 +870,15 @@ impl App {
                     .show(ui);
                 if !field.streams.is_empty() {
                     layer(ui, "streamlines", &mut flow.streams);
+                    if recorded {
+                        ui.horizontal(|ui| {
+                            for (label, value) in [("mean", false), ("moving", true)] {
+                                if toggle(ui, label, flow.lines_moving == value).clicked() {
+                                    flow.lines_moving = value;
+                                }
+                            }
+                        });
+                    }
                     layer(ui, "particles", &mut flow.particles);
                 }
                 for (k, title) in titles.iter().enumerate().take(flow.slices.len()) {
@@ -1743,12 +1758,27 @@ impl App {
         if let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
             && is_flow(&field)
         {
+            self.flow.lines_recorded = field.movie.as_ref().is_some_and(|m| !m.streams.is_empty());
             if self.flow.playing {
                 let dt = ui.input(|i| i.stable_dt) as f64;
                 self.flow.clock += dt * self.flow.speed as f64;
                 ui.ctx().request_repaint();
             }
             self.draw_reels(&p, &projector, &field, ui.ctx(), rect);
+            if self.flow.lines_recorded
+                && self.flow.lines_moving
+                && self.flow.streams.on
+                && let Some(movie) = &field.movie
+            {
+                let frame = (self.flow.clock * REEL_RATE) as usize % movie.streams.len();
+                moving_lines(
+                    &p,
+                    &projector,
+                    &movie.streams[frame],
+                    crate::plot::flow_scale(&field.slices),
+                    self.flow.streams.opacity,
+                );
+            }
             if self.flow.particles.on && !field.streams.is_empty() {
                 particles(
                     &p,
@@ -1938,6 +1968,50 @@ impl App {
 
 fn browser_at(dir: PathBuf) -> Browser {
     Browser::new("open a part or assembly", dir).suffixes(&[".gcad", ".gasm", ".gsim"])
+}
+
+fn moving_lines(
+    p: &egui::Painter,
+    projector: &Projector,
+    lines: &[crate::sim::Stream],
+    fastest: f64,
+    opacity: f32,
+) {
+    let mut mesh = egui::epaint::Mesh::default();
+    let half = 0.8;
+    for line in lines {
+        let screen: Vec<Option<Pos2>> = line
+            .points
+            .iter()
+            .map(|q| projector.project(q.map(|v| v as f32)))
+            .collect();
+        for k in 1..screen.len() {
+            let (Some(a), Some(b)) = (screen[k - 1], screen[k]) else {
+                continue;
+            };
+            let along = b - a;
+            let length = along.length();
+            if length < 1.0e-3 {
+                continue;
+            }
+            let side = Vec2::new(-along.y, along.x) / length * half;
+            let speed = 0.5 * (line.speed[k - 1] + line.speed[k]);
+            let c = crate::plot::heat(speed / fastest);
+            let colour = Color32::from_rgb(
+                (c[0] * 255.0) as u8,
+                (c[1] * 255.0) as u8,
+                (c[2] * 255.0) as u8,
+            )
+            .gamma_multiply(opacity);
+            let base = mesh.vertices.len() as u32;
+            for corner in [a + side, a - side, b - side, b + side] {
+                mesh.colored_vertex(corner, colour);
+            }
+            mesh.add_triangle(base, base + 1, base + 2);
+            mesh.add_triangle(base, base + 2, base + 3);
+        }
+    }
+    p.add(egui::Shape::mesh(mesh));
 }
 
 fn is_flow(field: &crate::sim::statics::FieldView) -> bool {

@@ -327,7 +327,27 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         settings.inflow = k as f64 / 20.0;
         lattice.run(&settings, ramp.div_ceil(20))?;
     }
-    lattice.run(&settings, settle)?;
+    let velocity_scale = setup.wind.speed / speed;
+    let early = settle * 2 / 3;
+    lattice.run(&settings, early)?;
+    let every_settle = (setup.pass() / 20).clamp(1, 200);
+    let mut left = settle - early;
+    while left > 0 {
+        let chunk = left.min(every_settle);
+        lattice.run(&settings, chunk)?;
+        lattice.accumulate();
+        left -= chunk;
+    }
+    let seeds: Vec<[f64; 3]> = {
+        let all = stream_seeds(&setup);
+        let traced = streamlines(&setup, &lattice.mean_field()?, velocity_scale, &all);
+        all.into_iter()
+            .zip(traced)
+            .filter(|(_, line)| line.as_ref().is_some_and(|l| disturbed(l, &setup)))
+            .map(|(seed, _)| seed)
+            .collect()
+    };
+    let mut moving: Vec<Vec<super::Stream>> = Vec::new();
     let every = (setup.pass() / 20).clamp(1, 200);
     let samples = average.div_ceil(every);
     let links = lattice.links.clone();
@@ -368,14 +388,26 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             }
             watch.last = values;
         }
+        if sample % frame_every == 0 && !seeds.is_empty() {
+            let now = lattice.snapshot()?;
+            moving.push(
+                streamlines(&setup, &now, velocity_scale, &seeds)
+                    .into_iter()
+                    .flatten()
+                    .collect(),
+            );
+        }
         for (sum, value) in sums.iter_mut().zip(lattice.link_samples()?) {
             for d in 0..4 {
                 sum[d] += value[d] as f64;
             }
         }
     }
-    let velocity_scale = setup.wind.speed / speed;
-    let streams = streamlines(&setup, &lattice.mean_field()?, velocity_scale);
+    let streams: Vec<super::Stream> =
+        streamlines(&setup, &lattice.mean_field()?, velocity_scale, &seeds)
+            .into_iter()
+            .flatten()
+            .collect();
     let movie = super::Movie {
         top,
         seconds: (every * frame_every) as f64 * step_seconds(&setup),
@@ -387,6 +419,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                 frames: w.frames.clone(),
             })
             .collect(),
+        streams: moving,
     };
     let slices = planes
         .into_iter()
@@ -628,11 +661,41 @@ fn sampled(
     (out, tris)
 }
 
+fn stream_seeds(setup: &Setup) -> Vec<[f64; 3]> {
+    let (low, high) = setup.bounds;
+    let spacing = setup.grid.spacing;
+    let fine = |p: Point3| {
+        let q = (p - setup.grid.origin) / spacing;
+        [q.x, q.y, q.z]
+    };
+    let widen = |a: usize| {
+        let pad = 0.15 * (high[a] - low[a]) + 0.1 * setup.across;
+        (low[a] - pad, high[a] + pad)
+    };
+    let (side, up) = (widen(SIDE), widen(UP));
+    let aspect = (side.1 - side.0) / (up.1 - up.0).max(1.0e-9);
+    let wanted = 2400.0;
+    let along_side = ((wanted * aspect).sqrt().round() as usize).clamp(4, 160);
+    let along_up = ((wanted / along_side as f64).round() as usize).clamp(4, 160);
+    let mut seeds = Vec::new();
+    for i in 0..along_side {
+        for j in 0..along_up {
+            let mut p = Point3::origin();
+            p[SIDE] = side.0 + (side.1 - side.0) * (i as f64 + 0.5) / along_side as f64;
+            p[UP] = up.0 + (up.1 - up.0) * (j as f64 + 0.5) / along_up as f64;
+            p[WIND] = low[WIND] - 0.4 * setup.across;
+            seeds.push(fine(p));
+        }
+    }
+    seeds
+}
+
 fn streamlines(
     setup: &Setup,
     field: &crate::flow::lattice::MeanField,
     scale: f64,
-) -> Vec<super::Stream> {
+    seeds: &[[f64; 3]],
+) -> Vec<Option<super::Stream>> {
     use rayon::prelude::*;
     let stride = field.stride as f64;
     let size = setup.grid.size.map(|n| n as f64);
@@ -680,31 +743,7 @@ fn streamlines(
         }
         (weight > 0.0).then(|| total.map(|v| v / weight.max(1.0)))
     };
-    let (low, high) = setup.bounds;
     let spacing = setup.grid.spacing;
-    let fine = |p: Point3| {
-        let q = (p - setup.grid.origin) / spacing;
-        [q.x, q.y, q.z]
-    };
-    let widen = |a: usize| {
-        let pad = 0.15 * (high[a] - low[a]) + 0.1 * setup.across;
-        (low[a] - pad, high[a] + pad)
-    };
-    let (side, up) = (widen(SIDE), widen(UP));
-    let aspect = (side.1 - side.0) / (up.1 - up.0).max(1.0e-9);
-    let wanted = 2400.0;
-    let along_side = ((wanted * aspect).sqrt().round() as usize).clamp(4, 160);
-    let along_up = ((wanted / along_side as f64).round() as usize).clamp(4, 160);
-    let mut seeds = Vec::new();
-    for i in 0..along_side {
-        for j in 0..along_up {
-            let mut p = Point3::origin();
-            p[SIDE] = side.0 + (side.1 - side.0) * (i as f64 + 0.5) / along_side as f64;
-            p[UP] = up.0 + (up.1 - up.0) * (j as f64 + 0.5) / along_up as f64;
-            p[WIND] = low[WIND] - 0.4 * setup.across;
-            seeds.push(fine(p));
-        }
-    }
     let step = 0.5 * stride;
     let limit = (3.0 * size[WIND] / step) as usize;
     let calm = 0.02 * LATTICE_SPEED;
@@ -714,8 +753,9 @@ fn streamlines(
         [w.x, w.y, w.z].map(|v| (v * 10.0).round() / 10.0)
     };
     seeds
-        .into_par_iter()
-        .filter_map(|mut p| {
+        .par_iter()
+        .map(|&start| {
+            let mut p = start;
             let mut stream = super::Stream::default();
             for n in 0..limit {
                 let Some(v) = velocity(p) else { break };
@@ -740,7 +780,6 @@ fn streamlines(
             }
             (stream.points.len() > 2).then_some(stream)
         })
-        .filter(|stream| disturbed(stream, setup))
         .collect()
 }
 

@@ -424,7 +424,7 @@ pub fn mean_stride(size: [usize; 3]) -> usize {
     ((cells / MEAN_CELLS as f64).cbrt().ceil() as usize).max(1)
 }
 
-fn mean_shader() -> String {
+fn mean_shader(add: bool) -> String {
     let mut s = String::new();
     s += "struct Mean { nx: u32, ny: u32, nz: u32, stride: u32, cx: u32, cy: u32, cz: u32, count: u32 }\n";
     s += "@group(0) @binding(0) var<uniform> m: Mean;\n";
@@ -459,7 +459,11 @@ fn mean_shader() -> String {
     }
     s += "    total = total + vec4<f32>(mx, my, mz, 1.0);\n";
     s += "  } } }\n";
-    s += "  out[k] = out[k] + total;\n";
+    s += if add {
+        "  out[k] = out[k] + total;\n"
+    } else {
+        "  out[k] = total;\n"
+    };
     s += "}\n";
     s
 }
@@ -572,6 +576,7 @@ pub struct Lattice<'a> {
     forces: Option<(Pass, wgpu::Buffer)>,
     planes: (Pass, wgpu::Buffer),
     mean: (Pass, wgpu::Buffer, usize, [usize; 3]),
+    now: (Pass, wgpu::Buffer),
     parity: usize,
     pub links: Vec<[u32; 2]>,
 }
@@ -917,7 +922,7 @@ impl<'a> Lattice<'a> {
         });
         let mean = (
             Pass {
-                pipeline: pipeline(mean_shader(), "mean", &[&plane_layout, &side_layout]),
+                pipeline: pipeline(mean_shader(true), "mean", &[&plane_layout, &side_layout]),
                 common: group(&plane_layout, &[&mean_header, &flags, &mean_out]),
                 sides: [side(0), side(1)],
                 count: coarse_count as u32,
@@ -926,6 +931,22 @@ impl<'a> Lattice<'a> {
             mean_out,
             stride,
             coarse,
+        );
+        let now_out = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("snapshot"),
+            size: coarse_count as u64 * 16,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let now = (
+            Pass {
+                pipeline: pipeline(mean_shader(false), "mean", &[&plane_layout, &side_layout]),
+                common: group(&plane_layout, &[&mean.0.header, &flags, &now_out]),
+                sides: [side(0), side(1)],
+                count: coarse_count as u32,
+                header: mean.0.header.clone(),
+            },
+            now_out,
         );
         Ok(Lattice {
             gpu,
@@ -939,6 +960,7 @@ impl<'a> Lattice<'a> {
             forces,
             planes,
             mean,
+            now,
             parity: 0,
             links,
         })
@@ -1078,12 +1100,32 @@ impl<'a> Lattice<'a> {
         self.gpu.queue.submit([encoder.finish()]);
     }
 
+    pub fn snapshot(&self) -> Result<MeanField> {
+        let (pass, buffer) = &self.now;
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        {
+            let mut compute = encoder.begin_compute_pass(&Default::default());
+            compute.set_pipeline(&pass.pipeline);
+            compute.set_bind_group(0, &pass.common, &[]);
+            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
+            let (gx, gy) = dispatch(pass.count);
+            compute.dispatch_workgroups(gx, gy, 1);
+        }
+        self.gpu.queue.submit([encoder.finish()]);
+        let (_, _, stride, size) = &self.mean;
+        self.field(buffer, *stride, *size)
+    }
+
     pub fn mean_field(&self) -> Result<MeanField> {
         let (_, buffer, stride, size) = &self.mean;
+        self.field(buffer, *stride, *size)
+    }
+
+    fn field(&self, buffer: &wgpu::Buffer, stride: usize, size: [usize; 3]) -> Result<MeanField> {
         let values = self.gpu.read(buffer)?;
         Ok(MeanField {
-            stride: *stride,
-            size: *size,
+            stride,
+            size,
             velocity: values
                 .chunks_exact(4)
                 .map(|v| {
