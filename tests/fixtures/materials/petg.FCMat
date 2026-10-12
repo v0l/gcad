@@ -1,0 +1,16 @@
+---
+General:
+  UUID: "00000000-0000-0000-0000-000000000001"
+  Name: "PETG Natural"
+  Description: "A test card in the FreeCAD 1.0 layout"
+Models:
+  LinearElastic:
+    UUID: '7b561d1d-fb9b-44f6-9da9-56a4f74d7536'
+    Density: "1270 kg/m^3"
+    PoissonRatio: "0.38"
+    YieldStrength: "47 MPa"
+    YoungsModulus: "2.1 GPa"
+  Thermal:
+    UUID: '9959d007-a970-4ea7-bae4-3eb1b8b883c7'
+    ThermalConductivity: "0.21 W/m/K"
+    ThermalExpansionCoefficient: "0.000068 m/m/K"

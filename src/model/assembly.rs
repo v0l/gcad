@@ -620,6 +620,7 @@ impl Model {
             "interference" => self.op_interference(line),
             "color" => self.op_colour_part(line),
             "material" => self.op_material(line),
+            "materials" => self.op_materials(line),
             "measure" => self.op_measure(line),
             "concentric" => self.op_concentric(line),
             "flush" => self.op_flush(line),

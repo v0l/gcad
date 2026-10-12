@@ -197,7 +197,8 @@ Bodies:
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
 | `import` | `file.step` or `file.stl`, `solid=` | adds the solid in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file. A STEP file with several solids needs `solid=n` to pick one; the error lists them with their names and sizes. A STEP assembly's solids come where the file places them, a part used six times being six solids |
 | `color` | name, `#rrggbb` or `r,g,b` | colours the current body in STEP and 3MF files |
-| `material` | `name` `density=` `E=` `nu=` `yield=` `k=` `alpha=` | sets what the current body is made of, for its mass and for simulations. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood (their properties are under Simulations). `density=` in g/cm³ gives any other; the rest set stiffness in GPa, Poisson's ratio, yield strength in MPa, conductivity in W/m·K and expansion in µm/m·K |
+| `material` | `name` `density=` `E=` `nu=` `yield=` `k=` `alpha=` | sets what the current body is made of, for its mass and for simulations. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood (their properties are under Simulations). `density=` in g/cm³ gives any other; the rest set stiffness in GPa, Poisson's ratio, yield strength in MPa, conductivity in W/m·K and expansion in µm/m·K. A name from a material library (see Material libraries) is used before a built-in one of the same name |
+| `materials` | `file` | loads a material library: a `.toml` in gcad's own layout, a MatML `.xml` (Ansys Engineering Data, Granta) or a FreeCAD `.FCMat`. Its materials take names in lower case with dashes (`Structural Steel` is `structural-steel`) and come before any found automatically |
 
 Measuring, which changes nothing and prints the answer:
 
@@ -213,6 +214,71 @@ Measuring, which changes nothing and prints the answer:
 Profiles drawn inside another profile in the same sketch become holes in it.
 A sketch for `sweep` is drawn around the workplane origin; `sweep` moves it to the first
 path point (or the start of the helix) and turns it to face along the path.
+
+
+## Material libraries
+
+A file's materials come from, in order: `materials file` lines, a `materials.toml` beside the
+file or in any folder above it up to the repository root (nearer files first), then
+`~/.config/gcad/materials.toml`, then the built-in list. `gcad materials [file or folder]` prints
+what a file can use and where each came from. A library is checked into the project, so a
+material gives the same result on any machine, and a changed library makes simulation results
+stale.
+
+`materials.toml` has one table per material, in the engineering-constants names every solver
+shares. Axis 3 is the print direction for a printed part.
+
+```toml
+[petg-cf]
+density = 1.30
+E = 3.8
+nu = 0.36
+yield = 52
+k = 0.25
+alpha = 50
+printed = true
+
+[petg-print]
+density = 1.27
+E1 = 2.1
+E2 = 2.1
+E3 = 1.5
+nu12 = 0.38
+nu13 = 0.35
+nu23 = 0.35
+G12 = 0.76
+G13 = 0.55
+G23 = 0.55
+Xt = 47
+Yt = 47
+Zt = 22
+source = "own tensile bars, 0.2 mm layers, 100% infill"
+```
+
+| key | unit | meaning |
+|---|---|---|
+| `density` | g/cm³ | |
+| `E`, `nu`, `yield`, `k`, `alpha` | GPa, -, MPa, W/m·K, µm/m·K | isotropic values |
+| `E1` `E2` `E3`, `G12` `G13` `G23` | GPa | Young's and shear moduli along and between the axes |
+| `nu12` `nu13` `nu23` | - | Poisson's ratios |
+| `Xt` `Yt` `Zt`, `Xc` `Yc` `Zc`, `S12` `S13` `S23` | MPa | tensile, compressive and shear strengths |
+| `k1` `k2` `k3`, `alpha1` `alpha2` `alpha3` | W/m·K, µm/m·K | conductivity and expansion along the axes |
+| `printed` | true or false | the readings say the values are for printed parts |
+| `source` | text | where the numbers came from |
+
+The solvers are isotropic. A material given along three axes and no isotropic value is
+simulated with its weakest: the smallest modulus, the smallest tensile or compressive
+strength, `nu12`, the smallest conductivity and the largest expansion, and the simulation
+notes say which part that applies to and the values used. Giving `E=` or `yield=` as well
+overrides that choice.
+
+MatML files are read the way Ansys Workbench writes them (`Young's Modulus X direction`,
+`Poisson's Ratio XY`, `Stress Limits` with `Tensile X direction` and so on), converting from the
+units each parameter declares; a property given against temperature takes the value nearest
+22 °C. FreeCAD cards are read in the YAML layout of FreeCAD 1.0 (`LinearElastic`,
+`OrthotropicLinearElastic`, `Thermal`) and the older INI layout, with quantities like
+`1240 kg/m^3` and `0.000068 m/m/K`. Neither writes yield strength for every material; where it
+is missing the tensile strength is used.
 
 ## Assemblies
 
@@ -242,6 +308,7 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 | `explode` | `part x,y,z` | moves a part and the parts held by it by that much in exploded views only: `render --explode` and the viewer's explode slider. It does not change where the part is for mates, joints, interference or export |
 | `color` | `part colour` | colours a part, over the colour its file gave it |
 | `material` | `part name` `density=` | sets a part's material, over the one its file gave it |
+| `materials` | `file` | loads a material library, as in a part file |
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
 | `measure` | `mass`, `overlap a b` | as in part files |
 
@@ -366,6 +433,7 @@ expect shoulder<15 sun_s_turn<4
 | `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line. Every body of it is simulated |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
+| `materials` | `file` | loads a material library for the simulated parts |
 | `gravity` | `x,y,z` | in m/s². A torque simulation uses `0,0,-9.81` unless given; a static one leaves the part's weight out unless this line is there |
 | `payload` | `part grams` `at=x,y,z` | a point mass carried by a part, at its centre of mass unless `at=` places it (in the assembly's coordinates as posed when the line runs). It moves with the part |
 | `sweep` | `joint ... steps=` | runs every pose of the listed joints across their ranges in `steps` (24 unless given) equal steps; a joint that turns all the way round goes from -180 to 180. Several joints on one line make a grid of poses; separate lines make separate sweeps |

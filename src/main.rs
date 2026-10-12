@@ -58,6 +58,8 @@ enum Command {
         #[arg(long)]
         dry_run: bool,
     },
+    /// List the materials a file can use: materials.toml files above it, ~/.config/gcad, and the built-in ones; or the materials in one library file
+    Materials { file: Option<String> },
     /// List the parts an assembly is made of, counted by file, body and variables
     Bom {
         file: String,
@@ -275,6 +277,13 @@ fn main() -> Result<()> {
             export::export_model(&run.model, std::path::Path::new(&file), &output)
         }
         Command::Sim { file, dry_run } => simulate(&file, &vars, dry_run),
+        Command::Materials { file } => {
+            println!(
+                "{}",
+                gcad::model::materials::table(file.as_deref().map(std::path::Path::new))?
+            );
+            Ok(())
+        }
         Command::Bom { file, csv } => {
             let run = load(&file, None, &vars)?;
             finished(&run)?;

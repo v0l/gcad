@@ -1,0 +1,11 @@
+; An old INI style card
+[General]
+Name = ABS Black
+[Mechanical]
+Density = 1.04 g/cm^3
+YoungsModulus = 2100 MPa
+PoissonRatio = 0.35
+UltimateTensileStrength = 4351 psi
+[Thermal]
+ThermalConductivity = 0.17 W/m/K
+ThermalExpansionCoefficient = 90 um/m/K

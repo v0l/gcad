@@ -471,22 +471,45 @@ impl Model {
             [one] => Some(one.to_string()),
             _ => bail!("give one material name, like `material steel`"),
         };
-        let known = label.as_deref().and_then(stock_of);
-        let density = match (args.optional_number("density", &self.scope)?, known, &label) {
+        self.ensure_library()?;
+        let entry = label
+            .as_deref()
+            .and_then(|l| self.library.get(&super::materials::slug(l)).cloned());
+        let known = if entry.is_some() {
+            None
+        } else {
+            label.as_deref().and_then(stock_of)
+        };
+        let listed = entry
+            .as_ref()
+            .and_then(|e| e.density)
+            .or(known.map(|s| s.density));
+        let density = match (
+            args.optional_number("density", &self.scope)?,
+            listed,
+            &label,
+        ) {
             (Some(d), _, _) if d <= 0.0 => bail!("density must be above zero, not {d}"),
             (Some(d), _, _) => d,
-            (None, Some(stock), _) => stock.density,
-            (None, None, Some(label)) => bail!(
-                "no density known for `{label}`; give `density=` in g/cm³, or use one of {}",
-                MATERIALS
-                    .iter()
-                    .map(|m| m.name)
-                    .collect::<Vec<_>>()
-                    .join(", ")
-            ),
+            (None, Some(d), _) => d,
+            (None, None, Some(label)) => {
+                let mut names: Vec<String> = MATERIALS.iter().map(|m| m.name.to_string()).collect();
+                names.extend(self.library.keys().cloned());
+                names.sort();
+                names.dedup();
+                bail!(
+                    "no density known for `{label}`; give `density=` in g/cm³, add it to a materials.toml, or use one of {}",
+                    names.join(", ")
+                )
+            }
             (None, None, None) => bail!("write `material steel` or `material name density=1.2`"),
         };
-        let mut mechanics = known.map(Stock::mechanics).unwrap_or_default();
+        let mut mechanics = match (&entry, known) {
+            (Some(e), _) => e.mechanics,
+            (None, Some(stock)) => stock.mechanics(),
+            (None, None) => Mechanics::default(),
+        };
+        let axes = entry.as_ref().and_then(|e| e.axes);
         for (key, slot) in [
             ("E", &mut mechanics.young),
             ("nu", &mut mechanics.poisson),
@@ -513,9 +536,41 @@ impl Model {
                 name: label.clone(),
                 density,
                 mechanics,
+                axes,
             },
         );
-        Ok(format!("`{name}` is {label}, {density} g/cm³"))
+        let from = entry
+            .map(|e| format!(" from {}", e.source.display()))
+            .unwrap_or_default();
+        Ok(format!("`{name}` is {label}, {density} g/cm³{from}"))
+    }
+
+    pub(crate) fn ensure_library(&mut self) -> Result<()> {
+        if !self.library_loaded {
+            for (name, entry) in super::materials::discovered(self.dir.as_deref())? {
+                self.library.entry(name).or_insert(entry);
+            }
+            self.library_loaded = true;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn load_library(&mut self, file: &std::path::Path) -> Result<String> {
+        if !file.is_file() {
+            bail!("no file {}", file.display());
+        }
+        let entries = super::materials::load(file)?;
+        let names: Vec<String> = entries.iter().map(|e| e.name.clone()).collect();
+        for entry in entries {
+            self.library.insert(entry.name.clone(), entry);
+        }
+        Ok(format!("materials {}", names.join(", ")))
+    }
+
+    pub(crate) fn op_materials(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["file"], &[], false)?;
+        let file = self.relative(args.text("file")?);
+        self.load_library(&file)
     }
 
     pub fn named_solids(&self) -> Vec<(String, &Solid)> {
@@ -857,6 +912,7 @@ pub struct Material {
     pub name: String,
     pub density: f64,
     pub mechanics: Mechanics,
+    pub axes: Option<super::materials::Axes>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]

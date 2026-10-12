@@ -1,0 +1,124 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<EngineeringData version="23.1">
+  <Materials>
+    <MatML_Doc>
+      <Material>
+        <BulkDetails>
+          <Name>Structural Steel</Name>
+          <PropertyData property="pr0">
+            <Data format="string">-</Data>
+            <ParameterValue parameter="pa1" format="float">
+              <Data>7900,7850,7800</Data>
+              <Qualifier name="Variable Type">Dependent,Dependent,Dependent</Qualifier>
+            </ParameterValue>
+            <ParameterValue parameter="pa2" format="float">
+              <Data>-20,22,100</Data>
+              <Qualifier name="Variable Type">Independent,Independent,Independent</Qualifier>
+            </ParameterValue>
+          </PropertyData>
+          <PropertyData property="pr1">
+            <Data format="string">-</Data>
+            <Qualifier name="Behavior">Isotropic</Qualifier>
+            <ParameterValue parameter="pa3" format="float">
+              <Data>200000000000</Data>
+            </ParameterValue>
+            <ParameterValue parameter="pa4" format="float">
+              <Data>0.3</Data>
+            </ParameterValue>
+          </PropertyData>
+          <PropertyData property="pr2">
+            <Data format="string">-</Data>
+            <ParameterValue parameter="pa5" format="float">
+              <Data>36259.4</Data>
+            </ParameterValue>
+          </PropertyData>
+          <PropertyData property="pr3">
+            <Data format="string">-</Data>
+            <ParameterValue parameter="pa6" format="float">
+              <Data>1.2e-05</Data>
+            </ParameterValue>
+          </PropertyData>
+        </BulkDetails>
+      </Material>
+      <Material>
+        <BulkDetails>
+          <Name>Glass Epoxy UD</Name>
+          <PropertyData property="pr0">
+            <Data format="string">-</Data>
+            <ParameterValue parameter="pa1" format="float">
+              <Data>1950</Data>
+            </ParameterValue>
+          </PropertyData>
+          <PropertyData property="pr1">
+            <Data format="string">-</Data>
+            <Qualifier name="Behavior">Orthotropic</Qualifier>
+            <ParameterValue parameter="pa10" format="float"><Data>41000</Data></ParameterValue>
+            <ParameterValue parameter="pa11" format="float"><Data>9500</Data></ParameterValue>
+            <ParameterValue parameter="pa12" format="float"><Data>9000</Data></ParameterValue>
+            <ParameterValue parameter="pa13" format="float"><Data>0.28</Data></ParameterValue>
+            <ParameterValue parameter="pa14" format="float"><Data>0.29</Data></ParameterValue>
+            <ParameterValue parameter="pa15" format="float"><Data>0.41</Data></ParameterValue>
+            <ParameterValue parameter="pa16" format="float"><Data>4700</Data></ParameterValue>
+            <ParameterValue parameter="pa17" format="float"><Data>4600</Data></ParameterValue>
+            <ParameterValue parameter="pa18" format="float"><Data>3400</Data></ParameterValue>
+          </PropertyData>
+          <PropertyData property="pr4">
+            <Data format="string">-</Data>
+            <Qualifier name="Behavior">Orthotropic</Qualifier>
+            <ParameterValue parameter="pa20" format="float"><Data>1050</Data></ParameterValue>
+            <ParameterValue parameter="pa21" format="float"><Data>38</Data></ParameterValue>
+            <ParameterValue parameter="pa22" format="float"><Data>36</Data></ParameterValue>
+            <ParameterValue parameter="pa23" format="float"><Data>-610</Data></ParameterValue>
+            <ParameterValue parameter="pa24" format="float"><Data>-115</Data></ParameterValue>
+            <ParameterValue parameter="pa25" format="float"><Data>-110</Data></ParameterValue>
+            <ParameterValue parameter="pa26" format="float"><Data>75</Data></ParameterValue>
+          </PropertyData>
+        </BulkDetails>
+      </Material>
+      <Metadata>
+        <ParameterDetails id="pa1">
+          <Name>Density</Name>
+          <Units name="Density"><Unit><Name>kg</Name></Unit><Unit power="-3"><Name>m</Name></Unit></Units>
+        </ParameterDetails>
+        <ParameterDetails id="pa2">
+          <Name>Temperature</Name>
+          <Units name="Temperature"><Unit><Name>C</Name></Unit></Units>
+        </ParameterDetails>
+        <ParameterDetails id="pa3">
+          <Name>Young's Modulus</Name>
+          <Units name="Stress"><Unit><Name>Pa</Name></Unit></Units>
+        </ParameterDetails>
+        <ParameterDetails id="pa4"><Name>Poisson's Ratio</Name><Unitless /></ParameterDetails>
+        <ParameterDetails id="pa5">
+          <Name>Tensile Yield Strength</Name>
+          <Units name="Stress"><Unit><Name>psi</Name></Unit></Units>
+        </ParameterDetails>
+        <ParameterDetails id="pa6">
+          <Name>Coefficient of Thermal Expansion</Name>
+          <Units name="InvTemp1"><Unit power="-1"><Name>C</Name></Unit></Units>
+        </ParameterDetails>
+        <ParameterDetails id="pa10"><Name>Young's Modulus X direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa11"><Name>Young's Modulus Y direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa12"><Name>Young's Modulus Z direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa13"><Name>Poisson's Ratio XY</Name><Unitless /></ParameterDetails>
+        <ParameterDetails id="pa14"><Name>Poisson's Ratio XZ</Name><Unitless /></ParameterDetails>
+        <ParameterDetails id="pa15"><Name>Poisson's Ratio YZ</Name><Unitless /></ParameterDetails>
+        <ParameterDetails id="pa16"><Name>Shear Modulus XY</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa17"><Name>Shear Modulus XZ</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa18"><Name>Shear Modulus YZ</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa20"><Name>Tensile X direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa21"><Name>Tensile Y direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa22"><Name>Tensile Z direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa23"><Name>Compressive X direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa24"><Name>Compressive Y direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa25"><Name>Compressive Z direction</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <ParameterDetails id="pa26"><Name>Shear XY</Name><Units><Unit><Name>MPa</Name></Unit></Units></ParameterDetails>
+        <PropertyDetails id="pr0"><Unitless /><Name>Density</Name></PropertyDetails>
+        <PropertyDetails id="pr1"><Unitless /><Name>Elasticity</Name></PropertyDetails>
+        <PropertyDetails id="pr2"><Unitless /><Name>Tensile Yield Strength</Name></PropertyDetails>
+        <PropertyDetails id="pr3"><Unitless /><Name>Coefficient of Thermal Expansion</Name></PropertyDetails>
+        <PropertyDetails id="pr4"><Unitless /><Name>Stress Limits</Name></PropertyDetails>
+      </Metadata>
+    </MatML_Doc>
+  </Materials>
+</EngineeringData>

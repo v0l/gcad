@@ -265,7 +265,8 @@ pub fn short(value: f64) -> String {
 }
 
 const FILE_KINDS: &[&str] = &[
-    "gcad", "gasm", "gsim", "step", "stp", "svg", "dxf", "stl", "ttf", "otf",
+    "gcad", "gasm", "gsim", "step", "stp", "svg", "dxf", "stl", "ttf", "otf", "toml", "xml",
+    "fcmat",
 ];
 const READ_INTO: &[&str] = &["gcad", "gasm", "gsim"];
 
@@ -288,6 +289,11 @@ pub fn inputs(spec: &Path) -> Vec<PathBuf> {
             continue;
         };
         let dir = file.parent().map(Path::to_path_buf).unwrap_or_default();
+        for library in crate::model::materials::discover(Some(&dir)) {
+            if !found.contains(&library) {
+                found.push(library);
+            }
+        }
         for word in text.lines().flat_map(str::split_whitespace) {
             let word = word.rsplit('=').next().unwrap_or(word);
             let path = dir.join(word);

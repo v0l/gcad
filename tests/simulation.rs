@@ -1329,3 +1329,168 @@ fn wind_draws_the_flow() {
     let image = image::open(&path).expect("png").to_rgb8();
     assert!(image.width() > 1000 && image.height() > 500);
 }
+
+fn material_fixture(name: &str) -> String {
+    format!(
+        "{}/tests/fixtures/materials/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    )
+}
+
+fn triple(got: [Option<f64>; 3], want: [f64; 3]) {
+    for (g, w) in got.iter().zip(want) {
+        close(g.expect("a value"), w, 1.0e-9);
+    }
+}
+
+fn materials_of(
+    path: &std::path::Path,
+) -> std::collections::HashMap<String, gcad::model::Material> {
+    spec_of(path).materials
+}
+
+#[test]
+fn material_library_is_found() {
+    let dir = PathBuf::from(scratch("material_library_is_found"));
+    let sub = dir.join("parts");
+    std::fs::create_dir_all(dir.join(".git")).expect("dir");
+    std::fs::create_dir_all(&sub).expect("dir");
+    std::fs::write(
+        dir.join("materials.toml"),
+        "[petg-cf]\ndensity = 1.3\nE = 3.8\nnu = 0.36\nyield = 52\nprinted = true\n\n[pla]\ndensity = 1.25\nE = 3.5\nnu = 0.35\n",
+    )
+    .expect("library");
+    std::fs::write(
+        sub.join("materials.toml"),
+        "[petg-cf]\ndensity = 1.31\nE = 3.9\n",
+    )
+    .expect("nearer library");
+    let part = |name: &str, material: &str| {
+        let path = sub.join(name);
+        std::fs::write(
+            &path,
+            format!("rect 10 10\nextrude 10\nmaterial {material}\n"),
+        )
+        .expect("part");
+        path
+    };
+    let near = &materials_of(&part("near.gcad", "PETG-CF"))["main"];
+    assert_eq!((near.density, near.mechanics.young), (1.31, Some(3.9)));
+    let pla = &materials_of(&part("pla.gcad", "pla"))["main"];
+    assert_eq!((pla.density, pla.mechanics.young), (1.25, Some(3.5)));
+    std::fs::remove_file(sub.join("materials.toml")).expect("remove");
+    let far = &materials_of(&part("far.gcad", "petg-cf"))["main"];
+    assert_eq!((far.density, far.mechanics.strength), (1.3, Some(52.0)));
+    assert!(far.mechanics.printed);
+    let bad = part("bad.gcad", "unobtainium");
+    let run = gcad::model::run_path(&bad, &[], None).expect("runs");
+    let (_, step) = run.steps.last().expect("a step");
+    let error = format!("{:#}", step.as_ref().expect_err("unknown material"));
+    assert!(
+        error.contains("petg-cf") && error.contains("materials.toml"),
+        "{error}"
+    );
+    std::fs::write(dir.join("materials.toml"), "[odd]\ndensity = 1\nE11 = 3\n")
+        .expect("bad library");
+    let run = gcad::model::run_path(&part("odd.gcad", "odd"), &[], None).expect("runs");
+    let (_, step) = run.steps.last().expect("a step");
+    let error = format!("{:#}", step.as_ref().expect_err("unknown key"));
+    assert!(
+        error.contains("`E11`") && error.contains("E1, E2, E3"),
+        "{error}"
+    );
+}
+
+#[test]
+fn directional_material_takes_the_weakest() {
+    let library = "[printed-pla]\ndensity = 1.24\nE1 = 3.0\nE2 = 3.0\nE3 = 1.5\nnu12 = 0.35\nnu13 = 0.33\nnu23 = 0.33\nG12 = 1.1\nG13 = 0.6\nG23 = 0.6\nXt = 50\nYt = 50\nZt = 20\nprinted = true\n";
+    let path = written(
+        "directional_material_takes_the_weakest",
+        &[
+            ("materials.toml", library),
+            (
+                "bar.gcad",
+                "rect 100 10 at=50,0\nbar: extrude 10 both\nmaterial printed-pla\n",
+            ),
+        ],
+        "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nload >X force=1000,0,0\nmid: probe 50,0,0\nmesh 4",
+    );
+    let outcome =
+        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("simulates");
+    let strain: f64 = 1000.0 / (100.0 * 1.5e3);
+    let along = strain * 50.0;
+    let across = 0.35 * strain * 5.0;
+    close(
+        reading(&outcome, "mid.displacement"),
+        (along * along + 2.0 * across * across).sqrt(),
+        1.0e-3,
+    );
+    close(reading(&outcome, "safety"), 2.0, 1.0e-6);
+    assert!(
+        outcome
+            .notes
+            .iter()
+            .any(|n| n.contains("printed-pla") && n.contains("weakest") && n.contains("E 1.5 GPa")),
+        "{:?}",
+        outcome.notes
+    );
+    let inputs = gcad::sim::inputs(&path);
+    assert!(
+        inputs.iter().any(|f| f.ends_with("materials.toml")),
+        "{inputs:?}"
+    );
+}
+
+#[test]
+fn material_files_import() {
+    let source = format!(
+        "materials {}\nmaterials {}\nmaterials {}\nmaterials {}\nrect 10 10\nsteel: extrude 10\nmaterial structural-steel\n",
+        material_fixture("workbench.xml"),
+        material_fixture("petg.FCMat"),
+        material_fixture("printed.FCMat"),
+        material_fixture("abs.FCMat"),
+    );
+    let model = common::build(&source);
+    let library = &model.library;
+    let steel = &library["structural-steel"];
+    close(steel.density.unwrap(), 7.85, 1.0e-9);
+    close(steel.mechanics.young.unwrap(), 200.0, 1.0e-9);
+    close(steel.mechanics.poisson.unwrap(), 0.3, 1.0e-9);
+    close(steel.mechanics.strength.unwrap(), 250.0, 1.0e-4);
+    close(steel.mechanics.expansion.unwrap(), 12.0, 1.0e-9);
+    assert!(steel.axes.is_none());
+    close(model.materials["main"].density, 7.85, 1.0e-9);
+    let glass = &library["glass-epoxy-ud"];
+    let axes = glass.axes.expect("orthotropic");
+    triple(axes.young, [41.0, 9.5, 9.0]);
+    triple(axes.poisson, [0.28, 0.29, 0.41]);
+    triple(axes.shear, [4.7, 4.6, 3.4]);
+    triple(axes.compression, [610.0, 115.0, 110.0]);
+    close(axes.shear_strength[0].unwrap(), 75.0, 1.0e-9);
+    close(glass.mechanics.young.unwrap(), 9.0, 1.0e-9);
+    close(glass.mechanics.strength.unwrap(), 36.0, 1.0e-9);
+    close(glass.density.unwrap(), 1.95, 1.0e-9);
+    let petg = &library["petg-natural"];
+    close(petg.density.unwrap(), 1.27, 1.0e-9);
+    close(petg.mechanics.young.unwrap(), 2.1, 1.0e-9);
+    close(petg.mechanics.strength.unwrap(), 47.0, 1.0e-9);
+    close(petg.mechanics.conductivity.unwrap(), 0.21, 1.0e-9);
+    close(petg.mechanics.expansion.unwrap(), 68.0, 1.0e-9);
+    let asa = &library["printed-asa"];
+    close(asa.density.unwrap(), 1.07, 1.0e-9);
+    close(asa.mechanics.young.unwrap(), 1.3, 1.0e-9);
+    close(asa.mechanics.poisson.unwrap(), 0.35, 1.0e-9);
+    triple(asa.axes.unwrap().shear, [0.7, 0.5, 0.5]);
+    let abs = &library["abs-black"];
+    close(abs.density.unwrap(), 1.04, 1.0e-9);
+    close(abs.mechanics.strength.unwrap(), 30.0, 1.0e-3);
+    close(abs.mechanics.expansion.unwrap(), 90.0, 1.0e-9);
+    let listed = gcad::model::materials::table(Some(std::path::Path::new(&material_fixture(
+        "workbench.xml",
+    ))))
+    .expect("lists");
+    assert!(
+        listed.contains("glass-epoxy-ud") && listed.contains("along three axes"),
+        "{listed}"
+    );
+}

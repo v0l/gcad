@@ -45,7 +45,10 @@ scale.
 `material` gains the properties the solvers need, beside density: Young's modulus, Poisson's
 ratio, yield strength, thermal conductivity and expansion. Printed plastics (pla, petg, abs,
 asa, nylon, tpu) get printed-part values, lower than the moulded ones, and the readings say so.
-`material name E= nu= yield= k=` sets any of them for an unlisted material.
+`material name E= nu= yield= k=` sets any of them for an unlisted material. Material libraries
+(`materials.toml`, MatML, FreeCAD cards; see Material libraries in `docs/format.md`) carry
+properties along three axes as well, for printed and fibre parts; the solvers are isotropic and
+take the weakest direction, with a note.
 
 ## Kinds
 

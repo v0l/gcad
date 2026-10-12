@@ -89,6 +89,10 @@ watching; you work from `check` and `render`.
   sizes, which an assembly brings in as `part.name`, or a piece you `combine` into this part.
   When a part file ends with several bodies, `check` reminds you to bring it into a `.gasm`.
 - `color` and `material` on a body feed the STEP colours, the viewer and the mass in `bom`.
+- Materials not in the built-in list go in a `materials.toml` beside the files or above them
+  (`[petg-cf]` then `density = 1.3`, `E = 3.8`, `nu = 0.36`, `yield = 52`; `E1 E2 E3 Xt Zt`
+  for printed parts, axis 3 the print direction). `materials file.xml` or `file.FCMat` loads
+  Ansys MatML or FreeCAD cards. `gcad materials` lists what a file can use.
 
 Selectors pick faces: `label`, `label.end`, `label.side`, `label.start`, `>Z` (flat faces
 furthest along +Z), `+Z` (every flat face facing +Z), `all`, and `a,b` for either. Edges are

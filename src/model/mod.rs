@@ -11,6 +11,7 @@ mod fuse;
 mod holes;
 mod import;
 pub mod mate;
+pub mod materials;
 mod measure;
 mod member;
 mod path;
@@ -98,6 +99,8 @@ pub struct Model {
     pub axes: HashMap<String, (Point3, Vector3)>,
     pub colours: HashMap<String, [f64; 3]>,
     pub materials: HashMap<String, bodies::Material>,
+    pub library: HashMap<String, materials::Entry>,
+    pub library_loaded: bool,
     pub sources: HashMap<String, assembly::Source>,
     pub placements: HashMap<String, Matrix4>,
     pub explode: Vec<(String, Vector3)>,
@@ -395,6 +398,7 @@ impl Model {
             "axis" => self.op_axis(line),
             "color" => self.op_color(line),
             "material" => self.op_material(line),
+            "materials" => self.op_materials(line),
             "dxf" | "svg" => self.op_drawing_file(line),
             "thicken" => self.op_thicken(line),
             "wrap" => self.op_wrap(line),

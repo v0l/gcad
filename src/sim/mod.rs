@@ -168,8 +168,39 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
             .notes
             .push(settled(&rough, &outcome, size * 1.5, within));
     }
+    if spec.kind.is_some_and(Kind::meshed) {
+        outcome.notes.extend(directional_notes(spec)?);
+    }
     outcome.check(&spec.expects);
     Ok(outcome)
+}
+
+fn directional_notes(spec: &Spec) -> Result<Vec<String>> {
+    let model = spec.target()?;
+    let mut notes = Vec::new();
+    for (name, _) in spec.named()? {
+        let Some(material) = model.materials.get(&name) else {
+            continue;
+        };
+        let Some(axes) = material.axes else { continue };
+        let m = &material.mechanics;
+        let used: Vec<String> = [
+            m.young.map(|v| format!("E {} GPa", crate::plot::label(v))),
+            m.poisson.map(|v| format!("nu {}", crate::plot::label(v))),
+            m.strength
+                .map(|v| format!("yield {} MPa", crate::plot::label(v))),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
+        notes.push(format!(
+            "`{name}` is {} with properties along three axes ({}); the solver is isotropic and takes the weakest: {}",
+            material.name,
+            axes.summary(),
+            used.join(", ")
+        ));
+    }
+    Ok(notes)
 }
 
 fn settled(rough: &Outcome, fine: &Outcome, coarse: f64, within: f64) -> String {

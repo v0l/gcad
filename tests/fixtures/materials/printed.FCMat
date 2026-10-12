@@ -1,0 +1,17 @@
+---
+General:
+  Name: "Printed ASA"
+Models:
+  Density:
+    Density: "1.07 g/cm^3"
+  OrthotropicLinearElastic:
+    UUID: 'b19ccc6b-a431-418e-91c2-0ac8c649d146'
+    YoungsModulusX: "1900 MPa"
+    YoungsModulusY: "1900 MPa"
+    YoungsModulusZ: "1300 MPa"
+    PoissonRatioXY: "0.35"
+    PoissonRatioXZ: "0.33"
+    PoissonRatioYZ: "0.33"
+    ShearModulusXY: "700 MPa"
+    ShearModulusXZ: "500 MPa"
+    ShearModulusYZ: "500 MPa"

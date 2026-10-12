@@ -56,6 +56,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "wind",
     "air",
     "average",
+    "materials",
 ];
 
 impl Model {
@@ -95,6 +96,11 @@ impl Model {
             "part" => self.op_sim_part(line),
             "pose" => self.op_sim_pose(line),
             "material" => self.with_target(|t| t.op_material(line)),
+            "materials" => {
+                let args = Args::new(line, &["file"], &[], false)?;
+                let file = self.relative(args.text("file")?);
+                self.with_target(|t| t.load_library(&file))
+            }
             "gravity" => {
                 let args = Args::new(line, &["vector"], &[], false)?;
                 let g = point3(args.text("vector")?, &self.scope)?.to_vec();
