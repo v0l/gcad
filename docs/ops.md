@@ -10,7 +10,8 @@ tests pass and flipping the row to `supported`. `tests/ops_doc.rs` fails if this
 and the tests disagree: a test not listed here, a listed test that does not exist, a
 `supported` row whose test is ignored as missing, or a `missing` row whose test runs.
 
-Run everything with `cargo test --release`. The OpenCascade check needs a Python with
+Run everything with `cargo test --release`. Tests that need a GPU (`flow`, `simulation::wind_*`)
+are ignored unless you add `--features gpu-tests`. The OpenCascade check needs a Python with
 OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ignored step_opens`.
 
 ## Sketch

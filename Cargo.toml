@@ -34,6 +34,9 @@ toml = "1.1.8"
 roxmltree = "0.21.1"
 yaml-rust2 = "0.13.0"
 
+[features]
+gpu-tests = []
+
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
 eframe = { version = "0.35", default-features = false, features = ["wayland", "x11"] }
 faer = { version = "0.24", features = ["rayon"] }

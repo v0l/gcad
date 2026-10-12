@@ -1209,6 +1209,7 @@ fn contact_presses_but_lets_go() {
 const CUBE: &str = "plane XY\nrect 100 100\nextrude 100\n";
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn wind_on_a_cube() {
     let outcome = simulated(
         "wind_on_a_cube",
@@ -1232,6 +1233,7 @@ fn wind_on_a_cube() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn wind_loads_a_static_part() {
     let path = written(
         "wind_loads_a_static_part",
@@ -1259,6 +1261,7 @@ fn wind_loads_a_static_part() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn wind_shelters_a_part_behind() {
     let pair = "part front cube.gcad\npart back cube.gcad\nmove back 250,0,0\n";
     let outcome = simulated(
@@ -1275,6 +1278,7 @@ fn wind_shelters_a_part_behind() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn wind_seals_a_closed_box() {
     let outcome = simulated(
         "wind_seals_a_closed_box",
@@ -1308,6 +1312,7 @@ fn wind_seals_a_closed_box() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn wind_draws_the_flow() {
     let path = written(
         "wind_draws_the_flow",

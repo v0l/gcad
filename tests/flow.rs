@@ -20,6 +20,7 @@ fn domain(size: [usize; 3], flags: Vec<u8>) -> Domain {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn poiseuille_between_plates() {
     let (_device, gpu) = device();
     let size = [4, 34, 4];
@@ -97,6 +98,7 @@ fn against_ghia(u: impl Fn(f64) -> f64, table: &[(f64, f64)], tolerance: f64) {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn lid_driven_cavity_re100() {
     let ghia = [
         (0.9766, 0.84123),
@@ -119,6 +121,7 @@ fn lid_driven_cavity_re100() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn lid_driven_cavity_re1000() {
     let ghia = [
         (0.9766, 0.65928),
@@ -259,6 +262,7 @@ struct Channel {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn cylinder_in_a_channel_re20() {
     let Channel {
         drag,
@@ -278,6 +282,7 @@ fn cylinder_in_a_channel_re20() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn cylinder_in_a_channel_re100() {
     let run = schaefer_turek(40, 100.0, 300_000, 1500, 40);
     let drag = run.history.iter().map(|h| h.0).fold(f64::MIN, f64::max);
@@ -374,6 +379,7 @@ fn sphere_drag(gpu: &Gpu, d: f64) -> f64 {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn sphere_drag_re50() {
     let (_device, gpu) = device();
     let drag = sphere_drag(&gpu, 20.0);
@@ -396,6 +402,7 @@ fn sphere_drag_re50_fine() {
 }
 
 #[test]
+#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
 fn pipe_flow_with_curved_walls() {
     let (_device, gpu) = device();
     let radius = 10.3;
