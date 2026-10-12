@@ -3,13 +3,18 @@
 Problems found while sizing the rotator (`~/git/rotator`, `sims/`) with `gcad sim`. Each
 item has a way to reproduce it. Take one, fix it, delete it from this file.
 
-## Stacked cylinders of one radius blow up the mesh
+## Flat caps on cylinder seams make sims mesh far too finely
 
-Extruding `circle 20` several times end to end (a shaft with bearing and load bands, like
-`~/git/rotator/sims/elshaft_fea.gcad`) meshes slowly and far too finely, and a coarser `mesh`
-can make it worse. Five segments of 10, 4, 86, 4 and 86 mm give about 1.2 million tetrahedra at
-`mesh 4` and 1.6 million at `mesh 6`, against 22 thousand for the same shaft with the bands at
-`circle 24`, and two to two and a half minutes of meshing against a quarter of a second.
+`mesh_part` (src/sim/mesh.rs) retries at 0.6 of the size, up to five times, whenever the worst
+dihedral is under 2 degrees. A shaft extruded as several `circle 20` segments end to end (like
+`~/git/rotator/sims/elshaft_fea.gcad`) meshes at `mesh 4` in 6 s with 56 thousand tetrahedra,
+but keeps 0.0 degree slivers at every size from 3.6 to 6, so the retries go down to about 0.5 mm
+and the sim gets 1.2 million tetrahedra after two minutes. The slivers have all four corners on
+the surface, at the 45 degree seam lines of the cylinder faces. `shed_flat_caps`
+(src/sim/tet/mod.rs) refuses 132 of them because shedding would push the cap's opposite edge
+past two surface triangles (the rim check). The same shaft with its bands at `circle 24` meshes
+cleanly. Repro: five extrudes of `circle 20` 10, 4, 86, 4, 86 mm long, `fix a.start`, `mesh 4`,
+`gcad sim x.gsim --dry-run`.
 
 ## `elbox.gsim` meshes 30 times finer than it did
 
