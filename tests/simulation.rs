@@ -824,6 +824,17 @@ fn tet_mesh_of_stacked_cylinders() {
 }
 
 #[test]
+fn tet_mesh_of_a_bore_with_a_tiny_step() {
+    let solid = solid_of(
+        "circle 18\ncircle 8.04\nshaft: extrude 20\nplane shaft.end\ncircle 13.4\ncircle 8.06\nextrude 12",
+    );
+    for size in [6.0, 3.6, 2.2] {
+        let q = checked_mesh(&solid, size).quality();
+        close(q.volume, gcad::geometry::volume(&solid), 0.03);
+    }
+}
+
+#[test]
 fn tet_mesh_of_example_parts() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/parts");
     for (name, size) in [

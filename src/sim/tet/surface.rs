@@ -246,9 +246,23 @@ fn metric(points: &[Point3], uvs: &[Vector2], triangles: &[[usize; 3]]) -> Matri
 type KernelFace = (Option<PolygonMesh>, Vec<Vec<Point3>>);
 
 pub fn surface_mesh(solid: &Solid, size: f64) -> Result<SurfaceMesh> {
-    let faces = select::faces(solid);
     let diameter = geometry::bounds(solid).diameter();
-    let tolerance = (size * 0.02).min(diameter * 2.0e-3).max(diameter * 1.0e-5);
+    let finest = diameter * 1.0e-5;
+    let mut tolerance = (size * 0.02).min(diameter * 2.0e-3).max(finest);
+    let mut tries = 0;
+    loop {
+        match surface_at(solid, size, diameter, tolerance) {
+            Err(_) if tries < 6 && tolerance > finest => {
+                tries += 1;
+                tolerance = (tolerance / 2.0).max(finest);
+            }
+            result => return result,
+        }
+    }
+}
+
+fn surface_at(solid: &Solid, size: f64, diameter: f64, tolerance: f64) -> Result<SurfaceMesh> {
+    let faces = select::faces(solid);
     let kernel: Vec<KernelFace> = solid
         .boundaries()
         .iter()

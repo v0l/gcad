@@ -35,6 +35,9 @@ All notable changes to gcad are listed here. The format follows
   every part in place instead of all at the origin. Faceted breps and surface models are built
   from their polygons, and a solid that still cannot be read becomes a box and is named in the
   line's summary, instead of failing the import.
+- Parts with a face narrower than the kernel's chord tolerance, like a 0.01 mm step where two
+  bores meet, mesh for simulation. The surface came out open at most sizes; it is now rebuilt
+  with finer boundary polylines until it closes.
 - A shaft extruded in several pieces of one radius meshes at the size asked. Its seams left
   flat elements, so the mesher retried down to a fraction of a millimetre (1.2 million
   elements and two minutes for a 190 mm shaft).
