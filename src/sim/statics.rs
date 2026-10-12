@@ -322,6 +322,49 @@ pub fn place_probe(
     Ok((found, note))
 }
 
+fn singular_band(spec: &Spec, mesh: &Quadratic) -> Result<(Vec<bool>, f64)> {
+    let reach = super::mesh::size(spec)?;
+    let held: std::collections::HashSet<usize> = spec
+        .supports
+        .iter()
+        .flat_map(|s| s.faces.iter().copied())
+        .collect();
+    let seeds: Vec<Point3> = mesh
+        .boundary
+        .iter()
+        .filter(|(_, tag)| held.contains(tag))
+        .flat_map(|(f, _)| f.iter().map(|&v| mesh.nodes[v as usize]))
+        .chain(
+            mesh.ties
+                .iter()
+                .flat_map(|t| t.group())
+                .map(|v| mesh.nodes[v as usize]),
+        )
+        .collect();
+    let key = |p: Point3| [p.x, p.y, p.z].map(|c| (c / reach).floor() as i64);
+    let mut cells: std::collections::HashMap<[i64; 3], Vec<Point3>> = Default::default();
+    for p in seeds {
+        cells.entry(key(p)).or_default().push(p);
+    }
+    let near = mesh
+        .nodes
+        .iter()
+        .map(|&p| {
+            let k = key(p);
+            (-1..=1).any(|x| {
+                (-1..=1).any(|y| {
+                    (-1..=1).any(|z| {
+                        cells
+                            .get(&[k[0] + x, k[1] + y, k[2] + z])
+                            .is_some_and(|c| c.iter().any(|q| (q - p).magnitude() < reach))
+                    })
+                })
+            })
+        })
+        .collect();
+    Ok((near, reach))
+}
+
 pub fn at(p: Point3) -> String {
     format!(
         "at {},{},{}",
@@ -376,20 +419,47 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             triple(f)
         ));
     }
-    let (peak, where_peak) = answer
-        .von_mises
-        .iter()
-        .enumerate()
-        .fold(
-            (0.0, 0),
-            |best, (i, v)| if *v > best.0 { (*v, i) } else { best },
-        );
+    let (near, reach) = singular_band(spec, mesh)?;
+    let counted = |v: usize| !near[v] || near.iter().all(|n| *n);
+    let peak_of = |keep: &dyn Fn(usize) -> bool| {
+        answer
+            .von_mises
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| keep(*i))
+            .fold(
+                (0.0, 0),
+                |best, (i, v)| if *v > best.0 { (*v, i) } else { best },
+            )
+    };
+    let (peak, where_peak) = peak_of(&counted);
+    let (held_peak, where_held) = peak_of(&|v| near[v]);
     readings.push(Reading {
         name: "stress".into(),
         value: peak,
         unit: "MPa".into(),
-        at: format!("peak von Mises {}", at(mesh.nodes[where_peak])),
+        at: if near.iter().any(|n| *n) {
+            format!(
+                "peak von Mises {}, over {} mm from supports and bonds",
+                at(mesh.nodes[where_peak]),
+                crate::plot::label(reach)
+            )
+        } else {
+            format!("peak von Mises {}", at(mesh.nodes[where_peak]))
+        },
     });
+    if held_peak > peak {
+        readings.push(Reading {
+            name: "support_stress".into(),
+            value: held_peak,
+            unit: "MPa".into(),
+            at: format!(
+                "peak von Mises {} within {} mm of a support or bond; a rigid hold makes it rise without limit as the mesh gets finer",
+                at(mesh.nodes[where_held]),
+                crate::plot::label(reach)
+            ),
+        });
+    }
     let (moved, where_moved) =
         answer
             .displacement
@@ -409,7 +479,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     for (t, tet) in mesh.tets.iter().enumerate() {
         let b = mesh.body[t] as usize;
         for &v in tet {
-            peaks[b] = peaks[b].max(answer.von_mises[v as usize]);
+            if counted(v as usize) {
+                peaks[b] = peaks[b].max(answer.von_mises[v as usize]);
+            }
         }
     }
     let safety = prepared
@@ -758,11 +830,15 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
     } else {
         0.0
     };
-    let high = field
+    let largest = field
         .values
         .iter()
         .copied()
         .fold(f64::NEG_INFINITY, f64::max);
+    let high = match outcome.reading("stress") {
+        Some(r) if field.unit == "MPa" && r.value > 0.0 => r.value.min(largest),
+        _ => largest,
+    };
     let low = if field.unit == "°C" {
         field.values.iter().copied().fold(f64::INFINITY, f64::min)
     } else {
@@ -770,7 +846,11 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
     };
     let span = (high - low).max(1.0e-12);
     Ok(FieldView {
-        shade: field.values.iter().map(|v| (v - low) / span).collect(),
+        shade: field
+            .values
+            .iter()
+            .map(|v| ((v - low) / span).clamp(0.0, 1.0))
+            .collect(),
         low,
         high: low + span,
         title: field.title.clone(),

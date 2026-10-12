@@ -3,14 +3,6 @@
 Problems found while sizing the rotator (`~/git/rotator`, `sims/`) with `gcad sim`. Each
 item has a way to reproduce it. Take one, fix it, delete it from this file.
 
-## The headline safety comes from singular peaks
-
-`sims/elbox.gsim` reports a peak of 214325 MPa at the edge of a fixed face, and
-`azframe.gsim` reports 140615 MPa where a post is bonded to the plate. Probes away from
-those spots read 3 to 30 MPa. `safety` is therefore useless and `expect safety>2` can't
-be used on assemblies. Leave out a band at fixed-face edges and bond interfaces, or report
-that peak separately.
-
 ## `pin` on a short cylinder band acts as a clamp
 
 In `sims/elshaft.gsim` the 2 mm bearing bands are `pin`ned, yet the reaction moments are

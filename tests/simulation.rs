@@ -227,6 +227,30 @@ fn cantilever_stress() {
 }
 
 #[test]
+fn peak_stress_leaves_out_the_fixed_edge() {
+    let run = |mesh: f64| {
+        simulated(
+            &format!("peak_stress_fixed_edge_{mesh}"),
+            &[("beam.gcad", BEAM)],
+            &format!("sim static\npart beam.gcad\nroot: fix <X\nload >X force=0,0,-100\nmesh {mesh}"),
+        )
+    };
+    let (coarse, fine) = (run(4.0), run(2.0));
+    let inertia = 20.0 * 10.0_f64.powi(3) / 12.0;
+    for (outcome, reach) in [(&coarse, 4.0), (&fine, 2.0)] {
+        let root = 100.0 * (200.0 - reach) * 5.0 / inertia;
+        close(reading(outcome, "stress"), root, 0.05);
+        assert!(reading(outcome, "support_stress") > reading(outcome, "stress"));
+        close(
+            reading(outcome, "safety"),
+            250.0 / reading(outcome, "stress"),
+            1.0e-9,
+        );
+    }
+    assert!(reading(&fine, "support_stress") > reading(&coarse, "support_stress"));
+}
+
+#[test]
 fn field_reads_at_a_point() {
     let path = written(
         "field_reads_at_a_point",

@@ -476,11 +476,13 @@ part coloured by it instead (deformed as in `render`), with the range in the par
 
 `sim static` is linear elasticity on curved 10-node tetrahedra.
 Units are millimetres, newtons and MPa. It needs a material with a stiffness and at least one
-`fix` or `slide`. Its readings are `stress` (the peak von Mises stress and where),
-`displacement` (the largest movement and where), `safety` (yield strength over the peak
-stress, when the material has one), each support's reaction force (and `label.moment` in N·m when it also holds a twist) and each probe's values. A part its supports leave free to move or turn is refused before solving. The
-peak stress at a sharp inside corner, or at the edge of a fixed face, is a singularity: it keeps
-rising as the mesh is refined, so put a fillet there or `probe` the stress a little away from it.
+`fix` or `slide`. Its readings are `stress` (the peak von Mises stress and where, more than one
+`mesh` size from any support or bonded face), `support_stress` (the peak inside that band, when it is
+higher), `displacement` (the largest movement and where), `safety` (yield strength over `stress`,
+when the material has one), each support's reaction force (and `label.moment` in N·m when it also holds a twist) and each probe's values. A part its supports leave free to move or turn is refused before solving. The
+stress at the edge of a fixed face or a bond is a singularity: it keeps rising as the mesh is
+refined, which is why `stress` leaves that band out. A sharp inside corner elsewhere is one too, so
+put a fillet there or `probe` the stress a little away from it.
 `gcad render file.gsim file.png` draws the von Mises stress on the deformed part, with the
 deformation exaggerated so it shows.
 

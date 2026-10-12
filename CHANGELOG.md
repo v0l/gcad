@@ -11,7 +11,14 @@ All notable changes to gcad are listed here. The format follows
 - Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
   or for flow the parts in their duct or air box, the wind and the heated faces.
 
+- `support_stress` reading: the peak von Mises stress within one mesh size of supports and bonds.
+- `torque axis=` and `wind toward=` take `x`, `y`, `z` and `-z`.
+
 ### Changed
+- `stress` and `safety` leave out one mesh size around supports and bonds, where a rigid hold
+  is singular.
+- A probe just outside a coarse curved face reads on the mesh surface with a note, instead of failing.
+- A `let` in an included file carries over to the file that includes it.
 - Viewer shows a stale simulation result with a warning instead of hiding it.
 - Viewer reloads when a result is written.
 

@@ -297,7 +297,7 @@ The plan for the rest is in `docs/simulation.md`.
 | materials along three axes | supported | `E1= E2= E3= Xt= Zt=` in `materials.toml`, simulated with the weakest | `simulation::directional_material_takes_the_weakest` |
 | stiffness, strength and conductivity | supported | `material pla`, `material delrin density=1.41 E=3.1 nu=0.35 yield=65` | `simulation::material_properties` |
 | tetrahedral mesh | supported | `mesh 2`, `gcad sim x.gsim --dry-run`, `gcad render x.gsim x.png` | `simulation::tet_mesh_of_a_box`, `simulation::tet_mesh_of_curved_parts`, `simulation::tet_mesh_of_example_parts`, `simulation::tet_mesh_of_thin_walls`, `simulation::tet_mesh_of_a_ring_gear_part`, `simulation::mesh_dry_run` |
-| static stress | supported | `sim static`, `fix faces`, `load faces force=x,y,z` | `simulation::bar_in_tension`, `simulation::cantilever_stress`, `simulation::static_needs_supports_and_stiffness` |
+| static stress | supported | `sim static`, `fix faces`, `load faces force=x,y,z`; `stress` leaves out the band around supports | `simulation::bar_in_tension`, `simulation::cantilever_stress`, `simulation::peak_stress_leaves_out_the_fixed_edge`, `simulation::static_needs_supports_and_stiffness` |
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::torque_about_a_named_axis`, `simulation::pinned_link` |
 | leaving parts out | supported | `leave ctl* *screw*` | `simulation::leave_parts_out` |

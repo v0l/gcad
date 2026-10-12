@@ -79,7 +79,8 @@ No mesh. Runs in seconds.
 Linear elastic stress. Supports: `fix faces`, `slide faces` (held only along their normal),
 `pin faces` (a round face held but free to turn). Loads: `load faces force=x,y,z` (spread over
 the faces), `pressure faces p`, `gravity`, `torque faces n axis=`. Readings: peak von Mises
-stress and where, peak displacement and where, minimum safety factor against yield, reaction
+stress and where (more than one mesh size from supports and bonds, with the peak inside that band
+as `support_stress`), peak displacement and where, minimum safety factor against yield, reaction
 forces at each support.
 
 ### thermal
