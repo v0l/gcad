@@ -41,7 +41,7 @@ jobs:
           mkdir -p "dist/$name/skills" "dist/$name/docs"
           cp -r skills/gcad "dist/$name/skills/"
           cp docs/format.md "dist/$name/docs/"
-          cp README.md LICENSE "dist/$name/"
+          cp README.md LICENSE CHANGELOG.md "dist/$name/"
           cd dist
           if [[ "${{ matrix.target }}" == *windows* ]]; then
             cp "../target/${{ matrix.target }}/release/gcad.exe" "$name/"
@@ -66,10 +66,12 @@ jobs:
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/')
     steps:
+      - uses: actions/checkout@v4
+      - run: awk -v v="${GITHUB_REF_NAME#v}" '/^## \[/{p=index($0,"[" v "]")>0;next} p' CHANGELOG.md > notes.md
       - uses: actions/download-artifact@v4
         with:
           path: dist
           merge-multiple: true
       - env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --generate-notes
+        run: gh release create "${GITHUB_REF_NAME}" dist/* --repo "${GITHUB_REPOSITORY}" --title "${GITHUB_REF_NAME}" --notes-file notes.md
