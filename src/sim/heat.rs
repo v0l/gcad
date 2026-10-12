@@ -1,7 +1,7 @@
-use super::fem::elastic::{locate, sample};
+use super::fem::elastic::sample;
 use super::fem::thermal::solve;
 use super::result::short;
-use super::statics::{at, prepare};
+use super::statics::{at, place_probe, prepare};
 use super::{Field, Outcome, Reading, Spec};
 use anyhow::{Result, bail};
 
@@ -58,14 +58,12 @@ fn run_spec(spec: &Spec) -> Result<Outcome> {
         });
     }
     for (name, point) in &spec.probes {
-        let Some(found) = locate(mesh, *point) else {
-            bail!("probe `{name}` {} is not inside the part", at(*point));
-        };
+        let (found, note) = place_probe(mesh, name, *point)?;
         readings.push(Reading {
             name: format!("{name}.temperature"),
             value: sample(mesh, t, found),
             unit: "°C".into(),
-            at: at(*point),
+            at: format!("{}{note}", at(*point)),
         });
     }
     let into: f64 = spec

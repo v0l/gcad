@@ -940,6 +940,33 @@ pub fn locate(mesh: &Quadratic, p: Point3) -> Option<(usize, [f64; 4])> {
     best.filter(|b| b.0 > -0.05).map(|(_, t, l)| (t, l))
 }
 
+pub fn locate_near(mesh: &Quadratic, p: Point3) -> Option<((usize, [f64; 4]), f64)> {
+    if let Some(found) = locate(mesh, p) {
+        return Some((found, 0.0));
+    }
+    let (gap, nearest, edge) = mesh
+        .boundary
+        .iter()
+        .map(|(f, _)| {
+            let corners = [f[0], f[1], f[2]].map(|v| mesh.nodes[v as usize]);
+            let (d, l) = super::closest_on_triangle(p, corners);
+            let q = corners
+                .iter()
+                .zip(l)
+                .fold(Vector3::zero(), |acc, (c, w)| acc + c.to_vec() * w);
+            let edge = [(0, 1), (1, 2), (2, 0)]
+                .iter()
+                .map(|&(i, j)| (corners[i] - corners[j]).magnitude())
+                .fold(0.0, f64::max);
+            (d, Point3::from_vec(q), edge)
+        })
+        .min_by(|a, b| a.0.total_cmp(&b.0))?;
+    if gap > 0.15 * edge {
+        return None;
+    }
+    locate(mesh, nearest).map(|found| (found, gap))
+}
+
 pub fn sample(mesh: &Quadratic, values: &[f64], at: (usize, [f64; 4])) -> f64 {
     let (t, l) = at;
     shape(l)

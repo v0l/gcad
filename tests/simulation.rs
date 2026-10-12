@@ -1064,7 +1064,9 @@ fn shaft_in_torsion() {
 fn torque_about_a_named_axis() {
     let rod = [("rod.gcad", "circle 20\nrod: extrude 100\nmaterial steel\n")];
     let spec = |axis: &str| {
-        format!("sim static\npart rod.gcad\nbase: fix rod.start\ntorque rod.end 10 axis={axis}\nmesh 6")
+        format!(
+            "sim static\npart rod.gcad\nbase: fix rod.start\ntorque rod.end 10 axis={axis}\nmesh 6"
+        )
     };
     let named = simulated("torque_about_named_z", &rod, &spec("z"));
     let spelled = simulated("torque_about_spelled_z", &rod, &spec("0,0,1"));
@@ -1080,6 +1082,29 @@ fn torque_about_a_named_axis() {
         reading(&named, "displacement"),
         1.0e-6,
     );
+}
+
+#[test]
+fn probe_on_a_curved_face_snaps_to_the_mesh() {
+    let disc = [("disc.gcad", "material steel\nc: circle 100\nrod: extrude 20\n")];
+    let spec = |at: &str| {
+        format!(
+            "sim static\npart disc.gcad\nfix rod.start\nload rod.end force=0,0,-10\nrim: probe {at}\nmesh 40"
+        )
+    };
+    let between = 50.0 * 7.0_f64.to_radians().cos();
+    let side = 50.0 * 7.0_f64.to_radians().sin();
+    let outcome = simulated(
+        "probe_on_a_curved_face",
+        &disc,
+        &spec(&format!("{between},{side},10")),
+    );
+    let rim = outcome.reading("rim.stress").expect("a reading");
+    assert!(rim.at.contains("outside the mesh"), "{}", rim.at);
+    assert!(rim.value > 0.0);
+    let model = spec_of(&written("probe_off_the_part", &disc, &spec("60,0,10")));
+    let error = gcad::sim::simulate(model.sim.as_deref().expect("sim")).expect_err("too far");
+    assert!(format!("{error:#}").contains("not inside the part"), "{error:#}");
 }
 
 #[test]

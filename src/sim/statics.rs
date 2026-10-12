@@ -1,5 +1,5 @@
 use super::fem::Quadratic;
-use super::fem::elastic::{Problem, locate, sample, solve};
+use super::fem::elastic::{Problem, sample, solve};
 use super::result::short;
 use super::{Field, Outcome, Reading, Spec, Warm};
 use crate::model::Mechanics;
@@ -300,6 +300,28 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
     })
 }
 
+pub fn place_probe(
+    mesh: &Quadratic,
+    name: &str,
+    point: Point3,
+) -> Result<((usize, [f64; 4]), String)> {
+    let Some((found, gap)) = super::fem::elastic::locate_near(mesh, point) else {
+        bail!(
+            "probe `{name}` {} is not inside the part, nor on its surface",
+            at(point)
+        );
+    };
+    let note = if gap > 0.0 {
+        format!(
+            ", {} mm outside the mesh so read on its surface",
+            short(gap)
+        )
+    } else {
+        String::new()
+    };
+    Ok((found, note))
+}
+
 pub fn at(p: Point3) -> String {
     format!(
         "at {},{},{}",
@@ -440,14 +462,12 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         }
     }
     for (name, point) in &spec.probes {
-        let Some(found) = locate(mesh, *point) else {
-            bail!("probe `{name}` {} is not inside the part", at(*point));
-        };
+        let (found, note) = place_probe(mesh, name, *point)?;
         readings.push(Reading {
             name: format!("{name}.stress"),
             value: sample(mesh, &answer.von_mises, found),
             unit: "MPa".into(),
-            at: format!("von Mises {}", at(*point)),
+            at: format!("von Mises {}{note}", at(*point)),
         });
         let parts: Vec<f64> = (0..3)
             .map(|k| {
@@ -459,7 +479,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             name: format!("{name}.displacement"),
             value: Vector3::new(parts[0], parts[1], parts[2]).magnitude(),
             unit: "mm".into(),
-            at: at(*point),
+            at: format!("{}{note}", at(*point)),
         });
     }
     notes.push(format!(

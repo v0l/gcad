@@ -16,11 +16,6 @@ that peak separately.
 In `sims/elshaft.gsim` the 2 mm bearing bands are `pin`ned, yet the reaction moments are
 14 and 29 N·m. A bearing seat should carry force and almost no moment.
 
-## Probes on a surface
-
-A probe has to lie strictly inside the solid, so a point on a face is rejected as "not
-inside the part". Snap it to the nearest element within a small tolerance and say so.
-
 ## Importing a KiCad/agentee board STEP
 
 Importing the STEP from `agentee export ctl -o ctl.step` (run in `~/git/rotator/board`)

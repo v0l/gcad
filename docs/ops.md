@@ -302,7 +302,7 @@ The plan for the rest is in `docs/simulation.md`.
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::torque_about_a_named_axis`, `simulation::pinned_link` |
 | leaving parts out | supported | `leave ctl* *screw*` | `simulation::leave_parts_out` |
 | mesh convergence check | supported | `converge`, `converge within=2` | `simulation::mesh_convergence_check` |
-| probes | supported | `top: probe 100,0,10` | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure` |
+| probes | supported | `top: probe 100,0,10`; a point on a curved face just outside the mesh reads on its surface | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure`, `simulation::probe_on_a_curved_face_snaps_to_the_mesh` |
 | example simulations | supported | `examples/parts/bracket.gsim`, `examples/parts/heatsink.gsim` | `simulation::example_simulations` |
 | large problems | supported | conjugate gradients with a two-level preconditioner, above 100,000 unknowns for stress and 150,000 for heat; LOBPCG above 250,000 for frequencies and buckling | `simulation::large_problems_iterate`, `simulation::large_heat_problem_solves_iteratively`, `simulation::large_eigenproblems_iterate` |
 | stress plots | supported | `gcad render x.gsim x.png`; the viewer reads the value, movement and point under the cursor, and draws and lists every load and support with its total | `simulation::stress_field_render`, `simulation::field_reads_at_a_point` |
