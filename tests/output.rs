@@ -286,6 +286,18 @@ fn step_import_from_opencascade() {
 }
 
 #[test]
+fn step_import_boxes_what_it_cannot_read() {
+    let file = fixture("open-surface.step");
+    let source = format!("import {file}");
+    assert_volume(&build(&source), 6.0, 1.0e-9);
+    let text = summary(&source);
+    assert!(
+        text.contains("a box stands in") && text.contains("watertight"),
+        "{text}"
+    );
+}
+
+#[test]
 fn step_import_asks_which_solid() {
     let error = failure(&format!("import {}", fixture("occt-two-solids.step")));
     assert!(

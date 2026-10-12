@@ -24,6 +24,7 @@ mod sketch;
 mod skin;
 mod solids;
 mod standard;
+mod step_raw;
 mod thread;
 mod weld;
 mod wrap;
@@ -103,6 +104,7 @@ pub struct Model {
     pub library_loaded: bool,
     pub sources: HashMap<String, assembly::Source>,
     pub placements: HashMap<String, Matrix4>,
+    pub stand_ins: HashMap<String, String>,
     pub explode: Vec<(String, Vector3)>,
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,

@@ -5,6 +5,145 @@ use std::collections::HashMap;
 
 type P2 = (f64, f64);
 
+pub(crate) type Polygon = Vec<Vec<Point3>>;
+
+pub(crate) fn connected_polygons(faces: &[Polygon]) -> Vec<Vec<Polygon>> {
+    let size = faces
+        .iter()
+        .flatten()
+        .flatten()
+        .collect::<BoundingBox<Point3>>()
+        .diameter()
+        .max(1.0e-9);
+    let key = |p: &Point3| [p.x, p.y, p.z].map(|v| (v / (size * 1.0e-9)).round() as i64);
+    let mut parent: Vec<usize> = (0..faces.len()).collect();
+    let mut first: HashMap<[i64; 3], usize> = HashMap::new();
+    for (k, face) in faces.iter().enumerate() {
+        for p in face.iter().flatten() {
+            match first.get(&key(p)) {
+                Some(&other) => {
+                    let (a, b) = (find(&mut parent, k), find(&mut parent, other));
+                    parent[a] = b;
+                }
+                None => {
+                    first.insert(key(p), k);
+                }
+            }
+        }
+    }
+    let mut groups: HashMap<usize, Vec<Polygon>> = HashMap::new();
+    let mut order = Vec::new();
+    for (k, face) in faces.iter().enumerate() {
+        let root = find(&mut parent, k);
+        if !groups.contains_key(&root) {
+            order.push(root);
+        }
+        groups.entry(root).or_default().push(face.clone());
+    }
+    order
+        .into_iter()
+        .filter_map(|root| groups.remove(&root))
+        .collect()
+}
+
+fn inside(point: (f64, f64), polygon: &[(f64, f64)]) -> bool {
+    let mut inside = false;
+    let mut j = polygon.len() - 1;
+    for i in 0..polygon.len() {
+        let (a, b) = (polygon[i], polygon[j]);
+        if (a.1 > point.1) != (b.1 > point.1)
+            && point.0 < (b.0 - a.0) * (point.1 - a.1) / (b.1 - a.1) + a.0
+        {
+            inside = !inside;
+        }
+        j = i;
+    }
+    inside
+}
+
+fn triangulate(face: &Polygon) -> Option<Vec<[Point3; 3]>> {
+    let outer = face.first()?;
+    if face.len() == 1 && outer.len() == 3 {
+        return Some(vec![[outer[0], outer[1], outer[2]]]);
+    }
+    let normal = (0..outer.len())
+        .fold(Vector3::zero(), |w, k| {
+            w + outer[k]
+                .to_vec()
+                .cross(outer[(k + 1) % outer.len()].to_vec())
+        })
+        .normalize();
+    let seed = if normal.x.abs() < 0.9 {
+        Vector3::unit_x()
+    } else {
+        Vector3::unit_y()
+    };
+    let x = (seed - normal * seed.dot(normal)).normalize();
+    let y = normal.cross(x);
+    let flat = |p: &Point3| (p.to_vec().dot(x), p.to_vec().dot(y));
+    let loops: Vec<Vec<(f64, f64)>> = face.iter().map(|l| l.iter().map(flat).collect()).collect();
+    use spade::{ConstrainedDelaunayTriangulation, Point2, Triangulation};
+    let mut cdt: ConstrainedDelaunayTriangulation<Point2<f64>> = Default::default();
+    let mut at: HashMap<spade::handles::FixedVertexHandle, Point3> = HashMap::new();
+    for (ring, flat) in face.iter().zip(&loops) {
+        let handles: Vec<_> = ring
+            .iter()
+            .zip(flat)
+            .map(|(p, q)| {
+                let handle = cdt.insert(Point2::new(q.0, q.1)).ok()?;
+                at.insert(handle, *p);
+                Some(handle)
+            })
+            .collect::<Option<_>>()?;
+        for k in 0..handles.len() {
+            let (a, b) = (handles[k], handles[(k + 1) % handles.len()]);
+            if a != b && cdt.can_add_constraint(a, b) {
+                cdt.add_constraint(a, b);
+            }
+        }
+    }
+    let mut out = Vec::new();
+    for triangle in cdt.inner_faces() {
+        let corners = triangle.vertices();
+        let middle = corners.iter().fold((0.0, 0.0), |m, v| {
+            let p = v.position();
+            (m.0 + p.x / 3.0, m.1 + p.y / 3.0)
+        });
+        if !inside(middle, &loops[0]) || loops[1..].iter().any(|hole| inside(middle, hole)) {
+            continue;
+        }
+        let mut t = corners.map(|v| at[&v.fix()]);
+        if (t[1] - t[0]).cross(t[2] - t[0]).dot(normal) < 0.0 {
+            t.swap(1, 2);
+        }
+        out.push(t);
+    }
+    Some(out)
+}
+
+pub(crate) fn polygon_solid(faces: &[Polygon]) -> Result<Solid> {
+    let mut positions = Vec::new();
+    let mut triangles: Vec<[monstertruck::mesh::StandardVertex; 3]> = Vec::new();
+    for face in faces {
+        let pieces =
+            triangulate(face).ok_or_else(|| anyhow!("a face could not be triangulated"))?;
+        for t in pieces {
+            let base = positions.len();
+            positions.extend(t);
+            triangles.push([base, base + 1, base + 2].map(|v| v.into()));
+        }
+    }
+    let mesh = monstertruck::mesh::PolygonMesh::new(
+        monstertruck::mesh::StandardAttributes {
+            positions,
+            uv_coords: Vec::new(),
+            normals: Vec::new(),
+        },
+        monstertruck::mesh::Faces::from_tri_and_quad_faces(triangles, Vec::new()),
+    );
+    mesh_solid(&mesh)
+}
+
 pub(crate) fn stl_solid(path: &std::path::Path) -> Result<Solid> {
     let file = crate::host::read(path).with_context(|| format!("reading {}", path.display()))?;
     let mesh = monstertruck::mesh::stl::read(
@@ -29,7 +168,7 @@ fn find(parent: &mut [usize], i: usize) -> usize {
     root
 }
 
-fn mesh_solid(mesh: &monstertruck::mesh::PolygonMesh) -> Result<Solid> {
+pub(crate) fn mesh_solid(mesh: &monstertruck::mesh::PolygonMesh) -> Result<Solid> {
     let (points, triangles) = geometry::welded(mesh);
     if triangles.len() < 4 {
         bail!(

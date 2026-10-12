@@ -10,7 +10,6 @@ All notable changes to gcad are listed here. The format follows
 - Viewer simulation card with readings, `expect` checks, notes, sweep traces and a run button.
 - Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
   or for flow the parts in their duct or air box, the wind and the heated faces.
-
 - `bearing faces axial`: a round band held sideways at one ring, free to turn and tilt, so it carries
   force and no moment. `pin` on a short band suggests it.
 - `support_stress` reading: the peak von Mises stress within one mesh size of supports and bonds.
@@ -25,6 +24,12 @@ All notable changes to gcad are listed here. The format follows
 - Viewer reloads when a result is written.
 
 ### Fixed
+- STEP imports read each solid in its own length unit; inch vendor models came in 25.4 times too
+  small.
+- STEP assemblies that monstertruck cannot walk, like KiCad and agentee board exports, come in with
+  every part in place instead of all at the origin. Faceted breps and surface models are built
+  from their polygons, and a solid that still cannot be read becomes a box and is named in the
+  line's summary, instead of failing the import.
 - Revolved parts whose profile runs along the axis mesh for simulation; the zero-area faces
   the axis edge leaves are skipped.
 - Smooth lofts between sections with more than 240 matching edges.

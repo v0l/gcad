@@ -664,19 +664,19 @@ impl Model {
             None => None,
         };
         let found = if stl {
-            vec![(String::new(), super::import::stl_solid(&path)?)]
+            vec![(String::new(), super::import::stl_solid(&path)?, None)]
         } else {
             read_step(&path, pick)
                 .with_context(|| format!("importing {}", path.display()))?
                 .into_iter()
-                .map(|part| (part.name, part.solid))
+                .map(|part| (part.name, part.solid, part.failure))
                 .collect()
         };
         let listing = || {
             found
                 .iter()
                 .enumerate()
-                .map(|(k, (name, solid))| {
+                .map(|(k, (name, solid, _))| {
                     let b = geometry::bounds(solid);
                     let (lo, hi) = (b.min(), b.max());
                     format!(
@@ -690,8 +690,8 @@ impl Model {
                 .collect::<Vec<_>>()
                 .join("; ")
         };
-        let solid = match (pick, found.as_slice()) {
-            (_, [(_, only)]) => only.clone(),
+        let (solid, failure) = match (pick, found.as_slice()) {
+            (_, [(_, only, failure)]) => (only.clone(), failure.clone()),
             (Some(_), _) => bail!(
                 "`solid` must be 1 to {}; the file holds {}",
                 found.len(),
@@ -710,13 +710,40 @@ impl Model {
             .collect();
         self.record(&label, groups);
         self.merge(&label, solid, Combine::Add)?;
-        self.describe_solid()
+        let summary = self.describe_solid()?;
+        Ok(match failure {
+            Some(why) => {
+                format!("{summary}; a box stands in for the solid, which gcad cannot read: {why}")
+            }
+            None => summary,
+        })
     }
 }
 
 type StepTable = monstertruck::step::load::Table;
 
-fn placed_breps(table: &StepTable) -> Vec<(u64, String, String, Matrix4)> {
+fn placed_breps(
+    table: &StepTable,
+    raw: &super::step_raw::Raw,
+) -> Vec<(u64, String, String, Matrix4)> {
+    let edges = raw.edge_matrices();
+    let in_millimetres = |attributes: &monstertruck::step::common::PartAttributes,
+                          step: Matrix4| {
+        let key = (
+            attributes.id.clone(),
+            attributes.name.clone(),
+            attributes.description.clone(),
+        );
+        edges
+            .get(&key)
+            .and_then(|found| {
+                found
+                    .iter()
+                    .find(|(native, _)| super::step_raw::close(native, &step))
+                    .map(|(_, millimetres)| *millimetres)
+            })
+            .unwrap_or(step)
+    };
     let Ok(assembly) = table.step_assy() else {
         return Vec::new();
     };
@@ -727,7 +754,9 @@ fn placed_breps(table: &StepTable) -> Vec<(u64, String, String, Matrix4)> {
                 .edges()
                 .iter()
                 .try_fold(Matrix4::identity(), |m, edge| {
-                    Matrix4::try_from(edge.matrix()).ok().map(|step| m * step)
+                    Matrix4::try_from(edge.matrix())
+                        .ok()
+                        .map(|step| m * in_millimetres(edge.attributes(), step))
                 })
             else {
                 continue;
@@ -783,6 +812,20 @@ pub(crate) struct StepSolid {
     pub product: String,
     pub matrix: Matrix4,
     pub solid: Solid,
+    pub failure: Option<String>,
+}
+
+fn stand_in(low: Point3, high: Point3) -> Result<Solid> {
+    let size = high - low;
+    let least = size.x.max(size.y).max(size.z) * 1.0e-3;
+    let size = Vector3::new(size.x.max(least), size.y.max(least), size.z.max(least));
+    if size.x <= 0.0 {
+        bail!("it has no points to box");
+    }
+    let v = builder::vertex(low);
+    let e = builder::extrude(&v, Vector3::unit_x() * size.x);
+    let f = builder::extrude(&e, Vector3::unit_y() * size.y);
+    Ok(oriented(builder::extrude(&f, Vector3::unit_z() * size.z)))
 }
 
 fn ident(text: &str) -> String {
@@ -825,6 +868,9 @@ pub(crate) fn step_model(path: &std::path::Path) -> Result<Model> {
             },
         );
         model.placements.insert(name.clone(), part.matrix);
+        if let Some(why) = part.failure {
+            model.stand_ins.insert(name.clone(), why);
+        }
         model.bodies.push((name, part.solid));
     }
     Ok(model)
@@ -834,10 +880,19 @@ fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSoli
     use monstertruck::step::load::step_geometry::{Curve3D, Surface as StepSurface};
     let text = crate::host::read(path)?;
     let table = StepTable::from_step_bytes(&text).map_err(|error| anyhow!("{error}"))?;
-    if table.manifold_solid_brep.is_empty() {
+    let raw = super::step_raw::Raw::parse(&String::from_utf8_lossy(&text));
+    let mut placed = placed_breps(&table, &raw);
+    if placed.is_empty() {
+        placed = raw
+            .placed()
+            .into_iter()
+            .map(|p| (p.id, p.name, p.product, p.matrix))
+            .collect();
+        placed.sort_by(|a, b| a.0.cmp(&b.0).then_with(|| natural(&a.1, &b.1)));
+    }
+    if placed.is_empty() && table.manifold_solid_brep.is_empty() {
         bail!("the file has no solids");
     }
-    let mut placed = placed_breps(&table);
     if placed.is_empty() {
         let mut ids: Vec<u64> = table.manifold_solid_brep.keys().copied().collect();
         ids.sort_unstable();
@@ -864,47 +919,107 @@ fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSoli
         Some(index) if index < placed.len() => vec![placed[index].clone()],
         _ => placed,
     };
-    let mut converted: std::collections::HashMap<u64, Solid> = std::collections::HashMap::new();
-    chosen
-        .into_iter()
-        .map(|(id, name, product, matrix)| {
-            let solid = match converted.get(&id) {
-                Some(solid) => solid.clone(),
-                None => {
-                    let holder = &table.manifold_solid_brep[&id];
-                    let compressed = table
-                        .to_compressed_trimmed_solid(holder)
-                        .map_err(|error| anyhow!("{error}"))?;
-                    let solid =
-                        monstertruck::healing::extract_healed_trimmed_solid(compressed, 1.0e-3)
-                            .map_err(|error| anyhow!("{error}"))?
-                            .erase_trims()
-                            .try_mapped(
-                                |point| Some(*point),
-                                |curve: &Curve3D| Curve::try_from(curve).ok(),
-                                |surface: &StepSurface| Surface::try_from(surface).ok(),
-                            )
-                            .ok_or_else(|| {
-                                anyhow!("the file uses a curve or surface gcad cannot read")
-                            })?;
-                    let solid = oriented(solid);
-                    converted.insert(id, solid.clone());
-                    solid
+    let mut converted: std::collections::HashMap<u64, Vec<(Solid, Option<String>)>> =
+        std::collections::HashMap::new();
+    let read = |id: u64| -> Result<Solid> {
+        let compressed = match (
+            table.manifold_solid_brep.get(&id),
+            table.shell_based_surface_model.get(&id),
+        ) {
+            (Some(holder), _) => table
+                .to_compressed_trimmed_solid(holder)
+                .map_err(|error| anyhow!("{error}"))?,
+            (None, Some(model)) => {
+                let shells = table
+                    .to_compressed_trimmed_shells(model)
+                    .map_err(|error| anyhow!("{error}"))?;
+                if shells.len() != 1 {
+                    bail!("a surface model of {} shells", shells.len());
                 }
-            };
+                monstertruck::topology::compress::CompressedTrimmedSolid { boundaries: shells }
+            }
+            (None, None) => bail!("{}", raw.kind(id).to_lowercase().replace('_', " ")),
+        };
+        let solid = monstertruck::healing::extract_healed_trimmed_solid(compressed, 1.0e-3)
+            .map_err(|error| {
+                anyhow!(
+                    "healing fails ({})",
+                    format!("{error}").trim_end_matches('.')
+                )
+            })?
+            .erase_trims()
+            .try_mapped(
+                |point| Some(*point),
+                |curve: &Curve3D| Curve::try_from(curve).ok(),
+                |surface: &StepSurface| Surface::try_from(surface).ok(),
+            )
+            .ok_or_else(|| anyhow!("a curve or surface type gcad has no kernel form for"))?;
+        let closed = solid.boundaries().iter().all(|shell| {
+            shell.shell_condition() == monstertruck::topology::shell::ShellCondition::Closed
+        });
+        let volume = geometry::volume(&solid);
+        if !closed || !volume.is_finite() || volume == 0.0 {
+            bail!("a surface that does not close around a volume");
+        }
+        let scale = raw.scale_of(id);
+        let solid = if scale == 1.0 {
+            solid
+        } else {
+            builder::transformed(&solid, Matrix4::from_scale(scale))
+        };
+        Ok(oriented(solid))
+    };
+    let pieces = |id: u64, name: &str| -> Result<Vec<(Solid, Option<String>)>> {
+        if let Some(polygons) = raw.polygons(id) {
+            return super::import::connected_polygons(&polygons)
+                .into_iter()
+                .map(|part| match super::import::polygon_solid(&part) {
+                    Ok(solid) => Ok((solid, None)),
+                    Err(error) => {
+                        let points: BoundingBox<Point3> =
+                            part.iter().flatten().flatten().copied().collect();
+                        Ok((
+                            stand_in(points.min(), points.max())?,
+                            Some(format!("{error:#}")),
+                        ))
+                    }
+                })
+                .collect();
+        }
+        Ok(match read(id) {
+            Ok(solid) => vec![(solid, None)],
+            Err(error) => {
+                let (low, high) = raw.bounds(id).ok_or_else(|| anyhow!("`{name}`: {error}"))?;
+                vec![(stand_in(low, high)?, Some(format!("{error}")))]
+            }
+        })
+    };
+    let mut out = Vec::new();
+    for (id, name, product, matrix) in chosen {
+        let found = match converted.get(&id) {
+            Some(found) => found.clone(),
+            None => {
+                let found = pieces(id, &name)?;
+                converted.insert(id, found.clone());
+                found
+            }
+        };
+        for (solid, failure) in found {
             let placed = if matrix == Matrix4::identity() {
                 solid
             } else {
                 oriented(builder::transformed(&solid, matrix))
             };
-            Ok(StepSolid {
-                name,
-                product,
+            out.push(StepSolid {
+                name: name.clone(),
+                product: product.clone(),
                 matrix,
                 solid: placed,
-            })
-        })
-        .collect()
+                failure,
+            });
+        }
+    }
+    Ok(out)
 }
 
 #[derive(Clone, Debug, PartialEq)]

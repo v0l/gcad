@@ -3,12 +3,6 @@
 Problems found while sizing the rotator (`~/git/rotator`, `sims/`) with `gcad sim`. Each
 item has a way to reproduce it. Take one, fix it, delete it from this file.
 
-## Importing a KiCad/agentee board STEP
-
-Importing the STEP from `agentee export ctl -o ctl.step` (run in `~/git/rotator/board`)
-fails with "This wire is not simple" and boolean errors. As a workaround,
-`~/git/rotator/board/tools/board_gcad.py` turns each part into its bounding box.
-
 ## Stacked cylinders of one radius blow up the mesh
 
 Extruding `circle 20` several times end to end (a shaft with bearing and load bands, like
@@ -23,3 +17,11 @@ can make it worse. Five segments of 10, 4, 86, 4 and 86 mm give about 1.2 millio
 15.7 million now (about 8 minutes and 50 GB). The box has a 0.05 mm deep `seat` cut, which the
 mesh has to resolve; whether the growth comes from that or from the stacked-cylinder fault above
 is not known yet.
+
+## Six board STEP solids still come in as boxes
+
+`part board ctl.step` (from `agentee export ctl` in `~/git/rotator/board`) brings in 528 parts
+with 6 boxes. Three fail the kernel's healing with "This wire is not simple": U1
+(`Ag5400_simplified`), U2 (`SO-4_4.4x3.6mm_P2.54mm`) and part 2 of the RJ45
+(`V8BR-1AX1-GH_PART2`). Three electrolytics (C2, C76, C83, models `CP_Elec_*`) use a
+`SURFACE_OF_REVOLUTION` and `TOROIDAL_SURFACE` that `Surface::try_from` does not convert.

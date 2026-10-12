@@ -795,7 +795,32 @@ impl Model {
                 });
             }
         }
-        Ok(format!("{} from {}", added.join(", "), path.display()))
+        let mut reasons: Vec<(String, usize)> = Vec::new();
+        for body in &picked {
+            if let Some(why) = loaded.stand_ins.get(body) {
+                self.stand_ins.insert(rename(body), why.clone());
+                match reasons.iter_mut().find(|(r, _)| r == why) {
+                    Some((_, n)) => *n += 1,
+                    None => reasons.push((why.clone(), 1)),
+                }
+            }
+        }
+        let listed = if added.len() > 12 {
+            format!("{} parts", added.len())
+        } else {
+            added.join(", ")
+        };
+        let boxes: usize = reasons.iter().map(|(_, n)| n).sum();
+        Ok(if boxes == 0 {
+            format!("{listed} from {}", path.display())
+        } else {
+            let why: Vec<String> = reasons.iter().map(|(r, n)| format!("{n} {r}")).collect();
+            format!(
+                "{listed} from {}; {boxes} are boxes standing in for solids gcad cannot read: {}",
+                path.display(),
+                why.join(", ")
+            )
+        })
     }
 
     fn part_transform(&mut self, line: &Line, transform: Matrix4) -> Result<String> {

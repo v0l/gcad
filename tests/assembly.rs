@@ -862,6 +862,68 @@ fn step_assembly_as_a_part() {
 }
 
 #[test]
+fn step_part_in_its_own_units() {
+    let step = |name: &str| format!("{}/tests/fixtures/{name}", env!("CARGO_MANIFEST_DIR"));
+    let (mm, _) = built(
+        "step_units_mm",
+        &format!("part rig {}", step("occt-instances.step")),
+        &[],
+    );
+    let (cm, _) = built(
+        "step_units_cm",
+        &format!("part rig {}", step("occt-instances-cm.step")),
+        &[],
+    );
+    let pin = |model: &Model| model.named_body("rig.pin_3").expect("pin");
+    let ratio = gcad::geometry::volume(&pin(&cm)) / gcad::geometry::volume(&pin(&mm));
+    assert!((ratio - 1000.0).abs() < 1.0e-6, "{ratio}");
+    let (small, large) = (
+        gcad::geometry::bounds(&pin(&mm)),
+        gcad::geometry::bounds(&pin(&cm)),
+    );
+    for k in 0..2 {
+        let centre = |b: &monstertruck::modeling::BoundingBox<monstertruck::modeling::Point3>| {
+            (b.min()[k] + b.max()[k]) / 2.0
+        };
+        assert!(
+            (centre(&small) - centre(&large)).abs() < 1.0e-6,
+            "{small:?} {large:?}"
+        );
+    }
+}
+
+#[test]
+fn kicad_board_in_inches_and_surface_models() {
+    let step = format!(
+        "{}/tests/fixtures/kicad-inch-board.step",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (model, summaries) = built("kicad_board", &format!("part pcb {step}"), &[]);
+    assert_eq!(
+        model.body_names(),
+        ["pcb.board", "pcb.chip", "pcb.chip_2"],
+        "{summaries:?}"
+    );
+    let volume = |name: &str| gcad::geometry::volume(&model.named_body(name).expect("body"));
+    assert!((volume("pcb.board") - 196.0).abs() < 1.0e-6);
+    let cube = 2.54_f64.powi(3);
+    for chip in ["pcb.chip", "pcb.chip_2"] {
+        assert!((volume(chip) - cube).abs() < cube * 1.0e-6, "{chip}");
+    }
+    let near = |a: f64, b: f64| (a - b).abs() < 1.0e-6;
+    let first = gcad::geometry::bounds(&model.named_body("pcb.chip").expect("chip"));
+    let second = gcad::geometry::bounds(&model.named_body("pcb.chip_2").expect("chip"));
+    assert!(
+        near(first.min().x, 7.46) && near(first.min().y, 2.46) && near(first.min().z, 1.0),
+        "{first:?}"
+    );
+    assert!(
+        near(second.min().x, 7.46) && near(second.min().y, 7.54),
+        "{second:?}"
+    );
+}
+
+#[test]
 fn case_and_lid_with_screws() {
     let path = std::path::PathBuf::from(format!(
         "{}/examples/assemblies/case.gasm",

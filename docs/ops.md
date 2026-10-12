@@ -239,6 +239,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | standard screws, nuts, washers and inserts | supported | `part s1 shcs:M3x10`, `nut:M3`, `washer:M3`, `insert:M3` | `assembly::standard_parts_from_the_library` |
 | bearings, dowels and standoffs | supported | `part b bearing:608`, `dowel:4x16`, `standoff:M3x10` | `assembly::bearings_dowels_and_standoffs` |
 | vendor STEP assembly as parts | supported | `part box vendor.step` | `assembly::step_assembly_as_a_part` |
+| STEP length units and board exports | supported | `part pcb board.step` with inch parts, faceted breps and surface models | `assembly::step_part_in_its_own_units`, `assembly::kicad_board_in_inches_and_surface_models` |
 
 ## Output
 
@@ -248,7 +249,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | STL export | supported | `gcad export part.gcad part.stl` | `output::stl` |
 | simulation parts export | supported | `gcad export wind.gsim parts.stl` writes the parts the simulation keeps after `leave` | `output::simulation_parts_export` |
 | PNG views | supported | `gcad render part.gcad part.png` | `output::png` |
-| STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid` |
+| STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid`, `output::step_import_boxes_what_it_cannot_read` |
 | STEP instances placed | supported | `import rig.step solid=4` puts a repeated part where the file places it | `output::step_import_places_instances` |
 | OBJ export | supported | `gcad export part.gcad part.obj` | `output::obj` |
 | 3MF export | supported | `gcad export part.gcad part.3mf` | `output::three_mf` |
