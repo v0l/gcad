@@ -123,6 +123,7 @@ pub struct Settings {
     pub sponge: f64,
     pub stream: [f64; 3],
     pub bulk: f64,
+    pub sponge_axis: usize,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -143,6 +144,7 @@ impl Settings {
             sponge: 0.0,
             stream: [0.0; 3],
             bulk: 0.0,
+            sponge_axis: 0,
         }
     }
 }
@@ -168,12 +170,12 @@ struct Params {
     sx: f32,
     sy: f32,
     sz: f32,
-    pad1: f32,
+    axis: u32,
 }
 
 fn shader() -> String {
     let mut s = String::new();
-    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, sponge: f32, bulk: f32, sx: f32, sy: f32, sz: f32, pad1: f32 }\n";
+    s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32, omega: f32, fx: f32, fy: f32, fz: f32, wx: f32, wy: f32, wz: f32, regular: f32, smagorinsky: f32, sponge: f32, bulk: f32, sx: f32, sy: f32, sz: f32, axis: u32 }\n";
     s += "@group(0) @binding(0) var<uniform> p: Params;\n";
     s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
     s += "@group(0) @binding(2) var<storage, read> cuts: array<f32>;\n";
@@ -261,7 +263,9 @@ fn shader() -> String {
     s += "  let omega = 1.0 / tau;\n";
     s += "  let keep = 1.0 - 0.5 * omega;\n";
     s += "  let shed = select(0.0, (omega - 1.0 / (tau + 4.5 * p.bulk)) * (pxx + pyy + pzz) / 3.0, p.regular > 0.5);\n";
-    s += "  let edge = f32(p.nx - 1u) - f32(x);\n";
+    s += "  let along = select(select(f32(x), f32(y), p.axis == 1u), f32(z), p.axis == 2u);\n";
+    s += "  let span = select(select(f32(p.nx), f32(p.ny), p.axis == 1u), f32(p.nz), p.axis == 2u);\n";
+    s += "  let edge = span - 1.0 - along;\n";
     s += "  var damp = 0.0;\n";
     s += "  if (p.sponge > 0.0 && edge < p.sponge) { let r = 1.0 - edge / p.sponge; damp = 0.5 * r * r; }\n";
     s += "  let su = p.sx * p.sx + p.sy * p.sy + p.sz * p.sz;\n";
@@ -745,7 +749,7 @@ impl<'a> Lattice<'a> {
             sx: settings.stream[0] as f32,
             sy: settings.stream[1] as f32,
             sz: settings.stream[2] as f32,
-            pad1: 0.0,
+            axis: settings.sponge_axis as u32,
         };
         self.gpu
             .queue

@@ -145,7 +145,25 @@ boom clamp) and no rule tried (one-cell gaps, a second fluid node, cells only re
 narrow passages, skipping cells from the thin-wall pass) removed it, so `sim flow` uses
 staircase walls and the benchmarks keep the interpolated ones.
 
-The rotator head (`~/git/rotator/sims/wind.gsim`, 120 km/h side wind, no antennas) at 9 mm
-cells reads 79.9 N of drag, 16 N on the el box and lid, 14.7 N on the az box and lid, and
-18 N on each 25 mm boom tube, which at three cells across is a square bar (a round tube
-would take about 10 N).
+`sim flow` blows the wind along lattice z. With the inlet on an x face the edge pass touched
+one cell every nx along each of 38 population buffers, and at 547 x 571 x 471 that cost about
+150 ms a step (throughput fell from 9.1 to 0.9 billion updates a second); the z faces are
+contiguous, and a z-flow edge pass costs nothing measurable. The sponge's axis is a setting
+(`sponge_axis`), x for the benchmarks.
+
+The rotator head (`~/git/rotator/sims/wind.gsim`, 120 km/h side wind, no antennas):
+
+| | drag | booms | el box and lid | az box and lid | mast |
+|---|---|---|---|---|---|
+| lattice, 9 mm cells (26 M) | 79.9 N | 18.3, 17.7 | 16.0 | 14.7 | 8.7 |
+| lattice, 5 mm cells (147 M) | 63.8 N | 12.2, 12.3 | 14.3 | 13.7 | 7.6 |
+| OpenFOAM k-omega SST, 2.1 M cells | 39.9 N | | | | |
+| OpenFOAM k-omega SST, 11.3 M cells | 34.9 N | | | | |
+
+The booms are 25 mm tubes; on their own the lattice reads Cd 1.89, 1.36 and 1.03 at 2.8, 5 and
+10 cells across, against about 0.98 from Hoerner, so the 5 mm run is still about 7 N high on
+the booms. OpenFOAM's RANS reads the same lone tube at Cd near 0.2: steady RANS cannot hold the
+laminar separation of a round section at Re 55,000 and gives it post-crisis drag. Neither
+solver is right on this assembly, then; the lattice converges toward the measured cylinder
+drag as its cells shrink and the RANS model does not, so the head takes about 55 to 60 N in
+this wind, not 35.

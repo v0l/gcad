@@ -15,6 +15,9 @@ pub struct Wind {
 
 pub const AIR: (f64, f64) = (1.204, 1.516e-5);
 const LATTICE_SPEED: f64 = 0.04;
+const SIDE: usize = 0;
+const UP: usize = 1;
+const WIND: usize = 2;
 const ACROSS: f64 = 32.0;
 const UPSTREAM: f64 = 4.0;
 const DOWNSTREAM: f64 = 5.0;
@@ -64,13 +67,13 @@ impl Setup {
 }
 
 fn frontal_area(setup: &Setup, low: Point3, high: Point3) -> f64 {
-    let pixel = (high.y - low.y).max(high.z - low.z) / 1024.0;
+    let pixel = (high[SIDE] - low[SIDE]).max(high[UP] - low[UP]) / 1024.0;
     if pixel <= 0.0 {
         return 0.0;
     }
     let (w, h) = (
-        ((high.y - low.y) / pixel).ceil() as usize + 1,
-        ((high.z - low.z) / pixel).ceil() as usize + 1,
+        ((high[SIDE] - low[SIDE]) / pixel).ceil() as usize + 1,
+        ((high[UP] - low[UP]) / pixel).ceil() as usize + 1,
     );
     let mut covered = vec![false; w * h];
     for part in &setup.parts {
@@ -79,7 +82,7 @@ fn frontal_area(setup: &Setup, low: Point3, high: Point3) -> f64 {
             .iter()
             .map(|&p| {
                 let q = setup.to_lattice(p);
-                [(q.y - low.y) / pixel, (q.z - low.z) / pixel]
+                [(q[SIDE] - low[SIDE]) / pixel, (q[UP] - low[UP]) / pixel]
             })
             .collect();
         for t in &part.triangles {
@@ -117,7 +120,7 @@ fn axes(toward: Vector3) -> [Vector3; 3] {
         Vector3::unit_y()
     };
     let z = (up - x * up.dot(x)).normalize();
-    [x, z.cross(x), z]
+    [z.cross(x), z, x]
 }
 
 fn setup(spec: &Spec) -> Result<Setup> {
@@ -163,13 +166,11 @@ fn setup(spec: &Spec) -> Result<Setup> {
     let frontal = frontal_area(&setup, low, high);
     let across = frontal.sqrt().max(1.0e-6);
     let spacing = spec.mesh.unwrap_or(across / ACROSS);
-    let margin = Vector3::new(UPSTREAM, ASIDE, ASIDE) * across;
+    let mut margin = Vector3::new(ASIDE, ASIDE, ASIDE) * across;
+    margin[WIND] = UPSTREAM * across;
     let origin = low - margin - Vector3::new(0.5, 0.5, 0.5) * spacing;
-    let extent = Vector3::new(
-        high.x - low.x + (UPSTREAM + DOWNSTREAM) * across,
-        high.y - low.y + 2.0 * ASIDE * across,
-        high.z - low.z + 2.0 * ASIDE * across,
-    );
+    let mut extent = high - low + Vector3::new(2.0, 2.0, 2.0) * (ASIDE * across);
+    extent[WIND] = high[WIND] - low[WIND] + (UPSTREAM + DOWNSTREAM) * across;
     setup.across = across;
     setup.frontal = frontal;
     setup.grid = Grid {
@@ -209,7 +210,7 @@ fn step_seconds(setup: &Setup) -> f64 {
 
 fn steps(setup: &Setup, spec: &Spec) -> (usize, usize, usize) {
     let pass = setup.pass();
-    let through = (setup.grid.size[0] as f64 / LATTICE_SPEED) as usize;
+    let through = (setup.grid.size[WIND] as f64 / LATTICE_SPEED) as usize;
     let average = (spec.average.unwrap_or(40.0) * pass as f64) as usize;
     (2 * pass, through, average.max(1))
 }
@@ -245,18 +246,19 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         seed ^= seed << 17;
         (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
     };
+    let last = size[WIND] - 1;
     for y in 0..size[1] {
-        for z in 0..size[2] {
-            let (inlet, outlet) = (domain.at(0, y, z), domain.at(size[0] - 1, y, z));
+        for x in 0..size[0] {
+            let (inlet, outlet) = (domain.at(x, y, 0), domain.at(x, y, last));
             domain.flags[inlet] = INLET;
             domain.flags[outlet] = OUTLET;
             let velocity = [
+                0.02 * speed * noise(),
+                0.02 * speed * noise(),
                 speed * (1.0 + 0.02 * noise()),
-                0.02 * speed * noise(),
-                0.02 * speed * noise(),
             ];
-            domain.inflow.push((inlet, domain.at(1, y, z), velocity));
-            domain.outflow.push((outlet, domain.at(size[0] - 2, y, z)));
+            domain.inflow.push((inlet, domain.at(x, y, 1), velocity));
+            domain.outflow.push((outlet, domain.at(x, y, last - 1)));
         }
     }
     let inlets: Vec<usize> = domain.inflow.iter().map(|i| i.0).collect();
@@ -266,7 +268,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let viscosity = air.1 * speed / (setup.wind.speed * dx);
     let mut settings = Settings {
         sponge: (0.5 * setup.across / setup.grid.spacing).min(40.0),
-        stream: [speed, 0.0, 0.0],
+        stream: [0.0, 0.0, speed],
+        sponge_axis: WIND,
         smagorinsky: 0.14,
         bulk: 0.1,
         ..Settings::laminar(viscosity)
@@ -315,12 +318,12 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let along = |f: Vector3, d: usize| f.dot(setup.axes[d]);
     let q = 0.5 * air.0 * setup.wind.speed * setup.wind.speed;
     let mut readings = vec![
-        reading("drag", along(total, 0), "N", "along the wind"),
-        reading("side", along(total, 1), "N", "across the wind, level"),
-        reading("lift", along(total, 2), "N", "across the wind, up"),
+        reading("drag", along(total, WIND), "N", "along the wind"),
+        reading("side", along(total, SIDE), "N", "across the wind, level"),
+        reading("lift", along(total, UP), "N", "across the wind, up"),
         reading(
             "cda",
-            along(total, 0) / q,
+            along(total, WIND) / q,
             "m²",
             "drag over the dynamic pressure",
         ),
@@ -336,7 +339,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     }
     if n > 1 {
         for (part, force) in setup.parts.iter().zip(&forces) {
-            for (d, name) in ["drag", "side", "lift"].iter().enumerate() {
+            for (d, name) in [(WIND, "drag"), (SIDE, "side"), (UP, "lift")] {
                 readings.push(reading(
                     &format!("{}.{name}", part.name),
                     along(*force, d),
@@ -346,15 +349,22 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             }
         }
     }
-    let mut values = Vec::new();
-    for (k, part) in setup.parts.iter().enumerate() {
-        let (points, _) = sampled(&part.points, &part.triangles, setup.grid.spacing);
-        values.extend(
-            points
-                .iter()
-                .map(|&p| nearest(&setup, &at_link[k], setup.to_lattice(p))),
-        );
-    }
+    let values: Vec<f64> = {
+        use rayon::prelude::*;
+        setup
+            .parts
+            .par_iter()
+            .enumerate()
+            .map(|(k, part)| {
+                let (points, _) = sampled(&part.points, &part.triangles, setup.grid.spacing);
+                points
+                    .iter()
+                    .map(|&p| nearest(&setup, &at_link[k], setup.to_lattice(p)))
+                    .collect::<Vec<f64>>()
+            })
+            .collect::<Vec<_>>()
+            .concat()
+    };
     let (high, low) = values
         .iter()
         .fold((f64::NEG_INFINITY, f64::INFINITY), |(h, l), &v| {
