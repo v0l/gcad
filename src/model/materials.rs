@@ -227,7 +227,9 @@ fn check(entry: &Entry) -> Result<()> {
     let name = &entry.name;
     let positive = |what: &str, v: Option<f64>| -> Result<()> {
         match v {
-            Some(v) if v.is_nan() || v <= 0.0 => bail!("`{name}` has {what} {v}; it must be above zero"),
+            Some(v) if v.is_nan() || v <= 0.0 => {
+                bail!("`{name}` has {what} {v}; it must be above zero")
+            }
             _ => Ok(()),
         }
     };

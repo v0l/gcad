@@ -313,5 +313,5 @@ The plan for the rest is in `docs/simulation.md`.
 | wind loads | supported | `sim flow`, `wind 30 toward=1,0,0 about=0,0,0`, `mesh 5`, `average 40`, `air density=1.2 viscosity=1.5e-5` | `simulation::wind_on_a_cube` |
 | wind pressure in a static simulation | supported | `wind flow.gsim` | `simulation::wind_loads_a_static_part` |
 | air sealed inside parts | supported | a closed box in a `sim flow` is airtight even with walls thinner than a cell | `simulation::wind_seals_a_closed_box` |
-| flow slices | supported | `gcad render wind.gsim flow.png --flow` | `simulation::wind_draws_the_flow` |
+| flow slices and streamlines | supported | `gcad render wind.gsim flow.png --flow`; the viewer draws 3D streamlines and the slices | `simulation::wind_draws_the_flow` |
 | wind on an assembly | supported | `part pair.gasm` in a `sim flow` reads `front.drag`, `back.drag` | `simulation::wind_shelters_a_part_behind` |

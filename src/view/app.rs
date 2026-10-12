@@ -422,15 +422,23 @@ impl App {
     }
 
     fn mode(&self, part: &str) -> Mode {
-        self.modes.get(part).copied().unwrap_or_default()
+        if let Some(mode) = self.modes.get(part) {
+            return *mode;
+        }
+        let hidden = self
+            .shown
+            .as_ref()
+            .and_then(|s| s.scene.parts.iter().find(|p| p.name == part))
+            .is_some_and(|p| p.hidden);
+        if hidden {
+            Mode::Hidden
+        } else {
+            Mode::default()
+        }
     }
 
     fn set_mode(&mut self, part: &str, mode: Mode) {
-        if mode == Mode::Solid {
-            self.modes.remove(part);
-        } else {
-            self.modes.insert(part.to_string(), mode);
-        }
+        self.modes.insert(part.to_string(), mode);
     }
 
     fn looks(&self) -> Vec<Look> {
@@ -1424,7 +1432,27 @@ impl App {
                 hit.point[1] as f64,
                 hit.point[2] as f64,
             );
-            if let Some(probe) = field.probe(point) {
+            if hit.surface > 0 {
+                if let Some(probe) = field.slice_probe((hit.surface - 1) / 2, point) {
+                    let round = |v: f64| crate::plot::label((v * 1000.0).round() / 1000.0);
+                    readout(
+                        &p,
+                        rect,
+                        at,
+                        vec![
+                            format!("{} m/s mean", crate::plot::label(probe.mean)),
+                            format!("{} m/s at one moment", crate::plot::label(probe.moment)),
+                            probe.title,
+                            format!(
+                                "at {}, {}, {}",
+                                round(probe.at.x),
+                                round(probe.at.y),
+                                round(probe.at.z)
+                            ),
+                        ],
+                    );
+                }
+            } else if let Some(probe) = field.probe(point) {
                 field_readout(&p, rect, at, &field, &probe);
             }
         }
@@ -1623,6 +1651,10 @@ fn field_readout(
         round(probe.at.y),
         round(probe.at.z)
     ));
+    readout(p, rect, at, lines);
+}
+
+fn readout(p: &egui::Painter, rect: Rect, at: Pos2, lines: Vec<String>) {
     let text = p.layout_no_wrap(
         lines.join("\n"),
         egui::FontId::monospace(12.0),

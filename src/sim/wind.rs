@@ -38,6 +38,7 @@ struct Setup {
     across: f64,
     frontal: f64,
     centre: Point3,
+    bounds: (Point3, Point3),
     parts: Vec<Part>,
 }
 
@@ -169,6 +170,7 @@ fn setup(spec: &Spec) -> Result<Setup> {
         across: 0.0,
         frontal: 0.0,
         centre: Point3::origin(),
+        bounds: (Point3::origin(), Point3::origin()),
         parts,
     };
     let mut low = Point3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
@@ -186,6 +188,7 @@ fn setup(spec: &Spec) -> Result<Setup> {
     setup.centre[SIDE] = middle[0];
     setup.centre[UP] = middle[1];
     setup.centre[WIND] = 0.5 * (low[WIND] + high[WIND]);
+    setup.bounds = (low, high);
     let across = frontal.sqrt().max(1.0e-6);
     let spacing = spec.mesh.unwrap_or(across / ACROSS);
     {
@@ -343,6 +346,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         .collect();
     for _ in 0..samples {
         lattice.run(&settings, every)?;
+        lattice.accumulate();
         for watch in planes.iter_mut() {
             let (width, values) = lattice.plane(watch.axis, watch.index)?;
             if watch.mean.is_empty() {
@@ -363,19 +367,31 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         }
     }
     let velocity_scale = setup.wind.speed / speed;
+    let streams = streamlines(&setup, &lattice.mean_field()?, velocity_scale);
     let slices = planes
         .into_iter()
         .map(
             |Watch {
                  axis,
+                 index,
                  width,
                  mean,
                  last,
-                 ..
              }| {
                 let other = if axis == SIDE { UP } else { SIDE };
                 let height = width;
                 let long = mean.len() / width.max(1);
+                let mut first = [0usize; 3];
+                first[axis] = index;
+                first[other] = height - 1;
+                let corner = setup.grid.centre(first[0], first[1], first[2]);
+                let origin = Point3::origin() + setup.to_world([corner.x, corner.y, corner.z]);
+                let step = |a: usize, sign: f64| {
+                    let mut v = [0.0; 3];
+                    v[a] = sign * setup.grid.spacing;
+                    let w = setup.to_world(v);
+                    [w.x, w.y, w.z]
+                };
                 let round = |v: f64| (v * 100.0).round() / 100.0;
                 let mut slice = super::Slice {
                     title: if axis == SIDE {
@@ -390,6 +406,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                     } else {
                         "side".into()
                     },
+                    origin: [origin.x, origin.y, origin.z],
+                    right: step(WIND, 1.0),
+                    down: step(other, -1.0),
                     ..Default::default()
                 };
                 for row in 0..height {
@@ -533,6 +552,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     Ok(Outcome {
         kind: "flow".into(),
         slices,
+        streams,
         readings,
         notes,
         field: Some(Field {
@@ -584,6 +604,127 @@ fn sampled(
         }
     }
     (out, tris)
+}
+
+fn streamlines(
+    setup: &Setup,
+    field: &crate::flow::lattice::MeanField,
+    scale: f64,
+) -> Vec<super::Stream> {
+    use rayon::prelude::*;
+    let stride = field.stride as f64;
+    let size = setup.grid.size.map(|n| n as f64);
+    let [cx, cy, _] = field.size;
+    let node = |x: usize, y: usize, z: usize| field.velocity[x + (y + z * cy) * cx];
+    let velocity = |p: [f64; 3]| -> Option<[f64; 3]> {
+        let c = p.map(|v| (v - 0.5 * (stride - 1.0)) / stride);
+        let base = c.map(|v| v.floor());
+        if base
+            .iter()
+            .zip(field.size)
+            .any(|(b, n)| *b < 0.0 || *b + 1.0 >= n as f64)
+        {
+            return None;
+        }
+        let [bx, by, bz] = base.map(|v| v as usize);
+        let f = [c[0] - base[0], c[1] - base[1], c[2] - base[2]];
+        let mut total = [0.0; 3];
+        let mut weight = 0.0;
+        for (dx, dy, dz) in [
+            (0, 0, 0),
+            (1, 0, 0),
+            (0, 1, 0),
+            (1, 1, 0),
+            (0, 0, 1),
+            (1, 0, 1),
+            (0, 1, 1),
+            (1, 1, 1),
+        ] {
+            let w = [dx, dy, dz]
+                .iter()
+                .zip(f)
+                .map(|(d, t)| if *d == 1 { t } else { 1.0 - t })
+                .product::<f64>();
+            match node(bx + dx, by + dy, bz + dz) {
+                Some(v) => {
+                    for k in 0..3 {
+                        total[k] += w * v[k] as f64;
+                    }
+                    weight += w;
+                }
+                None if w > 0.5 => return None,
+                None => {}
+            }
+        }
+        (weight > 0.0).then(|| total.map(|v| v / weight.max(1.0)))
+    };
+    let (low, high) = setup.bounds;
+    let spacing = setup.grid.spacing;
+    let fine = |p: Point3| {
+        let q = (p - setup.grid.origin) / spacing;
+        [q.x, q.y, q.z]
+    };
+    let widen = |a: usize| {
+        let pad = 0.15 * (high[a] - low[a]) + 0.1 * setup.across;
+        (low[a] - pad, high[a] + pad)
+    };
+    let (side, up) = (widen(SIDE), widen(UP));
+    let aspect = (side.1 - side.0) / (up.1 - up.0).max(1.0e-9);
+    let wanted = 2400.0;
+    let along_side = ((wanted * aspect).sqrt().round() as usize).clamp(4, 160);
+    let along_up = ((wanted / along_side as f64).round() as usize).clamp(4, 160);
+    let mut seeds = Vec::new();
+    for i in 0..along_side {
+        for j in 0..along_up {
+            let mut p = Point3::origin();
+            p[SIDE] = side.0 + (side.1 - side.0) * (i as f64 + 0.5) / along_side as f64;
+            p[UP] = up.0 + (up.1 - up.0) * (j as f64 + 0.5) / along_up as f64;
+            p[WIND] = low[WIND] - 0.4 * setup.across;
+            seeds.push(fine(p));
+        }
+    }
+    let step = 0.5 * stride;
+    let limit = (3.0 * size[WIND] / step) as usize;
+    let calm = 0.02 * LATTICE_SPEED;
+    let world = |p: [f64; 3]| {
+        let local = setup.grid.origin + Vector3::new(p[0], p[1], p[2]) * spacing;
+        let w = Point3::origin() + setup.to_world([local.x, local.y, local.z]);
+        [w.x, w.y, w.z].map(|v| (v * 10.0).round() / 10.0)
+    };
+    seeds
+        .into_par_iter()
+        .filter_map(|mut p| {
+            let mut stream = super::Stream::default();
+            for n in 0..limit {
+                let Some(v) = velocity(p) else { break };
+                let speed = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                if n % 2 == 0 {
+                    stream.points.push(world(p));
+                    stream.speed.push((speed * scale * 100.0).round() / 100.0);
+                }
+                if speed < calm {
+                    break;
+                }
+                let mid = [0, 1, 2].map(|k| p[k] + 0.5 * step * v[k] / speed);
+                let Some(w) = velocity(mid) else { break };
+                let half = (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt();
+                if half < calm {
+                    break;
+                }
+                p = [0, 1, 2].map(|k| p[k] + step * w[k] / half);
+                if p.iter().zip(size).any(|(v, n)| *v < 0.0 || *v > n - 1.0) {
+                    break;
+                }
+            }
+            (stream.points.len() > 2).then_some(stream)
+        })
+        .filter(|stream| disturbed(stream, setup))
+        .collect()
+}
+
+fn disturbed(stream: &super::Stream, setup: &Setup) -> bool {
+    let slowest = stream.speed.iter().copied().fold(f64::INFINITY, f64::min);
+    slowest < 0.85 * setup.wind.speed
 }
 
 #[derive(Default)]
@@ -688,6 +829,8 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         unit: field.unit.clone(),
         values: field.values.clone(),
         moved: vec![Vector3::zero(); positions.len()],
+        slices: outcome.slices.clone(),
+        streams: outcome.streams.clone(),
         rest: positions.clone(),
         positions,
         marks: Vec::new(),

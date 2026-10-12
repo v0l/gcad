@@ -40,6 +40,9 @@ pub struct Slice {
     pub width: usize,
     pub spacing: f64,
     pub across: String,
+    pub origin: [f64; 3],
+    pub right: [f64; 3],
+    pub down: [f64; 3],
     pub speed: Vec<f64>,
     pub along: Vec<f64>,
     pub side: Vec<f64>,
@@ -53,6 +56,12 @@ impl Slice {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct Stream {
+    pub points: Vec<[f64; 3]>,
+    pub speed: Vec<f64>,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Outcome {
     pub kind: String,
     pub readings: Vec<Reading>,
@@ -62,6 +71,7 @@ pub struct Outcome {
     pub aliases: Vec<(String, String)>,
     pub field: Option<Field>,
     pub slices: Vec<Slice>,
+    pub streams: Vec<Stream>,
 }
 
 impl Outcome {
@@ -140,7 +150,11 @@ impl Outcome {
             })),
             "slices": self.slices.iter().map(|s| json!({
                 "title": s.title, "width": s.width, "spacing": s.spacing, "across": s.across,
+                "origin": s.origin, "right": s.right, "down": s.down,
                 "speed": s.speed, "along": s.along, "side": s.side, "snapshot": s.snapshot,
+            })).collect::<Vec<_>>(),
+            "streams": self.streams.iter().map(|s| json!({
+                "points": s.points, "speed": s.speed,
             })).collect::<Vec<_>>(),
             "expect": self.checks.iter().map(|(t, v, p)| json!({
                 "text": t, "value": v, "pass": p,
@@ -162,6 +176,10 @@ impl Outcome {
                 .unwrap_or_default()
         };
         let list = |v: &Value| v.as_array().cloned().unwrap_or_default();
+        let triple = |v: &Value| -> [f64; 3] {
+            let n = numbers(v);
+            [0, 1, 2].map(|k| n.get(k).copied().unwrap_or(0.0))
+        };
         Ok(Outcome {
             kind: text(value, "kind"),
             readings: list(&value["readings"])
@@ -200,10 +218,20 @@ impl Outcome {
                     width: s["width"].as_u64().unwrap_or(1) as usize,
                     spacing: s["spacing"].as_f64().unwrap_or(1.0),
                     across: text(s, "across"),
+                    origin: triple(&s["origin"]),
+                    right: triple(&s["right"]),
+                    down: triple(&s["down"]),
                     speed: numbers(&s["speed"]),
                     along: numbers(&s["along"]),
                     side: numbers(&s["side"]),
                     snapshot: numbers(&s["snapshot"]),
+                })
+                .collect(),
+            streams: list(&value["streams"])
+                .iter()
+                .map(|s| Stream {
+                    points: list(&s["points"]).iter().map(triple).collect(),
+                    speed: numbers(&s["speed"]),
                 })
                 .collect(),
             field: value["field"].as_object().map(|_| {

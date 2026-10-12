@@ -8,7 +8,7 @@ mod torque;
 mod vibration;
 pub mod wind;
 
-pub use result::{Curve, Field, Outcome, Reading, Series, Slice, inputs, stale, stamp};
+pub use result::{Curve, Field, Outcome, Reading, Series, Slice, Stream, inputs, stale, stamp};
 
 use crate::model::Model;
 use anyhow::{Result, bail};

@@ -119,7 +119,12 @@ Readings: `drag` along the wind, `side` across it and level, `lift` across it an
 sampled about a cell apart on a surface tessellated to a fifth of a cell. `--dry-run`
 prints the grid, the GPU memory it needs and the number of steps. `gcad render wind.gsim flow.png
 --flow` draws the air speed on an upright and a level slice along the wind through the
-centre of the frontal area, the mean with streamlines and one moment of the wake.
+centre of the frontal area, the mean with streamlines and one moment of the wake. The viewer
+draws streamlines of the mean flow in 3D, coloured by speed: the velocity is averaged over the
+whole box on the GPU (on cells up to a few lattice cells across, at most 16 million of them),
+lines are seeded on a grid a little upstream across the frontal area and traced through it,
+and the ones the parts slow below 85% of the wind are kept. The same slices are there as
+parts to switch on, and hovering one reads the mean speed and the speed at one moment.
 
 The box runs 4 H upstream, 5 H downstream and 3 H to each side of the parts, which keeps the
 blockage near 2% whatever their shape (a long thin part does not inflate the box). Nearer

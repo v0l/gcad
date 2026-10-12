@@ -417,6 +417,53 @@ fn plane_shader() -> String {
     s
 }
 
+pub const MEAN_CELLS: usize = 16_000_000;
+
+pub fn mean_stride(size: [usize; 3]) -> usize {
+    let cells = size.iter().product::<usize>() as f64;
+    ((cells / MEAN_CELLS as f64).cbrt().ceil() as usize).max(1)
+}
+
+fn mean_shader() -> String {
+    let mut s = String::new();
+    s += "struct Mean { nx: u32, ny: u32, nz: u32, stride: u32, cx: u32, cy: u32, cz: u32, count: u32 }\n";
+    s += "@group(0) @binding(0) var<uniform> m: Mean;\n";
+    s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
+    s += "@group(0) @binding(2) var<storage, read_write> out: array<vec4<f32>>;\n";
+    s += &populations(1, "a");
+    s += "@compute @workgroup_size(64)\n";
+    s += "fn mean(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {\n";
+    s += "  let k = id.x + id.y * groups.x * 64u;\n";
+    s += "  if (k >= m.count) { return; }\n";
+    s += "  let bx = (k % m.cx) * m.stride; let by = ((k / m.cx) % m.cy) * m.stride; let bz = (k / (m.cx * m.cy)) * m.stride;\n";
+    s += "  var total = vec4<f32>(0.0, 0.0, 0.0, 0.0);\n";
+    s += "  for (var dz = 0u; dz < m.stride; dz++) { for (var dy = 0u; dy < m.stride; dy++) { for (var dx = 0u; dx < m.stride; dx++) {\n";
+    s += "    let x = bx + dx; let y = by + dy; let z = bz + dz;\n";
+    s += "    if (x >= m.nx || y >= m.ny || z >= m.nz) { continue; }\n";
+    s += "    let cell = x + (y + z * m.ny) * m.nx;\n";
+    s += "    let kind = flags[cell] & 255u;\n";
+    s += "    if (kind == 1u || kind == 2u) { continue; }\n";
+    let sum = (0..Q)
+        .map(|i| format!("a{i}[cell]"))
+        .collect::<Vec<_>>()
+        .join(" + ");
+    s += &format!("    let rho = 1.0 + {sum};\n");
+    for (axis, name) in ["x", "y", "z"].iter().enumerate() {
+        let terms: Vec<String> = C
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c[axis] != 0)
+            .map(|(i, c)| format!("{}a{i}[cell]", if c[axis] > 0 { "+" } else { "-" }))
+            .collect();
+        s += &format!("    let m{name} = (0.0 {}) / rho;\n", terms.join(" "));
+    }
+    s += "    total = total + vec4<f32>(mx, my, mz, 1.0);\n";
+    s += "  } } }\n";
+    s += "  out[k] = out[k] + total;\n";
+    s += "}\n";
+    s
+}
+
 fn edge_shader() -> String {
     let mut s = String::new();
     s += "struct Edge { cell: u32, inner: u32, inlet: u32, pad: u32, vx: f32, vy: f32, vz: f32, pad2: f32 }\n";
@@ -524,8 +571,15 @@ pub struct Lattice<'a> {
     edges: Option<Pass>,
     forces: Option<(Pass, wgpu::Buffer)>,
     planes: (Pass, wgpu::Buffer),
+    mean: (Pass, wgpu::Buffer, usize, [usize; 3]),
     parity: usize,
     pub links: Vec<[u32; 2]>,
+}
+
+pub struct MeanField {
+    pub stride: usize,
+    pub size: [usize; 3],
+    pub velocity: Vec<Option<[f32; 3]>>,
 }
 
 pub struct Fields {
@@ -838,6 +892,41 @@ impl<'a> Lattice<'a> {
             },
             plane_out,
         );
+        let stride = mean_stride(size);
+        let coarse = size.map(|n| n.div_ceil(stride));
+        let coarse_count = coarse.iter().product::<usize>();
+        let mean_out = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("mean"),
+            size: coarse_count as u64 * 16,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let mean_header = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("mean params"),
+            contents: bytemuck::cast_slice(&[
+                size[0] as u32,
+                size[1] as u32,
+                size[2] as u32,
+                stride as u32,
+                coarse[0] as u32,
+                coarse[1] as u32,
+                coarse[2] as u32,
+                coarse_count as u32,
+            ]),
+            usage: wgpu::BufferUsages::UNIFORM,
+        });
+        let mean = (
+            Pass {
+                pipeline: pipeline(mean_shader(), "mean", &[&plane_layout, &side_layout]),
+                common: group(&plane_layout, &[&mean_header, &flags, &mean_out]),
+                sides: [side(0), side(1)],
+                count: coarse_count as u32,
+                header: mean_header,
+            },
+            mean_out,
+            stride,
+            coarse,
+        );
         Ok(Lattice {
             gpu,
             size,
@@ -849,6 +938,7 @@ impl<'a> Lattice<'a> {
             edges,
             forces,
             planes,
+            mean,
             parity: 0,
             links,
         })
@@ -972,6 +1062,39 @@ impl<'a> Lattice<'a> {
                 .map(|v| [v[0], v[1], v[2], v[3]])
                 .collect(),
         ))
+    }
+
+    pub fn accumulate(&self) {
+        let (pass, ..) = &self.mean;
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        {
+            let mut compute = encoder.begin_compute_pass(&Default::default());
+            compute.set_pipeline(&pass.pipeline);
+            compute.set_bind_group(0, &pass.common, &[]);
+            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
+            let (gx, gy) = dispatch(pass.count);
+            compute.dispatch_workgroups(gx, gy, 1);
+        }
+        self.gpu.queue.submit([encoder.finish()]);
+    }
+
+    pub fn mean_field(&self) -> Result<MeanField> {
+        let (_, buffer, stride, size) = &self.mean;
+        let values = self.gpu.read(buffer)?;
+        Ok(MeanField {
+            stride: *stride,
+            size: *size,
+            velocity: values
+                .chunks_exact(4)
+                .map(|v| {
+                    if v[3] > 0.0 {
+                        Some([v[0] / v[3], v[1] / v[3], v[2] / v[3]])
+                    } else {
+                        None
+                    }
+                })
+                .collect(),
+        })
     }
 
     pub fn link_samples(&self) -> Result<Vec<[f32; 4]>> {

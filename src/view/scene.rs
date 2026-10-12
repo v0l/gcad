@@ -43,6 +43,7 @@ pub struct Part {
     pub source: Option<String>,
     pub material: Option<(String, f64)>,
     pub size: [f64; 3],
+    pub hidden: bool,
 }
 
 #[derive(Clone)]
@@ -356,6 +357,7 @@ pub fn build(
                 .get(name)
                 .map(|m| (m.name.clone(), m.density)),
             size: [high.x - low.x, high.y - low.y, high.z - low.z],
+            hidden: false,
         });
     }
     let current_index = parts.iter().position(|p| p.current).unwrap_or(0);
@@ -445,29 +447,144 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         };
         lines.push(curve(&mark.outline, colour, MARKED_WIDTH));
     }
+    let mut surfaces = vec![surface];
+    let mut images = vec![viewer3d::Image {
+        width: 256,
+        height: 1,
+        rgba,
+    }];
+    let mut parts = vec![Part {
+        name,
+        colour: crate::plot::heat(1.0).map(|v| v as f32),
+        volume: 0.0,
+        current: true,
+        source: None,
+        material: None,
+        size: [high.x - low.x, high.y - low.y, high.z - low.z],
+        hidden: false,
+    }];
+    let fastest = crate::plot::flow_scale(&view.slices);
+    if !view.streams.is_empty() {
+        let group = parts.len();
+        let bins = 24;
+        let mut bands: Vec<Lines> = (0..bins)
+            .map(|b| Lines {
+                colour: crate::plot::heat((b as f64 + 0.5) / bins as f64).map(|v| v as f32),
+                material: Ink::Edge,
+                group,
+                width: 1.6,
+                ..Default::default()
+            })
+            .collect();
+        for stream in &view.streams {
+            for (pair, speeds) in stream.points.windows(2).zip(stream.speed.windows(2)) {
+                let t = 0.5 * (speeds[0] + speeds[1]) / fastest;
+                let band = ((t * bins as f64) as usize).min(bins - 1);
+                bands[band]
+                    .segments
+                    .push([pair[0].map(|v| v as f32), pair[1].map(|v| v as f32)]);
+            }
+        }
+        lines.extend(bands);
+        parts.push(Part {
+            name: format!(
+                "air streamlines, mean flow (0 to {} m/s)",
+                crate::plot::label(fastest.round())
+            ),
+            colour: crate::plot::heat(0.8).map(|v| v as f32),
+            volume: 0.0,
+            current: false,
+            source: None,
+            material: None,
+            size: [0.0; 3],
+            hidden: false,
+        });
+    }
+    for slice in &view.slices {
+        for (moment, values) in [(false, &slice.speed), (true, &slice.snapshot)] {
+            let mut rgba = Vec::with_capacity(values.len() * 4);
+            for v in values.iter() {
+                let c = if *v < 0.0 {
+                    [0.59, 0.59, 0.59]
+                } else {
+                    crate::plot::heat(v / fastest)
+                };
+                rgba.extend(c.map(|x| (x * 255.0) as u8));
+                rgba.push(255);
+            }
+            images.push(viewer3d::Image {
+                width: slice.width,
+                height: slice.height(),
+                rgba,
+            });
+            let group = parts.len();
+            surfaces.push(slice_quad(slice, images.len() - 1, group));
+            parts.push(Part {
+                name: format!(
+                    "air speed, {}, {} (0 to {} m/s)",
+                    slice.title,
+                    if moment { "one moment" } else { "mean" },
+                    crate::plot::label(fastest.round())
+                ),
+                colour: crate::plot::heat(0.5).map(|v| v as f32),
+                volume: 0.0,
+                current: false,
+                source: None,
+                material: None,
+                size: [0.0; 3],
+                hidden: true,
+            });
+        }
+    }
     Scene {
         mesh: Arc::new(viewer3d::Scene {
-            surfaces: vec![surface],
+            surfaces,
             lines,
-            images: vec![viewer3d::Image {
-                width: 256,
-                height: 1,
-                rgba,
-            }],
+            images,
             centre: v3(bounds.center()),
             radius: (bounds.diameter() / 2.0).max(1.0e-3) as f32,
             ..Default::default()
         }),
-        parts: vec![Part {
-            name,
-            colour: crate::plot::heat(1.0).map(|v| v as f32),
-            volume: 0.0,
-            current: true,
-            source: None,
-            material: None,
-            size: [high.x - low.x, high.y - low.y, high.z - low.z],
-        }],
+        parts,
         vertices: Vec::new(),
         faces: Vec::new(),
     }
+}
+
+fn slice_quad(slice: &crate::sim::Slice, texture: usize, group: usize) -> Surface {
+    let o = slice.origin;
+    let (right, down) = (slice.right, slice.down);
+    let (w, h) = (slice.width as f64, slice.height() as f64);
+    let at =
+        |c: f64, r: f64| -> V3 { [0, 1, 2].map(|k| (o[k] + c * right[k] + r * down[k]) as f32) };
+    let corners = [
+        (at(-0.5, -0.5), [0.0, 0.0]),
+        (at(w - 0.5, -0.5), [1.0, 0.0]),
+        (at(w - 0.5, h - 0.5), [1.0, 1.0]),
+        (at(-0.5, h - 0.5), [0.0, 1.0]),
+    ];
+    let normal = norm(cross(
+        sub(corners[1].0, corners[0].0),
+        sub(corners[3].0, corners[0].0),
+    ));
+    let back = normal.map(|v| -v);
+    let mut surface = Surface {
+        colour: [1.0, 1.0, 1.0],
+        texture: Some(texture),
+        group,
+        ..Default::default()
+    };
+    for (triangle, n) in [
+        ([0, 1, 2], normal),
+        ([0, 2, 3], normal),
+        ([0, 2, 1], back),
+        ([0, 3, 2], back),
+    ] {
+        for k in triangle {
+            surface.positions.push(corners[k].0);
+            surface.normals.push(n);
+            surface.uvs.push(corners[k].1);
+        }
+    }
+    surface
 }

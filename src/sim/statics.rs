@@ -516,6 +516,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         checks: Vec::new(),
         aliases: Vec::new(),
         slices: Vec::new(),
+        streams: Vec::new(),
         field: Some(Field {
             title: "von Mises stress".into(),
             unit: "MPa".into(),
@@ -545,6 +546,37 @@ pub struct FieldView {
     pub rest: Vec<Point3>,
     pub marks: Vec<Mark>,
     pub index: std::sync::Arc<std::sync::OnceLock<TriangleGrid>>,
+    pub slices: Vec<crate::sim::Slice>,
+    pub streams: Vec<crate::sim::Stream>,
+}
+
+pub struct SliceProbe {
+    pub title: String,
+    pub mean: f64,
+    pub moment: f64,
+    pub at: Point3,
+}
+
+impl FieldView {
+    pub fn slice_probe(&self, slice: usize, at: Point3) -> Option<SliceProbe> {
+        let s = self.slices.get(slice)?;
+        let o = Point3::new(s.origin[0], s.origin[1], s.origin[2]);
+        let right = Vector3::new(s.right[0], s.right[1], s.right[2]);
+        let down = Vector3::new(s.down[0], s.down[1], s.down[2]);
+        let d = at - o;
+        let c = (d.dot(right) / right.magnitude2()).round();
+        let r = (d.dot(down) / down.magnitude2()).round();
+        if c < 0.0 || r < 0.0 || c as usize >= s.width || r as usize >= s.height() {
+            return None;
+        }
+        let k = r as usize * s.width + c as usize;
+        (s.speed[k] >= 0.0).then(|| SliceProbe {
+            title: s.title.clone(),
+            mean: s.speed[k],
+            moment: s.snapshot[k],
+            at,
+        })
+    }
 }
 
 pub struct TriangleGrid {
@@ -732,6 +764,8 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
             })
             .collect(),
         index: Default::default(),
+        slices: Vec::new(),
+        streams: Vec::new(),
     })
 }
 
@@ -906,6 +940,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
         checks: Vec::new(),
         aliases: Vec::new(),
         slices: Vec::new(),
+        streams: Vec::new(),
         field: Some(Field {
             title: format!("buckling mode, {} times the loads", short(first.factor)),
             unit: "relative".into(),

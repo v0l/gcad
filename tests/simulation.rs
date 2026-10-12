@@ -1309,11 +1309,14 @@ fn wind_seals_a_closed_box() {
 
 #[test]
 fn wind_draws_the_flow() {
-    let outcome = simulated(
+    let path = written(
         "wind_draws_the_flow",
         &[("cube.gcad", CUBE)],
         "sim flow\npart cube.gcad\nwind 10 toward=1,0,0\nmesh 5\naverage 4",
     );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("sim");
+    let outcome = gcad::sim::simulate(spec).expect("flows");
     assert_eq!(outcome.slices.len(), 2);
     for slice in &outcome.slices {
         assert_eq!(slice.speed.len(), slice.width * slice.height());
@@ -1323,6 +1326,40 @@ fn wind_draws_the_flow() {
         );
         let free = slice.speed[slice.width / 2];
         assert!((free - 10.0).abs() < 1.0, "free stream {free} m/s");
+    }
+    assert!(
+        outcome.streams.len() > 20,
+        "{} streamlines",
+        outcome.streams.len()
+    );
+    for stream in &outcome.streams {
+        assert!(stream.points[0][0] < -50.0, "seeded upstream");
+        assert!(stream.speed.iter().any(|v| *v < 8.5), "slowed by the cube");
+        assert!(
+            stream
+                .points
+                .iter()
+                .all(|p| { p[0].abs() > 45.0 || p[1].abs() > 45.0 || p[2] < 5.0 || p[2] > 95.0 })
+        );
+    }
+    let view = gcad::sim::wind::field_view(spec, &outcome).expect("view");
+    for (k, slice) in outcome.slices.iter().enumerate() {
+        let at = |c: f64, r: f64| {
+            monstertruck::modeling::Point3::new(
+                slice.origin[0] + c * slice.right[0] + r * slice.down[0],
+                slice.origin[1] + c * slice.right[1] + r * slice.down[1],
+                slice.origin[2] + c * slice.right[2] + r * slice.down[2],
+            )
+        };
+        let upstream = view
+            .slice_probe(k, at(3.0, slice.height() as f64 / 2.0))
+            .expect("air upstream");
+        assert!((upstream.mean - 10.0).abs() < 1.0, "{} m/s", upstream.mean);
+        assert!(
+            view.slice_probe(k, monstertruck::modeling::Point3::new(0.0, 0.0, 50.0))
+                .is_none(),
+            "inside the cube is not air"
+        );
     }
     let path = std::path::PathBuf::from(scratch("wind_draws_the_flow")).join("flow.png");
     gcad::plot::flow(&outcome.slices, path.to_str().expect("utf-8")).expect("draws");

@@ -75,6 +75,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         checks: Vec::new(),
         aliases: Vec::new(),
         slices: Vec::new(),
+        streams: Vec::new(),
         field,
     })
 }

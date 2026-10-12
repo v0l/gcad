@@ -460,10 +460,7 @@ pub fn title(canvas: &mut Canvas, (x, y): (f64, f64), text: &str) {
     canvas.text((x, y), 20.0, text, Anchor::Centre, INK);
 }
 
-pub fn flow(slices: &[crate::sim::Slice], path: &str) -> Result<()> {
-    if slices.is_empty() {
-        bail!("the result has no flow slices; run `gcad sim` again");
-    }
+pub fn flow_scale(slices: &[crate::sim::Slice]) -> f64 {
     let mut speeds: Vec<f64> = slices
         .iter()
         .flat_map(|s| s.speed.iter().chain(&s.snapshot))
@@ -471,11 +468,18 @@ pub fn flow(slices: &[crate::sim::Slice], path: &str) -> Result<()> {
         .filter(|v| *v >= 0.0)
         .collect();
     speeds.sort_by(f64::total_cmp);
-    let high = speeds
+    speeds
         .get(speeds.len().saturating_sub(1) * 995 / 1000)
         .copied()
         .unwrap_or(1.0)
-        .max(1.0e-9);
+        .max(1.0e-9)
+}
+
+pub fn flow(slices: &[crate::sim::Slice], path: &str) -> Result<()> {
+    if slices.is_empty() {
+        bail!("the result has no flow slices; run `gcad sim` again");
+    }
+    let high = flow_scale(slices);
     let panel = 720u32;
     let heights: Vec<u32> = slices
         .iter()
