@@ -680,13 +680,9 @@ impl Model {
             }
         }
         let depth = self.depth + 1;
-        std::thread::scope(|scope| {
-            for (key, path, vars) in wanted {
-                let cache = self.cache.clone();
-                scope.spawn(move || {
-                    let _ = cache.part(key, || super::load_model(&path, &vars, depth, &cache));
-                });
-            }
+        let cache = &self.cache;
+        crate::host::each(wanted, |(key, path, vars)| {
+            let _ = cache.part(key, || super::load_model(&path, &vars, depth, cache));
         });
     }
 

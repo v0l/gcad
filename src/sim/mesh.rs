@@ -37,7 +37,7 @@ pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
     named
         .par_iter()
         .map(|(name, solid)| {
-            let clock = std::time::Instant::now();
+            let clock = crate::host::Instant::now();
             let (mesh, _) = mesh_part(solid, size).with_context(|| format!("meshing `{name}`"))?;
             Ok(Body {
                 name: name.clone(),

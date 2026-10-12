@@ -193,7 +193,7 @@ impl Model {
                 if crate::sim::is_sim(std::path::Path::new(by)) {
                     let reference = args.optional_number("from", &self.scope)?.unwrap_or(20.0);
                     let file = self.relative(by);
-                    if !file.is_file() {
+                    if !crate::host::is_file(&file) {
                         bail!("no file {}", file.display());
                     }
                     self.spec().warming = Some(crate::sim::Warm::From { file, reference });
@@ -328,7 +328,7 @@ impl Model {
                 let args = Args::new(line, &["file"], &[], false)?;
                 let name = args.text("file")?;
                 let file = self.relative(name);
-                if !file.is_file() {
+                if !crate::host::is_file(&file) {
                     bail!("no file {}", file.display());
                 }
                 if self.spec().kind == Some(crate::sim::Kind::Flow) {

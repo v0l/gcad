@@ -61,6 +61,35 @@ The format, operations and selectors are in [docs/format.md](docs/format.md), wh
 operations exist, which are still missing and the tests behind each are in
 [docs/ops.md](docs/ops.md).
 
+## In the browser
+
+The viewer also runs as a WebAssembly page with an editor beside the view. Edits are kept
+in the browser's local storage, and you can drop `.gcad` and `.gasm` files on the page.
+
+```sh
+./web/build.sh
+python3 web/serve.py 8080
+```
+
+`./web/deploy.sh` builds it and publishes it to Cloudflare Pages at https://gcad-8oy.pages.dev.
+
+The part after `#` in the address says what to open, so a link opens a project straight
+from GitHub. The page fetches the file and every file it names (parts, includes, imports):
+
+```
+#https://github.com/v0l/gcad/blob/master/examples/robot/arm.gasm
+#github.com/v0l/gcad/tree/master/examples/parts
+#v0l/gcad/examples/assemblies/linkage.gasm
+#examples/parts/plate.gcad
+```
+
+A `tree` link (or a bare repository) lists every part in that folder and opens the first
+assembly. The address follows whatever file is open, so copy it to share the view.
+Simulations and flow do not run in the browser. Models build on a pool of web workers, so
+the page stays responsive: the robot arm takes about 15 s (11 s on the desktop). Threads
+need a nightly toolchain with `rust-src` to build, and the page must be served with the
+cross-origin isolation headers in `web/_headers` (`web/serve.py` sends them too).
+
 ## Agent skill
 
 [skills/gcad/SKILL.md](skills/gcad/SKILL.md) teaches an agent the write, check, render loop,

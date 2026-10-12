@@ -8,6 +8,9 @@ pub struct Gpu {
 
 impl Gpu {
     pub fn open() -> Result<Gpu> {
+        if cfg!(target_arch = "wasm32") {
+            return Err(anyhow!("flow simulations do not run in the browser"));
+        }
         let instance =
             wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
         let adapters = pollster::block_on(instance.enumerate_adapters(wgpu::Backends::all()));

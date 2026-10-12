@@ -429,7 +429,7 @@ impl Outcome {
     }
 
     pub fn read(path: &Path) -> Result<Outcome> {
-        let text = std::fs::read_to_string(path)
+        let text = crate::host::read_to_string(path)
             .map_err(|e| anyhow!("reading {}: {e}; run `gcad sim` first", path.display()))?;
         Outcome::from_json(&serde_json::from_str(&text)?)
     }
@@ -473,7 +473,7 @@ pub fn inputs(spec: &Path) -> Vec<PathBuf> {
         if !READ_INTO.contains(&extension(&file).as_str()) {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&file) else {
+        let Ok(text) = crate::host::read_to_string(&file) else {
             continue;
         };
         let dir = file.parent().map(Path::to_path_buf).unwrap_or_default();
@@ -486,7 +486,7 @@ pub fn inputs(spec: &Path) -> Vec<PathBuf> {
             let word = word.rsplit('=').next().unwrap_or(word);
             let path = dir.join(word);
             if FILE_KINDS.contains(&extension(&path).as_str())
-                && path.is_file()
+                && crate::host::is_file(&path)
                 && !found.contains(&path)
             {
                 found.push(path);
@@ -507,7 +507,7 @@ pub fn stamp(spec: &Path, vars: &[(String, f64)]) -> Vec<(String, String)> {
     let mut stamp: Vec<(String, String)> = inputs(spec)
         .into_iter()
         .map(|file| {
-            let bytes = std::fs::read(&file).unwrap_or_default();
+            let bytes = crate::host::read(&file).unwrap_or_default();
             let name = file.strip_prefix(&dir).unwrap_or(&file);
             (name.display().to_string(), format!("{:016x}", fnv(&bytes)))
         })
@@ -522,7 +522,7 @@ pub fn stamp(spec: &Path, vars: &[(String, f64)]) -> Vec<(String, String)> {
 
 pub fn stale(spec: &Path, vars: &[(String, f64)]) -> Option<String> {
     let path = super::result_path(spec);
-    let Ok(text) = std::fs::read_to_string(&path) else {
+    let Ok(text) = crate::host::read_to_string(&path) else {
         return Some(format!("no result yet; run `gcad sim {}`", spec.display()));
     };
     let Ok(value) = serde_json::from_str::<Value>(&text) else {

@@ -540,6 +540,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "console_error_panic_hook"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a06aeb73f470f66dcdbf7223caeebb85984942f22f1adb2a088cf9668146bbbc"
+dependencies = [
+ "cfg-if",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "convert_case"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -894,13 +904,14 @@ dependencies = [
 
 [[package]]
 name = "egui_bench"
-version = "0.2.1"
+version = "0.2.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daef947c66d74e676ea8ff9032e869b22c4359831f52eedd147979ac57be979f"
+checksum = "a2c78e968455721b42444a52ad79c1dd60d3a1b7c381c3c6d257cadc4316d6f5"
 dependencies = [
  "egui",
  "egui_glow",
  "three-d",
+ "web-time",
 ]
 
 [[package]]
@@ -1219,10 +1230,57 @@ dependencies = [
 ]
 
 [[package]]
+name = "futures"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a31d2a3fbaaeb2af2368bbdd904aa8e812d3c04a1ee10d3171f52d556e5d0a3"
+dependencies = [
+ "futures-channel",
+ "futures-core",
+ "futures-io",
+ "futures-sink",
+ "futures-task",
+ "futures-util",
+]
+
+[[package]]
+name = "futures-channel"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b1f9e3d69d39e4862ffed03ed071a76f9a13ba1d9109d355b0f0aa6b15e393c4"
+dependencies = [
+ "futures-core",
+ "futures-sink",
+]
+
+[[package]]
 name = "futures-core"
 version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "92d699e522242e69e3003b94ecc1f960f3a5e015aa7c5d7486e65ad01dd94f5e"
+
+[[package]]
+name = "futures-io"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "53c0fa8157de1303bfffdaa1cc2a673bfffb60102f76b0ef4441659124373fed"
+
+[[package]]
+name = "futures-macro"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9fb9654ba8355388abeb8dcb4fc62f511300867002afc858860463bdd9fe0c44"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.6",
+]
+
+[[package]]
+name = "futures-sink"
+version = "0.3.34"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "1944426bf7d03f1d14f708785e4b33efd750b36d48a157b836b3efc15ede8e1d"
 
 [[package]]
 name = "futures-task"
@@ -1236,8 +1294,13 @@ version = "0.3.34"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0d50a92467f8ba5dd6e3ee5d4bd04d73ab2e4e1c44474a0674821dfce14b79bc"
 dependencies = [
+ "futures-channel",
  "futures-core",
+ "futures-io",
+ "futures-macro",
+ "futures-sink",
  "futures-task",
+ "memchr",
  "pin-project-lite",
  "slab",
 ]
@@ -1254,6 +1317,7 @@ dependencies = [
  "egui_bench",
  "epaint_default_fonts",
  "faer",
+ "getrandom 0.4.3",
  "image",
  "monstertruck",
  "monstertruck-io",
@@ -1268,8 +1332,28 @@ dependencies = [
  "spade",
  "toml",
  "ttf-parser",
+ "web-sys",
+ "web-time",
  "wgpu",
  "yaml-rust2",
+]
+
+[[package]]
+name = "gcad-web"
+version = "0.2.0"
+dependencies = [
+ "console_error_panic_hook",
+ "eframe",
+ "futures",
+ "gcad",
+ "js-sys",
+ "parking_lot_core",
+ "rayon",
+ "serde_json",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-rayon",
+ "web-sys",
 ]
 
 [[package]]
@@ -2217,7 +2301,7 @@ dependencies = [
 [[package]]
 name = "monstertruck"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-fillet",
@@ -2235,7 +2319,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-assembly"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "rayon",
@@ -2244,7 +2328,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-core"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "cgmath",
  "matext4cgmath",
@@ -2256,7 +2340,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-derive"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -2267,7 +2351,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-fillet"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2285,7 +2369,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-geometry"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2298,7 +2382,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-healing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "ahash",
  "getrandom 0.3.4",
@@ -2314,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-io"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "chrono",
  "derive_more",
@@ -2335,7 +2419,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-mesh"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "array-macro",
  "bytemuck",
@@ -2351,7 +2435,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-meshing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "array-macro",
  "derive_more",
@@ -2370,7 +2454,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-modeling"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "derive_more",
  "itertools 0.14.0",
@@ -2391,7 +2475,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-solid"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2412,7 +2496,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-topology"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2427,7 +2511,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-traits"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "getrandom 0.4.3",
  "monstertruck-core",
@@ -3584,6 +3668,7 @@ checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
 dependencies = [
  "either",
  "rayon-core",
+ "wasm_sync",
 ]
 
 [[package]]
@@ -3594,6 +3679,7 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+ "wasm_sync",
 ]
 
 [[package]]
@@ -4548,12 +4634,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-bindgen-rayon"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a16c60a56c81e4dc3b9c43d76ba5633e1c0278211d59a9cb07d61b6cd1c6583"
+dependencies = [
+ "crossbeam-channel",
+ "js-sys",
+ "rayon",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "wasm-bindgen-shared"
 version = "0.2.129"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasm_sync"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cff360cade7fec41ff0e9d2cda57fe58258c5f16def0e21302394659e6bbb0ea"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

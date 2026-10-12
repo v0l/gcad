@@ -99,7 +99,7 @@ pub fn slug(name: &str) -> String {
 
 pub fn load(path: &Path) -> Result<Vec<Entry>> {
     let text =
-        std::fs::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
+        crate::host::read_to_string(path).with_context(|| format!("reading {}", path.display()))?;
     let extension = path
         .extension()
         .map(|e| e.to_string_lossy().to_ascii_lowercase())
@@ -121,15 +121,15 @@ pub fn discover(dir: Option<&Path>) -> Vec<PathBuf> {
     let mut at = dir.map(Path::to_path_buf);
     while let Some(here) = at {
         let candidate = here.join(LIBRARY);
-        if candidate.is_file() {
+        if crate::host::is_file(&candidate) {
             found.push(candidate);
         }
-        if here.join(".git").exists() {
+        if crate::host::exists(&here.join(".git")) {
             break;
         }
         at = here.parent().map(Path::to_path_buf);
     }
-    if let Some(config) = config_library().filter(|p| p.is_file())
+    if let Some(config) = config_library().filter(|p| crate::host::is_file(p))
         && !found.contains(&config)
     {
         found.push(config);
@@ -679,7 +679,7 @@ fn yaml_text(value: &yaml_rust2::Yaml) -> Option<String> {
 pub fn table(target: Option<&Path>) -> Result<String> {
     let cwd = std::env::current_dir().unwrap_or_default();
     let here = target.unwrap_or(&cwd);
-    let library_file = here.is_file()
+    let library_file = crate::host::is_file(here)
         && matches!(
             here.extension()
                 .map(|e| e.to_string_lossy().to_ascii_lowercase())
@@ -689,7 +689,7 @@ pub fn table(target: Option<&Path>) -> Result<String> {
     let mut rows: Vec<Entry> = if library_file {
         load(here)?
     } else {
-        let dir = if here.is_dir() {
+        let dir = if crate::host::is_dir(here) {
             here.to_path_buf()
         } else {
             here.parent().map(Path::to_path_buf).unwrap_or(cwd.clone())

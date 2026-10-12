@@ -6,9 +6,12 @@ use std::collections::HashMap;
 type P2 = (f64, f64);
 
 pub(crate) fn stl_solid(path: &std::path::Path) -> Result<Solid> {
-    let file = std::fs::File::open(path).with_context(|| format!("reading {}", path.display()))?;
-    let mesh = monstertruck::mesh::stl::read(file, monstertruck::mesh::stl::StlType::Automatic)
-        .map_err(|e| anyhow!("{}: {e}", path.display()))?;
+    let file = crate::host::read(path).with_context(|| format!("reading {}", path.display()))?;
+    let mesh = monstertruck::mesh::stl::read(
+        std::io::Cursor::new(file),
+        monstertruck::mesh::stl::StlType::Automatic,
+    )
+    .map_err(|e| anyhow!("{}: {e}", path.display()))?;
     mesh_solid(&mesh)
 }
 

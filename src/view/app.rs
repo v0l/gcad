@@ -1,5 +1,6 @@
 use super::scene::{self, Highlight, Ink, Scene, V3};
 use crate::geometry;
+use crate::host::Instant;
 use crate::model::{
     Joint, JointKind, Rig, Snapshot, explode_offsets, label_of, posed, snapshots_path,
 };
@@ -11,11 +12,10 @@ use egui_bench::viewer3d::{
     self, BACKGROUND, Camera, Cut, Look, Orbit, Placement, Projector, Viewer, dot, sub,
 };
 use monstertruck::modeling::{Matrix4, Solid, SquareMatrix};
-use notify::{RecursiveMode, Watcher};
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 #[derive(Default)]
 struct Program {
@@ -226,6 +226,7 @@ pub struct App {
     cam: Camera,
     orbit: Orbit,
     events: Option<Receiver<()>>,
+    #[cfg(not(target_arch = "wasm32"))]
     _watcher: Option<notify::RecommendedWatcher>,
     dirty: Option<Instant>,
     loading: Option<(Receiver<Program>, Instant)>,
@@ -247,10 +248,16 @@ pub struct App {
     focus: Option<Focus>,
     clashes: Option<Result<Vec<String>, ()>>,
     clash_job: Option<Receiver<Vec<String>>>,
-    browser: Option<Browser>,
+    browser: Option<Picker>,
     frames: std::collections::VecDeque<Instant>,
+    editing: bool,
+    source: String,
+    cursor_row: Option<usize>,
 }
 
+const WEB: bool = cfg!(target_arch = "wasm32");
+
+#[cfg(not(target_arch = "wasm32"))]
 fn changes_content(kind: &notify::EventKind) -> bool {
     use notify::EventKind;
     use notify::event::{AccessKind, AccessMode, ModifyKind};
@@ -326,6 +333,10 @@ fn inside(polygon: &[Pos2], p: Pos2) -> bool {
 }
 
 impl App {
+    pub fn web(cc: &eframe::CreationContext, path: Option<PathBuf>) -> Self {
+        Self::new(cc, path, String::new(), None, Vec::new())
+    }
+
     fn new(
         cc: &eframe::CreationContext,
         path: Option<PathBuf>,
@@ -347,6 +358,7 @@ impl App {
             cam: Camera::default(),
             orbit: Orbit::default(),
             events: None,
+            #[cfg(not(target_arch = "wasm32"))]
             _watcher: None,
             dirty: None,
             loading: None,
@@ -370,20 +382,27 @@ impl App {
             clash_job: None,
             browser: None,
             frames: std::collections::VecDeque::new(),
+            editing: WEB,
+            source: String::new(),
+            cursor_row: None,
         };
         match path {
             Some(path) => app.open(path, &cc.egui_ctx),
+            None if crate::host::status().is_some() => {}
             None => app.browser = Some(browser_at(std::env::current_dir().unwrap_or_default())),
         }
         app
     }
 
     fn open(&mut self, path: PathBuf, ctx: &egui::Context) {
-        let path = std::fs::canonicalize(&path).unwrap_or(path);
+        let path = crate::host::canonicalize(&path).unwrap_or(path);
         ctx.send_viewport_cmd(egui::ViewportCommand::Title(format!(
             "gcad - {}",
             path.display()
         )));
+        crate::host::opened(&path);
+        self.source = crate::host::read_to_string(&path).unwrap_or_default();
+        self.cursor_row = None;
         self.path = Some(path);
         self.program = Arc::new(Program::default());
         self.shown = None;
@@ -394,13 +413,21 @@ impl App {
         self.clashes = None;
         self.follow = true;
         self.cam = Camera::default();
-        self._watcher = None;
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            self._watcher = None;
+        }
         self.events = None;
         self.reload(ctx);
         self.watch(ctx.clone());
     }
 
+    #[cfg(target_arch = "wasm32")]
+    fn watch(&mut self, _ctx: egui::Context) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
     fn watch(&mut self, ctx: egui::Context) {
+        use notify::{RecursiveMode, Watcher};
         let Some(file) = self.path.clone() else {
             return;
         };
@@ -435,9 +462,9 @@ impl App {
         };
         let (tx, rx) = channel();
         let (ctx, vars) = (ctx.clone(), self.vars.clone());
-        std::thread::spawn(move || {
+        crate::host::spawn(move || {
             let _ = tx.send(evaluate(&path, &vars));
-            ctx.request_repaint();
+            crate::host::wake(&ctx);
         });
         self.loading = Some((rx, Instant::now()));
     }
@@ -508,6 +535,7 @@ impl App {
     }
 
     fn install(&mut self, program: Program) {
+        crate::host::built(self.took.as_secs_f64());
         self.generation += 1;
         self.loaded = Instant::now();
         let last = program.snapshots.len().saturating_sub(1);
@@ -546,14 +574,14 @@ impl App {
         let (tx, rx) = channel();
         let job_key = key.clone();
         let ctx = ctx.clone();
-        std::thread::spawn(move || {
+        crate::host::spawn(move || {
             let snapshot = &program.snapshots[index];
             let started = Instant::now();
             if let Some(mut shown) = build_shown(snapshot, job_key) {
                 shown.built = started.elapsed();
                 let _ = tx.send(shown);
             }
-            ctx.request_repaint();
+            crate::host::wake(&ctx);
         });
         self.building = Some((key, rx));
     }
@@ -641,6 +669,9 @@ impl App {
                     )),
                 };
             }
+            if WEB && toggle(ui, "edit", self.editing).clicked() {
+                self.editing = !self.editing;
+            }
             if toggle(ui, "measure", self.measuring).clicked() {
                 self.measuring = !self.measuring;
                 self.picks.clear();
@@ -693,7 +724,7 @@ impl App {
         ui.add_space(6.0);
     }
 
-    fn lines(&mut self, ui: &mut Ui) {
+    fn parse_error(&self, ui: &mut Ui) {
         if let Some(error) = &self.program.error {
             card(
                 ui,
@@ -707,6 +738,85 @@ impl App {
             );
             ui.add_space(6.0);
         }
+    }
+
+    fn editor(&mut self, ui: &mut Ui) {
+        self.parse_error(ui);
+        let Some(path) = self.path.clone() else {
+            note(ui, "open a file to edit it", LEGEND);
+            return;
+        };
+        if crate::host::edited(&path) {
+            ui.horizontal(|ui| {
+                note(ui, "edited, kept in this browser", LEGEND);
+                if toggle(ui, "revert", false).clicked() {
+                    crate::host::revert(&path);
+                    self.source = crate::host::read_to_string(&path).unwrap_or_default();
+                    self.dirty = Some(Instant::now());
+                }
+            });
+            ui.add_space(4.0);
+        }
+        let failed = self
+            .program
+            .snapshots
+            .iter()
+            .zip(&self.program.lines)
+            .find(|(s, _)| s.result.is_err())
+            .map(|(_, l)| l.number);
+        let mut layouter = |ui: &Ui, text: &dyn egui::TextBuffer, _wrap: f32| {
+            let mut job = egui::text::LayoutJob::default();
+            for (row, line) in text.as_str().split_inclusive('\n').enumerate() {
+                let colour = if Some(row + 1) == failed {
+                    FAULT
+                } else {
+                    VALUE
+                };
+                job.append(line, 0.0, egui::TextFormat::simple(mono(13.0), colour));
+            }
+            job.wrap.max_width = f32::INFINITY;
+            ui.fonts_mut(|f| f.layout_job(job))
+        };
+        let output = egui::ScrollArea::both()
+            .auto_shrink([false, false])
+            .show(ui, |ui| {
+                egui::TextEdit::multiline(&mut self.source)
+                    .code_editor()
+                    .desired_width(f32::INFINITY)
+                    .desired_rows(40)
+                    .lock_focus(true)
+                    .layouter(&mut layouter)
+                    .show(ui)
+            })
+            .inner;
+        if output.response.changed() {
+            crate::host::save(&path, &self.source);
+            self.dirty = Some(Instant::now());
+        }
+        if let Some(range) = output.cursor_range {
+            let row = self
+                .source
+                .chars()
+                .take(range.primary.index.0)
+                .filter(|c| *c == '\n')
+                .count();
+            if self.cursor_row != Some(row) {
+                self.cursor_row = Some(row);
+                let at = self
+                    .program
+                    .lines
+                    .iter()
+                    .rposition(|l| l.number <= row + 1)
+                    .unwrap_or(0);
+                if at < self.program.lines.len() {
+                    self.select(at);
+                }
+            }
+        }
+    }
+
+    fn lines(&mut self, ui: &mut Ui) {
+        self.parse_error(ui);
         let program = self.program.clone();
         let mut clicked = None;
         egui::ScrollArea::vertical()
@@ -1386,7 +1496,7 @@ impl App {
             let values = self.joint_values.clone();
             let (tx, rx) = channel();
             let ctx = ui.ctx().clone();
-            std::thread::spawn(move || {
+            crate::host::spawn(move || {
                 let moved = posed(&joints, &values);
                 let bare: Vec<&Solid> = solids.iter().map(|(_, s)| s).collect();
                 let meshes: Vec<geometry::Meshed> = geometry::meshed_all(&bare)
@@ -1407,7 +1517,7 @@ impl App {
                     })
                     .collect();
                 let _ = tx.send(found);
-                ctx.request_repaint();
+                crate::host::wake(&ctx);
             });
             self.clash_job = Some(rx);
             self.clashes = None;
@@ -1843,10 +1953,12 @@ impl App {
         let p = ui.painter_at(rect);
         let Some(shown) = &self.shown else {
             p.rect_filled(rect, 0.0, BACKGROUND);
+            let status = crate::host::status();
             let message = match (
                 &self.path,
                 self.loading.is_some() || self.building.is_some(),
             ) {
+                _ if status.is_some() => status.as_deref().unwrap_or_default(),
                 (None, _) => "open a .gcad part or .gasm assembly",
                 (_, true) => "building",
                 _ => "no solid at this line",
@@ -2045,11 +2157,12 @@ impl App {
             BACKGROUND.gamma_multiply(0.85),
         );
         p.galley(corner, stats, Color32::from_gray(170));
-        if self.loading.is_some() || self.building.is_some() {
+        let status = crate::host::status();
+        if status.is_some() || self.loading.is_some() || self.building.is_some() {
             p.text(
                 rect.left_top() + Vec2::new(10.0, 30.0),
                 egui::Align2::LEFT_TOP,
-                "rebuilding",
+                status.as_deref().unwrap_or("rebuilding"),
                 egui::FontId::proportional(11.0),
                 READOUT,
             );
@@ -2067,6 +2180,38 @@ impl App {
                 self.browser = None;
                 self.open(path, ctx);
             }
+        }
+    }
+
+    fn dropped(&mut self, ctx: &egui::Context) {
+        let files = ctx.input(|i| i.raw.dropped_files.clone());
+        let mut found: Vec<PathBuf> = Vec::new();
+        for file in files {
+            let path = match (file.path, &file.bytes) {
+                (_, Some(bytes)) if WEB => {
+                    let path = PathBuf::from("dropped").join(&file.name);
+                    match std::str::from_utf8(bytes) {
+                        Ok(text) => crate::host::save(&path, text),
+                        Err(_) => {
+                            let _ = crate::host::write(&path, bytes);
+                        }
+                    }
+                    path
+                }
+                (Some(path), _) => path,
+                _ => continue,
+            };
+            found.push(path);
+        }
+        let rank = |p: &PathBuf| match p.extension().and_then(|e| e.to_str()) {
+            Some("gasm") => 0,
+            Some("gcad") => 1,
+            Some("gsim") => 2,
+            _ => 3,
+        };
+        if let Some(path) = found.into_iter().filter(|p| rank(p) < 3).min_by_key(rank) {
+            self.browser = None;
+            self.open(path, ctx);
         }
     }
 
@@ -2108,6 +2253,10 @@ impl App {
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
+type Picker = Browser;
+
+#[cfg(not(target_arch = "wasm32"))]
 fn browser_at(dir: PathBuf) -> Browser {
     Browser::new("open a part or assembly", dir).suffixes(&[".gcad", ".gasm", ".gsim"])
 }
@@ -2214,6 +2363,69 @@ fn particles(
             }
             release += gap;
         }
+    }
+}
+
+#[cfg(target_arch = "wasm32")]
+type Picker = Library;
+
+#[cfg(target_arch = "wasm32")]
+fn browser_at(_dir: PathBuf) -> Library {
+    Library
+}
+
+#[cfg(target_arch = "wasm32")]
+const OPENS: [&str; 3] = ["gcad", "gasm", "gsim"];
+
+#[cfg(target_arch = "wasm32")]
+struct Library;
+
+#[cfg(target_arch = "wasm32")]
+impl Library {
+    fn show(&mut self, ctx: &egui::Context) -> Picked {
+        let mut picked = Picked::Browsing;
+        let mut open = true;
+        let files: Vec<PathBuf> = crate::host::list()
+            .into_iter()
+            .filter(|p| {
+                p.extension()
+                    .is_some_and(|e| OPENS.contains(&&*e.to_string_lossy()))
+            })
+            .collect();
+        egui::Window::new("open a part or assembly")
+            .open(&mut open)
+            .collapsible(false)
+            .default_width(420.0)
+            .show(ctx, |ui| {
+                note(ui, "or drop .gcad and .gasm files on the page", LEGEND);
+                egui::ScrollArea::vertical()
+                    .max_height(560.0)
+                    .show(ui, |ui| {
+                        let mut folder = None;
+                        for path in files {
+                            let parent = path.parent().map(std::path::Path::to_path_buf);
+                            if folder != parent {
+                                ui.add_space(6.0);
+                                Line::new()
+                                    .legend(
+                                        &parent
+                                            .as_ref()
+                                            .map_or_else(String::new, |p| p.display().to_string()),
+                                    )
+                                    .show(ui);
+                                folder = parent;
+                            }
+                            let name = path
+                                .file_name()
+                                .map(|n| n.to_string_lossy().to_string())
+                                .unwrap_or_default();
+                            if ui.selectable_label(false, name).clicked() {
+                                picked = Picked::File(path.clone());
+                            }
+                        }
+                    });
+            });
+        if open { picked } else { Picked::Cancelled }
     }
 }
 
@@ -2459,6 +2671,11 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
+        self.dropped(&ctx);
+        if let Some(path) = crate::host::take_open() {
+            self.browser = None;
+            self.open(path, &ctx);
+        }
         let now = Instant::now();
         self.frames.push_back(now);
         while self
@@ -2483,13 +2700,19 @@ impl eframe::App for App {
         egui::Panel::left("lines")
             .resizable(true)
             .default_size(360.0)
-            .min_size(160.0)
+            .min_size(if self.editing { 320.0 } else { 160.0 })
             .frame(
                 egui::Frame::NONE
                     .fill(CHASSIS)
                     .inner_margin(egui::Margin::symmetric(6, 8)),
             )
-            .show_collapsible(ui, &mut lines_open, |ui| self.lines(ui));
+            .show_collapsible(ui, &mut lines_open, |ui| {
+                if self.editing {
+                    self.editor(ui)
+                } else {
+                    self.lines(ui)
+                }
+            });
         self.lines_open = lines_open;
         let mut parts_open = self.parts_open;
         egui::Panel::right("inspector")
@@ -2510,9 +2733,13 @@ impl eframe::App for App {
             self.viewport(ui);
         });
         self.browser(&ctx);
+        if self.loading.is_some() || self.building.is_some() || self.clash_job.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(50));
+        }
     }
 }
 
+#[cfg(not(target_arch = "wasm32"))]
 pub fn run(
     path: Option<PathBuf>,
     query: String,

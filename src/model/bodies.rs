@@ -556,7 +556,7 @@ impl Model {
     }
 
     pub(crate) fn load_library(&mut self, file: &std::path::Path) -> Result<String> {
-        if !file.is_file() {
+        if !crate::host::is_file(file) {
             bail!("no file {}", file.display());
         }
         let entries = super::materials::load(file)?;
@@ -832,7 +832,7 @@ pub(crate) fn step_model(path: &std::path::Path) -> Result<Model> {
 
 fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSolid>> {
     use monstertruck::step::load::step_geometry::{Curve3D, Surface as StepSurface};
-    let text = std::fs::read(path)?;
+    let text = crate::host::read(path)?;
     let table = StepTable::from_step_bytes(&text).map_err(|error| anyhow!("{error}"))?;
     if table.manifold_solid_brep.is_empty() {
         bail!("the file has no solids");
