@@ -345,7 +345,7 @@ impl Model {
                 let args = Args::new(line, &["speed"], &["toward", "about"], false)?;
                 let speed = positive(args.number("speed", &self.scope)?, "the wind speed")?;
                 let toward = if args.has("toward") {
-                    point3(args.text("toward")?, &self.scope)?.to_vec()
+                    super::args::direction(args.text("toward")?, &self.scope)?
                 } else {
                     Vector3::unit_x()
                 };
@@ -498,7 +498,7 @@ impl Model {
         let faces = self.target_faces(selector)?;
         let (point, axis) = match (args.values.get("axis"), args.values.get("at")) {
             (Some(axis), at) => {
-                let axis = point3(axis, &self.scope)?.to_vec();
+                let axis = super::args::direction(axis, &self.scope)?;
                 if axis.magnitude() == 0.0 {
                     bail!("`axis=` needs a direction");
                 }

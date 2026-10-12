@@ -1061,6 +1061,28 @@ fn shaft_in_torsion() {
 }
 
 #[test]
+fn torque_about_a_named_axis() {
+    let rod = [("rod.gcad", "circle 20\nrod: extrude 100\nmaterial steel\n")];
+    let spec = |axis: &str| {
+        format!("sim static\npart rod.gcad\nbase: fix rod.start\ntorque rod.end 10 axis={axis}\nmesh 6")
+    };
+    let named = simulated("torque_about_named_z", &rod, &spec("z"));
+    let spelled = simulated("torque_about_spelled_z", &rod, &spec("0,0,1"));
+    let flipped = simulated("torque_about_minus_z", &rod, &spec("-z"));
+    close(reading(&named, "base.moment"), 10.0, 1.0e-3);
+    close(
+        reading(&named, "displacement"),
+        reading(&spelled, "displacement"),
+        1.0e-9,
+    );
+    close(
+        reading(&flipped, "displacement"),
+        reading(&named, "displacement"),
+        1.0e-6,
+    );
+}
+
+#[test]
 fn pinned_link() {
     let link = "rect 100 10 at=50,0\nbar: extrude 10\nplane bar.end\na: hole 6 10,0\nb: hole 6 90,0\nmaterial steel\n";
     let outcome = simulated(

@@ -440,7 +440,7 @@ expect shoulder<15 sun_s_turn<4
 | `fix` | `faces` | holds the faces still (static). Its reaction force is a reading named after the line's label, or `fix1`, `fix2`, ... |
 | `slide` | `faces` | holds the faces only along their normal, free to slide along them (static); a symmetry plane, or a part resting on a flat. Reading as for `fix` |
 | `pin` | `faces` | holds a round face on its axis, free to turn about it, like a shaft in a bearing or a link on a pin (static). Reading as for `fix` |
-| `torque` | `faces moment` `axis=x,y,z` `at=x,y,z` | twists the faces by `moment` N·m about their axis: the axis of a round face, or the normal through the middle of a flat one, unless `axis=` and `at=` say (static) |
+| `torque` | `faces moment` `axis=x,y,z` `at=x,y,z` | twists the faces by `moment` N·m about their axis: the axis of a round face, or the normal through the middle of a flat one, unless `axis=` and `at=` say; `axis=` also takes `x`, `y`, `z` or `-z` (static) |
 | `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
 | `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |
 | `warm` | `by` `part=`, or `file.gsim from=` | warms the whole part evenly by that many °C (negative cools it), or with `part=` one part of an assembly (lines add up, so a bolt can be cooled to preload a joint: its shrink over its length is the stretch it is tightened by), so it expands by its material's `alpha` (static, buckling). Given a `sim thermal` file with the same `part` and `mesh` lines, it takes the temperatures that simulation works out instead, expanding from `from` °C (20 unless given). Parts held from growing, or bonded to a material that grows differently, take stress from it |

@@ -108,7 +108,7 @@ leave *screw* *nut*
 expect drag<400
 ```
 
-- `wind speed toward=x,y,z about=x,y,z` is in m/s; `toward` is the way the air moves and
+- `wind speed toward=x,y,z about=x,y,z` is in m/s (`toward=x` or `-y` work too); `toward` is the way the air moves and
   `about` is where moments are taken (default the origin).
 - `mesh` is the cell size in mm. The default puts 32 cells across H, the square root of the
   frontal area (the parts' shadow on a plane facing the wind).

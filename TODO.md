@@ -16,11 +16,6 @@ that peak separately.
 In `sims/elshaft.gsim` the 2 mm bearing bands are `pin`ned, yet the reaction moments are
 14 and 29 N·m. A bearing seat should carry force and almost no moment.
 
-## `torque ... axis=z`
-
-"`z` is not a 3D point, write it as x,y,z". Accept `x`, `y` and `z` as axes, the same way
-`rotate ... axis=` does.
-
 ## Probes on a surface
 
 A probe has to lie strictly inside the solid, so a point on a face is rejected as "not

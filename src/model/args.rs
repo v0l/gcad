@@ -1,6 +1,6 @@
 use crate::parse::{Line, Scope, eval, eval_point};
 use anyhow::{Context, Result, anyhow, bail};
-use monstertruck::modeling::{Point3, Vector3};
+use monstertruck::modeling::{EuclideanSpace, Point3, Vector3};
 use std::collections::HashMap;
 
 pub(crate) struct Args<'a> {
@@ -110,6 +110,17 @@ pub(crate) fn point3(text: &str, scope: &Scope) -> Result<Point3> {
             eval(z, scope)?,
         )),
         _ => bail!("`{text}` is not a 3D point, write it as x,y,z"),
+    }
+}
+
+pub(crate) fn direction(text: &str, scope: &Scope) -> Result<Vector3> {
+    let (sign, name) = match text.strip_prefix('-') {
+        Some(rest) => (-1.0, rest),
+        None => (1.0, text),
+    };
+    match name.to_ascii_lowercase().as_str() {
+        "x" | "y" | "z" => Ok(axis(name)? * sign),
+        _ => point3(text, scope).map(|p| p.to_vec()),
     }
 }
 
