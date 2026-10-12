@@ -55,10 +55,11 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: gcad-${{ matrix.target }}
+          if-no-files-found: error
           path: |
-            gcad/dist/*.tar.gz
-            gcad/dist/*.zip
-            gcad/dist/*.sha256
+            dist/*.tar.gz
+            dist/*.zip
+            dist/*.sha256
 
   release:
     needs: build
