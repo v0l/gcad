@@ -186,9 +186,17 @@ piecewise quadratic within 0.3% of the peak; a channel 20 cells high between hea
 Re 50 reaches Nu 8.232 and 8.239 at two stations against 8.235 for uniform flux (the wall
 temperature taken at the interface, weighting the two cells by conductivity). The heatsink in
 `examples/flow/heatsink.gsim` (eight 1.5 mm fins 20 mm tall on a 40 x 50 mm base, shrouded,
-2 m/s, 10 W) reads 1.93 K/W at 0.5 mm cells and 1.85 at 0.33, against 1.89 from Teertstra,
-Yovanovich and Culham's composite model for shrouded plate fin heat sinks (which leaves out
-the base between the fins). It runs in 36 s.
+2 m/s, 10 W), from the heated face to the inlet air:
+
+| | 0.5 mm | 0.33 mm | 0.25 mm |
+|---|---|---|---|
+| lattice | 1.925 K/W (36 s) | 1.854 (150 s) | 1.845 (470 s) |
+| OpenFOAM `chtMultiRegionSimpleFoam`, laminar, 2.6 M cells | 1.914 (27 min on 40 cores) | | |
+| Teertstra, Yovanovich and Culham's shrouded plate fin model | 1.887 | | |
+
+The model leaves out the base between the fins and takes the base as isothermal. OpenFOAM's
+steady solve never settles below residuals of a few percent (the fin leading edges shed), and
+its base temperature swings 0.3% about the mean; `tools/foam/heatsink.sh` runs it.
 
 The thermal lattice uses the air's molecular diffusivity only. Adding Smagorinsky's eddy
 viscosity over a turbulent Prandtl number of 0.85, as LES usually does, read the heatsink 1.22

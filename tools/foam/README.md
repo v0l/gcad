@@ -37,3 +37,17 @@ each side, H the square root of the frontal area). The parts are turned so the w
 
 The 100 mm cube at 10 m/s on 555,000 cells reads 0.656 N (Cd 1.09); the lattice reads Cd 1.01
 and Hoerner gives 1.05.
+
+`heatsink.sh WORK` runs `examples/flow/heatsink.gsim` as a conjugate heat transfer case:
+`chtMultiRegionSimpleFoam`, laminar, the same 40 x 25 mm duct, 123 mm upstream and 154 mm
+downstream as the lattice box, a hex mesh of `CELL` mm split into an air and an aluminium
+region (k 167 W/m K), the heat as a flux on the base's underside. It prints the mean
+temperature of that face and the resistance from it to the inlet air.
+
+    CELL=0.5 ./heatsink.sh /tmp/foam/heatsink
+
+| variable | default | meaning |
+|---|---|---|
+| `CELL` | 0.5 | cell size in mm (fins and gaps must be whole cells) |
+| `SPEED`, `WATTS` | 2, 10 | air entering the duct in m/s, heat into the base |
+| `ITERATIONS`, `PROCS` | 3000, 40 | |

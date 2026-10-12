@@ -1,0 +1,14 @@
+FoamFile { version 2.0; format ascii; class dictionary; object controlDict; }
+application chtMultiRegionSimpleFoam;
+startFrom startTime; startTime 0; stopAt endTime; endTime ITERATIONS; deltaT 1;
+writeControl timeStep; writeInterval ITERATIONS; purgeWrite 1; writeFormat binary; writePrecision 8;
+timeFormat general; timePrecision 6; runTimeModifiable true;
+functions
+{
+    base
+    {
+        type surfaceFieldValue; libs (fieldFunctionObjects); region sink;
+        regionType patch; name floor; operation areaAverage; fields (T);
+        writeControl timeStep; writeInterval 50; writeFields false; log true;
+    }
+}
