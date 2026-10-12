@@ -1347,9 +1347,12 @@ dependencies = [
  "futures",
  "gcad",
  "js-sys",
+ "parking_lot_core",
+ "rayon",
  "serde_json",
  "wasm-bindgen",
  "wasm-bindgen-futures",
+ "wasm-bindgen-rayon",
  "web-sys",
 ]
 
@@ -2298,7 +2301,7 @@ dependencies = [
 [[package]]
 name = "monstertruck"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-fillet",
@@ -2316,7 +2319,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-assembly"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "rayon",
@@ -2325,7 +2328,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-core"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "cgmath",
  "matext4cgmath",
@@ -2337,7 +2340,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-derive"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -2348,7 +2351,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-fillet"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2366,7 +2369,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-geometry"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2379,7 +2382,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-healing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "ahash",
  "getrandom 0.3.4",
@@ -2395,7 +2398,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-io"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "chrono",
  "derive_more",
@@ -2416,7 +2419,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-mesh"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "array-macro",
  "bytemuck",
@@ -2432,7 +2435,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-meshing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "array-macro",
  "derive_more",
@@ -2451,7 +2454,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-modeling"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "derive_more",
  "itertools 0.14.0",
@@ -2472,7 +2475,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-solid"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2493,7 +2496,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-topology"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2508,7 +2511,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-traits"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=6f6e0766c74ab73c91c819d66eb74c6882a3b4d6#6f6e0766c74ab73c91c819d66eb74c6882a3b4d6"
+source = "git+https://github.com/v0l/monstertruck?rev=70200de0af29426831ea2900a3c4f6b4d4590df1#70200de0af29426831ea2900a3c4f6b4d4590df1"
 dependencies = [
  "getrandom 0.4.3",
  "monstertruck-core",
@@ -3665,6 +3668,7 @@ checksum = "fb39b166781f92d482534ef4b4b1b2568f42613b53e5b6c160e24cfbfa30926d"
 dependencies = [
  "either",
  "rayon-core",
+ "wasm_sync",
 ]
 
 [[package]]
@@ -3675,6 +3679,7 @@ checksum = "22e18b0f0062d30d4230b2e85ff77fdfe4326feb054b9783a3460d8435c8ab91"
 dependencies = [
  "crossbeam-deque",
  "crossbeam-utils",
+ "wasm_sync",
 ]
 
 [[package]]
@@ -4629,12 +4634,35 @@ dependencies = [
 ]
 
 [[package]]
+name = "wasm-bindgen-rayon"
+version = "1.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9a16c60a56c81e4dc3b9c43d76ba5633e1c0278211d59a9cb07d61b6cd1c6583"
+dependencies = [
+ "crossbeam-channel",
+ "js-sys",
+ "rayon",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "wasm-bindgen-shared"
 version = "0.2.129"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23f0c9c52aa7cd7d77769a4cfe2a9adb1b331f489a41d912ce14513d5ab995c6"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "wasm_sync"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cff360cade7fec41ff0e9d2cda57fe58258c5f16def0e21302394659e6bbb0ea"
+dependencies = [
+ "js-sys",
+ "wasm-bindgen",
+ "web-sys",
 ]
 
 [[package]]

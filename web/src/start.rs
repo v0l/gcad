@@ -109,7 +109,13 @@ fn listen_for_hash_changes() {
     changed.forget();
 }
 
-#[wasm_bindgen(start)]
+fn note_build_time(seconds: f64) {
+    if let Some(window) = web_sys::window() {
+        let _ = js_sys::Reflect::set(&window, &"gcadBuilt".into(), &seconds.into());
+    }
+}
+
+#[wasm_bindgen]
 pub fn start() {
     console_error_panic_hook::set_once();
     for (path, bytes) in FILES {
@@ -117,6 +123,7 @@ pub fn start() {
     }
     gcad::host::restore();
     gcad::host::on_open(show_in_address_bar);
+    gcad::host::on_built(note_build_time);
     let asked = link::parse(&hash()).or_else(|| query_file().and_then(|f| link::parse(&f)));
     let file = match asked {
         Some(target) => follow(Some(target)),

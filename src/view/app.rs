@@ -327,7 +327,7 @@ impl App {
         let (ctx, vars) = (ctx.clone(), self.vars.clone());
         crate::host::spawn(move || {
             let _ = tx.send(evaluate(&path, &vars));
-            ctx.request_repaint();
+            crate::host::wake(&ctx);
         });
         self.loading = Some((rx, Instant::now()));
     }
@@ -398,6 +398,7 @@ impl App {
     }
 
     fn install(&mut self, program: Program) {
+        crate::host::built(self.took.as_secs_f64());
         self.generation += 1;
         self.loaded = Instant::now();
         let last = program.snapshots.len().saturating_sub(1);
@@ -443,7 +444,7 @@ impl App {
                 shown.built = started.elapsed();
                 let _ = tx.send(shown);
             }
-            ctx.request_repaint();
+            crate::host::wake(&ctx);
         });
         self.building = Some((key, rx));
     }
@@ -1018,7 +1019,7 @@ impl App {
                     })
                     .collect();
                 let _ = tx.send(found);
-                ctx.request_repaint();
+                crate::host::wake(&ctx);
             });
             self.clash_job = Some(rx);
             self.clashes = None;
@@ -1968,9 +1969,6 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
 impl eframe::App for App {
     fn ui(&mut self, ui: &mut Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
-        if crate::host::run_spawned() {
-            ctx.request_repaint();
-        }
         self.dropped(&ctx);
         if let Some(path) = crate::host::take_open() {
             self.browser = None;
@@ -2029,8 +2027,8 @@ impl eframe::App for App {
             self.viewport(ui);
         });
         self.browser(&ctx);
-        if crate::host::has_spawned() {
-            ctx.request_repaint();
+        if self.loading.is_some() || self.building.is_some() || self.clash_job.is_some() {
+            ctx.request_repaint_after(Duration::from_millis(50));
         }
     }
 }

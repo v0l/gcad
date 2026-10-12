@@ -66,6 +66,8 @@ mod files {
     }
 
     pub fn opened(_path: &Path) {}
+
+    pub fn built(_seconds: f64) {}
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -73,9 +75,19 @@ mod files {
     use std::collections::BTreeMap;
     use std::io;
     use std::path::{Path, PathBuf};
-    use std::sync::{Arc, Mutex};
+    use std::sync::{Arc, Mutex, MutexGuard, TryLockError};
 
     static FILES: Mutex<BTreeMap<PathBuf, Arc<[u8]>>> = Mutex::new(BTreeMap::new());
+
+    fn hold<T>(lock: &Mutex<T>) -> MutexGuard<'_, T> {
+        loop {
+            match lock.try_lock() {
+                Ok(guard) => return guard,
+                Err(TryLockError::Poisoned(poisoned)) => return poisoned.into_inner(),
+                Err(TryLockError::WouldBlock) => std::hint::spin_loop(),
+            }
+        }
+    }
 
     fn key(path: &Path) -> PathBuf {
         let path = super::tidy(path);
@@ -85,23 +97,19 @@ mod files {
     }
 
     pub fn read(path: &Path) -> io::Result<Vec<u8>> {
-        FILES
-            .lock()
-            .unwrap()
+        hold(&FILES)
             .get(&key(path))
             .map(|b| b.to_vec())
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no such file"))
     }
 
     pub fn is_file(path: &Path) -> bool {
-        FILES.lock().unwrap().contains_key(&key(path))
+        hold(&FILES).contains_key(&key(path))
     }
 
     pub fn is_dir(path: &Path) -> bool {
         let dir = key(path);
-        FILES
-            .lock()
-            .unwrap()
+        hold(&FILES)
             .keys()
             .any(|k| k != &dir && k.starts_with(&dir))
     }
@@ -111,12 +119,12 @@ mod files {
     }
 
     pub fn write(path: &Path, bytes: &[u8]) -> io::Result<()> {
-        FILES.lock().unwrap().insert(key(path), bytes.into());
+        hold(&FILES).insert(key(path), bytes.into());
         Ok(())
     }
 
     pub fn list() -> Vec<PathBuf> {
-        FILES.lock().unwrap().keys().cloned().collect()
+        hold(&FILES).keys().cloned().collect()
     }
 
     static BUNDLED: Mutex<BTreeMap<PathBuf, Arc<[u8]>>> = Mutex::new(BTreeMap::new());
@@ -129,7 +137,7 @@ mod files {
 
     pub fn bundle(path: &Path, bytes: &[u8]) {
         let path = key(path);
-        BUNDLED.lock().unwrap().insert(path.clone(), bytes.into());
+        hold(&BUNDLED).insert(path.clone(), bytes.into());
         let saved = storage().and_then(|s| {
             s.get_item(&format!("{PREFIX}{}", path.display()))
                 .ok()
@@ -139,35 +147,47 @@ mod files {
             Some(text) => text.as_bytes().into(),
             None => bytes.into(),
         };
-        FILES.lock().unwrap().insert(path, current);
+        hold(&FILES).insert(path, current);
     }
 
     static INBOX: Mutex<Option<PathBuf>> = Mutex::new(None);
     static STATUS: Mutex<Option<String>> = Mutex::new(None);
     static OPENED: Mutex<Option<fn(&Path)>> = Mutex::new(None);
+    static BUILT: Mutex<Option<fn(f64)>> = Mutex::new(None);
+
+    pub fn on_built(hook: fn(f64)) {
+        *hold(&BUILT) = Some(hook);
+    }
+
+    pub fn built(seconds: f64) {
+        let hook = *hold(&BUILT);
+        if let Some(hook) = hook {
+            hook(seconds);
+        }
+    }
 
     pub fn ask_open(path: &Path) {
-        *INBOX.lock().unwrap() = Some(key(path));
+        *hold(&INBOX) = Some(key(path));
     }
 
     pub fn take_open() -> Option<PathBuf> {
-        INBOX.lock().unwrap().take()
+        hold(&INBOX).take()
     }
 
     pub fn set_status(status: Option<String>) {
-        *STATUS.lock().unwrap() = status;
+        *hold(&STATUS) = status;
     }
 
     pub fn status() -> Option<String> {
-        STATUS.lock().unwrap().clone()
+        hold(&STATUS).clone()
     }
 
     pub fn on_open(hook: fn(&Path)) {
-        *OPENED.lock().unwrap() = Some(hook);
+        *hold(&OPENED) = Some(hook);
     }
 
     pub fn opened(path: &Path) {
-        let hook = *OPENED.lock().unwrap();
+        let hook = *hold(&OPENED);
         if let Some(hook) = hook {
             hook(&key(path));
         }
@@ -175,8 +195,8 @@ mod files {
 
     pub fn edited(path: &Path) -> bool {
         let path = key(path);
-        let bundled = BUNDLED.lock().unwrap().get(&path).cloned();
-        let current = FILES.lock().unwrap().get(&path).cloned();
+        let bundled = hold(&BUNDLED).get(&path).cloned();
+        let current = hold(&FILES).get(&path).cloned();
         bundled != current
     }
 
@@ -192,9 +212,9 @@ mod files {
         if let Some(storage) = storage() {
             let _ = storage.remove_item(&format!("{PREFIX}{}", path.display()));
         }
-        match BUNDLED.lock().unwrap().get(&path).cloned() {
-            Some(bytes) => FILES.lock().unwrap().insert(path, bytes),
-            None => FILES.lock().unwrap().remove(&path),
+        match hold(&BUNDLED).get(&path).cloned() {
+            Some(bytes) => hold(&FILES).insert(path, bytes),
+            None => hold(&FILES).remove(&path),
         };
     }
 
@@ -241,7 +261,8 @@ pub fn each<T: Send, R: Send>(items: Vec<T>, f: impl Fn(T) -> R + Sync) -> Vec<O
 
 #[cfg(target_arch = "wasm32")]
 pub fn each<T: Send, R: Send>(items: Vec<T>, f: impl Fn(T) -> R + Sync) -> Vec<Option<R>> {
-    items.into_iter().map(|item| Some(f(item))).collect()
+    use rayon::prelude::*;
+    items.into_par_iter().map(|item| Some(f(item))).collect()
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -250,34 +271,12 @@ pub fn spawn(job: impl FnOnce() + Send + 'static) {
 }
 
 #[cfg(target_arch = "wasm32")]
-thread_local! {
-    static QUEUE: std::cell::RefCell<Vec<Box<dyn FnOnce()>>> = const { std::cell::RefCell::new(Vec::new()) };
-}
-
-#[cfg(target_arch = "wasm32")]
 pub fn spawn(job: impl FnOnce() + Send + 'static) {
-    QUEUE.with(|q| q.borrow_mut().push(Box::new(job)));
+    rayon::spawn(job);
 }
 
-#[cfg(target_arch = "wasm32")]
-pub fn run_spawned() -> bool {
-    let jobs = QUEUE.with(|q| std::mem::take(&mut *q.borrow_mut()));
-    let ran = !jobs.is_empty();
-    jobs.into_iter().for_each(|job| job());
-    ran
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub fn run_spawned() -> bool {
-    false
-}
-
-#[cfg(target_arch = "wasm32")]
-pub fn has_spawned() -> bool {
-    QUEUE.with(|q| !q.borrow().is_empty())
-}
-
-#[cfg(not(target_arch = "wasm32"))]
-pub fn has_spawned() -> bool {
-    false
+pub fn wake(ctx: &egui::Context) {
+    if cfg!(not(target_arch = "wasm32")) {
+        ctx.request_repaint();
+    }
 }

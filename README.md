@@ -84,9 +84,10 @@ from GitHub. The page fetches the file and every file it names (parts, includes,
 
 A `tree` link (or a bare repository) lists every part in that folder and opens the first
 assembly. The address follows whatever file is open, so copy it to share the view.
-Simulations and flow do not run in the browser. Everything runs on one thread and the page
-does not respond while a model builds: a part takes a second or two, the robot arm about
-three minutes (11 s on the desktop).
+Simulations and flow do not run in the browser. Models build on a pool of web workers, so
+the page stays responsive: the robot arm takes about 15 s (11 s on the desktop). Threads
+need a nightly toolchain with `rust-src` to build, and the page must be served with the
+cross-origin isolation headers in `web/_headers` (`web/serve.py` sends them too).
 
 ## Agent skill
 
