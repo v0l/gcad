@@ -6,6 +6,18 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Viewer simulation card with readings, `expect` checks, notes, sweep traces and a run button.
+- Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
+  or for flow the parts in their duct or air box, the wind and the heated faces.
+
+### Changed
+- Viewer shows a stale simulation result with a warning instead of hiding it.
+- Viewer reloads when a result is written.
+
+### Fixed
+- Smooth lofts between sections with more than 240 matching edges.
+
 ## [0.3.1] - 2026-10-12
 
 ### Added

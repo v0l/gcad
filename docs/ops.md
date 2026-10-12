@@ -89,6 +89,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | rib | supported | open `pen` path, then `rib 2` | `features::rib` |
 | smooth loft | supported | `loft smooth` | `features::smooth_loft` |
 | loft between different profiles | supported | `section`s with different edge counts | `features::loft_mixed_profiles` |
+| smooth loft with many edges | supported | `loft smooth` between sections of over 240 edges | `features::loft_many_matching_edges` |
 | sweep along a smooth path | supported | `path ... smooth` | `features::sweep_smooth_path` |
 | sweep with twist | supported | `sweep twist=90` | `features::sweep_twist` |
 | sweep with scale | supported | `sweep scale=0.5` | `features::sweep_scale` |
@@ -289,6 +290,8 @@ The plan for the rest is in `docs/simulation.md`.
 | payloads | supported | `payload hand 300 at=x,y,z` | `simulation::torque_of_a_pendulum`, `simulation::payload_follows_the_pose` |
 | expectations | supported | `expect shoulder<2 drive>0.5` | `simulation::torque_through_gears` |
 | stale results and charts | supported | `gcad check x.gsim`, `gcad render x.gsim x.png` | `simulation::result_goes_stale` |
+| readings and sweeps in the viewer | supported | the simulation card lists readings and checks, traces each sweep, and runs the file | `simulation::torque_readings_without_a_field` |
+| setup before a result | supported | the viewer draws the mesh with its loads and supports, or the flow parts, duct, wind and heated faces | `simulation::setup_shown_before_a_result`, `simulation::flow_setup_shown_before_a_result` |
 | material libraries | supported | `materials.toml` beside or above a file, `~/.config/gcad/materials.toml`, `gcad materials` | `simulation::material_library_is_found` |
 | material files from other tools | supported | `materials workbench.xml`, `materials PLA.FCMat` | `simulation::material_files_import` |
 | materials along three axes | supported | `E1= E2= E3= Xt= Zt=` in `materials.toml`, simulated with the weakest | `simulation::directional_material_takes_the_weakest` |

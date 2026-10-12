@@ -684,6 +684,9 @@ pub struct Probe {
 
 impl FieldView {
     pub fn probe(&self, at: Point3) -> Option<Probe> {
+        if self.values.is_empty() {
+            return None;
+        }
         let grid = self
             .index
             .get_or_init(|| TriangleGrid::new(&self.positions, &self.triangles));
@@ -735,12 +738,6 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
     } else {
         0.0
     };
-    let positions: Vec<Point3> = mesh
-        .nodes
-        .iter()
-        .zip(&field.displacement)
-        .map(|(p, d)| p + Vector3::new(d[0], d[1], d[2]) * scale)
-        .collect();
     let high = field
         .values
         .iter()
@@ -752,7 +749,44 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         0.0
     };
     let span = (high - low).max(1.0e-12);
-    let shade = field.values.iter().map(|v| (v - low) / span).collect();
+    Ok(FieldView {
+        shade: field.values.iter().map(|v| (v - low) / span).collect(),
+        low,
+        high: low + span,
+        title: field.title.clone(),
+        unit: field.unit.clone(),
+        values: field.values.clone(),
+        ..skin_view(spec, mesh, &field.displacement, scale, Some(outcome))
+    })
+}
+
+pub fn setup_view(spec: &Spec) -> Result<FieldView> {
+    let prepared = prepare(spec)?;
+    let mesh = &prepared.mesh;
+    let still = vec![[0.0; 3]; mesh.nodes.len()];
+    Ok(FieldView {
+        title: format!(
+            "mesh {}, {} nodes",
+            crate::plot::label(super::mesh::size(spec)?),
+            mesh.nodes.len()
+        ),
+        ..skin_view(spec, mesh, &still, 0.0, None)
+    })
+}
+
+fn skin_view(
+    spec: &Spec,
+    mesh: &Quadratic,
+    displacement: &[[f64; 3]],
+    scale: f64,
+    outcome: Option<&Outcome>,
+) -> FieldView {
+    let positions: Vec<Point3> = mesh
+        .nodes
+        .iter()
+        .zip(displacement)
+        .map(|(p, d)| p + Vector3::new(d[0], d[1], d[2]) * scale)
+        .collect();
     let mut triangles = Vec::new();
     let mut sides: std::collections::BTreeMap<(u32, u32), (u32, Vec<usize>)> =
         std::collections::BTreeMap::new();
@@ -772,31 +806,29 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         .filter(|(_, (_, tags))| tags.windows(2).any(|w| w[0] != w[1]) || tags.len() == 1)
         .map(|((a, b), (m, _))| [a, m, b])
         .collect();
-    Ok(FieldView {
-        positions,
+    FieldView {
+        shade: vec![0.0; positions.len()],
         triangles,
-        shade,
         edges,
-        low,
-        high: low + span,
+        low: 0.0,
+        high: 1.0,
         scale,
-        title: field.title.clone(),
-        unit: field.unit.clone(),
-        values: field.values.clone(),
-        moved: field
-            .displacement
+        title: String::new(),
+        unit: String::new(),
+        values: Vec::new(),
+        moved: displacement
             .iter()
             .map(|d| Vector3::new(d[0], d[1], d[2]))
             .collect(),
         rest: mesh.nodes.clone(),
-        marks: stimuli(spec, mesh, Some(outcome))
+        marks: stimuli(spec, mesh, outcome)
             .into_iter()
             .map(|mut m| {
                 if !m.nodes.is_empty() {
                     let shift = m
                         .nodes
                         .iter()
-                        .map(|&v| positions_shift(&field.displacement[v as usize], scale))
+                        .map(|&v| positions_shift(&displacement[v as usize], scale))
                         .sum::<Vector3>()
                         / m.nodes.len() as f64;
                     m.at += shift;
@@ -804,12 +836,13 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
                 m
             })
             .collect(),
+        positions,
         index: Default::default(),
         slices: Vec::new(),
         streams: Vec::new(),
         travel: Default::default(),
         movie: None,
-    })
+    }
 }
 
 fn positions_shift(d: &[f64; 3], scale: f64) -> Vector3 {
@@ -999,6 +1032,7 @@ pub enum Stimulus {
     Push,
     Hold,
     Heat,
+    Wind,
 }
 
 #[derive(Clone, Debug)]

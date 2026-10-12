@@ -38,7 +38,11 @@ gcad check bracket.gsim           # also warns when the result is stale
 every part file it read, the `--set` variables and the gcad version; a mismatch makes the
 result stale. The viewer
 opens a `.gsim` and colours the part by the field, with a slider for mode shapes and deflection
-scale.
+scale. Its simulation card lists the readings, the `expect` checks, the notes and each sweep as a
+trace, and has a run button that solves the file in the background. A stale result is still
+drawn, with a warning saying what changed. Before there is a result it draws the setup: the mesh
+with its loads, supports and thermal boundaries for the meshed kinds, and for `flow` the parts
+inside the duct or the air box, the wind arrow and the heated faces.
 
 ## Materials
 
@@ -333,7 +337,7 @@ moment as tangential traction proportional to the distance from the axis. Checke
 shaft in torsion (stress and twist within 1%) and a link on two pins. Before solving, the six
 rigid-body motions are projected through the supports, and a part they leave free is refused.
 
-The viewer colours a `.gsim` by its result when the result is up to date, using a 1D colour
+The viewer colours a `.gsim` by its result, using a 1D colour
 map texture on the boundary triangles. Hovering over the part shows the value under the cursor
 (stress, temperature or mode shape), how far that point moved in a static run, and where it
 sits on the undeformed part, interpolated across the boundary triangle it lands on. Loads, supports and

@@ -184,18 +184,7 @@ fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
         return Ok(());
     }
     let outcome = gcad::sim::simulate(spec)?;
-    let stamp = gcad::sim::stamp(path, vars);
-    let out = gcad::sim::result_path(path);
-    std::fs::write(
-        &out,
-        serde_json::to_string_pretty(&outcome.to_json(&stamp))?,
-    )?;
-    let frames = gcad::sim::movie_path(path);
-    match &outcome.movie {
-        Some(movie) => movie.write(&frames)?,
-        None if frames.is_file() => std::fs::remove_file(&frames)?,
-        None => {}
-    }
+    let out = gcad::sim::save(path, vars, &outcome)?;
     print!("{}", outcome.table());
     println!("wrote {}", out.display());
     let failed = outcome.failed();

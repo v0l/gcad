@@ -78,6 +78,7 @@ pub const BODY: V3 = [0.62, 0.66, 0.72];
 pub const EDGE: V3 = [0.05, 0.06, 0.07];
 pub const EDGE_WIDTH: f32 = 1.5;
 pub const MARKED_WIDTH: f32 = 3.5;
+pub const WIND: V3 = [0.45, 0.75, 1.0];
 
 fn v3(p: Point3) -> V3 {
     [p.x as f32, p.y as f32, p.z as f32]
@@ -397,9 +398,10 @@ pub fn build(
 }
 
 pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
+    let plain = view.values.is_empty();
     let mut surface = Surface {
-        colour: [1.0, 1.0, 1.0],
-        texture: Some(0),
+        colour: if plain { BODY } else { [1.0, 1.0, 1.0] },
+        texture: (!plain).then_some(0),
         group: 0,
         ..Default::default()
     };
@@ -433,13 +435,17 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
             crate::plot::label((v * 100.0).round() / 100.0)
         }
     };
-    let name = format!(
-        "{} ({} to {} {})",
-        view.title.trim_start_matches("mean "),
-        short(view.low),
-        short(view.high),
-        view.unit
-    );
+    let name = if plain {
+        view.title.clone()
+    } else {
+        format!(
+            "{} ({} to {} {})",
+            view.title.trim_start_matches("mean "),
+            short(view.low),
+            short(view.high),
+            view.unit
+        )
+    };
     let point = |v: u32| v3(view.positions[v as usize]);
     let curve = |edges: &[[u32; 3]], colour: V3, width: f32| {
         let mut out = Lines {
@@ -461,6 +467,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
             crate::sim::statics::Stimulus::Push => [1.0, 0.31, 0.78],
             crate::sim::statics::Stimulus::Hold => [0.95, 0.95, 0.95],
             crate::sim::statics::Stimulus::Heat => [1.0, 0.67, 0.24],
+            crate::sim::statics::Stimulus::Wind => WIND,
         };
         lines.push(curve(&mark.outline, colour, MARKED_WIDTH));
     }
@@ -472,7 +479,11 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
     }];
     let mut parts = vec![Part {
         name,
-        colour: crate::plot::heat(1.0).map(|v| v as f32),
+        colour: if plain {
+            BODY
+        } else {
+            crate::plot::heat(1.0).map(|v| v as f32)
+        },
         volume: 0.0,
         current: true,
         source: None,

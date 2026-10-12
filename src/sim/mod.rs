@@ -9,7 +9,7 @@ mod vibration;
 pub mod wind;
 
 pub use result::{
-    Curve, Field, Movie, Outcome, Reading, Reel, Series, Slice, Stream, inputs, stale, stamp,
+    Curve, Field, Movie, Outcome, Reading, Reel, Series, Slice, Stream, inputs, short, stale, stamp,
 };
 
 use crate::model::Model;
@@ -282,17 +282,50 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
     }
 }
 
-pub fn current_field(spec: &Spec) -> Option<statics::FieldView> {
+pub struct Picture {
+    pub kind: Kind,
+    pub outcome: Option<Outcome>,
+    pub field: Option<statics::FieldView>,
+    pub stale: Option<String>,
+}
+
+pub fn picture(spec: &Spec, vars: &[(String, f64)]) -> Option<Picture> {
     let origin = spec.origin.as_ref()?;
     let kind = spec.kind?;
-    if !(kind.meshed() || kind == Kind::Flow) || stale(origin, &[]).is_some() {
-        return None;
+    let outcome = Outcome::read(&result_path(origin))
+        .ok()
+        .filter(|o| o.kind == kind.name());
+    let shown = outcome.as_ref().and_then(|outcome| match kind {
+        Kind::Flow => wind::field_view(spec, outcome).ok(),
+        Kind::Torque => None,
+        _ => statics::field_view(spec, outcome).ok(),
+    });
+    let field = shown.or_else(|| match kind {
+        Kind::Flow => wind::setup_view(spec).ok(),
+        Kind::Torque => None,
+        _ => statics::setup_view(spec).ok(),
+    });
+    Some(Picture {
+        kind,
+        stale: stale(origin, vars),
+        outcome,
+        field,
+    })
+}
+
+pub fn save(spec: &Path, vars: &[(String, f64)], outcome: &Outcome) -> Result<PathBuf> {
+    let out = result_path(spec);
+    crate::host::write(
+        &out,
+        serde_json::to_string_pretty(&outcome.to_json(&stamp(spec, vars)))?.as_bytes(),
+    )?;
+    let frames = movie_path(spec);
+    match &outcome.movie {
+        Some(movie) => movie.write(&frames)?,
+        None if crate::host::is_file(&frames) => std::fs::remove_file(&frames)?,
+        None => {}
     }
-    let outcome = Outcome::read(&result_path(origin)).ok()?;
-    if kind == Kind::Flow {
-        return wind::field_view(spec, &outcome).ok();
-    }
-    statics::field_view(spec, &outcome).ok()
+    Ok(out)
 }
 
 pub fn matches(pattern: &str, name: &str) -> bool {

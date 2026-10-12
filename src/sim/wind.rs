@@ -144,6 +144,26 @@ fn axes(toward: Vector3) -> [Vector3; 3] {
 }
 
 fn setup(spec: &Spec) -> Result<Setup> {
+    let mut setup = frame(spec)?;
+    use rayon::prelude::*;
+    let spacing = setup.grid.spacing;
+    let skins: Vec<_> = spec
+        .named()?
+        .par_iter()
+        .map(|(_, solid)| {
+            let tolerance = (0.2 * spacing).max(crate::geometry::mesh_tolerance(solid));
+            let (points, triangles) =
+                crate::geometry::welded(&crate::geometry::mesh(solid, tolerance));
+            sampled(&points, &triangles, spacing)
+        })
+        .collect();
+    for (part, skin) in setup.parts.iter_mut().zip(skins) {
+        part.skin = skin;
+    }
+    Ok(setup)
+}
+
+fn frame(spec: &Spec) -> Result<Setup> {
     let Some(wind) = spec.wind.clone() else {
         bail!("a flow simulation needs `wind speed toward=x,y,z`");
     };
@@ -196,22 +216,6 @@ fn setup(spec: &Spec) -> Result<Setup> {
         None => frontal.sqrt().max(1.0e-6),
     };
     let spacing = spec.mesh.unwrap_or(across / ACROSS);
-    {
-        use rayon::prelude::*;
-        let solids = spec.named()?;
-        let skins: Vec<_> = solids
-            .par_iter()
-            .map(|(_, solid)| {
-                let tolerance = (0.2 * spacing).max(crate::geometry::mesh_tolerance(solid));
-                let (points, triangles) =
-                    crate::geometry::welded(&crate::geometry::mesh(solid, tolerance));
-                sampled(&points, &triangles, spacing)
-            })
-            .collect();
-        for (part, skin) in setup.parts.iter_mut().zip(skins) {
-            part.skin = skin;
-        }
-    }
     let mut margin = Vector3::new(ASIDE, ASIDE, ASIDE) * across;
     margin[WIND] = UPSTREAM * across;
     let mut origin = low - margin - Vector3::new(0.5, 0.5, 0.5) * spacing;
@@ -237,7 +241,7 @@ fn setup(spec: &Spec) -> Result<Setup> {
 }
 
 pub fn plan(spec: &Spec) -> Result<String> {
-    let setup = setup(spec)?;
+    let setup = frame(spec)?;
     let air = spec.air.unwrap_or(AIR);
     let [nx, ny, nz] = setup.grid.size;
     let steps = steps(&setup, spec);
@@ -256,7 +260,7 @@ pub fn plan(spec: &Spec) -> Result<String> {
 }
 
 pub fn cell(spec: &Spec) -> Result<f64> {
-    Ok(setup(spec)?.grid.spacing)
+    Ok(frame(spec)?.grid.spacing)
 }
 
 fn step_seconds(setup: &Setup) -> f64 {
@@ -1397,6 +1401,170 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         positions,
         marks: Vec::new(),
         index: Default::default(),
+    })
+}
+
+type FacePatch = (Vec<u32>, Vec<[u32; 3]>, Point3, f64);
+
+pub fn setup_view(spec: &Spec) -> Result<FieldView> {
+    use super::fem::thermal::Boundary;
+    use super::statics::{Mark, Stimulus};
+    use monstertruck::meshing::prelude::*;
+    let setup = frame(spec)?;
+    let names: Vec<String> = spec
+        .target()?
+        .named_solids()
+        .into_iter()
+        .map(|(n, _)| n)
+        .collect();
+    let mut positions: Vec<Point3> = Vec::new();
+    let mut triangles: Vec<[u32; 3]> = Vec::new();
+    let mut edges: Vec<[u32; 3]> = Vec::new();
+    let mut faces: HashMap<usize, FacePatch> = HashMap::new();
+    for (name, solid) in spec.named()? {
+        let index = names.iter().position(|n| *n == name).unwrap_or(0);
+        let meshed = solid.robust_triangulation(crate::geometry::mesh_tolerance(solid));
+        let surfaces = meshed
+            .boundaries()
+            .iter()
+            .flat_map(|shell| shell.face_iter().cloned())
+            .map(|f| f.surface())
+            .collect::<Vec<_>>();
+        for (face, mesh) in surfaces.into_iter().enumerate() {
+            let Some(mesh) = mesh else { continue };
+            let base = positions.len();
+            positions.extend(mesh.positions().iter().copied());
+            let tris: Vec<[usize; 3]> = mesh
+                .faces()
+                .triangle_iter()
+                .map(|t| t.map(|v| v.pos))
+                .collect();
+            let (mut area, mut middle) = (0.0, Vector3::zero());
+            for t in &tris {
+                let [a, b, c] = t.map(|v| positions[base + v]);
+                let weight = (b - a).cross(c - a).magnitude() / 2.0;
+                area += weight;
+                middle += (a.to_vec() + b.to_vec() + c.to_vec()) / 3.0 * weight;
+            }
+            triangles.extend(tris.iter().map(|t| t.map(|v| (base + v) as u32)));
+            let outline: Vec<[u32; 3]> = creases(&positions[base..], &tris)
+                .into_iter()
+                .map(|[a, b]| [a, a, b].map(|v| (base + v) as u32))
+                .collect();
+            edges.extend(&outline);
+            let nodes = (base as u32..positions.len() as u32).collect();
+            let centre = Point3::from_vec(middle / area.max(f64::MIN_POSITIVE));
+            faces.insert(
+                index * super::fem::STRIDE + face,
+                (nodes, outline, centre, area),
+            );
+        }
+    }
+    if positions.is_empty() {
+        bail!("there is nothing left in the wind");
+    }
+    let mut marks = Vec::new();
+    for boundary in &spec.thermal {
+        let Boundary::Flux {
+            label,
+            faces: tags,
+            watts,
+        } = boundary
+        else {
+            continue;
+        };
+        let (mut nodes, mut outline) = (Vec::new(), Vec::new());
+        let (mut middle, mut area) = (Vector3::zero(), 0.0);
+        for (n, o, c, a) in tags.iter().filter_map(|t| faces.get(t)) {
+            nodes.extend(n);
+            outline.extend(o);
+            middle += c.to_vec() * *a;
+            area += a;
+        }
+        let at = Point3::from_vec(middle / area.max(f64::MIN_POSITIVE));
+        let spot = nodes.iter().copied().min_by(|&a, &b| {
+            (positions[a as usize] - at)
+                .magnitude2()
+                .total_cmp(&(positions[b as usize] - at).magnitude2())
+        });
+        marks.push(Mark {
+            kind: Stimulus::Heat,
+            text: format!("{label}: {} W", crate::plot::label(*watts)),
+            nodes,
+            outline,
+            spot,
+            at,
+            toward: None,
+        });
+    }
+    let bounds: BoundingBox<Point3> = positions.iter().copied().collect();
+    let toward = setup.wind.toward.normalize();
+    let centre = bounds.center();
+    let upstream = positions
+        .iter()
+        .map(|p| (p - centre).dot(toward))
+        .fold(0.0, f64::min);
+    marks.push(Mark {
+        kind: Stimulus::Wind,
+        text: format!(
+            "wind {} m/s toward {}, {}, {}",
+            crate::plot::label(setup.wind.speed),
+            crate::plot::label(setup.wind.toward.x),
+            crate::plot::label(setup.wind.toward.y),
+            crate::plot::label(setup.wind.toward.z)
+        ),
+        nodes: Vec::new(),
+        outline: Vec::new(),
+        spot: None,
+        at: centre + toward * upstream,
+        toward: Some(toward),
+    });
+    let grid = &setup.grid;
+    let corner = |k: usize| {
+        let lattice: [f64; 3] = [0, 1, 2].map(|d| {
+            let cells = if k >> d & 1 == 0 {
+                0.5
+            } else {
+                grid.size[d] as f64 - 1.5
+            };
+            grid.origin[d] + cells * grid.spacing
+        });
+        Point3::from_vec(setup.to_world(lattice))
+    };
+    let base = positions.len() as u32;
+    positions.extend((0..8).map(corner));
+    for a in 0..8u32 {
+        for d in 0..3 {
+            let b = a | 1 << d;
+            if b != a {
+                edges.push([base + a, base + a, base + b]);
+            }
+        }
+    }
+    let count = positions.len();
+    Ok(FieldView {
+        shade: vec![0.0; count],
+        triangles,
+        edges,
+        low: 0.0,
+        high: 1.0,
+        scale: 0.0,
+        title: if spec.duct.is_some() {
+            "parts in the duct".to_string()
+        } else {
+            "parts in the air".to_string()
+        },
+        unit: String::new(),
+        values: Vec::new(),
+        moved: vec![Vector3::zero(); count],
+        rest: positions.clone(),
+        positions,
+        marks,
+        index: Default::default(),
+        slices: Vec::new(),
+        streams: Vec::new(),
+        travel: Default::default(),
+        movie: None,
     })
 }
 

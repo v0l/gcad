@@ -206,7 +206,8 @@ A payload is in grams, at the part's centre of mass unless `at=x,y,z`. Several j
 gravity and where it happened. Couples pass the load on, so a sun gear driven by a joint
 at `ratio=4` reads a quarter of it: that is the motor's torque. Parts need a `material` to
 weigh anything. `gcad check x.gsim` says when the result is stale and `gcad render x.gsim
-x.png` plots the sweeps. Materials also carry `E= nu= yield= k= alpha=`.
+x.png` plots the sweeps. The viewer shows the readings, draws the setup before a result
+exists, and has a run button. Materials also carry `E= nu= yield= k= alpha=`.
 
 `sim static` solves linear stress on a part file (mm, N, MPa):
 

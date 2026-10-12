@@ -357,18 +357,46 @@ fn stress_field_render() {
         .filter(|p| p.0[2] > 120 && p.0[0] < 60)
         .count();
     assert!(warm > 100 && cold > 100, "{warm} warm, {cold} cold pixels");
-    let view = gcad::sim::current_field(spec).expect("an up to date field");
-    assert!(!view.triangles.is_empty());
+    let fresh = gcad::sim::picture(spec, &[]).expect("a simulation");
+    assert!(fresh.stale.is_none());
+    let view = fresh.field.expect("a field");
+    assert!(!view.triangles.is_empty() && !view.values.is_empty());
     assert!(view.shade.iter().all(|s| (0.0..=1.0).contains(s)));
     std::fs::write(
         path.with_file_name("beam.gcad"),
         BEAM.replace("200 20", "210 20"),
     )
     .expect("edit");
-    assert!(
-        gcad::sim::current_field(spec).is_none(),
-        "a stale result is not shown"
+    let stale = gcad::sim::picture(spec, &[]).expect("a simulation");
+    assert!(stale.stale.is_some_and(|why| why.contains("beam.gcad")));
+    assert!(stale.outcome.is_some(), "a stale result is still shown");
+    assert!(stale.field.is_some_and(|f| !f.values.is_empty()));
+}
+
+#[test]
+fn setup_shown_before_a_result() {
+    let path = written(
+        "setup_shown_before_a_result",
+        &[("beam.gcad", BEAM)],
+        "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\nmesh 8",
     );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("sim");
+    let picture = gcad::sim::picture(spec, &[]).expect("a simulation");
+    assert!(picture.outcome.is_none());
+    assert!(picture.stale.is_some_and(|why| why.contains("no result")));
+    let view = picture.field.expect("the mesh");
+    assert!(!view.triangles.is_empty() && view.values.is_empty());
+    let kinds: Vec<_> = view.marks.iter().map(|m| m.kind).collect();
+    assert!(
+        kinds.contains(&gcad::sim::statics::Stimulus::Push),
+        "{kinds:?}"
+    );
+    assert!(
+        kinds.contains(&gcad::sim::statics::Stimulus::Hold),
+        "{kinds:?}"
+    );
+    assert!(view.probe(view.positions[0]).is_none());
 }
 
 #[test]
@@ -1209,7 +1237,10 @@ fn contact_presses_but_lets_go() {
 const CUBE: &str = "plane XY\nrect 100 100\nextrude 100\n";
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn wind_on_a_cube() {
     let outcome = simulated(
         "wind_on_a_cube",
@@ -1233,7 +1264,68 @@ fn wind_on_a_cube() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+fn flow_setup_shown_before_a_result() {
+    use gcad::sim::statics::Stimulus;
+    use monstertruck::modeling::InnerSpace;
+    let path = written(
+        "flow_setup_shown_before_a_result",
+        &[("cube.gcad", CUBE)],
+        "sim flow\npart cube.gcad\nwind 10 toward=1,0,0\nduct 300 200\nmesh 5\nchip: heat <Z 10",
+    );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("sim");
+    let picture = gcad::sim::picture(spec, &[]).expect("a simulation");
+    assert!(picture.outcome.is_none());
+    let view = picture.field.expect("the parts");
+    assert!(!view.triangles.is_empty() && view.values.is_empty());
+    let heat = view
+        .marks
+        .iter()
+        .find(|m| m.kind == Stimulus::Heat)
+        .expect("the heated face");
+    assert!(
+        heat.text.contains("10 W") && !heat.outline.is_empty(),
+        "{} {}",
+        heat.text,
+        heat.outline.len()
+    );
+    assert!(heat.at.z.abs() < 1.0e-6, "{:?}", heat.at);
+    let wind = view
+        .marks
+        .iter()
+        .find(|m| m.kind == Stimulus::Wind)
+        .expect("the wind");
+    assert!(
+        (wind.at - monstertruck::modeling::Point3::new(-50.0, 0.0, 50.0)).magnitude() < 1.0e-6,
+        "{:?}",
+        wind.at
+    );
+    let bounds: monstertruck::modeling::BoundingBox<_> = view.positions.iter().copied().collect();
+    close(bounds.max().y - bounds.min().y, 300.0, 0.01);
+    close(bounds.max().z - bounds.min().z, 200.0, 0.01);
+}
+
+#[test]
+fn torque_readings_without_a_field() {
+    let path = written(
+        "torque_readings_without_a_field",
+        &pendulum_files(),
+        "sim torque\npart arm.gasm\nsweep swing steps=4",
+    );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("sim");
+    let outcome = gcad::sim::simulate(spec).expect("solves");
+    gcad::sim::save(&path, &[], &outcome).expect("saves");
+    let picture = gcad::sim::picture(spec, &[]).expect("a simulation");
+    assert!(picture.stale.is_none() && picture.field.is_none());
+    assert!(!picture.outcome.expect("the result").series.is_empty());
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn wind_in_half_precision() {
     let outcome = simulated(
         "wind_in_half_precision",
@@ -1246,7 +1338,10 @@ fn wind_in_half_precision() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn wind_loads_a_static_part() {
     let path = written(
         "wind_loads_a_static_part",
@@ -1274,7 +1369,10 @@ fn wind_loads_a_static_part() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn wind_shelters_a_part_behind() {
     let pair = "part front cube.gcad\npart back cube.gcad\nmove back 250,0,0\n";
     let outcome = simulated(
@@ -1291,7 +1389,10 @@ fn wind_shelters_a_part_behind() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn wind_seals_a_closed_box() {
     let outcome = simulated(
         "wind_seals_a_closed_box",
@@ -1325,7 +1426,10 @@ fn wind_seals_a_closed_box() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn wind_draws_the_flow() {
     let path = written(
         "wind_draws_the_flow",
@@ -1647,7 +1751,10 @@ material aluminium
 ";
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn fan_cools_a_ducted_heatsink() {
     let outcome = simulated(
         "fan_cools_a_ducted_heatsink",
@@ -1661,16 +1768,18 @@ fn fan_cools_a_ducted_heatsink() {
     let reynolds = speed * b / viscosity * b / l;
     let prandtl: f64 = 0.71;
     let developed = reynolds * prandtl / 2.0;
-    let developing = 0.664
-        * reynolds.sqrt()
-        * prandtl.cbrt()
-        * (1.0 + 3.65 / reynolds.sqrt()).sqrt();
+    let developing =
+        0.664 * reynolds.sqrt() * prandtl.cbrt() * (1.0 + 3.65 / reynolds.sqrt()).sqrt();
     let nusselt = (developed.powi(-3) + developing.powi(-3)).powf(-1.0 / 3.0);
     let m = (2.0 * nusselt * (conductivity / fin) * (h / b) * (h / t) * (t / l + 1.0)).sqrt();
     let efficiency = m.tanh() / m;
     let teertstra = b / (channels * conductivity * 2.0 * l * h * efficiency * nusselt);
     close(reading(&outcome, "resistance"), teertstra, 0.05);
-    close(reading(&outcome, "chip"), 25.0 + 10.0 * reading(&outcome, "resistance"), 1.0e-6);
+    close(
+        reading(&outcome, "chip"),
+        25.0 + 10.0 * reading(&outcome, "resistance"),
+        1.0e-6,
+    );
     assert!(reading(&outcome, "temperature") >= reading(&outcome, "chip"));
     let carried = outcome
         .notes

@@ -58,6 +58,13 @@ struct Shown {
     assembly: bool,
     built: Duration,
     field: Option<Arc<crate::sim::statics::FieldView>>,
+    sim: Option<Arc<SimState>>,
+}
+
+struct SimState {
+    kind: crate::sim::Kind,
+    outcome: Option<crate::sim::Outcome>,
+    stale: Option<String>,
 }
 
 enum Status {
@@ -253,6 +260,8 @@ pub struct App {
     editing: bool,
     source: String,
     cursor_row: Option<usize>,
+    sim_job: Option<(Receiver<Result<(), String>>, Instant)>,
+    sim_error: Option<String>,
 }
 
 const WEB: bool = cfg!(target_arch = "wasm32");
@@ -385,6 +394,8 @@ impl App {
             editing: WEB,
             source: String::new(),
             cursor_row: None,
+            sim_job: None,
+            sim_error: None,
         };
         match path {
             Some(path) => app.open(path, &cc.egui_ctx),
@@ -439,8 +450,9 @@ impl App {
                 && event.paths.iter().any(|p| {
                     p == &watched
                         || p.parent() == watched.parent()
-                            && p.extension()
-                                .is_some_and(|e| e == "gcad" || e == "gasm" || e == "gsim")
+                            && p.extension().is_some_and(|e| {
+                                e == "gcad" || e == "gasm" || e == "gsim" || e == "json"
+                            })
                 })
             {
                 let _ = tx.send(());
@@ -485,6 +497,20 @@ impl App {
                 Err(TryRecvError::Disconnected) => {
                     self.clashes = Some(Err(()));
                     self.clash_job = None;
+                }
+            }
+        }
+        if let Some((rx, _)) = &self.sim_job {
+            match rx.try_recv() {
+                Ok(result) => {
+                    self.sim_error = result.err();
+                    self.sim_job = None;
+                    self.reload(ctx);
+                }
+                Err(TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(500)),
+                Err(TryRecvError::Disconnected) => {
+                    self.sim_error = Some("the simulation stopped without a result".to_string());
+                    self.sim_job = None;
                 }
             }
         }
@@ -574,10 +600,11 @@ impl App {
         let (tx, rx) = channel();
         let job_key = key.clone();
         let ctx = ctx.clone();
+        let vars = self.vars.clone();
         crate::host::spawn(move || {
             let snapshot = &program.snapshots[index];
             let started = Instant::now();
-            if let Some(mut shown) = build_shown(snapshot, job_key) {
+            if let Some(mut shown) = build_shown(snapshot, job_key, &vars) {
                 shown.built = started.elapsed();
                 let _ = tx.send(shown);
             }
@@ -920,6 +947,111 @@ impl App {
             },
         );
         ui.add_space(8.0);
+    }
+
+    fn sim_card(&mut self, ui: &mut Ui) {
+        let Some(sim) = self.shown.as_ref().and_then(|s| s.sim.clone()) else {
+            return;
+        };
+        let short = crate::sim::short;
+        let failed = sim
+            .outcome
+            .as_ref()
+            .is_some_and(|o| o.checks.iter().any(|(_, _, pass)| !pass));
+        let rail = match (&sim.outcome, &sim.stale) {
+            (None, _) => ETCH,
+            (Some(_), _) if failed => FAULT,
+            (Some(_), Some(_)) => WARN,
+            (Some(_), None) => OK,
+        };
+        let mut run = false;
+        card(
+            ui,
+            Some(rail),
+            |ui| {
+                Line::new()
+                    .legend("simulation")
+                    .value(sim.kind.name())
+                    .show(ui);
+            },
+            |ui| {
+                if let Some(why) = &sim.stale {
+                    note(ui, why, if sim.outcome.is_some() { WARN } else { LEGEND });
+                }
+                if !WEB {
+                    match &self.sim_job {
+                        Some((_, started)) => {
+                            lamp(
+                                ui,
+                                &format!("running {:.0} s", started.elapsed().as_secs_f32()),
+                                true,
+                                false,
+                            );
+                        }
+                        None => {
+                            let label = if sim.outcome.is_some() {
+                                "rerun"
+                            } else {
+                                "run"
+                            };
+                            run = toggle(ui, label, false).clicked();
+                        }
+                    }
+                }
+                if let Some(error) = &self.sim_error {
+                    note(ui, error, FAULT);
+                }
+                let Some(outcome) = &sim.outcome else {
+                    return;
+                };
+                for r in &outcome.readings {
+                    Line::new()
+                        .legend(&r.name)
+                        .value(short(r.value))
+                        .note(&r.unit)
+                        .size(11.0)
+                        .show(ui);
+                }
+                for (text, value, pass) in &outcome.checks {
+                    Line::new()
+                        .legend("expect")
+                        .value(text)
+                        .note(format!(
+                            "{} ({})",
+                            if *pass { "ok" } else { "FAILED" },
+                            short(*value)
+                        ))
+                        .size(11.0)
+                        .wrapped(ui);
+                }
+                for series in &outcome.series {
+                    series_traces(ui, series);
+                }
+                for line in &outcome.notes {
+                    note(ui, line, LEGEND);
+                }
+            },
+        );
+        ui.add_space(8.0);
+        if run {
+            self.run_sim(ui.ctx());
+        }
+    }
+
+    fn run_sim(&mut self, ctx: &egui::Context) {
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        let vars = self.vars.clone();
+        let (tx, rx) = channel();
+        let ctx = ctx.clone();
+        crate::host::spawn(move || {
+            let result = simulate_file(&path, &vars).map_err(|e| format!("{e:#}"));
+            let _ = tx.send(result);
+            crate::host::wake(&ctx);
+        });
+        self.sim_error = None;
+        self.sim_job = Some((rx, Instant::now()));
     }
 
     fn measure_card(&mut self, ui: &mut Ui) {
@@ -1558,6 +1690,7 @@ impl App {
             .auto_shrink([false, false])
             .show(ui, |ui| {
                 self.line_card(ui);
+                self.sim_card(ui);
                 if self.section.is_some() {
                     self.section_card(ui);
                 }
@@ -2454,8 +2587,9 @@ fn field_marks(
             Stimulus::Push => Color32::from_rgb(255, 80, 200),
             Stimulus::Hold => Color32::from_rgb(235, 235, 235),
             Stimulus::Heat => Color32::from_rgb(255, 170, 60),
+            Stimulus::Wind => Color32::from_rgb(115, 190, 255),
         };
-        if mark.nodes.is_empty() {
+        if mark.nodes.is_empty() && mark.kind != Stimulus::Wind {
             continue;
         }
         let Some(head) = projector.project(v(mark.at)) else {
@@ -2558,6 +2692,52 @@ fn readout(p: &egui::Painter, rect: Rect, at: Pos2, lines: Vec<String>) {
     p.galley(corner, text, Color32::from_gray(230));
 }
 
+fn simulate_file(path: &std::path::Path, vars: &[(String, f64)]) -> anyhow::Result<()> {
+    let run = crate::model::run_path(path, vars, None)?;
+    if let Some((line, Err(error))) = run.steps.last() {
+        anyhow::bail!("line {}: {error:#}", line.number);
+    }
+    let Some(spec) = run.model.sim.as_deref() else {
+        anyhow::bail!("{} is not a simulation", path.display());
+    };
+    let outcome = crate::sim::simulate(spec)?;
+    crate::sim::save(path, vars, &outcome)?;
+    Ok(())
+}
+
+fn series_traces(ui: &mut Ui, series: &crate::sim::Series) {
+    Line::new()
+        .legend(&series.title)
+        .note(&series.axis)
+        .size(11.0)
+        .wrapped(ui);
+    for curve in &series.curves {
+        let points: Vec<f32> = curve.values.iter().map(|&v| v as f32).collect();
+        let finite = points.iter().copied().filter(|v| v.is_finite());
+        let low = finite.clone().fold(f32::INFINITY, f32::min);
+        let high = finite.fold(f32::NEG_INFINITY, f32::max);
+        if !low.is_finite() || high - low <= 0.0 {
+            continue;
+        }
+        Line::new()
+            .legend(&curve.name)
+            .value(format!(
+                "{} to {}",
+                crate::sim::short(low as f64),
+                crate::sim::short(high as f64)
+            ))
+            .note(&curve.unit)
+            .size(11.0)
+            .show(ui);
+        ui.add(
+            Trace::new(&points)
+                .size(Vec2::new(ui.available_width(), 36.0))
+                .range(low - 0.1 * (high - low), high + 0.1 * (high - low))
+                .filled(true),
+        );
+    }
+}
+
 fn field_shown(view: &crate::sim::statics::FieldView, key: SceneKey) -> Shown {
     let bounds: monstertruck::modeling::BoundingBox<monstertruck::modeling::Point3> =
         view.positions.iter().copied().collect();
@@ -2575,17 +2755,32 @@ fn field_shown(view: &crate::sim::statics::FieldView, key: SceneKey) -> Shown {
         assembly: false,
         built: Duration::ZERO,
         field: Some(Arc::new(view.clone())),
+        sim: None,
     }
 }
 
-fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
-    if let Some(view) = snapshot
+fn build_shown(snapshot: &Snapshot, key: SceneKey, vars: &[(String, f64)]) -> Option<Shown> {
+    let picture = snapshot
         .model
         .sim
         .as_deref()
-        .and_then(crate::sim::current_field)
-    {
-        return Some(field_shown(&view, key));
+        .and_then(|spec| crate::sim::picture(spec, vars));
+    let (field, sim) = match picture {
+        Some(p) => (
+            p.field,
+            Some(Arc::new(SimState {
+                kind: p.kind,
+                outcome: p.outcome,
+                stale: p.stale,
+            })),
+        ),
+        None => (None, None),
+    };
+    if let Some(view) = field {
+        return Some(Shown {
+            sim,
+            ..field_shown(&view, key)
+        });
     }
     let model = match snapshot
         .model
@@ -2665,6 +2860,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey) -> Option<Shown> {
         assembly: model.assembly,
         built: Duration::ZERO,
         field: None,
+        sim,
     })
 }
 
@@ -2779,6 +2975,26 @@ fn exploded(
 #[cfg(test)]
 mod tests {
     use monstertruck::modeling::*;
+
+    #[test]
+    fn run_writes_a_fresh_result() {
+        let dir = std::env::temp_dir().join("gcad-tests/viewer_run");
+        std::fs::create_dir_all(&dir).expect("scratch dir");
+        std::fs::write(
+            dir.join("bar.gcad"),
+            "material steel\nplane XY\nrect 100 10\nextrude 10\n",
+        )
+        .expect("part");
+        let spec = dir.join("bar.gsim");
+        std::fs::write(
+            &spec,
+            "sim static\npart bar.gcad\nfix <X\nload >X force=0,0,-10\nmesh 5",
+        )
+        .expect("spec");
+        let _ = std::fs::remove_file(crate::sim::result_path(&spec));
+        super::simulate_file(&spec, &[]).expect("runs");
+        assert_eq!(crate::sim::stale(&spec, &[]), None);
+    }
 
     #[test]
     fn frames_step_and_wrap() {
