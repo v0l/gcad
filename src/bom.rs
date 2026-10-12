@@ -22,8 +22,8 @@ fn shown(file: &Path, base: &Path) -> String {
 }
 
 fn pathdiff(path: &Path, base: &Path) -> Option<std::path::PathBuf> {
-    let path = std::fs::canonicalize(path).ok()?;
-    let base = std::fs::canonicalize(if base.as_os_str().is_empty() {
+    let path = crate::host::canonicalize(path).ok()?;
+    let base = crate::host::canonicalize(if base.as_os_str().is_empty() {
         Path::new(".")
     } else {
         base

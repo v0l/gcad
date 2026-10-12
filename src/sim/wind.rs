@@ -727,7 +727,7 @@ pub fn surface_pressure(file: &std::path::Path) -> Result<super::fem::elastic::S
         bail!("{} is not a `sim flow`", file.display());
     }
     let result = super::result_path(file);
-    if !result.is_file() {
+    if !crate::host::is_file(&result) {
         bail!(
             "{} has no result yet; run `gcad sim {}` first",
             file.display(),

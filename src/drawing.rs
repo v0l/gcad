@@ -355,15 +355,13 @@ pub fn annotated(
             )
         })
         .collect();
-    let holes: Vec<Vec<crate::model::mate::Cylinder>> = std::thread::scope(|scope| {
-        let jobs: Vec<_> = parts
-            .iter()
-            .map(|(solid, _)| scope.spawn(move || crate::model::mate::holes_in(solid)))
-            .collect();
-        jobs.into_iter()
-            .map(|job| job.join().unwrap_or_default())
-            .collect()
-    });
+    let holes: Vec<Vec<crate::model::mate::Cylinder>> =
+        crate::host::each(parts.iter().collect(), |(solid, _)| {
+            crate::model::mate::holes_in(solid)
+        })
+        .into_iter()
+        .map(Option::unwrap_or_default)
+        .collect();
     let width = |i: usize| extents[i].1 - extents[i].0;
     let height = |i: usize| extents[i].3 - extents[i].2;
     let cells = [(0, 0), (0, 1), (1, 1), (1, 0), (2, 1)];

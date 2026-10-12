@@ -810,7 +810,7 @@ impl Model {
     pub(crate) fn op_drawing_file(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["file"], &["at", "scale"], false)?;
         let path = self.relative(args.text("file")?);
-        let text = std::fs::read_to_string(&path)
+        let text = crate::host::read_to_string(&path)
             .with_context(|| format!("reading {}", path.display()))?;
         let profiles = if line.op == "dxf" {
             super::import::dxf_profiles(&text)?

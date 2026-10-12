@@ -60,6 +60,32 @@ The format, operations and selectors are in [docs/format.md](docs/format.md), wh
 operations exist, which are still missing and the tests behind each are in
 [docs/ops.md](docs/ops.md).
 
+## In the browser
+
+The viewer also runs as a WebAssembly page with an editor beside the view. Edits are kept
+in the browser's local storage, and you can drop `.gcad` and `.gasm` files on the page.
+
+```sh
+./web/build.sh
+python3 web/serve.py 8080
+```
+
+The part after `#` in the address says what to open, so a link opens a project straight
+from GitHub. The page fetches the file and every file it names (parts, includes, imports):
+
+```
+#https://github.com/v0l/gcad/blob/master/examples/robot/arm.gasm
+#github.com/v0l/gcad/tree/master/examples/parts
+#v0l/gcad/examples/assemblies/linkage.gasm
+#examples/parts/plate.gcad
+```
+
+A `tree` link (or a bare repository) lists every part in that folder and opens the first
+assembly. The address follows whatever file is open, so copy it to share the view.
+Simulations and flow do not run in the browser. Everything runs on one thread and the page
+does not respond while a model builds: a part takes a second or two, the robot arm about
+three minutes (11 s on the desktop).
+
 ## Agent skill
 
 [skills/gcad/SKILL.md](skills/gcad/SKILL.md) teaches an agent the write, check, render loop,

@@ -526,7 +526,7 @@ impl Model {
             Some(dir) if std::path::Path::new(file).is_relative() => dir.join(file),
             _ => PathBuf::from(file),
         };
-        let source = std::fs::read_to_string(&path)
+        let source = crate::host::read_to_string(&path)
             .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
         let lines = crate::parse::parse_program(&source)?;
         let (saved_fixed, saved_scope, saved_dir) =
@@ -613,8 +613,8 @@ fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Mo
 }
 
 fn read_lines(path: &std::path::Path) -> Result<Vec<Line>> {
-    let source =
-        std::fs::read_to_string(path).map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
+    let source = crate::host::read_to_string(path)
+        .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
     crate::parse::parse_program(&source).map_err(|e| anyhow!("{}: {e:#}", path.display()))
 }
 
@@ -758,7 +758,7 @@ fn run_model(mut model: Model, lines: &[Line]) -> Run {
     let mut took = Vec::new();
     for line in lines {
         let before = model.clone();
-        let clock = std::time::Instant::now();
+        let clock = crate::host::Instant::now();
         let result = model.apply(line);
         took.push(clock.elapsed());
         let failed = result.is_err();

@@ -3,6 +3,7 @@ pub mod drawing;
 pub mod export;
 pub mod flow;
 pub mod geometry;
+pub mod host;
 pub mod model;
 pub mod offset;
 pub mod parse;

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>gcad</title>
+<link rel="icon" href="data:,">
+<style>
+html, body { margin: 0; height: 100%; background: #16181b; overflow: hidden; }
+canvas { width: 100%; height: 100%; display: block; outline: none; }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; color: #8a8f98; font: 14px sans-serif; }
+</style>
+</head>
+<body>
+<canvas id="gcad"></canvas>
+<div id="loading">loading gcad</div>
+<script type="module">
+import init from "./gcad_web.js";
+await init();
+document.getElementById("loading").remove();
+</script>
+</body>
+</html>
