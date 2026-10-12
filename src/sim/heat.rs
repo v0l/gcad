@@ -106,6 +106,7 @@ fn run_spec(spec: &Spec) -> Result<Outcome> {
         series: Vec::new(),
         checks: Vec::new(),
         aliases: Vec::new(),
+        slices: Vec::new(),
         field: Some(Field {
             title: "temperature".into(),
             unit: "°C".into(),

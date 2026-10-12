@@ -387,7 +387,11 @@ impl Model {
                 let args = Args::new(line, &["size"], &[], false)?;
                 let size = positive(args.number("size", &self.scope)?, "the mesh size")?;
                 self.spec().mesh = Some(size);
-                Ok(format!("elements about {size} mm across"))
+                Ok(if self.spec().kind == Some(crate::sim::Kind::Flow) {
+                    format!("cells {size} mm across")
+                } else {
+                    format!("elements about {size} mm across")
+                })
             }
             other => bail!(
                 "unknown simulation operation `{other}`; simulations use {}",

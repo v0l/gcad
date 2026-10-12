@@ -74,6 +74,66 @@ impl Domain {
         x + (y + z * self.size[1]) * self.size[0]
     }
 
+    pub fn close_diagonals(&mut self) -> usize {
+        use rayon::prelude::*;
+        let [nx, ny, nz] = self.size;
+        let diagonals: Vec<[i32; 3]> = C
+            .iter()
+            .skip(1)
+            .filter(|c| c.iter().filter(|v| **v != 0).count() == 2)
+            .copied()
+            .collect();
+        let mut closed = 0;
+        loop {
+            let flags = &self.flags;
+            let neighbour = |cell: usize, c: [i32; 3]| -> Option<usize> {
+                let (x, y, z) = (cell % nx, (cell / nx) % ny, cell / (nx * ny));
+                let step = |v: usize, d: i32, n: usize| {
+                    let w = v as i64 + d as i64;
+                    (0..n as i64).contains(&w).then_some(w as usize)
+                };
+                Some(step(x, c[0], nx)? + (step(y, c[1], ny)? + step(z, c[2], nz)? * ny) * nx)
+            };
+            let candidates: Vec<(usize, usize, usize)> = (0..flags.len())
+                .into_par_iter()
+                .filter(|&cell| flags[cell] == FLUID)
+                .flat_map_iter(|cell| {
+                    diagonals.iter().filter_map(move |c| {
+                        let far = neighbour(cell, *c)?;
+                        if flags[far] != FLUID {
+                            return None;
+                        }
+                        let sides: Vec<usize> = (0..3)
+                            .filter(|&d| c[d] != 0)
+                            .map(|d| {
+                                let mut part = [0; 3];
+                                part[d] = c[d];
+                                neighbour(cell, part)
+                            })
+                            .collect::<Option<_>>()?;
+                        sides
+                            .iter()
+                            .all(|&s| flags[s] == WALL)
+                            .then_some((cell, far, sides[0]))
+                    })
+                })
+                .collect();
+            let mut changed = 0;
+            for (cell, far, side) in candidates {
+                if self.flags[cell] == FLUID && self.flags[far] == FLUID {
+                    self.flags[far] = WALL;
+                    self.body[far] = self.body[side];
+                    changed += 1;
+                }
+            }
+            closed += changed;
+            if changed == 0 {
+                break;
+            }
+        }
+        closed
+    }
+
     pub fn seal(&mut self, from: &[usize]) -> usize {
         let [nx, ny, nz] = self.size;
         let open = |flag: u8| matches!(flag, FLUID | INLET | OUTLET);
@@ -315,6 +375,42 @@ fn populations(group: u32, name: &str) -> String {
         .collect()
 }
 
+fn plane_shader() -> String {
+    let mut s = String::new();
+    s += "struct Plane { nx: u32, ny: u32, nz: u32, axis: u32, index: u32, width: u32, count: u32, pad: u32 }\n";
+    s += "@group(0) @binding(0) var<uniform> p: Plane;\n";
+    s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
+    s += "@group(0) @binding(2) var<storage, read_write> out: array<vec4<f32>>;\n";
+    s += &populations(1, "a");
+    s += "@compute @workgroup_size(64)\n";
+    s += "fn plane(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {\n";
+    s += "  let k = id.x + id.y * groups.x * 64u;\n";
+    s += "  if (k >= p.count) { return; }\n";
+    s += "  let u = k % p.width; let v = k / p.width;\n";
+    s += "  var x = u; var y = v; var z = p.index;\n";
+    s += "  if (p.axis == 0u) { x = p.index; y = u; z = v; } else if (p.axis == 1u) { x = u; y = p.index; z = v; }\n";
+    s += "  let cell = x + (y + z * p.ny) * p.nx;\n";
+    s += "  let kind = flags[cell] & 255u;\n";
+    s += "  if (kind == 1u || kind == 2u) { out[k] = vec4<f32>(0.0, 0.0, 0.0, -1.0); return; }\n";
+    let sum = (0..Q)
+        .map(|i| format!("a{i}[cell]"))
+        .collect::<Vec<_>>()
+        .join(" + ");
+    s += &format!("  let rho = 1.0 + {sum};\n");
+    for (axis, name) in ["x", "y", "z"].iter().enumerate() {
+        let terms: Vec<String> = C
+            .iter()
+            .enumerate()
+            .filter(|(_, c)| c[axis] != 0)
+            .map(|(i, c)| format!("{}a{i}[cell]", if c[axis] > 0 { "+" } else { "-" }))
+            .collect();
+        s += &format!("  let m{name} = (0.0 {}) / rho;\n", terms.join(" "));
+    }
+    s += "  out[k] = vec4<f32>(mx, my, mz, rho);\n";
+    s += "}\n";
+    s
+}
+
 fn edge_shader() -> String {
     let mut s = String::new();
     s += "struct Edge { cell: u32, inner: u32, inlet: u32, pad: u32, vx: f32, vy: f32, vz: f32, pad2: f32 }\n";
@@ -421,6 +517,7 @@ pub struct Lattice<'a> {
     sides: [[wgpu::BindGroup; 2]; 2],
     edges: Option<Pass>,
     forces: Option<(Pass, wgpu::Buffer)>,
+    planes: (Pass, wgpu::Buffer),
     parity: usize,
     pub links: Vec<[u32; 2]>,
 }
@@ -709,6 +806,32 @@ impl<'a> Lattice<'a> {
             };
             (pass, out)
         });
+        let widest = (size[0] * size[1])
+            .max(size[1] * size[2])
+            .max(size[0] * size[2]);
+        let plane_out = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("plane"),
+            size: widest as u64 * 16,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
+            mapped_at_creation: false,
+        });
+        let plane_header = device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("plane params"),
+            size: 32,
+            usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        let plane_layout = layout(&[entry(0, uniform), entry(1, read), entry(2, write)]);
+        let planes = (
+            Pass {
+                pipeline: pipeline(plane_shader(), "plane", &[&plane_layout, &side_layout]),
+                common: group(&plane_layout, &[&plane_header, &flags, &plane_out]),
+                sides: [side(0), side(1)],
+                count: widest as u32,
+                header: plane_header,
+            },
+            plane_out,
+        );
         Ok(Lattice {
             gpu,
             size,
@@ -719,6 +842,7 @@ impl<'a> Lattice<'a> {
             sides,
             edges,
             forces,
+            planes,
             parity: 0,
             links,
         })
@@ -803,6 +927,45 @@ impl<'a> Lattice<'a> {
             }
         }
         Ok(out)
+    }
+
+    pub fn plane(&self, axis: usize, index: usize) -> Result<(usize, Vec<[f32; 4]>)> {
+        let others: Vec<usize> = (0..3).filter(|&a| a != axis).collect();
+        let (width, height) = (self.size[others[0]], self.size[others[1]]);
+        let count = width * height;
+        let (pass, buffer) = &self.planes;
+        let header = [
+            self.size[0] as u32,
+            self.size[1] as u32,
+            self.size[2] as u32,
+            axis as u32,
+            index as u32,
+            width as u32,
+            count as u32,
+            0,
+        ];
+        self.gpu
+            .queue
+            .write_buffer(&pass.header, 0, bytemuck::cast_slice(&header));
+        let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
+        {
+            let mut compute = encoder.begin_compute_pass(&Default::default());
+            compute.set_pipeline(&pass.pipeline);
+            compute.set_bind_group(0, &pass.common, &[]);
+            compute.set_bind_group(1, &pass.sides[self.parity], &[]);
+            let (gx, gy) = dispatch(count as u32);
+            compute.dispatch_workgroups(gx, gy, 1);
+        }
+        self.gpu.queue.submit([encoder.finish()]);
+        let values = self.gpu.read(buffer)?;
+        Ok((
+            width,
+            values
+                .chunks_exact(4)
+                .take(count)
+                .map(|v| [v[0], v[1], v[2], v[3]])
+                .collect(),
+        ))
     }
 
     pub fn link_samples(&self) -> Result<Vec<[f32; 4]>> {

@@ -459,3 +459,122 @@ pub fn colour_bar(
 pub fn title(canvas: &mut Canvas, (x, y): (f64, f64), text: &str) {
     canvas.text((x, y), 20.0, text, Anchor::Centre, INK);
 }
+
+pub fn flow(slices: &[crate::sim::Slice], path: &str) -> Result<()> {
+    if slices.is_empty() {
+        bail!("the result has no flow slices; run `gcad sim` again");
+    }
+    let mut speeds: Vec<f64> = slices
+        .iter()
+        .flat_map(|s| s.speed.iter().chain(&s.snapshot))
+        .copied()
+        .filter(|v| *v >= 0.0)
+        .collect();
+    speeds.sort_by(f64::total_cmp);
+    let high = speeds
+        .get(speeds.len().saturating_sub(1) * 995 / 1000)
+        .copied()
+        .unwrap_or(1.0)
+        .max(1.0e-9);
+    let panel = 720u32;
+    let heights: Vec<u32> = slices
+        .iter()
+        .map(|s| ((s.height() as f64 * panel as f64 / s.width as f64).round() as u32).max(1))
+        .collect();
+    let gap = 70u32;
+    let total: u32 = heights.iter().map(|h| h + gap).sum();
+    let mut canvas = Canvas::new(2 * panel + 3 * 30 + 160, total + 40);
+    let mut top = 60u32;
+    for (slice, &h) in slices.iter().zip(&heights) {
+        let (w, rows) = (slice.width as u32, slice.height() as u32);
+        for (column, values) in [&slice.speed, &slice.snapshot].iter().enumerate() {
+            let mut raw = RgbImage::new(w, rows);
+            for (k, v) in values.iter().enumerate() {
+                let colour = if *v < 0.0 {
+                    [150, 150, 150]
+                } else {
+                    heat(v / high).map(|c| (c * 255.0) as u8)
+                };
+                raw.put_pixel(k as u32 % w, k as u32 / w, Rgb(colour));
+            }
+            let picture =
+                image::imageops::resize(&raw, panel, h, image::imageops::FilterType::Triangle);
+            let left = 30 + column as u32 * (panel + 30);
+            canvas.paste(&picture, (left, top));
+            if column == 0 {
+                streamlines(
+                    &mut canvas,
+                    slice,
+                    (left as f64, top as f64),
+                    panel as f64 / w as f64,
+                );
+            }
+            let caption = format!(
+                "{}, {}",
+                slice.title,
+                if column == 0 {
+                    "mean speed"
+                } else {
+                    "one moment"
+                }
+            );
+            canvas.text(
+                (left as f64, top as f64 - 12.0),
+                15.0,
+                &caption,
+                Anchor::Left,
+                INK,
+            );
+        }
+        top += h + gap;
+    }
+    colour_bar(
+        &mut canvas,
+        (2.0 * panel as f64 + 100.0, 90.0, total as f64 - 40.0),
+        0.0,
+        high,
+        "m/s",
+    );
+    title(
+        &mut canvas,
+        (panel as f64 + 30.0, 30.0),
+        "air speed, wind from the left",
+    );
+    canvas.save(path)
+}
+
+fn streamlines(canvas: &mut Canvas, slice: &crate::sim::Slice, (x0, y0): (f64, f64), scale: f64) {
+    let (w, h) = (slice.width as f64, slice.height() as f64);
+    let at = |x: f64, y: f64| -> Option<(f64, f64)> {
+        if x < 0.0 || y < 0.0 || x >= w - 1.0 || y >= h - 1.0 {
+            return None;
+        }
+        let k = y as usize * slice.width + x as usize;
+        if slice.speed[k] < 0.0 {
+            return None;
+        }
+        Some((slice.along[k], -slice.side[k]))
+    };
+    let seeds = 28;
+    for n in 0..seeds {
+        let mut p = (1.0, (n as f64 + 0.5) * h / seeds as f64);
+        let mut line = vec![(x0 + p.0 * scale, y0 + p.1 * scale)];
+        for _ in 0..(4.0 * w) as usize {
+            let Some((u, v)) = at(p.0, p.1) else { break };
+            let speed = (u * u + v * v).sqrt();
+            if speed < 1.0e-6 {
+                break;
+            }
+            let half = (p.0 + 0.25 * u / speed, p.1 + 0.25 * v / speed);
+            let Some((u2, v2)) = at(half.0, half.1) else {
+                break;
+            };
+            let s2 = (u2 * u2 + v2 * v2).sqrt().max(1.0e-9);
+            p = (p.0 + 0.5 * u2 / s2, p.1 + 0.5 * v2 / s2);
+            line.push((x0 + p.0 * scale, y0 + p.1 * scale));
+        }
+        if line.len() > 2 {
+            canvas.line(&line, 1.0, [255, 255, 255]);
+        }
+    }
+}

@@ -515,6 +515,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         series: Vec::new(),
         checks: Vec::new(),
         aliases: Vec::new(),
+        slices: Vec::new(),
         field: Some(Field {
             title: "von Mises stress".into(),
             unit: "MPa".into(),
@@ -543,6 +544,63 @@ pub struct FieldView {
     pub moved: Vec<Vector3>,
     pub rest: Vec<Point3>,
     pub marks: Vec<Mark>,
+    pub index: std::sync::Arc<std::sync::OnceLock<TriangleGrid>>,
+}
+
+pub struct TriangleGrid {
+    size: f64,
+    cells: std::collections::HashMap<[i64; 3], Vec<u32>>,
+}
+
+impl TriangleGrid {
+    fn new(positions: &[Point3], triangles: &[[u32; 3]]) -> TriangleGrid {
+        let total: f64 = triangles
+            .iter()
+            .map(|t| {
+                let [a, b, c] = t.map(|v| positions[v as usize]);
+                (b - a).magnitude().max((c - a).magnitude())
+            })
+            .sum();
+        let size = (2.0 * total / triangles.len().max(1) as f64).max(1.0e-6);
+        let mut cells: std::collections::HashMap<[i64; 3], Vec<u32>> = Default::default();
+        let key = |p: Point3| [p.x, p.y, p.z].map(|v| (v / size).floor() as i64);
+        for (k, t) in triangles.iter().enumerate() {
+            let corners = t.map(|v| positions[v as usize]);
+            let (low, high) =
+                corners
+                    .iter()
+                    .fold((key(corners[0]), key(corners[0])), |(l, h), &p| {
+                        let q = key(p);
+                        (
+                            [0, 1, 2].map(|d| l[d].min(q[d])),
+                            [0, 1, 2].map(|d| h[d].max(q[d])),
+                        )
+                    });
+            for x in low[0]..=high[0] {
+                for y in low[1]..=high[1] {
+                    for z in low[2]..=high[2] {
+                        cells.entry([x, y, z]).or_default().push(k as u32);
+                    }
+                }
+            }
+        }
+        TriangleGrid { size, cells }
+    }
+
+    fn near(&self, at: Point3, reach: i64) -> impl Iterator<Item = u32> + '_ {
+        let base = [at.x, at.y, at.z].map(|v| (v / self.size).floor() as i64);
+        (-reach..=reach).flat_map(move |x| {
+            (-reach..=reach).flat_map(move |y| {
+                (-reach..=reach).flat_map(move |z| {
+                    self.cells
+                        .get(&[base[0] + x, base[1] + y, base[2] + z])
+                        .into_iter()
+                        .flatten()
+                        .copied()
+                })
+            })
+        })
+    }
 }
 
 pub struct Probe {
@@ -553,15 +611,19 @@ pub struct Probe {
 
 impl FieldView {
     pub fn probe(&self, at: Point3) -> Option<Probe> {
-        let (_, t, l) = self
-            .triangles
-            .iter()
-            .map(|t| {
-                let corners = t.map(|v| self.positions[v as usize]);
-                let (d, l) = super::fem::closest_on_triangle(at, corners);
-                (d, t, l)
-            })
-            .min_by(|a, b| a.0.total_cmp(&b.0))?;
+        let grid = self
+            .index
+            .get_or_init(|| TriangleGrid::new(&self.positions, &self.triangles));
+        let (_, t, l) = (1..=3).find_map(|reach| {
+            grid.near(at, reach)
+                .map(|k| {
+                    let t = &self.triangles[k as usize];
+                    let corners = t.map(|v| self.positions[v as usize]);
+                    let (d, l) = super::fem::closest_on_triangle(at, corners);
+                    (d, t, l)
+                })
+                .min_by(|a, b| a.0.total_cmp(&b.0))
+        })?;
         let blend = |f: &dyn Fn(usize) -> Vector3| -> Vector3 {
             t.iter()
                 .zip(l)
@@ -669,6 +731,7 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
                 m
             })
             .collect(),
+        index: Default::default(),
     })
 }
 
@@ -842,6 +905,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
         series: Vec::new(),
         checks: Vec::new(),
         aliases: Vec::new(),
+        slices: Vec::new(),
         field: Some(Field {
             title: format!("buckling mode, {} times the loads", short(first.factor)),
             unit: "relative".into(),

@@ -35,6 +35,24 @@ pub struct Field {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct Slice {
+    pub title: String,
+    pub width: usize,
+    pub spacing: f64,
+    pub across: String,
+    pub speed: Vec<f64>,
+    pub along: Vec<f64>,
+    pub side: Vec<f64>,
+    pub snapshot: Vec<f64>,
+}
+
+impl Slice {
+    pub fn height(&self) -> usize {
+        self.speed.len() / self.width.max(1)
+    }
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Outcome {
     pub kind: String,
     pub readings: Vec<Reading>,
@@ -43,6 +61,7 @@ pub struct Outcome {
     pub checks: Vec<(String, f64, bool)>,
     pub aliases: Vec<(String, String)>,
     pub field: Option<Field>,
+    pub slices: Vec<Slice>,
 }
 
 impl Outcome {
@@ -119,6 +138,10 @@ impl Outcome {
                 "title": f.title, "unit": f.unit, "values": f.values,
                 "displacement": f.displacement,
             })),
+            "slices": self.slices.iter().map(|s| json!({
+                "title": s.title, "width": s.width, "spacing": s.spacing, "across": s.across,
+                "speed": s.speed, "along": s.along, "side": s.side, "snapshot": s.snapshot,
+            })).collect::<Vec<_>>(),
             "expect": self.checks.iter().map(|(t, v, p)| json!({
                 "text": t, "value": v, "pass": p,
             })).collect::<Vec<_>>(),
@@ -168,6 +191,19 @@ impl Outcome {
                             values: numbers(&c["values"]),
                         })
                         .collect(),
+                })
+                .collect(),
+            slices: list(&value["slices"])
+                .iter()
+                .map(|s| Slice {
+                    title: text(s, "title"),
+                    width: s["width"].as_u64().unwrap_or(1) as usize,
+                    spacing: s["spacing"].as_f64().unwrap_or(1.0),
+                    across: text(s, "across"),
+                    speed: numbers(&s["speed"]),
+                    along: numbers(&s["along"]),
+                    side: numbers(&s["side"]),
+                    snapshot: numbers(&s["snapshot"]),
                 })
                 .collect(),
             field: value["field"].as_object().map(|_| {

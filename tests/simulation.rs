@@ -1273,3 +1273,56 @@ fn wind_shelters_a_part_behind() {
     close(front + back, reading(&outcome, "drag"), 1.0e-9);
     assert!(back < 0.5 * front, "front {front} back {back}");
 }
+
+#[test]
+fn wind_seals_a_closed_box() {
+    let outcome = simulated(
+        "wind_seals_a_closed_box",
+        &[
+            (
+                "base.gcad",
+                "plane XY\nrect 100 100\nextrude 99\nplane >Z\nrect 98 98\ncut 98\n",
+            ),
+            ("lid.gcad", "plane XY\nrect 100 100\nextrude 1\n"),
+            (
+                "case.gasm",
+                "part base base.gcad\npart lid lid.gcad\nmove lid 0,0,99\n",
+            ),
+        ],
+        "sim flow\npart case.gasm\nwind 10 toward=1,1,0\nmesh 5\naverage 2",
+    );
+    let sealed = outcome
+        .notes
+        .iter()
+        .find(|n| n.contains("sealed"))
+        .and_then(|n| n.split(' ').next()?.parse::<f64>().ok())
+        .unwrap_or_else(|| panic!("no sealed air in {:?}", outcome.notes));
+    let inside = 98.0f64.powi(3) * 1.0e-3;
+    assert!(
+        sealed > 0.7 * inside && sealed < 1.05 * inside,
+        "{sealed} cm³ sealed against {inside:.0}"
+    );
+}
+
+#[test]
+fn wind_draws_the_flow() {
+    let outcome = simulated(
+        "wind_draws_the_flow",
+        &[("cube.gcad", CUBE)],
+        "sim flow\npart cube.gcad\nwind 10 toward=1,0,0\nmesh 5\naverage 4",
+    );
+    assert_eq!(outcome.slices.len(), 2);
+    for slice in &outcome.slices {
+        assert_eq!(slice.speed.len(), slice.width * slice.height());
+        assert!(
+            slice.speed.iter().any(|v| *v < 0.0),
+            "the cube shows in the slice"
+        );
+        let free = slice.speed[slice.width / 2];
+        assert!((free - 10.0).abs() < 1.0, "free stream {free} m/s");
+    }
+    let path = std::path::PathBuf::from(scratch("wind_draws_the_flow")).join("flow.png");
+    gcad::plot::flow(&outcome.slices, path.to_str().expect("utf-8")).expect("draws");
+    let image = image::open(&path).expect("png").to_rgb8();
+    assert!(image.width() > 1000 && image.height() > 500);
+}

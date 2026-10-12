@@ -112,8 +112,11 @@ expect drag<400
 Readings: `drag` along the wind, `side` across it and level, `lift` across it and up, `cda`
 (drag over the dynamic pressure, m²), `moment.x`, `.y` and `.z` about the `about` point in N·m,
 `pressure` and `suction` (the extremes of the mean surface pressure, Pa), and for an assembly
-`part.drag`, `part.side` and `part.lift`. The field is the mean surface pressure. `--dry-run`
-prints the grid, the GPU memory it needs and the number of steps.
+`part.drag`, `part.side` and `part.lift`. The field is the mean surface pressure,
+sampled about a cell apart on a surface tessellated to a fifth of a cell. `--dry-run`
+prints the grid, the GPU memory it needs and the number of steps. `gcad render wind.gsim flow.png
+--flow` draws the air speed on an upright and a level slice along the wind through the
+centre of the frontal area, the mean with streamlines and one moment of the wake.
 
 The box runs 4 H upstream, 5 H downstream and 3 H to each side of the parts, which keeps the
 blockage near 2% whatever their shape (a long thin part does not inflate the box). Nearer
@@ -124,8 +127,11 @@ round numbers fall between cell centres.
 
 Parts are voxelized with plain (staircase) walls. A wall thinner than a cell still blocks the
 flow: rays along all three axes mark the nearest cell wherever two surface crossings have no
-cell centre between them, so enclosure walls stay airtight. Air the inlet cannot reach is
-taken out of the flow and noted. A part with no cells of its own (inside another, or thinner
+cell centre between them, so enclosure walls stay airtight. Where two fluid cells are joined
+by a diagonal link and both cells beside that link are wall, one of them becomes wall, or air
+streams diagonally through a staircase wall one cell thick (the rotator's boxes leaked at the
+lid's rounded top edge). Air the inlet cannot reach is then taken out of the flow and noted,
+so leave out only parts that are inside an enclosure: a gland or screw left out is a hole. A part with no cells of its own (inside another, or thinner
 than a cell along every axis) is noted and reads no force. Forces are gauge forces, so parts
 pressed against each other do not feel the lattice's reference pressure on one side only.
 

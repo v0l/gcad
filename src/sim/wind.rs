@@ -28,6 +28,7 @@ struct Part {
     name: String,
     points: Vec<Point3>,
     triangles: Vec<[usize; 3]>,
+    skin: (Vec<Point3>, Vec<[usize; 3]>),
 }
 
 struct Setup {
@@ -36,6 +37,7 @@ struct Setup {
     grid: Grid,
     across: f64,
     frontal: f64,
+    centre: Point3,
     parts: Vec<Part>,
 }
 
@@ -66,10 +68,10 @@ impl Setup {
     }
 }
 
-fn frontal_area(setup: &Setup, low: Point3, high: Point3) -> f64 {
+fn frontal_area(setup: &Setup, low: Point3, high: Point3) -> (f64, [f64; 2]) {
     let pixel = (high[SIDE] - low[SIDE]).max(high[UP] - low[UP]) / 1024.0;
     if pixel <= 0.0 {
-        return 0.0;
+        return (0.0, [low[SIDE], low[UP]]);
     }
     let (w, h) = (
         ((high[SIDE] - low[SIDE]) / pixel).ceil() as usize + 1,
@@ -109,7 +111,22 @@ fn frontal_area(setup: &Setup, low: Point3, high: Point3) -> f64 {
             }
         }
     }
-    covered.iter().filter(|&&c| c).count() as f64 * pixel * pixel
+    let mut sum = [0.0f64; 2];
+    let mut count = 0usize;
+    for (k, _) in covered.iter().enumerate().filter(|(_, c)| **c) {
+        sum[0] += (k % w) as f64 + 0.5;
+        sum[1] += (k / w) as f64 + 0.5;
+        count += 1;
+    }
+    let centre = if count == 0 {
+        [low[SIDE], low[UP]]
+    } else {
+        [
+            low[SIDE] + sum[0] / count as f64 * pixel,
+            low[UP] + sum[1] / count as f64 * pixel,
+        ]
+    };
+    (count as f64 * pixel * pixel, centre)
 }
 
 fn axes(toward: Vector3) -> [Vector3; 3] {
@@ -135,6 +152,7 @@ fn setup(spec: &Spec) -> Result<Setup> {
             name,
             points,
             triangles,
+            skin: (Vec::new(), Vec::new()),
         });
     }
     if parts.is_empty() {
@@ -150,6 +168,7 @@ fn setup(spec: &Spec) -> Result<Setup> {
         },
         across: 0.0,
         frontal: 0.0,
+        centre: Point3::origin(),
         parts,
     };
     let mut low = Point3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
@@ -163,9 +182,28 @@ fn setup(spec: &Spec) -> Result<Setup> {
             }
         }
     }
-    let frontal = frontal_area(&setup, low, high);
+    let (frontal, middle) = frontal_area(&setup, low, high);
+    setup.centre[SIDE] = middle[0];
+    setup.centre[UP] = middle[1];
+    setup.centre[WIND] = 0.5 * (low[WIND] + high[WIND]);
     let across = frontal.sqrt().max(1.0e-6);
     let spacing = spec.mesh.unwrap_or(across / ACROSS);
+    {
+        use rayon::prelude::*;
+        let solids = spec.named()?;
+        let skins: Vec<_> = solids
+            .par_iter()
+            .map(|(_, solid)| {
+                let tolerance = (0.2 * spacing).max(crate::geometry::mesh_tolerance(solid));
+                let (points, triangles) =
+                    crate::geometry::welded(&crate::geometry::mesh(solid, tolerance));
+                sampled(&points, &triangles, spacing)
+            })
+            .collect();
+        for (part, skin) in setup.parts.iter_mut().zip(skins) {
+            part.skin = skin;
+        }
+    }
     let mut margin = Vector3::new(ASIDE, ASIDE, ASIDE) * across;
     margin[WIND] = UPSTREAM * across;
     let origin = low - margin - Vector3::new(0.5, 0.5, 0.5) * spacing;
@@ -238,6 +276,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     if unseen.len() == setup.parts.len() {
         bail!("every part is thinner than a cell; use a finer `mesh`");
     }
+    domain.close_diagonals();
     let speed = LATTICE_SPEED;
     let mut seed = 0x2545_f491_4f6c_dd1du64;
     let mut noise = || {
@@ -290,16 +329,95 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let samples = average.div_ceil(every);
     let links = lattice.links.clone();
     let mut sums = vec![[0.0f64; 4]; links.len()];
+    let cut = |axis: usize| {
+        (((setup.centre[axis] - setup.grid.origin[axis]) / setup.grid.spacing).round() as usize)
+            .min(size[axis] - 1)
+    };
+    let mut planes: Vec<Watch> = [SIDE, UP]
+        .iter()
+        .map(|&axis| Watch {
+            axis,
+            index: cut(axis),
+            ..Default::default()
+        })
+        .collect();
     for _ in 0..samples {
         lattice.run(&settings, every)?;
+        for watch in planes.iter_mut() {
+            let (width, values) = lattice.plane(watch.axis, watch.index)?;
+            if watch.mean.is_empty() {
+                watch.mean = vec![[0.0; 3]; values.len()];
+            }
+            for (m, v) in watch.mean.iter_mut().zip(&values) {
+                for d in 0..3 {
+                    m[d] += v[d] as f64;
+                }
+            }
+            watch.width = width;
+            watch.last = values;
+        }
         for (sum, value) in sums.iter_mut().zip(lattice.link_samples()?) {
             for d in 0..4 {
                 sum[d] += value[d] as f64;
             }
         }
     }
-    let means: Vec<[f64; 4]> = sums.iter().map(|s| s.map(|v| v / samples as f64)).collect();
     let velocity_scale = setup.wind.speed / speed;
+    let slices = planes
+        .into_iter()
+        .map(
+            |Watch {
+                 axis,
+                 width,
+                 mean,
+                 last,
+                 ..
+             }| {
+                let other = if axis == SIDE { UP } else { SIDE };
+                let height = width;
+                let long = mean.len() / width.max(1);
+                let round = |v: f64| (v * 100.0).round() / 100.0;
+                let mut slice = super::Slice {
+                    title: if axis == SIDE {
+                        "upright slice along the wind".into()
+                    } else {
+                        "level slice along the wind".into()
+                    },
+                    width: long,
+                    spacing: setup.grid.spacing,
+                    across: if axis == SIDE {
+                        "up".into()
+                    } else {
+                        "side".into()
+                    },
+                    ..Default::default()
+                };
+                for row in 0..height {
+                    let a = height - 1 - row;
+                    for c in 0..long {
+                        let k = a + c * width;
+                        let solid = last[k][3] < 0.0;
+                        let m = mean[k].map(|v| v / samples as f64 * velocity_scale);
+                        let l = last[k].map(|v| v as f64 * velocity_scale);
+                        let magnitude =
+                            |v: [f64; 3]| (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+                        slice
+                            .speed
+                            .push(if solid { -1.0 } else { round(magnitude(m)) });
+                        slice.snapshot.push(if solid {
+                            -1.0
+                        } else {
+                            round(magnitude([l[0], l[1], l[2]]))
+                        });
+                        slice.along.push(if solid { 0.0 } else { round(m[WIND]) });
+                        slice.side.push(if solid { 0.0 } else { round(m[other]) });
+                    }
+                }
+                slice
+            },
+        )
+        .collect::<Vec<_>>();
+    let means: Vec<[f64; 4]> = sums.iter().map(|s| s.map(|v| v / samples as f64)).collect();
     let force_scale = air.0 * velocity_scale * velocity_scale * dx * dx;
     let pressure_scale = air.0 * velocity_scale * velocity_scale / 3.0;
     let n = setup.parts.len();
@@ -356,7 +474,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             .par_iter()
             .enumerate()
             .map(|(k, part)| {
-                let (points, _) = sampled(&part.points, &part.triangles, setup.grid.spacing);
+                let points = &part.skin.0;
                 points
                     .iter()
                     .map(|&p| nearest(&setup, &at_link[k], setup.to_lattice(p)))
@@ -414,6 +532,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     }
     Ok(Outcome {
         kind: "flow".into(),
+        slices,
         readings,
         notes,
         field: Some(Field {
@@ -465,6 +584,15 @@ fn sampled(
         }
     }
     (out, tris)
+}
+
+#[derive(Default)]
+struct Watch {
+    axis: usize,
+    index: usize,
+    width: usize,
+    mean: Vec<[f64; 3]>,
+    last: Vec<[f32; 4]>,
 }
 
 fn reading(name: &str, value: f64, unit: &str, at: &str) -> Reading {
@@ -529,7 +657,7 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
     let mut triangles = Vec::new();
     let mut edges = Vec::new();
     for part in &setup.parts {
-        let (points, tris) = sampled(&part.points, &part.triangles, setup.grid.spacing);
+        let (points, tris) = part.skin.clone();
         let base = positions.len() as u32;
         edges.extend(
             creases(&points, &tris)
@@ -563,6 +691,7 @@ pub fn field_view(spec: &Spec, outcome: &Outcome) -> Result<FieldView> {
         rest: positions.clone(),
         positions,
         marks: Vec::new(),
+        index: Default::default(),
     })
 }
 
@@ -581,7 +710,7 @@ fn creases(points: &[Point3], triangles: &[[usize; 3]]) -> Vec<[usize; 2]> {
     }
     sides
         .into_iter()
-        .filter(|(_, normals)| normals.len() != 2 || normals[0].dot(normals[1]) < 0.77)
+        .filter(|(_, normals)| normals.len() != 2 || normals[0].dot(normals[1]) < 0.5)
         .map(|((a, b), _)| [a, b])
         .collect()
 }
@@ -619,7 +748,7 @@ pub fn surface_pressure(file: &std::path::Path) -> Result<super::fem::elastic::S
     let setup = setup(spec)?;
     let mut samples = Vec::new();
     for part in &setup.parts {
-        samples.extend(sampled(&part.points, &part.triangles, setup.grid.spacing).0);
+        samples.extend(part.skin.0.iter().copied());
     }
     if samples.len() != field.values.len() {
         bail!(

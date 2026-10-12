@@ -257,7 +257,9 @@ prints cells, GPU memory and steps. Readings: `drag`, `side`, `lift` (N), `cda` 
 `moment.x/y/z` (N·m), `part.drag` per part, `pressure`/`suction` (Pa). Round members under
 about 10 cells across read like square bars (drag up to 1.8x too high); sharp-edged boxes read
 well. Then `wind flow.gsim` in a `sim static` loads the parts with that surface pressure; it
-needs the flow's result to be fresh.
+needs the flow's result to be fresh. `gcad render wind.gsim flow.png --flow` draws the air speed on
+slices through the parts. Only `leave` parts inside a closed box: a gland or screw left out is
+a hole the wind blows into.
 
 ## Output
 

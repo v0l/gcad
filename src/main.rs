@@ -72,6 +72,9 @@ enum Command {
         /// Draw an assembly with its parts moved apart as its `explode` lines say
         #[arg(long)]
         explode: bool,
+        /// For a flow simulation, draw the air speed on slices through the parts
+        #[arg(long)]
+        flow: bool,
     },
     /// Print the format reference: every operation, selector and assembly line
     Docs,
@@ -287,6 +290,7 @@ fn main() -> Result<()> {
             file,
             output,
             explode,
+            flow,
         } => {
             if gcad::sim::is_sim(std::path::Path::new(&file)) {
                 let run = load(&file, None, &vars)?;
@@ -296,6 +300,11 @@ fn main() -> Result<()> {
                     .sim
                     .as_deref()
                     .expect("a .gsim file runs as a simulation");
+                if flow {
+                    let result = gcad::sim::result_path(std::path::Path::new(&file));
+                    let outcome = gcad::sim::Outcome::read(&result)?;
+                    return gcad::plot::flow(&outcome.slices, &output);
+                }
                 let result = gcad::sim::result_path(std::path::Path::new(&file));
                 return gcad::sim::render(spec, &result, &output);
             }
