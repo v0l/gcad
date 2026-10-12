@@ -137,30 +137,36 @@ impl Domain {
     pub fn seal(&mut self, from: &[usize]) -> usize {
         let [nx, ny, nz] = self.size;
         let open = |flag: u8| matches!(flag, FLUID | INLET | OUTLET);
-        let mut reached = vec![false; self.flags.len()];
-        let mut queue: Vec<usize> = Vec::new();
-        for &cell in from {
-            if open(self.flags[cell]) && !reached[cell] {
-                reached[cell] = true;
-                queue.push(cell);
-            }
-        }
-        while let Some(cell) = queue.pop() {
+        let links = |cell: usize| {
             let (x, y, z) = (cell % nx, (cell / nx) % ny, cell / (nx * ny));
-            for c in C.iter().skip(1) {
+            C.iter().skip(1).map(move |c| {
                 let w = |v: usize, d: i32, n: usize| {
                     (v as i64 + d as i64).rem_euclid(n as i64) as usize
                 };
-                let next = self.at(w(x, c[0], nx), w(y, c[1], ny), w(z, c[2], nz));
-                if !reached[next] && open(self.flags[next]) {
+                w(x, c[0], nx) + (w(y, c[1], ny) + w(z, c[2], nz) * ny) * nx
+            })
+        };
+        let flags = &self.flags;
+        let deep = |cell: usize| open(flags[cell]) && links(cell).all(|n| open(flags[n]));
+        let mut reached = vec![false; flags.len()];
+        let mut queue: Vec<usize> = from.iter().copied().filter(|&c| deep(c)).collect();
+        for &cell in &queue {
+            reached[cell] = true;
+        }
+        while let Some(cell) = queue.pop() {
+            for next in links(cell) {
+                if !reached[next] && deep(next) {
                     reached[next] = true;
                     queue.push(next);
                 }
             }
         }
+        let outside: Vec<bool> = (0..flags.len())
+            .map(|cell| reached[cell] || (open(flags[cell]) && links(cell).any(|n| reached[n])))
+            .collect();
         let mut sealed = 0;
         for (cell, flag) in self.flags.iter_mut().enumerate() {
-            if *flag == FLUID && !reached[cell] {
+            if *flag == FLUID && !outside[cell] {
                 *flag = WALL;
                 self.body[cell] = 0;
                 sealed += 1;

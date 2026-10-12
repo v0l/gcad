@@ -130,8 +130,11 @@ flow: rays along all three axes mark the nearest cell wherever two surface cross
 cell centre between them, so enclosure walls stay airtight. Where two fluid cells are joined
 by a diagonal link and both cells beside that link are wall, one of them becomes wall, or air
 streams diagonally through a staircase wall one cell thick (the rotator's boxes leaked at the
-lid's rounded top edge). Air the inlet cannot reach is then taken out of the flow and noted,
-so leave out only parts that are inside an enclosure: a gland or screw left out is a hole. A part with no cells of its own (inside another, or thinner
+lid's rounded top edge). Air counts as outside only where the inlet reaches it
+through passages at least three cells wide, with the layer of cells beside them; the rest is
+taken out of the flow and noted. An opening narrower than about three cells (a cable gland's
+bore once the cable is left out, a slit at a lid) therefore closes its enclosure, and the
+rotator's boxes, which leaked through the Ethernet gland at 5 mm cells, seal at 9 and at 5. A part with no cells of its own (inside another, or thinner
 than a cell along every axis) is noted and reads no force. Forces are gauge forces, so parts
 pressed against each other do not feel the lattice's reference pressure on one side only.
 

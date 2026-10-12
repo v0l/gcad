@@ -1283,7 +1283,10 @@ fn wind_seals_a_closed_box() {
                 "base.gcad",
                 "plane XY\nrect 100 100\nextrude 99\nplane >Z\nrect 98 98\ncut 98\n",
             ),
-            ("lid.gcad", "plane XY\nrect 100 100\nextrude 1\n"),
+            (
+                "lid.gcad",
+                "plane XY\nrect 100 100\nextrude 1\nplane >Z\nhole 6 20,20 depth=1\n",
+            ),
             (
                 "case.gasm",
                 "part base base.gcad\npart lid lid.gcad\nmove lid 0,0,99\n",
