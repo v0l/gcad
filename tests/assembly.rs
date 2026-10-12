@@ -462,6 +462,20 @@ fn coupled_joints_move_together() {
 }
 
 #[test]
+fn couple_losses_are_checked() {
+    let parts = [("rod.gcad", ROD), ("plate.gcad", SLAB)];
+    let pair = "part frame plate.gcad\npart a rod.gcad\npart b rod.gcad\nmove b 20,0,0\naxis ax 0,0,0 0,0,1\naxis bx 20,0,0 20,0,1\njoint ja a frame turn about=ax\njoint jb b frame turn about=bx\n";
+    for (name, couple, wanted) in [
+        ("couple_over_one", "couple jb ja ratio=-2 efficiency=1.5", "at most 1"),
+        ("couple_friction_alone", "couple jb ja ratio=-2 friction=0.1", "goes with `lead=`"),
+        ("couple_both_ways", "couple jb ja ratio=-2 lead=5 efficiency=0.5", "or `efficiency=`"),
+    ] {
+        let error = failed(name, &format!("{pair}{couple}\n"), &parts);
+        assert!(error.contains(wanted), "{error}");
+    }
+}
+
+#[test]
 fn materials_follow_parts() {
     let parts = [("rod.gcad", "circle 10\nextrude 10\nmaterial aluminium\n")];
     let (_, text) = built(

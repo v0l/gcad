@@ -139,7 +139,9 @@ explode case.lid 0,0,30
   Define every joint with the assembly in its home position, then `pose` it at the end.
 - `couple driven driver ratio=` makes one joint follow another: `-teeth_a/teeth_b` for a gear
   pair, `pi*d/360` mm per degree for a rack. A planetary sun turns `1+ring/sun` per turn of the
-  carrier, a planet `-ring/planet` relative to it.
+  carrier, a planet `-ring/planet` relative to it. Add losses with `efficiency=` (driven
+  turning driver) and `back=` (the load turning it back), or for a worm `lead=` in degrees and
+  `friction=` (0.05 to 0.15 greased), which works out both and whether it locks.
 - `pattern part count=3 angle=360 axis=A` copies a part with its mates, joints and couples.
 - End the file with `interference none` and sweep each joint once with
   `interference joint=NAME steps=12` to find the range where it clashes. Set `min`/`max` from
@@ -204,7 +206,9 @@ expect shoulder<15 sun_s_turn<4
 A payload is in grams, at the part's centre of mass unless `at=x,y,z`. Several joints on one
 `sweep` make a grid of poses. Every moving joint gets a reading: the worst holding torque (N·m) or force (N) against
 gravity and where it happened. Couples pass the load on, so a sun gear driven by a joint
-at `ratio=4` reads a quarter of it: that is the motor's torque. Parts need a `material` to
+at `ratio=4` reads a quarter of it: that is the motor's torque. With lossy couples that
+reading is the torque to drive the load and `joint.back` the torque the load pushes back with
+(0 when a worm locks). `torque az 6.3` adds a steady joint torque, like wind. Parts need a `material` to
 weigh anything. `gcad check x.gsim` says when the result is stale and `gcad render x.gsim
 x.png` plots the sweeps. The viewer shows the readings, draws the setup before a result
 exists, and has a run button. Materials also carry `E= nu= yield= k= alpha=`.

@@ -180,6 +180,8 @@ pub struct Couple {
     pub driver: String,
     pub ratio: f64,
     pub offset: f64,
+    pub efficiency: f64,
+    pub back: f64,
 }
 
 type PartKey = (String, std::path::PathBuf, Vec<(String, f64)>);
@@ -940,8 +942,56 @@ impl Model {
         Ok(values)
     }
 
+    fn couple_losses(&self, args: &Args<'_>) -> Result<(f64, f64)> {
+        let given = |name: &str| args.optional_number(name, &self.scope);
+        let fraction = |value: f64, name: &str| -> Result<f64> {
+            if value <= 0.0 || value > 1.0 {
+                bail!("`{name}={value}` must be above 0 and at most 1");
+            }
+            Ok(value)
+        };
+        match (
+            given("lead")?,
+            given("friction")?,
+            given("efficiency")?,
+            given("back")?,
+        ) {
+            (Some(lead), friction, None, None) => {
+                if lead <= 0.0 || lead >= 90.0 {
+                    bail!("`lead={lead}` is the worm's lead angle in degrees, between 0 and 90");
+                }
+                let friction = friction.unwrap_or(0.0);
+                if friction < 0.0 {
+                    bail!("`friction={friction}` cannot be negative");
+                }
+                let (lead, slip) = (lead.to_radians(), friction.atan());
+                let efficiency = lead.tan() / (lead + slip).tan();
+                let back = ((lead - slip).tan() / lead.tan()).max(0.0);
+                Ok((efficiency, back))
+            }
+            (None, Some(_), _, _) => bail!("`friction=` goes with `lead=`, the worm's lead angle"),
+            (Some(_), _, _, _) => {
+                bail!("give `lead=` and `friction=`, or `efficiency=` and `back=`")
+            }
+            (None, None, efficiency, back) => {
+                let efficiency = fraction(efficiency.unwrap_or(1.0), "efficiency")?;
+                let back = match back {
+                    Some(b) if b <= 0.0 => 0.0,
+                    Some(b) => fraction(b, "back")?,
+                    None => efficiency,
+                };
+                Ok((efficiency, back))
+            }
+        }
+    }
+
     pub(crate) fn op_couple(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["driven", "driver"], &["ratio"], false)?;
+        let args = Args::new(
+            line,
+            &["driven", "driver"],
+            &["ratio", "efficiency", "back", "lead", "friction"],
+            false,
+        )?;
         let (driven, driver) = (args.text("driven")?, args.text("driver")?);
         let find = |name: &str| {
             self.joints
@@ -965,14 +1015,31 @@ impl Model {
             chain = couple.driver.clone();
         }
         let ratio = args.optional_number("ratio", &self.scope)?.unwrap_or(1.0);
+        let (efficiency, back) = self.couple_losses(&args)?;
         self.couples.push(Couple {
             driven: driven.to_string(),
             driver: driver.to_string(),
             ratio,
             offset: follower.value - ratio * leader.value,
+            efficiency,
+            back,
         });
+        let losses = if efficiency == 1.0 && back == 1.0 {
+            String::new()
+        } else if back <= 0.0 {
+            format!(
+                "; {:.0}% efficient driving `{driver}`, and `{driver}` cannot turn it back",
+                efficiency * 100.0
+            )
+        } else {
+            format!(
+                "; {:.0}% efficient driving `{driver}`, {:.0}% when `{driver}` turns it back",
+                efficiency * 100.0,
+                back * 100.0
+            )
+        };
         Ok(format!(
-            "`{driven}` moves {ratio}{} for each {} `{driver}` moves",
+            "`{driven}` moves {ratio}{} for each {} `{driver}` moves{losses}",
             follower.unit(),
             leader.unit().trim()
         ))

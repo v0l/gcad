@@ -14,6 +14,10 @@ All notable changes to gcad are listed here. The format follows
   force and no moment. `pin` on a short band suggests it.
 - `support_stress` reading: the peak von Mises stress within one mesh size of supports and bonds.
 - `torque axis=` and `wind toward=` take `x`, `y`, `z` and `-z`.
+- Gear and worm losses on couples: `efficiency=` and `back=`, or a worm's `lead=` and `friction=`,
+  with `joint.back` readings and worms that lock.
+- `torque joint value` in `sim torque`: a steady torque on a joint, like wind.
+- A boss glued onto a face, including twisted faces and over an edge; twisted extrudes with holes.
 
 ### Changed
 - `stress` and `safety` leave out one mesh size around supports and bonds, where a rigid hold

@@ -121,6 +121,58 @@ fn torque_through_gears() {
 }
 
 #[test]
+fn torque_through_lossy_gears() {
+    let lossy = LIFT.replace("ratio=360/(pi*20)", "ratio=360/(pi*20) efficiency=0.5 back=0.25");
+    let outcome = simulated(
+        "torque_through_lossy_gears",
+        &[
+            ("base.gcad", BASE),
+            ("block.gcad", BLOCK),
+            ("pinion.gcad", PINION),
+            ("lift.gasm", &lossy),
+        ],
+        "sim torque\npart lift.gasm",
+    );
+    let held = 20.0 * 20.0 * 20.0 * 7.85 / 1.0e6 * G * 0.01;
+    close(reading(&outcome, "drive"), held / 0.5, 1.0e-6);
+    close(reading(&outcome, "drive.back"), held * 0.25, 1.0e-6);
+    assert!(outcome.reading("lift.back").is_none());
+}
+
+#[test]
+fn worm_that_locks() {
+    let worm = LIFT.replace("ratio=360/(pi*20)", "ratio=360/(pi*20) lead=3.58 friction=0.1");
+    let outcome = simulated(
+        "worm_that_locks",
+        &[
+            ("base.gcad", BASE),
+            ("block.gcad", BLOCK),
+            ("pinion.gcad", PINION),
+            ("lift.gasm", &worm),
+        ],
+        "sim torque\npart lift.gasm",
+    );
+    let held = 20.0 * 20.0 * 20.0 * 7.85 / 1.0e6 * G * 0.01;
+    let lead = 3.58_f64.to_radians();
+    let efficiency = lead.tan() / (lead + 0.1_f64.atan()).tan();
+    close(reading(&outcome, "drive"), held / efficiency, 1.0e-6);
+    assert_eq!(reading(&outcome, "drive.back"), 0.0);
+    assert!(outcome.notes.iter().any(|n| n.starts_with("drive locks")));
+}
+
+#[test]
+fn torque_on_a_joint() {
+    let outcome = simulated(
+        "torque_on_a_joint",
+        &pendulum_files(),
+        "sim torque\npart arm.gasm\ngravity 0,0,0\ntorque swing 2.5",
+    );
+    close(reading(&outcome, "swing"), 2.5, 1.0e-6);
+    let swing = outcome.reading("swing").expect("swing");
+    assert!(swing.at.contains("pushing negative"), "{}", swing.at);
+}
+
+#[test]
 fn torque_needs_joints() {
     let path = written(
         "torque_needs_joints",

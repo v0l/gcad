@@ -893,3 +893,45 @@ fn mitred_frame() {
         ]
     );
 }
+
+#[test]
+fn twisted_extrude_with_a_hole() {
+    let started = std::time::Instant::now();
+    let model = build("rect 20 20\ncircle 8\nextrude 40 twist=720");
+    assert_volume(&model, (400.0 - 16.0 * PI) * 40.0, 1.0e-3);
+    assert!(started.elapsed().as_secs_f64() < 5.0);
+}
+
+#[test]
+fn boss_on_a_twisted_face() {
+    let started = std::time::Instant::now();
+    let model = build(
+        "rect 20 20\ncircle 8\nthread: extrude 40 twist=720\nplane thread.end\ncircle 12\ncircle 9\nboss: extrude 10",
+    );
+    assert_volume(
+        &model,
+        (400.0 - 16.0 * PI) * 40.0 + PI / 4.0 * (144.0 - 81.0) * 10.0,
+        1.0e-3,
+    );
+    assert!(started.elapsed().as_secs_f64() < 8.0);
+}
+
+#[test]
+fn boss_glued_onto_a_face() {
+    let model = build(
+        "rect 40 30\nbase: extrude 10\nplane base.end\ncircle 12 at=5,0\ncircle 4 at=5,0\nboss: extrude 8\nplane base.end\nrect 6 6 at=-12,0\npad: extrude 3",
+    );
+    assert_volume(
+        &model,
+        12000.0 + PI / 4.0 * (144.0 - 16.0) * 8.0 + 108.0,
+        1.0e-4,
+    );
+    assert_eq!(model.solids().len(), 1);
+}
+
+#[test]
+fn boss_over_an_edge_still_joins() {
+    let model =
+        build("rect 40 30\nbase: extrude 10\nplane base.end\nrect 20 10 at=15,0\nboss: extrude 5");
+    assert_volume(&model, 12000.0 + 200.0 * 5.0, 1.0e-6);
+}

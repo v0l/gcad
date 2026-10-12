@@ -151,6 +151,9 @@ impl Model {
                     )
                 })
             }
+            "torque" if self.spec().kind == Some(crate::sim::Kind::Torque) => {
+                self.op_joint_torque(line)
+            }
             "torque" => self.op_torque(line),
             "load" => self.op_load(line),
             "pressure" => self.op_load(line),
@@ -705,6 +708,24 @@ impl Model {
             }
         }
         Ok(said)
+    }
+
+    fn op_joint_torque(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["joint", "value"], &[], false)?;
+        let name = args.text("joint")?.to_string();
+        let value = args.number("value", &self.scope)?;
+        let rig = self.target_mut()?.rig();
+        let joint = rig
+            .joints
+            .iter()
+            .find(|j| j.name == name)
+            .ok_or_else(|| anyhow!("no joint called `{name}`"))?;
+        if !joint.movable() {
+            bail!("`{name}` does not move");
+        }
+        let unit = if joint.unit() == "°" { "N·m" } else { "N" };
+        self.spec().joint_torques.push((name.clone(), value));
+        Ok(format!("{value} {unit} on `{name}`"))
     }
 
     fn op_payload(&mut self, line: &Line) -> Result<String> {

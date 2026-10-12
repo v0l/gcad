@@ -83,9 +83,15 @@ fn lumps(spec: &Spec, model: &Model) -> Result<(Vec<Lump>, Vec<String>)> {
     Ok((lumps, notes))
 }
 
-fn energy(rig: &Rig, lumps: &[Lump], gravity: Vector3, values: &[f64]) -> f64 {
+fn energy(
+    rig: &Rig,
+    lumps: &[Lump],
+    pushes: &[(usize, f64)],
+    gravity: Vector3,
+    values: &[f64],
+) -> f64 {
     let moves = posed(&rig.joints, values);
-    lumps
+    let weight: f64 = lumps
         .iter()
         .map(|lump| {
             let at = moves
@@ -93,25 +99,49 @@ fn energy(rig: &Rig, lumps: &[Lump], gravity: Vector3, values: &[f64]) -> f64 {
                 .map_or(lump.centroid, |m| m.transform_point(lump.centroid));
             -lump.kg * gravity.dot(at.to_vec()) / 1000.0
         })
-        .sum()
+        .sum();
+    weight
+        - pushes
+            .iter()
+            .map(|&(joint, load)| load * values[joint])
+            .sum::<f64>()
 }
 
-fn root(rig: &Rig, joint: usize) -> (usize, f64) {
-    let index = |name: &str| rig.joints.iter().position(|j| j.name == name);
-    let (mut at, mut ratio) = (joint, 1.0);
-    for _ in 0..rig.couples.len() {
-        match rig
-            .driver_of(&rig.joints[at].name)
-            .and_then(|c| Some((index(&c.driver)?, c.ratio)))
-        {
-            Some((driver, r)) => {
-                at = driver;
-                ratio *= r;
-            }
-            None => break,
-        }
+#[derive(Clone, Copy)]
+struct Root {
+    driver: usize,
+    ratio: f64,
+    efficiency: f64,
+    back: f64,
+}
+
+impl Root {
+    fn lossy(&self) -> bool {
+        self.efficiency < 1.0 || self.back < 1.0
     }
-    (at, ratio)
+}
+
+fn root(rig: &Rig, joint: usize) -> Root {
+    let index = |name: &str| rig.joints.iter().position(|j| j.name == name);
+    let mut root = Root {
+        driver: joint,
+        ratio: 1.0,
+        efficiency: 1.0,
+        back: 1.0,
+    };
+    for _ in 0..rig.couples.len() {
+        let Some((driver, couple)) = rig
+            .driver_of(&rig.joints[root.driver].name)
+            .and_then(|c| Some((index(&c.driver)?, c)))
+        else {
+            break;
+        };
+        root.driver = driver;
+        root.ratio *= couple.ratio;
+        root.efficiency *= couple.efficiency;
+        root.back *= couple.back;
+    }
+    root
 }
 
 fn reach(rig: &Rig, base: &[f64], targets: &[(usize, f64)]) -> Option<Vec<f64>> {
@@ -144,9 +174,10 @@ fn unit(rig: &Rig, joint: usize) -> &'static str {
 struct Setup {
     rig: Rig,
     lumps: Vec<Lump>,
+    pushes: Vec<(usize, f64)>,
     gravity: Vector3,
     reported: Vec<usize>,
-    roots: Vec<(usize, f64)>,
+    roots: Vec<Root>,
     aliases: Vec<(String, String)>,
 }
 
@@ -156,10 +187,14 @@ impl Setup {
         let derivative = |i: usize| -> f64 {
             let at = values[i];
             let side = |v: f64| {
-                reach(&self.rig, values, &[(i, v)])
-                    .map(|vals| (v, energy(&self.rig, &self.lumps, self.gravity, &vals)))
+                reach(&self.rig, values, &[(i, v)]).map(|vals| {
+                    (
+                        v,
+                        energy(&self.rig, &self.lumps, &self.pushes, self.gravity, &vals),
+                    )
+                })
             };
-            let here = energy(&self.rig, &self.lumps, self.gravity, values);
+            let here = energy(&self.rig, &self.lumps, &self.pushes, self.gravity, values);
             let one_sided = |direction: f64| -> Option<f64> {
                 let (_, near) = side(at + direction * step)?;
                 let (_, far) = side(at + direction * 2.0 * step)?;
@@ -176,9 +211,14 @@ impl Setup {
         self.reported
             .iter()
             .map(|&joint| {
-                let (driver, ratio) = self.roots[joint];
+                let Root {
+                    driver,
+                    ratio,
+                    efficiency,
+                    ..
+                } = self.roots[joint];
                 let q = *raw.entry(driver).or_insert_with(|| derivative(driver));
-                let load = q / ratio * per_unit(&self.rig, joint);
+                let load = q / ratio * per_unit(&self.rig, joint) / efficiency;
                 if load.abs() < 1.0e-9 { 0.0 } else { load }
             })
             .collect()
@@ -217,13 +257,28 @@ fn setup(spec: &Spec, model: &Model) -> Result<(Setup, Vec<String>)> {
     }
     let rig = model.rig();
     let (lumps, notes) = lumps(spec, model)?;
-    let roots: Vec<(usize, f64)> = (0..rig.joints.len()).map(|i| root(&rig, i)).collect();
+    let roots: Vec<Root> = (0..rig.joints.len()).map(|i| root(&rig, i)).collect();
+    let pushes = spec
+        .joint_torques
+        .iter()
+        .map(|(name, value)| {
+            let joint = rig
+                .joints
+                .iter()
+                .position(|j| &j.name == name)
+                .ok_or_else(|| anyhow::anyhow!("no joint called `{name}`"))?;
+            Ok((joint, value / per_unit(&rig, joint)))
+        })
+        .collect::<Result<Vec<_>>>()?;
     let mut reported: Vec<usize> = Vec::new();
     let mut aliases = Vec::new();
     for i in (0..rig.joints.len()).filter(|&i| rig.joints[i].movable()) {
         let twin = reported.iter().copied().find(|&k| {
-            roots[k].0 == roots[i].0
-                && (roots[k].1 - roots[i].1).abs() <= roots[i].1.abs() * 1.0e-12
+            let (a, b) = (roots[k], roots[i]);
+            a.driver == b.driver
+                && (a.ratio - b.ratio).abs() <= b.ratio.abs() * 1.0e-12
+                && a.efficiency == b.efficiency
+                && a.back == b.back
                 && unit(&rig, k) == unit(&rig, i)
         });
         match twin {
@@ -235,6 +290,7 @@ fn setup(spec: &Spec, model: &Model) -> Result<(Setup, Vec<String>)> {
         Setup {
             rig,
             lumps,
+            pushes,
             gravity: spec.gravity(),
             reported,
             roots,
@@ -382,25 +438,66 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         ));
     }
     let g = setup.gravity;
+    let pushed = if setup.pushes.is_empty() {
+        ""
+    } else {
+        ", joint torques"
+    };
     notes.push(format!(
-        "holding torque against gravity {},{},{} m/s² and payloads; the sign of a value is the way the joint must push",
+        "holding torque against gravity {},{},{} m/s², payloads{pushed}; the sign of a value is the way the joint must push",
         g.x, g.y, g.z
     ));
-    let readings = names
-        .into_iter()
-        .zip(&setup.reported)
-        .zip(peaks)
-        .map(|((name, &j), (value, at))| Reading {
+    let lossy: Vec<usize> = setup
+        .reported
+        .iter()
+        .copied()
+        .filter(|&j| setup.roots[j].lossy())
+        .collect();
+    if !lossy.is_empty() {
+        notes.push(
+            "through lossy couples a joint reads the torque to drive its load, and `.back` the torque the load turns it back with"
+                .to_string(),
+        );
+    }
+    let locked: Vec<&str> = lossy
+        .iter()
+        .filter(|&&j| setup.roots[j].back <= 0.0)
+        .map(|&j| setup.rig.joints[j].name.as_str())
+        .collect();
+    if !locked.is_empty() {
+        let (verb, it) = if locked.len() == 1 {
+            ("locks", "it")
+        } else {
+            ("lock", "them")
+        };
+        notes.push(format!(
+            "{} {verb}: the load cannot turn {it} back",
+            locked.join(", ")
+        ));
+    }
+    let mut readings = Vec::new();
+    for ((name, &j), (value, at)) in names.into_iter().zip(&setup.reported).zip(peaks) {
+        let unit = unit(&setup.rig, j).to_string();
+        let at = if value < 0.0 {
+            format!("{at}, pushing negative")
+        } else {
+            at
+        };
+        let root = setup.roots[j];
+        let back = root.lossy().then(|| Reading {
+            name: format!("{name}.back"),
+            value: value.abs() * root.efficiency * root.back,
+            unit: unit.clone(),
+            at: at.clone(),
+        });
+        readings.push(Reading {
             name,
             value: value.abs(),
-            unit: unit(&setup.rig, j).to_string(),
-            at: if value < 0.0 {
-                format!("{at}, pushing negative")
-            } else {
-                at
-            },
-        })
-        .collect();
+            unit,
+            at,
+        });
+        readings.extend(back);
+    }
     Ok(Outcome {
         kind: "torque".to_string(),
         readings,

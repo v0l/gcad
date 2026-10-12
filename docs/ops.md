@@ -76,7 +76,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | revolve | supported | `revolve 360 axis=y`, `revolve 90` | `features::revolve_full`, `features::revolve_partial` |
 | sweep along a path | supported | `path x,y,z ... r=8` then `sweep` | `features::sweep_bent_path`, `features::sweep_straight_path` |
 | sweep along a helix | supported | `helix r=10 pitch=5 turns=3` then `sweep` | `features::sweep_helix` |
-| loft | supported | `section` per profile, then `loft` | `features::loft` |
+| loft | supported | `section` per profile, then `loft` | `features::loft`, `features::loft_many_matching_edges` |
 | shell | supported | `shell 2 open=base.end` | `features::shell` |
 | face draft | supported | `draft 5 base.side neutral=base.start` | `features::face_draft` |
 | push or pull a face | supported | `push base.end 2` | `features::push_face` |
@@ -93,7 +93,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | sweep along a smooth path | supported | `path ... smooth` | `features::sweep_smooth_path` |
 | sweep with twist | supported | `sweep twist=90` | `features::sweep_twist` |
 | sweep with scale | supported | `sweep scale=0.5` | `features::sweep_scale` |
-| twisted or tapered extrude | supported | `extrude 10 twist=90`, `extrude 10 scale=0.5` | `features::extrude_twisted`, `features::extrude_scaled` |
+| twisted or tapered extrude | supported | `extrude 10 twist=90`, `extrude 10 scale=0.5` | `features::extrude_twisted`, `features::extrude_scaled`, `features::twisted_extrude_with_a_hole` |
 | helical gear | supported | `gear 20 2 helix=20` then `extrude 10` | `features::helical_gear` |
 | bevel gear | supported | `gear 20 2 cone=45` then `extrude 5` | `features::bevel_gear` |
 | modelled thread | supported | `thread M6 on=rod.side`, `thread M6 on=h.side` in a hole, `left`, `pitch=` | `features::modelled_thread`, `features::tapped_thread`, `features::thread_up_to_a_bolt_head`, `features::thread_on_an_undersized_rod_with_a_fine_pitch`, `features::thread_turns_right_handed`, `features::thread_needs_a_round_face_that_fits` |
@@ -185,7 +185,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| union | supported | `extrude` onto existing material | `bodies::union` |
+| union | supported | `extrude` onto existing material | `bodies::union`, `features::boss_glued_onto_a_face`, `features::boss_on_a_twisted_face`, `features::boss_over_an_edge_still_joins` |
 | subtract | supported | `cut` | `bodies::subtract` |
 | intersect | supported | `extrude 10 mode=intersect` | `bodies::intersect` |
 | mirror | supported | `mirror YZ` | `bodies::mirror` |
@@ -227,7 +227,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
 | cylindrical joint | supported | a `turn` and a `slide` on one axis | `assembly::a_rod_turns_and_slides_on_one_axis` |
 | closed loops of joints | supported | a four-bar linkage follows its crank | `assembly::a_four_bar_linkage_follows_its_crank` |
-| gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together`, `assembly::gears_in_mesh_turn_without_touching`, `assembly::planetary_gears_turn_without_touching` |
+| gears and racks | supported | `couple jb ja ratio=-0.5` | `assembly::coupled_joints_move_together`, `assembly::couple_losses_are_checked`, `assembly::gears_in_mesh_turn_without_touching`, `assembly::planetary_gears_turn_without_touching` |
 | motors driving joints through gears | supported | `examples/robot/arm.gasm` | `assembly::robot_arm_example` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
@@ -288,6 +288,8 @@ The plan for the rest is in `docs/simulation.md`.
 |---|---|---|---|
 | joint torque against gravity | supported | `sim torque`, `part arm.gasm`, `sweep shoulder elbow steps=24` | `simulation::torque_of_a_pendulum`, `simulation::torque_needs_joints` |
 | torque through gears and racks | supported | a `couple` carries the load to the joint it drives | `simulation::torque_through_gears`, `simulation::robot_arm_motor_torque` |
+| gear and worm losses | supported | `couple ... efficiency=0.9 back=0.8`, `couple ... lead=3.6 friction=0.1` | `simulation::torque_through_lossy_gears`, `simulation::worm_that_locks` |
+| torque on a joint | supported | `torque az 6.3` in `sim torque` | `simulation::torque_on_a_joint` |
 | payloads | supported | `payload hand 300 at=x,y,z` | `simulation::torque_of_a_pendulum`, `simulation::payload_follows_the_pose` |
 | expectations | supported | `expect shoulder<2 drive>0.5` | `simulation::torque_through_gears` |
 | stale results and charts | supported | `gcad check x.gsim`, `gcad render x.gsim x.png` | `simulation::result_goes_stale` |

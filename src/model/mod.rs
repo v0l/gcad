@@ -438,6 +438,19 @@ impl Model {
         let boxes: Vec<BoundingBox<Point3>> = tools.iter().map(geometry::bounds).collect();
         let disjoint =
             (0..boxes.len()).all(|i| (i + 1..boxes.len()).all(|j| apart(&boxes[i], &boxes[j])));
+        if combine == Combine::Add
+            && let Some(existing) = self.solid.as_ref()
+        {
+            let welded = tools
+                .iter()
+                .try_fold(existing.clone(), |solid, tool| weld::weld(&solid, tool));
+            if let Some(solid) = welded {
+                self.solid = Some(fuse::fuse_coplanar(&exact::exact_edges(&solid)));
+                let entry = self.tools.entry(label.to_string()).or_default();
+                entry.extend(tools.into_iter().map(|tool| (combine, tool)));
+                return Ok(());
+            }
+        }
         if tools.len() > 1 && disjoint && self.solid.is_some() {
             let faces: Vec<Face> = tools.iter().flat_map(select::faces).collect();
             let together = Solid::new_unchecked(vec![faces.into()]);
@@ -456,13 +469,11 @@ impl Model {
         let result = match (self.solid.as_ref(), combine) {
             (None, Combine::Add) => tool.clone(),
             (None, _) => bail!("there is no solid to cut or intersect"),
-            (Some(existing), Combine::Add) => {
-                match monstertruck::solid::or_normalized(existing, &tool) {
-                    Ok(solid) => solid,
-                    Err(error) => weld::weld_union(existing, &tool)
-                        .ok_or_else(|| anyhow!("union failed: {error}"))?,
-                }
-            }
+            (Some(existing), Combine::Add) => match weld::weld(existing, &tool) {
+                Some(solid) => solid,
+                None => monstertruck::solid::or_normalized(existing, &tool)
+                    .map_err(|error| anyhow!("union failed: {error}"))?,
+            },
             (Some(existing), Combine::Remove) => {
                 let tool = solids::clear_flush(&tool, existing);
                 monstertruck::solid::difference_normalized(existing, &tool)
