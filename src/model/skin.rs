@@ -128,10 +128,10 @@ pub(crate) fn skin(sections: &[Wire], smooth: bool) -> Result<Solid> {
     }
     let counts: Vec<usize> = sections.iter().map(|w| w.len()).collect();
     let common = counts.iter().fold(1, |l, &c| l / gcd(l, c) * c);
-    if common > 240 {
+    let mixed = counts.iter().any(|&c| c != counts[0]);
+    if mixed && common > 240 {
         bail!("sections have {counts:?} edges, too far apart to match up");
     }
-    let mixed = counts.iter().any(|&c| c != counts[0]);
     let mut rings: Vec<Vec<Piece>> = sections
         .iter()
         .map(|wire| {
