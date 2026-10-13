@@ -327,7 +327,11 @@ impl Model {
             anyhow!("write `part:faces`, like `case.main:pilot.side`; `{text}` has no `:`")
         })?;
         let solid = self.named_body(part)?;
-        let groups = self.part_groups.get(part).cloned().unwrap_or_default();
+        let groups = self
+            .part_groups
+            .get(part)
+            .map(super::PartGroups::placed)
+            .unwrap_or_default();
         let tolerance = (geometry::bounds(&solid).diameter() * 1.0e-6).max(1.0e-7);
         let faces = select::select_faces(selector, &solid, &groups, tolerance)?;
         if faces.is_empty() {

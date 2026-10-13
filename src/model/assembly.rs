@@ -608,9 +608,7 @@ impl Model {
             }
         }
         if let Some(groups) = self.part_groups.get_mut(name) {
-            groups.0.iter_mut().for_each(|entry| {
-                entry.surface = super::bodies::moved_surface(&entry.surface, transform)
-            });
+            *groups = groups.moved(transform);
         }
         Ok(())
     }
@@ -812,7 +810,7 @@ impl Model {
                 .part_groups
                 .get(body)
                 .cloned()
-                .unwrap_or_else(|| loaded.groups.clone());
+                .unwrap_or_else(|| super::PartGroups::new(loaded.groups.clone()));
             self.part_groups.insert(new.clone(), groups);
             self.bodies.push((new.clone(), solid));
             added.push(new);

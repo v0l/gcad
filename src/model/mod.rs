@@ -110,7 +110,7 @@ pub struct Model {
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,
     pub assembly: bool,
-    pub part_groups: HashMap<String, select::Groups>,
+    pub part_groups: HashMap<String, PartGroups>,
     pub mates: Vec<assembly::Mate>,
     pub couples: Vec<assembly::Couple>,
     pub cache: Cache,
@@ -120,6 +120,38 @@ pub struct Model {
     pub sheet: Option<sheet::Sheet>,
     pub members: Vec<String>,
     pub sim: Option<Box<crate::sim::Spec>>,
+}
+
+#[derive(Clone)]
+pub struct PartGroups {
+    groups: std::sync::Arc<Groups>,
+    placed: Matrix4,
+}
+
+impl PartGroups {
+    pub fn new(groups: Groups) -> Self {
+        PartGroups {
+            groups: std::sync::Arc::new(groups),
+            placed: Matrix4::identity(),
+        }
+    }
+
+    pub fn moved(&self, transform: Matrix4) -> Self {
+        PartGroups {
+            groups: self.groups.clone(),
+            placed: transform * self.placed,
+        }
+    }
+
+    pub fn placed(&self) -> Groups {
+        let mut groups = (*self.groups).clone();
+        if self.placed != Matrix4::identity() {
+            groups.0.iter_mut().for_each(|entry| {
+                entry.surface = bodies::moved_surface(&entry.surface, self.placed)
+            });
+        }
+        groups
+    }
 }
 
 #[derive(Clone, Debug)]

@@ -34,12 +34,9 @@ impl Model {
             .copied()
             .unwrap_or_else(Matrix4::identity);
         self.placements.insert(name.to_string(), transform * placed);
-        if let Some(groups) = self.part_groups.get(part).cloned() {
-            let mut groups = groups;
-            groups.0.iter_mut().for_each(|entry| {
-                entry.surface = super::bodies::moved_surface(&entry.surface, transform)
-            });
-            self.part_groups.insert(name.to_string(), groups);
+        if let Some(groups) = self.part_groups.get(part) {
+            let moved = groups.moved(transform);
+            self.part_groups.insert(name.to_string(), moved);
         }
         Ok(())
     }
