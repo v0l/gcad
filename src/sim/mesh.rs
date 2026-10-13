@@ -85,8 +85,8 @@ fn mesh_reporting(
             None if attempt > 1 => format!(", try {attempt} (the last failed)"),
             None => String::new(),
         };
-        let report = |what: String| stage.detail(|| format!("{at} mm{retry}: {what}"));
-        match super::tet::mesh_solid_reporting(solid, tried, &report) {
+        stage.detail(|| format!("{at} mm{retry}"));
+        match super::tet::mesh_solid(solid, tried) {
             Ok(mesh) => {
                 let worst = mesh.quality().min_dihedral;
                 if worst >= FLATTEST {

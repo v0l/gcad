@@ -1,5 +1,4 @@
 use super::{Field, Outcome, Reading, Spec, statics::FieldView};
-use crate::flow::gpu::Gpu;
 use crate::flow::lattice::{Domain, Heat, INLET, Lattice, OUTLET, Settings, WALL};
 use crate::flow::voxel::{Grid, place_surface, surface};
 use anyhow::{Result, bail};
@@ -391,7 +390,7 @@ fn standard_error(series: &[f64], batch: usize) -> Option<f64> {
 pub fn run(spec: &Spec) -> Result<Outcome> {
     let setup = setup(spec)?;
     let air = spec.air.unwrap_or(AIR);
-    let gpu = Gpu::open()?;
+    let gpu = crate::flow::gpu::open()?;
     let size = setup.grid.size;
     let mut domain = Domain {
         half: spec.half,

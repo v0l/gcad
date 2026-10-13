@@ -437,7 +437,7 @@ fn main() -> Result<()> {
         ),
         Command::Remote { action } => remote(action),
         Command::GpuBench => {
-            let bench = gcad::flow::bench::run()?;
+            let bench = gcad::flow::bench::run(&gcad::flow::gpu::open()?)?;
             println!(
                 "{}",
                 serde_json::to_string(&gcad_sims_proto::GpuBench {

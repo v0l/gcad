@@ -1409,6 +1409,7 @@ dependencies = [
  "sha2",
  "sims-fem",
  "sims-field",
+ "sims-flow",
  "sims-progress",
  "sims-tet",
  "spade",
@@ -4112,7 +4113,7 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 [[package]]
 name = "sims-fem"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=f4784d0a2603c8878cb009b660d8ef5f108b76e3#f4784d0a2603c8878cb009b660d8ef5f108b76e3"
+source = "git+https://github.com/v0l/sims?rev=55e5363796275454b35308334fae5b89e3e89aa4#55e5363796275454b35308334fae5b89e3e89aa4"
 dependencies = [
  "anyhow",
  "faer",
@@ -4125,18 +4126,34 @@ dependencies = [
 [[package]]
 name = "sims-field"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=f4784d0a2603c8878cb009b660d8ef5f108b76e3#f4784d0a2603c8878cb009b660d8ef5f108b76e3"
+source = "git+https://github.com/v0l/sims?rev=55e5363796275454b35308334fae5b89e3e89aa4#55e5363796275454b35308334fae5b89e3e89aa4"
 dependencies = [
  "bytemuck",
  "pollster",
  "rayon",
+ "sims-progress",
+ "wgpu",
+]
+
+[[package]]
+name = "sims-flow"
+version = "0.1.0"
+source = "git+https://github.com/v0l/sims?rev=55e5363796275454b35308334fae5b89e3e89aa4#55e5363796275454b35308334fae5b89e3e89aa4"
+dependencies = [
+ "anyhow",
+ "bytemuck",
+ "cgmath",
+ "pollster",
+ "rayon",
+ "sims-field",
+ "sims-progress",
  "wgpu",
 ]
 
 [[package]]
 name = "sims-progress"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=f4784d0a2603c8878cb009b660d8ef5f108b76e3#f4784d0a2603c8878cb009b660d8ef5f108b76e3"
+source = "git+https://github.com/v0l/sims?rev=55e5363796275454b35308334fae5b89e3e89aa4#55e5363796275454b35308334fae5b89e3e89aa4"
 dependencies = [
  "web-time",
 ]
@@ -4144,13 +4161,14 @@ dependencies = [
 [[package]]
 name = "sims-tet"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=f4784d0a2603c8878cb009b660d8ef5f108b76e3#f4784d0a2603c8878cb009b660d8ef5f108b76e3"
+source = "git+https://github.com/v0l/sims?rev=55e5363796275454b35308334fae5b89e3e89aa4#55e5363796275454b35308334fae5b89e3e89aa4"
 dependencies = [
  "anyhow",
  "cgmath",
  "rayon",
  "robust",
  "sims-field",
+ "sims-progress",
 ]
 
 [[package]]

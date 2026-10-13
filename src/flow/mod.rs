@@ -1,5 +1,4 @@
-pub mod bench;
 pub mod gpu;
-pub mod lattice;
-pub mod rotor;
 pub mod voxel;
+
+pub use sims_flow::{bench, lattice, rotor};
