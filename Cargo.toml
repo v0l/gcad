@@ -32,6 +32,7 @@ robust = "1.2"
 faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
 ttf-parser = "0.25"
 wgpu = "29"
+fieldgrid = { git = "https://github.com/v0l/fieldgrid", rev = "8056ef00eebbc609bec669ac7138a92389a9dc8b" }
 pollster = "0.4"
 bytemuck = "1"
 toml = "1.1.8"

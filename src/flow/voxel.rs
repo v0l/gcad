@@ -1,6 +1,8 @@
 use super::lattice::{C, Domain, FLUID, WALL};
 use crate::geometry;
-use crate::sim::tet::sizing::Bvh;
+use fieldgrid::Bvh;
+use fieldgrid::bvh::Point;
+use fieldgrid::raster::fill;
 use monstertruck::modeling::*;
 
 #[derive(Clone, Copy, Debug)]
@@ -34,8 +36,8 @@ pub fn place_surface(
     body: u16,
 ) -> usize {
     use rayon::prelude::*;
-    let triangles: Vec<[Point3; 3]> = triangles.iter().map(|t| t.map(|v| points[v])).collect();
-    let bvh = Bvh::new(triangles);
+    let corners: Vec<Point> = points.iter().map(|p| [p.x, p.y, p.z]).collect();
+    let bvh = Bvh::indexed(&corners, triangles);
     let [nx, ny, nz] = grid.size;
     let h = grid.spacing;
     let span = |axis: usize, n: usize| {
@@ -50,76 +52,20 @@ pub fn place_surface(
     if points.is_empty() || xs.is_empty() || ys.is_empty() || zs.is_empty() {
         return 0;
     }
-    let spans = [xs.clone(), ys.clone(), zs.clone()];
-    let mut columns: Vec<Vec<usize>> = Vec::new();
-    let mut thin: Vec<usize> = Vec::new();
-    for axis in 0..3 {
-        let (u, v) = ((axis + 1) % 3, (axis + 2) % 3);
-        let (us, vs) = (spans[u].clone(), spans[v].clone());
-        let start = grid.origin[axis] - 2.0 * h;
-        let mut direction = Vector3::zero();
-        direction[axis] = 1.0;
-        let mut nudge = Vector3::zero();
-        nudge[u] = h * 1.234_567e-6;
-        nudge[v] = h * 2.345_678e-6;
-        let wide = us.len();
-        let filled: Vec<(Vec<usize>, Vec<usize>)> = (0..us.len() * vs.len())
-            .into_par_iter()
-            .map(|column| {
-                let mut cell = [0usize; 3];
-                cell[u] = us.start + column % wide;
-                cell[v] = vs.start + column / wide;
-                let mut from = grid.centre(cell[0], cell[1], cell[2]) + nudge;
-                from[axis] = start;
-                let mut crossings = Vec::new();
-                let mut last = 0.0;
-                loop {
-                    let t = bvh.ray(from, direction, usize::MAX, last + h * 1.0e-9);
-                    if !t.is_finite() {
-                        break;
-                    }
-                    crossings.push(start + t);
-                    last = t;
-                }
-                let n = grid.size[axis] as f64;
-                let mut inside = Vec::new();
-                let mut skins = Vec::new();
-                let mut index = |k: usize| {
-                    let mut at = cell;
-                    at[axis] = k;
-                    domain_index(grid, at[0], at[1], at[2])
-                };
-                for pair in crossings.chunks(2) {
-                    let [a, b] = [pair[0], *pair.get(1).unwrap_or(&f64::INFINITY)];
-                    let (a, b) = ((a - grid.origin[axis]) / h, (b - grid.origin[axis]) / h);
-                    let (first, last) = (a.ceil().max(0.0), b.floor().min(n - 1.0));
-                    if axis == 0 && first <= last {
-                        inside.extend((first as usize..=last as usize).map(&mut index));
-                    } else if first > last && b.is_finite() {
-                        let middle = (0.5 * (a + b)).round();
-                        if (0.0..n).contains(&middle) {
-                            skins.push(index(middle as usize));
-                        }
-                    }
-                }
-                (inside, skins)
-            })
-            .collect();
-        for (inside, skins) in filled {
-            columns.push(inside);
-            thin.extend(skins);
-        }
-    }
+    let samples: [Vec<f64>; 3] = std::array::from_fn(|a| {
+        (0..grid.size[a])
+            .map(|k| grid.origin[a] + k as f64 * h)
+            .collect()
+    });
+    let filled = fill(
+        &bvh,
+        [&samples[0], &samples[1], &samples[2]],
+        |[x, y, z]| domain_index(grid, x, y, z),
+    );
+    let thin = filled.thin;
     let mut solid_cells = 0;
-    let mut cored = std::collections::HashSet::new();
-    for cells in &columns {
-        cored.extend(cells.iter().copied());
-    }
-    let thin: std::collections::HashSet<usize> =
-        thin.into_iter().filter(|c| !cored.contains(c)).collect();
-    columns.push(thin.iter().copied().collect());
-    for cells in columns {
-        for cell in cells {
+    for cells in [&filled.inside, &thin] {
+        for &cell in cells {
             if domain.flags[cell] == FLUID {
                 domain.flags[cell] = WALL;
                 domain.body[cell] = body;
@@ -161,11 +107,11 @@ pub fn place_surface(
                     return None;
                 }
                 let s = domain_index(grid, sx as usize, sy as usize, sz as usize);
-                if flags[s] != WALL || bodies[s] != body || thin.contains(&s) {
+                if flags[s] != WALL || bodies[s] != body || thin.binary_search(&s).is_ok() {
                     return None;
                 }
-                let step = Vector3::new(-c[0] as f64, -c[1] as f64, -c[2] as f64) * h;
-                let t = bvh.ray(centre, step, usize::MAX, 0.0);
+                let step = [-c[0] as f64 * h, -c[1] as f64 * h, -c[2] as f64 * h];
+                let t = bvh.ray([centre.x, centre.y, centre.z], step, usize::MAX, 0.0);
                 Some((
                     cell,
                     j,

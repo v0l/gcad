@@ -1,152 +1,6 @@
 use super::fixed::HashMap;
+use fieldgrid::Bvh;
 use monstertruck::modeling::*;
-
-struct Node {
-    low: Point3,
-    high: Point3,
-    start: usize,
-    count: usize,
-    children: Option<(usize, usize)>,
-}
-
-pub struct Bvh {
-    triangles: Vec<[Point3; 3]>,
-    order: Vec<usize>,
-    nodes: Vec<Node>,
-}
-
-fn bounds_of(triangles: &[[Point3; 3]], items: &[usize]) -> (Point3, Point3) {
-    let mut low = Point3::new(f64::INFINITY, f64::INFINITY, f64::INFINITY);
-    let mut high = Point3::new(f64::NEG_INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
-    for &i in items {
-        for p in triangles[i] {
-            low = Point3::new(low.x.min(p.x), low.y.min(p.y), low.z.min(p.z));
-            high = Point3::new(high.x.max(p.x), high.y.max(p.y), high.z.max(p.z));
-        }
-    }
-    (low, high)
-}
-
-impl Bvh {
-    pub fn new(triangles: Vec<[Point3; 3]>) -> Bvh {
-        let mut bvh = Bvh {
-            order: (0..triangles.len()).collect(),
-            triangles,
-            nodes: Vec::new(),
-        };
-        if !bvh.order.is_empty() {
-            bvh.build(0, bvh.order.len());
-        }
-        bvh
-    }
-
-    fn build(&mut self, start: usize, end: usize) -> usize {
-        let (low, high) = bounds_of(&self.triangles, &self.order[start..end]);
-        let index = self.nodes.len();
-        self.nodes.push(Node {
-            low,
-            high,
-            start,
-            count: end - start,
-            children: None,
-        });
-        if end - start <= 4 {
-            return index;
-        }
-        let extent = high - low;
-        let axis = if extent.x >= extent.y && extent.x >= extent.z {
-            0
-        } else if extent.y >= extent.z {
-            1
-        } else {
-            2
-        };
-        let triangles = &self.triangles;
-        let centre = |i: usize| {
-            let [a, b, c] = triangles[i];
-            (a[axis] + b[axis] + c[axis]) / 3.0
-        };
-        let middle = (start + end) / 2;
-        self.order[start..end]
-            .select_nth_unstable_by(middle - start, |&a, &b| centre(a).total_cmp(&centre(b)));
-        let left = self.build(start, middle);
-        let right = self.build(middle, end);
-        self.nodes[index].children = Some((left, right));
-        index
-    }
-
-    fn slab(node: &Node, origin: Point3, inverse: Vector3, limit: f64) -> bool {
-        let mut near: f64 = 0.0;
-        let mut far = limit;
-        for k in 0..3 {
-            let t1 = (node.low[k] - origin[k]) * inverse[k];
-            let t2 = (node.high[k] - origin[k]) * inverse[k];
-            let (a, b) = if t1 < t2 { (t1, t2) } else { (t2, t1) };
-            near = near.max(a);
-            far = far.min(b);
-            if near > far {
-                return false;
-            }
-        }
-        true
-    }
-
-    pub fn ray(&self, origin: Point3, direction: Vector3, skip: usize, least: f64) -> f64 {
-        let mut best = f64::INFINITY;
-        if self.nodes.is_empty() {
-            return best;
-        }
-        let inverse = Vector3::new(1.0 / direction.x, 1.0 / direction.y, 1.0 / direction.z);
-        let mut stack = vec![0];
-        while let Some(n) = stack.pop() {
-            let node = &self.nodes[n];
-            if !Self::slab(node, origin, inverse, best) {
-                continue;
-            }
-            match node.children {
-                Some((l, r)) => {
-                    stack.push(l);
-                    stack.push(r);
-                }
-                None => {
-                    for &i in &self.order[node.start..node.start + node.count] {
-                        if i == skip {
-                            continue;
-                        }
-                        if let Some(t) = hit(self.triangles[i], origin, direction)
-                            && t > least
-                            && t < best
-                        {
-                            best = t;
-                        }
-                    }
-                }
-            }
-        }
-        best
-    }
-}
-
-fn hit([a, b, c]: [Point3; 3], origin: Point3, direction: Vector3) -> Option<f64> {
-    let (e1, e2) = (b - a, c - a);
-    let p = direction.cross(e2);
-    let det = e1.dot(p);
-    if det.abs() < 1.0e-18 {
-        return None;
-    }
-    let inv = 1.0 / det;
-    let s = origin - a;
-    let u = s.dot(p) * inv;
-    if !(-1.0e-9..=1.0 + 1.0e-9).contains(&u) {
-        return None;
-    }
-    let q = s.cross(e1);
-    let v = direction.dot(q) * inv;
-    if v < -1.0e-9 || u + v > 1.0 + 1.0e-9 {
-        return None;
-    }
-    Some(e2.dot(q) * inv)
-}
 
 pub struct SizeField {
     pub top: f64,
@@ -176,13 +30,14 @@ impl SizeField {
         curves: &[(Vec<Point3>, [Point3; 2])],
         bends: Vec<(Point3, f64)>,
     ) -> SizeField {
-        let bvh = Bvh::new(triangles);
+        let arr = |p: Point3| [p.x, p.y, p.z];
+        let bvh = Bvh::new(triangles.iter().map(|t| t.map(arr)).collect());
         let samples: Vec<(Point3, f64)> = {
             use rayon::prelude::*;
-            (0..bvh.triangles.len())
+            (0..triangles.len())
                 .into_par_iter()
                 .filter_map(|i| {
-                    let [a, b, c] = bvh.triangles[i];
+                    let [a, b, c] = triangles[i];
                     let n = (b - a).cross(c - a);
                     let length = n.magnitude();
                     if length < 1.0e-18 {
@@ -192,8 +47,8 @@ impl SizeField {
                     let centre = Point3::from_vec((a.to_vec() + b.to_vec() + c.to_vec()) / 3.0);
                     let tiny = top * 1.0e-6;
                     let gap = bvh
-                        .ray(centre, n, i, tiny)
-                        .min(bvh.ray(centre, -n, i, tiny));
+                        .ray(arr(centre), arr(Point3::from_vec(n)), i, tiny)
+                        .min(bvh.ray(arr(centre), arr(Point3::from_vec(-n)), i, tiny));
                     let size = (gap * 0.9).max(least);
                     (size < top).then_some((centre, size))
                 })
