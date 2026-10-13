@@ -306,6 +306,17 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
     }
 }
 
+pub fn render_lines(spec: &Spec, result: &Path, output: &str) -> Result<()> {
+    if spec.kind != Some(Kind::Flow) {
+        bail!("`--lines` draws the streamlines of a flow simulation");
+    }
+    let outcome = Outcome::read(result)
+        .ok()
+        .filter(|o| o.kind == "flow")
+        .ok_or_else(|| anyhow::anyhow!("there is no result to draw yet; run `gcad sim` first"))?;
+    statics::draw_lines(&wind::field_view(spec, &outcome)?, output)
+}
+
 pub struct Picture {
     pub kind: Kind,
     pub outcome: Option<Outcome>,

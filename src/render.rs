@@ -184,7 +184,7 @@ pub fn draw_triangles(
     edges: &[Vec<Point3>],
     bounds: BoundingBox<Point3>,
 ) -> RgbImage {
-    draw_lit(positions, triangles, edges, bounds, 0.35)
+    draw_lit(positions, triangles, edges, &[], bounds, 0.35)
 }
 
 pub fn draw_field(
@@ -193,13 +193,26 @@ pub fn draw_field(
     edges: &[Vec<Point3>],
     bounds: BoundingBox<Point3>,
 ) -> RgbImage {
-    draw_lit(positions, triangles, edges, bounds, 0.8)
+    draw_lit(positions, triangles, edges, &[], bounds, 0.8)
+}
+
+pub type Line = (Vec<Point3>, Vec<Rgb<u8>>);
+
+pub fn draw_field_lines(
+    positions: &[Point3],
+    triangles: &[([usize; 3], [[f64; 3]; 3])],
+    edges: &[Vec<Point3>],
+    lines: &[Line],
+    bounds: BoundingBox<Point3>,
+) -> RgbImage {
+    draw_lit(positions, triangles, edges, lines, bounds, 0.8)
 }
 
 fn draw_lit(
     positions: &[Point3],
     triangles: &[([usize; 3], [[f64; 3]; 3])],
     edges: &[Vec<Point3>],
+    lines: &[Line],
     bounds: BoundingBox<Point3>,
     floor: f64,
 ) -> RgbImage {
@@ -211,10 +224,19 @@ fn draw_lit(
             (v.dot(view.right), v.dot(view.up), v.dot(view.toward_eye))
         };
         let projected: Vec<(f64, f64, f64)> = positions.iter().map(|&p| project(p)).collect();
-        let extent = projected
+        let parts = projected
             .iter()
             .map(|p| p.0.abs().max(p.1.abs()))
             .fold(1.0e-9, f64::max);
+        let extent = lines
+            .iter()
+            .flat_map(|(points, _)| points)
+            .map(|&p| {
+                let q = project(p);
+                q.0.abs().max(q.1.abs())
+            })
+            .fold(parts, f64::max)
+            .min(2.5 * parts);
         let scale = (CELL as f64 * 0.42) / extent;
         let depth_range = projected.iter().map(|p| p.2.abs()).fold(1.0e-9, f64::max);
         let to_pixel = |(x, y, z): (f64, f64, f64)| {
@@ -253,6 +275,16 @@ fn draw_lit(
                     bias,
                 );
             });
+        }
+        for (points, colours) in lines {
+            for (pair, colour) in points.windows(2).zip(colours) {
+                canvas.line(
+                    to_pixel(project(pair[0])),
+                    to_pixel(project(pair[1])),
+                    *colour,
+                    bias,
+                );
+            }
         }
         let triad = extent * 0.15;
         let origin = (40.0, CELL as f64 - 40.0);

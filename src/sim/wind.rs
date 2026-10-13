@@ -572,7 +572,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         let all = if setup.wind.speed > 0.0 {
             stream_seeds(&setup)
         } else {
-            Vec::new()
+            fan_seeds(&setup)
         };
         let traced = streamlines(&setup, &lattice.mean_field()?, velocity_scale, &all);
         all.into_iter()
@@ -1274,6 +1274,32 @@ fn stream_seeds(setup: &Setup) -> Vec<[f64; 3]> {
     seeds
 }
 
+fn fan_seeds(setup: &Setup) -> Vec<[f64; 3]> {
+    let mut seeds = Vec::new();
+    for spin in &setup.spins {
+        let axis = spin.axis;
+        let side = axis.cross(if axis.x.abs() < 0.9 {
+            Vector3::unit_x()
+        } else {
+            Vector3::unit_y()
+        });
+        let side = side.normalize();
+        let up = axis.cross(side);
+        for ring in 1..=8 {
+            let radius = spin.reach * (0.15 + 0.95 * ring as f64 / 8.0);
+            let count = 12 + 6 * ring;
+            for k in 0..count {
+                let angle =
+                    std::f64::consts::TAU * (k as f64 + 0.5 * (ring % 2) as f64) / count as f64;
+                let p = spin.middle + (side * angle.cos() + up * angle.sin()) * radius;
+                let q = (setup.to_lattice(p) - setup.grid.origin) / setup.grid.spacing;
+                seeds.push([q.x, q.y, q.z]);
+            }
+        }
+    }
+    seeds
+}
+
 fn sample(field: &crate::flow::lattice::MeanField, p: [f64; 3]) -> Option<([f64; 3], Option<f64>)> {
     let stride = field.stride as f64;
     let [cx, cy, _] = field.size;
@@ -1347,43 +1373,72 @@ fn streamlines(
         let w = Point3::origin() + setup.to_world([local.x, local.y, local.z]);
         [w.x, w.y, w.z].map(|v| (v * 10.0).round() / 10.0)
     };
-    seeds
-        .par_iter()
-        .map(|&start| {
-            let mut p = start;
-            let mut stream = super::Stream::default();
-            let mut along = Vec::new();
-            let mut visited: HashMap<[i64; 3], usize> = HashMap::new();
-            for n in 0..limit {
-                let Some(v) = velocity(p) else { break };
-                let speed = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
-                if n % 2 == 0 {
-                    along.push(p);
-                    stream.points.push(world(p));
-                    stream.speed.push((speed * scale * 100.0).round() / 100.0);
-                    let cell = p.map(|v| (v / stride).floor() as i64);
-                    let here = stream.points.len();
-                    if visited
-                        .insert(cell, here)
-                        .is_some_and(|then| here - then > 3)
-                    {
-                        break;
-                    }
-                }
-                if speed < calm {
-                    break;
-                }
-                let mid = [0, 1, 2].map(|k| p[k] + 0.5 * step * v[k] / speed);
-                let Some(w) = velocity(mid) else { break };
-                let half = (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt();
-                if half < calm {
-                    break;
-                }
-                p = [0, 1, 2].map(|k| p[k] + step * w[k] / half);
-                if p.iter().zip(size).any(|(v, n)| *v < 0.0 || *v > n - 1.0) {
+    let trace = |start: [f64; 3], sign: f64| {
+        let velocity = |p: [f64; 3]| velocity(p).map(|v| v.map(|c| sign * c));
+        let mut p = start;
+        let mut points = Vec::new();
+        let mut speeds = Vec::new();
+        let mut along = Vec::new();
+        let mut visited: HashMap<[i64; 3], usize> = HashMap::new();
+        for n in 0..limit {
+            let Some(v) = velocity(p) else { break };
+            let speed = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+            if n % 2 == 0 {
+                along.push(p);
+                points.push(world(p));
+                speeds.push((speed * scale * 100.0).round() / 100.0);
+                let cell = p.map(|v| (v / stride).floor() as i64);
+                let here = points.len();
+                if visited
+                    .insert(cell, here)
+                    .is_some_and(|then| here - then > 3)
+                {
                     break;
                 }
             }
+            if speed < calm {
+                break;
+            }
+            let mid = [0, 1, 2].map(|k| p[k] + 0.5 * step * v[k] / speed);
+            let Some(w) = velocity(mid) else { break };
+            let half = (w[0] * w[0] + w[1] * w[1] + w[2] * w[2]).sqrt();
+            if half < calm {
+                break;
+            }
+            p = [0, 1, 2].map(|k| p[k] + step * w[k] / half);
+            if p.iter().zip(size).any(|(v, n)| *v < 0.0 || *v > n - 1.0) {
+                break;
+            }
+        }
+        (points, speeds, along)
+    };
+    let both = setup.wind.speed == 0.0;
+    seeds
+        .par_iter()
+        .map(|&start| {
+            let (mut points, mut speeds, mut along) = trace(start, 1.0);
+            if both {
+                let (back, back_speeds, back_along) = trace(start, -1.0);
+                let skip = usize::from(!points.is_empty());
+                points = back.into_iter().skip(skip).rev().chain(points).collect();
+                speeds = back_speeds
+                    .into_iter()
+                    .skip(skip)
+                    .rev()
+                    .chain(speeds)
+                    .collect();
+                along = back_along
+                    .into_iter()
+                    .skip(skip)
+                    .rev()
+                    .chain(along)
+                    .collect();
+            }
+            let stream = super::Stream {
+                points,
+                speed: speeds,
+                ..Default::default()
+            };
             (stream.points.len() > 2).then_some((stream, along))
         })
         .collect()

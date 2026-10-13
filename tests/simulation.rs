@@ -2157,6 +2157,11 @@ fn a_spinning_fan_pushes_air() {
         thrust > 0.0 && flow < 0.0,
         "the air goes down and pushes the fan up: thrust {thrust}, flow {flow}"
     );
+    assert!(
+        ahead.streams.len() > 100,
+        "{} streamlines through the fan",
+        ahead.streams.len()
+    );
     for slice in &ahead.slices {
         let (width, height) = (slice.width, slice.height());
         let fastest = slice.speed.iter().copied().fold(0.0, f64::max);

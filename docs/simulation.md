@@ -160,7 +160,11 @@ Readings: `drag` along the wind, `side` across it and level, `lift` across it an
 sampled about a cell apart on a surface tessellated to a fifth of a cell. `--dry-run`
 prints the grid, the GPU memory it needs and the number of steps. `gcad render wind.gsim flow.png
 --flow` draws the air speed on an upright and a level slice along the wind through the
-centre of the frontal area, the mean with streamlines and one moment of the wake. The viewer
+centre of the frontal area, the mean with streamlines and one moment of the wake, and
+`--lines` draws the parts in grey with the mean streamlines round them in four 3D views,
+coloured by speed (at most 300 of them). A spinning part with no wind seeds its lines on
+rings across the disc its blades sweep and traces them both ways, so they show the air drawn
+in as well as the jet. The viewer
 draws streamlines of the mean flow in 3D, coloured by speed: the velocity is averaged over the
 whole box on the GPU (on cells up to a few lattice cells across, at most 16 million of them),
 lines are seeded on a grid a little upstream across the frontal area and traced through it,

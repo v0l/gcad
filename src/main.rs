@@ -77,6 +77,9 @@ enum Command {
         /// For a flow simulation, draw the air speed on slices through the parts
         #[arg(long)]
         flow: bool,
+        /// For a flow simulation, draw the mean streamlines round the parts in 3D, coloured by speed
+        #[arg(long)]
+        lines: bool,
     },
     /// Print the format reference: every operation, selector and assembly line
     Docs,
@@ -295,6 +298,7 @@ fn main() -> Result<()> {
             output,
             explode,
             flow,
+            lines,
         } => {
             if gcad::sim::is_sim(std::path::Path::new(&file)) {
                 let run = load(&file, None, &vars)?;
@@ -310,6 +314,9 @@ fn main() -> Result<()> {
                     return gcad::plot::flow(&outcome.slices, &output);
                 }
                 let result = gcad::sim::result_path(std::path::Path::new(&file));
+                if lines {
+                    return gcad::sim::render_lines(spec, &result, &output);
+                }
                 return gcad::sim::render(spec, &result, &output);
             }
             let run = load(&file, None, &vars)?;

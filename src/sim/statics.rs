@@ -1043,6 +1043,80 @@ pub fn draw(view: &FieldView, path: &str) -> Result<()> {
     canvas.save(path)
 }
 
+pub fn draw_lines(view: &FieldView, path: &str) -> Result<()> {
+    if view.streams.is_empty() {
+        bail!("the result has no streamlines to draw; run `gcad sim` again");
+    }
+    let mut speeds: Vec<f64> = view
+        .streams
+        .iter()
+        .flat_map(|s| s.speed.iter().copied())
+        .collect();
+    speeds.sort_by(f64::total_cmp);
+    let top = speeds
+        .get(speeds.len().saturating_sub(1) * 99 / 100)
+        .copied()
+        .unwrap_or(1.0)
+        .max(1.0e-9);
+    let grey = [0.78, 0.78, 0.8];
+    let triangles: Vec<([usize; 3], [[f64; 3]; 3])> = view
+        .triangles
+        .iter()
+        .map(|t| (t.map(|v| v as usize), [grey; 3]))
+        .collect();
+    let edges: Vec<Vec<Point3>> = view
+        .edges
+        .iter()
+        .map(|e| e.iter().map(|&v| view.positions[v as usize]).collect())
+        .collect();
+    let every = view.streams.len().div_ceil(300).max(1);
+    let lines: Vec<crate::render::Line> = view
+        .streams
+        .iter()
+        .step_by(every)
+        .map(|s| {
+            (
+                s.points
+                    .iter()
+                    .map(|p| Point3::new(p[0], p[1], p[2]))
+                    .collect(),
+                s.speed
+                    .iter()
+                    .map(|v| {
+                        let c = crate::plot::heat((v / top).clamp(0.0, 1.0));
+                        image::Rgb(c.map(|x| (x * 255.0) as u8))
+                    })
+                    .collect(),
+            )
+        })
+        .collect();
+    let shown: BoundingBox<Point3> = view.positions.iter().copied().collect();
+    let picture =
+        crate::render::draw_field_lines(&view.positions, &triangles, &edges, &lines, shown);
+    let mut canvas = crate::plot::Canvas::new(picture.width() + 260, picture.height() + 60);
+    canvas.paste(&picture, (0, 60));
+    crate::plot::colour_bar(
+        &mut canvas,
+        (
+            picture.width() as f64 + 40.0,
+            160.0,
+            picture.height() as f64 - 60.0,
+        ),
+        0.0,
+        top,
+        "m/s",
+    );
+    crate::plot::title(
+        &mut canvas,
+        (picture.width() as f64 / 2.0, 38.0),
+        &format!(
+            "air speed along {} mean streamlines",
+            view.streams.len().div_ceil(every)
+        ),
+    );
+    canvas.save(path)
+}
+
 pub fn buckle(spec: &Spec) -> Result<Outcome> {
     let prepared = prepare(spec)?;
     prepared.held(
