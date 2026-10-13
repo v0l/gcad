@@ -1,7 +1,6 @@
 use super::gpu::{Gpu, Reading};
 use super::rotor::{COVERED, Rotor, SUBCELLS};
 use anyhow::{Result, bail};
-use wgpu::util::DeviceExt;
 
 pub const Q: usize = 19;
 
@@ -202,6 +201,7 @@ pub struct Settings {
     pub stream: [f64; 3],
     pub bulk: f64,
     pub sponge_axis: usize,
+    pub open_air: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -223,6 +223,7 @@ impl Settings {
             stream: [0.0; 3],
             bulk: 0.0,
             sponge_axis: 0,
+            open_air: false,
         }
     }
 }
@@ -427,7 +428,8 @@ fn shader(heat: bool) -> String {
     s += "  let shed = select(0.0, (omega - 1.0 / (tau + 4.5 * p.bulk)) * (pxx + pyy + pzz) / 3.0, p.regular > 0.5);\n";
     s += "  let along = select(select(f32(x), f32(y), p.axis == 1u), f32(z), p.axis == 2u);\n";
     s += "  let span = select(select(f32(p.nx), f32(p.ny), p.axis == 1u), f32(p.nz), p.axis == 2u);\n";
-    s += "  let edge = span - 1.0 - along;\n";
+    s += "  var edge = span - 1.0 - along;\n";
+    s += "  if (p.axis == 3u) { edge = f32(min(min(min(x, p.nx - 1u - x), min(y, p.ny - 1u - y)), min(z, p.nz - 1u - z))); }\n";
     s += "  var damp = 0.0;\n";
     s += "  if (p.sponge > 0.0 && edge < p.sponge) { let r = 1.0 - edge / p.sponge; damp = 0.5 * r * r; }\n";
     s += "  let su = p.sx * p.sx + p.sy * p.sy + p.sz * p.sz;\n";
@@ -572,7 +574,7 @@ fn mean_shader(add: bool) -> String {
 fn edge_shader(heat: bool) -> String {
     let mut s = String::new();
     s += "struct Edge { cell: u32, inner: u32, inlet: u32, pad: u32, vx: f32, vy: f32, vz: f32, pad2: f32 }\n";
-    s += "struct Count { n: u32, scale: f32, p1: u32, p2: u32 }\n";
+    s += "struct Count { n: u32, scale: f32, total: u32, p2: u32 }\n";
     s += "@group(0) @binding(0) var<uniform> count: Count;\n";
     s += "@group(0) @binding(1) var<storage, read> edges: array<Edge>;\n";
     s += &populations(1, "b");
@@ -599,6 +601,7 @@ fn edge_shader(heat: bool) -> String {
     }
     s += "  var rho = 1.0; var ux = nx; var uy = ny; var uz = nz;\n";
     s += "  if (e.inlet == 1u) { rho = rn; ux = count.scale * e.vx; uy = count.scale * e.vy; uz = count.scale * e.vz; }\n";
+    s += "  else if (count.total == 1u && ux * e.vx + uy * e.vy + uz * e.vz < 0.0) { rho = 1.0 - 1.5 * (ux * ux + uy * uy + uz * uz); }\n";
     s += "  let uu = ux * ux + uy * uy + uz * uz;\n";
     for (i, c) in C.iter().enumerate() {
         let w = weight(i);
@@ -928,6 +931,22 @@ fn typed(source: &str, half: bool) -> String {
     out
 }
 
+fn upload(gpu: &Gpu, descriptor: &wgpu::util::BufferInitDescriptor) -> wgpu::Buffer {
+    let size = (descriptor.contents.len() as u64)
+        .next_multiple_of(4)
+        .max(4);
+    let buffer = gpu.device.create_buffer(&wgpu::BufferDescriptor {
+        label: descriptor.label,
+        size,
+        usage: descriptor.usage | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    let mut bytes = descriptor.contents.to_vec();
+    bytes.resize(size as usize, 0);
+    gpu.queue.write_buffer(&buffer, 0, &bytes);
+    buffer
+}
+
 fn dispatch(count: u32) -> (u32, u32) {
     let groups = count.div_ceil(64).max(1);
     if groups <= 65535 {
@@ -1024,16 +1043,22 @@ impl<'a> Lattice<'a> {
         if table.is_empty() {
             table.extend(std::iter::repeat_n(-1.0, Q));
         }
-        let cuts = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("cuts"),
-            contents: bytemuck::cast_slice(&table),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
-        let flags = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("flags"),
-            contents: bytemuck::cast_slice(&words),
-            usage: wgpu::BufferUsages::STORAGE,
-        });
+        let cuts = upload(
+            gpu,
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("cuts"),
+                contents: bytemuck::cast_slice(&table),
+                usage: wgpu::BufferUsages::STORAGE,
+            },
+        );
+        let flags = upload(
+            gpu,
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("flags"),
+                contents: bytemuck::cast_slice(&words),
+                usage: wgpu::BufferUsages::STORAGE,
+            },
+        );
         if domain.heat.is_some() && !domain.rotors.is_empty() {
             bail!("a turning rotor cannot carry heat yet");
         }
@@ -1061,11 +1086,14 @@ impl<'a> Lattice<'a> {
                 0.0,
             ];
         }
-        let spins = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("spins"),
-            contents: bytemuck::cast_slice(&spin_table),
-            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
-        });
+        let spins = upload(
+            gpu,
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("spins"),
+                contents: bytemuck::cast_slice(&spin_table),
+                usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
+            },
+        );
         let params = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("params"),
             size: std::mem::size_of::<Params>() as u64,
@@ -1159,11 +1187,14 @@ impl<'a> Lattice<'a> {
                     gpu.name
                 );
             }
-            let cells = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("heat"),
-                contents: bytemuck::cast_slice(&h.cells),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
+            let cells = upload(
+                gpu,
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("heat"),
+                    contents: bytemuck::cast_slice(&h.cells),
+                    usage: wgpu::BufferUsages::STORAGE,
+                },
+            );
             let make = || -> Vec<wgpu::Buffer> {
                 (0..TQ)
                     .map(|_| {
@@ -1248,28 +1279,48 @@ impl<'a> Lattice<'a> {
                 pad2: 0.0,
             })
             .collect();
-        edges.extend(domain.outflow.iter().map(|&(cell, inner)| Edge {
-            cell: cell as u32,
-            inner: inner as u32,
-            inlet: 0,
-            pad: 0,
-            vx: 0.0,
-            vy: 0.0,
-            vz: 0.0,
-            pad2: 0.0,
+        let coords = |c: usize| {
+            [
+                (c % size[0]) as f32,
+                ((c / size[0]) % size[1]) as f32,
+                (c / (size[0] * size[1])) as f32,
+            ]
+        };
+        edges.extend(domain.outflow.iter().map(|&(cell, inner)| {
+            let (a, b) = (coords(cell), coords(inner));
+            let d = [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
+            let n = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2])
+                .sqrt()
+                .max(1.0e-12);
+            Edge {
+                cell: cell as u32,
+                inner: inner as u32,
+                inlet: 0,
+                pad: 0,
+                vx: d[0] / n,
+                vy: d[1] / n,
+                vz: d[2] / n,
+                pad2: 0.0,
+            }
         }));
         let edges = (!edges.is_empty()).then(|| {
-            let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("edges"),
-                contents: bytemuck::cast_slice(&edges),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
+            let list = upload(
+                gpu,
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("edges"),
+                    contents: bytemuck::cast_slice(&edges),
+                    usage: wgpu::BufferUsages::STORAGE,
+                },
+            );
             let n = edges.len() as u32;
-            let counter = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("edge count"),
-                contents: bytemuck::cast_slice(&[n, 1.0f32.to_bits(), 0, 0]),
-                usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
-            });
+            let counter = upload(
+                gpu,
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("edge count"),
+                    contents: bytemuck::cast_slice(&[n, 1.0f32.to_bits(), 0, 0]),
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                },
+            );
             let edge_layout = layout(&[entry(0, uniform), entry(1, read)]);
             Pass {
                 pipeline: match heat {
@@ -1335,27 +1386,33 @@ impl<'a> Lattice<'a> {
         }
         let forces = (!links.is_empty()).then(|| {
             let n = links.len() as u32;
-            let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("links"),
-                contents: bytemuck::cast_slice(&links),
-                usage: wgpu::BufferUsages::STORAGE,
-            });
+            let list = upload(
+                gpu,
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("links"),
+                    contents: bytemuck::cast_slice(&links),
+                    usage: wgpu::BufferUsages::STORAGE,
+                },
+            );
             let out = device.create_buffer(&wgpu::BufferDescriptor {
                 label: Some("link forces"),
                 size: n as u64 * 16,
                 usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
                 mapped_at_creation: false,
             });
-            let header = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("force params"),
-                contents: bytemuck::cast_slice(&[
-                    size[0] as u32,
-                    size[1] as u32,
-                    size[2] as u32,
-                    n,
-                ]),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+            let header = upload(
+                gpu,
+                &wgpu::util::BufferInitDescriptor {
+                    label: Some("force params"),
+                    contents: bytemuck::cast_slice(&[
+                        size[0] as u32,
+                        size[1] as u32,
+                        size[2] as u32,
+                        n,
+                    ]),
+                    usage: wgpu::BufferUsages::UNIFORM,
+                },
+            );
             let force_layout = layout(&[
                 entry(0, uniform),
                 entry(1, read),
@@ -1429,20 +1486,23 @@ impl<'a> Lattice<'a> {
             usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
             mapped_at_creation: false,
         });
-        let mean_header = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("mean params"),
-            contents: bytemuck::cast_slice(&[
-                size[0] as u32,
-                size[1] as u32,
-                size[2] as u32,
-                stride as u32,
-                coarse[0] as u32,
-                coarse[1] as u32,
-                coarse[2] as u32,
-                coarse_count as u32,
-            ]),
-            usage: wgpu::BufferUsages::UNIFORM,
-        });
+        let mean_header = upload(
+            gpu,
+            &wgpu::util::BufferInitDescriptor {
+                label: Some("mean params"),
+                contents: bytemuck::cast_slice(&[
+                    size[0] as u32,
+                    size[1] as u32,
+                    size[2] as u32,
+                    stride as u32,
+                    coarse[0] as u32,
+                    coarse[1] as u32,
+                    coarse[2] as u32,
+                    coarse_count as u32,
+                ]),
+                usage: wgpu::BufferUsages::UNIFORM,
+            },
+        );
         let mean = (
             Pass {
                 pipeline: pipeline(mean_shader(true), "mean", &[&plane_layout, &side_layout]),
@@ -1475,26 +1535,32 @@ impl<'a> Lattice<'a> {
             (Some((_, copies)), Some(groups)) => {
                 let theta_layout = layout(&[entry(0, uniform), entry(1, read), entry(2, write)]);
                 let theta_pass = |name: &str, add: bool, n: usize, cells: &[u32]| {
-                    let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("theta cells"),
-                        contents: bytemuck::cast_slice(if cells.is_empty() {
-                            &[0u32]
-                        } else {
-                            cells
-                        }),
-                        usage: wgpu::BufferUsages::STORAGE,
-                    });
+                    let list = upload(
+                        gpu,
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("theta cells"),
+                            contents: bytemuck::cast_slice(if cells.is_empty() {
+                                &[0u32]
+                            } else {
+                                cells
+                            }),
+                            usage: wgpu::BufferUsages::STORAGE,
+                        },
+                    );
                     let out = device.create_buffer(&wgpu::BufferDescriptor {
                         label: Some(name),
                         size: n.max(1) as u64 * 4,
                         usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_SRC,
                         mapped_at_creation: false,
                     });
-                    let header = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("theta count"),
-                        contents: bytemuck::cast_slice(&[n as u32, 0, 0, 0]),
-                        usage: wgpu::BufferUsages::UNIFORM,
-                    });
+                    let header = upload(
+                        gpu,
+                        &wgpu::util::BufferInitDescriptor {
+                            label: Some("theta count"),
+                            contents: bytemuck::cast_slice(&[n as u32, 0, 0, 0]),
+                            usage: wgpu::BufferUsages::UNIFORM,
+                        },
+                    );
                     (
                         Pass {
                             pipeline: pipeline(
@@ -1558,16 +1624,26 @@ impl<'a> Lattice<'a> {
                     mapped_at_creation: false,
                 });
                 let cells: Vec<u32> = rotor.cells.iter().map(|&c| c as u32).collect();
-                let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("rotor cells"),
-                    contents: bytemuck::cast_slice(if cells.is_empty() { &[0u32] } else { &cells }),
-                    usage: wgpu::BufferUsages::STORAGE,
-                });
-                let bits = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("rotor bits"),
-                    contents: bytemuck::cast_slice(&rotor.bits()),
-                    usage: wgpu::BufferUsages::STORAGE,
-                });
+                let list = upload(
+                    gpu,
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("rotor cells"),
+                        contents: bytemuck::cast_slice(if cells.is_empty() {
+                            &[0u32]
+                        } else {
+                            &cells
+                        }),
+                        usage: wgpu::BufferUsages::STORAGE,
+                    },
+                );
+                let bits = upload(
+                    gpu,
+                    &wgpu::util::BufferInitDescriptor {
+                        label: Some("rotor bits"),
+                        contents: bytemuck::cast_slice(&rotor.bits()),
+                        usage: wgpu::BufferUsages::STORAGE,
+                    },
+                );
                 let fresh = device.create_buffer(&wgpu::BufferDescriptor {
                     label: Some("rotor fresh"),
                     size: cells.len().max(1) as u64 * 4,
@@ -1666,7 +1742,11 @@ impl<'a> Lattice<'a> {
             sx: settings.stream[0] as f32,
             sy: settings.stream[1] as f32,
             sz: settings.stream[2] as f32,
-            axis: settings.sponge_axis as u32,
+            axis: if settings.open_air {
+                3
+            } else {
+                settings.sponge_axis as u32
+            },
         };
         self.gpu
             .queue
@@ -1676,6 +1756,11 @@ impl<'a> Lattice<'a> {
                 &edges.header,
                 4,
                 bytemuck::bytes_of(&(settings.inflow as f32)),
+            );
+            self.gpu.queue.write_buffer(
+                &edges.header,
+                8,
+                bytemuck::bytes_of(&(settings.open_air as u32)),
             );
         }
         let (gx, gy) = dispatch(count);

@@ -143,7 +143,8 @@ expect drag<400
   the other way), with everything the joint carries: a fan, a propeller or an impeller
   (`examples/flow/fan.gsim`). The blades move through the lattice and push the air
   themselves, so no fan curve is given. With no `wind` the box lies along the joint axis and
-  every face of it is open air, so the fan draws its own flow; with a `duct` the fan meets the
+  every face of it is open air (a sponge layer at each face keeps the far air still), so the fan
+  draws its own flow; with a `duct` the fan meets the
   duct's resistance. The time step comes from the tip speed when that is above the wind.
   Readings: `joint.torque` (N·m it takes to keep it turning, about the axis), `joint.power`
   (W at the shaft), `joint.thrust` (N, the air's push on it along the joint axis) and

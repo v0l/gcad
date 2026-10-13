@@ -642,7 +642,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         if poses > 2 {
             let emf = (1..poses - 1)
                 .map(|i| {
-                    ((solved[i + 1].fluxes[k] - solved[i - 1].fluxes[k]) / (2.0 * radians) * omega).abs()
+                    ((solved[i + 1].fluxes[k] - solved[i - 1].fluxes[k]) / (2.0 * radians) * omega)
+                        .abs()
                 })
                 .fold(0.0, f64::max);
             readings.push(reading(

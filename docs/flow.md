@@ -252,9 +252,16 @@ their own torque, with no fan curve supplied.
   step that used its new cells read the test fan's torque 43% high, which is why the geometry
   moves at the start of a step, not the end.
 - **Time step from the tip.** The tip speed sets the lattice speed when it is above the wind.
-- **Open air.** With no wind every face of the box is a pressure boundary. With the sides
-  periodic, as for wind, the fan pumped the whole box like an infinite row of fans with nothing
-  to stop them, and the flow kept growing until it diverged.
+- **Open air.** With no wind every face of the box is a pressure boundary, behind a sponge
+  half an H deep that pulls the air toward rest, and air coming in through a face pays for its
+  speed out of its pressure (total pressure 0, as OpenFOAM's `totalPressure` inlet). With the
+  sides periodic, as for wind, the fan pumped the whole box like an infinite row of fans with
+  nothing to stop them, and the flow kept growing until it diverged. Plain pressure faces (the
+  reference density, the velocity of the cell inside) made noise of their own: the outer three
+  cells of the box read 5.5 m/s against a 6 m/s jet, the band 8 to 20 cells in climbed from
+  0.07 to 2.2 m/s over the run, and closing the sides with walls stilled the sides but not the
+  ends. With the sponge and the inflow pressure the edge reads 0.00 m/s and 30 to 60 cells in
+  0.09 (0.43 before); the fan's torque and flow did not move, its thrust rose 5%.
 
 Checks:
 
@@ -273,9 +280,9 @@ Checks:
 
 | | torque | thrust | flow through the disc | time |
 |---|---|---|---|---|
-| lattice, 2 mm (6.9 M cells) | 0.854 mN·m | 0.0159 N | 0.0111 m³/s | 34 s |
-| lattice, 1.4 mm (20 M) | 0.904 | 0.0238 | 0.0121 | 173 s |
-| lattice, 1 mm (55 M) | 0.691 | 0.0268 | 0.0119 | 782 s |
+| lattice, 2 mm (6.9 M cells) | 0.865 mN·m | 0.0167 N | 0.0109 m³/s | 34 s |
+| lattice, 1.4 mm (20 M) | 0.950 | 0.0266 | 0.0119 | 173 s |
+| lattice, 1 mm (55 M) | 0.694 | 0.0279 | 0.0119 | 782 s |
 | OpenFOAM MRF, 1.57 M cells | 0.906 | 0.0317 | 0.0116 | 27 min on 40 cores |
 
 The flow agrees within 5% at every size. The thrust climbs toward OpenFOAM's as the cells

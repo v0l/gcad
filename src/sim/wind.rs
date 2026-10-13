@@ -533,11 +533,12 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         air,
     )?;
     let mut settings = Settings {
-        sponge: if inflow > 0.0 {
+        sponge: if inflow > 0.0 || spec.duct.is_none() {
             (0.5 * setup.across / setup.grid.spacing).min(40.0)
         } else {
             0.0
         },
+        open_air: inflow == 0.0 && spec.duct.is_none(),
         stream: [0.0, 0.0, inflow],
         sponge_axis: WIND,
         smagorinsky: 0.14,
@@ -568,7 +569,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         left -= chunk;
     }
     let (seeds, probes): (Vec<[f64; 3]>, Vec<Vec<[f64; 3]>>) = {
-        let all = stream_seeds(&setup);
+        let all = if setup.wind.speed > 0.0 {
+            stream_seeds(&setup)
+        } else {
+            Vec::new()
+        };
         let traced = streamlines(&setup, &lattice.mean_field()?, velocity_scale, &all);
         all.into_iter()
             .zip(traced)
@@ -834,6 +839,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             .collect(),
         streams: moving,
     };
+    let along = if setup.wind.speed > 0.0 {
+        "wind"
+    } else {
+        "axis"
+    };
     let slices = planes
         .into_iter()
         .map(
@@ -862,9 +872,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                 let round = |v: f64| (v * 100.0).round() / 100.0;
                 let mut slice = super::Slice {
                     title: if axis == SIDE {
-                        "upright slice along the wind".into()
+                        format!("upright slice along the {along}")
                     } else {
-                        "level slice along the wind".into()
+                        format!("level slice along the {along}")
                     },
                     width: long,
                     spacing: setup.grid.spacing,

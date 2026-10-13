@@ -552,7 +552,10 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
             parts.push(Part {
                 name: format!(
                     "{}, {}",
-                    slice.title.trim_end_matches(" along the wind"),
+                    slice
+                        .title
+                        .trim_end_matches(" along the wind")
+                        .trim_end_matches(" along the axis"),
                     if moment { "moment" } else { "mean" }
                 ),
                 colour: crate::plot::heat(0.5).map(|v| v as f32),

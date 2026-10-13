@@ -2157,6 +2157,23 @@ fn a_spinning_fan_pushes_air() {
         thrust > 0.0 && flow < 0.0,
         "the air goes down and pushes the fan up: thrust {thrust}, flow {flow}"
     );
+    for slice in &ahead.slices {
+        let (width, height) = (slice.width, slice.height());
+        let fastest = slice.speed.iter().copied().fold(0.0, f64::max);
+        let rim: Vec<f64> = (0..width * height)
+            .filter(|&k| {
+                let (x, y) = (k % width, k / width);
+                x.min(width - 1 - x).min(y).min(height - 1 - y) < 3
+            })
+            .map(|k| slice.speed[k])
+            .collect();
+        let mean = rim.iter().sum::<f64>() / rim.len() as f64;
+        assert!(
+            mean < 0.02 * fastest,
+            "{}: the box edge moves at {mean} m/s against {fastest} in the jet",
+            slice.title
+        );
+    }
     let back = simulated(
         "a_spinning_fan_pushes_air_back",
         &fan_files(),

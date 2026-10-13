@@ -467,6 +467,8 @@ pub fn flow_scale(slices: &[crate::sim::Slice]) -> f64 {
         .copied()
         .filter(|v| *v >= 0.0)
         .collect();
+    let fastest = speeds.iter().copied().fold(0.0, f64::max);
+    speeds.retain(|v| *v > 0.05 * fastest);
     speeds.sort_by(f64::total_cmp);
     speeds
         .get(speeds.len().saturating_sub(1) * 995 / 1000)
@@ -542,7 +544,11 @@ pub fn flow(slices: &[crate::sim::Slice], path: &str) -> Result<()> {
     title(
         &mut canvas,
         (panel as f64 + 30.0, 30.0),
-        "air speed, wind from the left",
+        if slices.iter().all(|s| s.title.ends_with("wind")) {
+            "air speed, wind from the left"
+        } else {
+            "air speed, the turning axis from left to right"
+        },
     );
     canvas.save(path)
 }

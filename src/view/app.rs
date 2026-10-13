@@ -1119,7 +1119,12 @@ impl App {
         let titles: Vec<String> = field
             .slices
             .iter()
-            .map(|s| s.title.trim_end_matches(" along the wind").to_string())
+            .map(|s| {
+                s.title
+                    .trim_end_matches(" along the wind")
+                    .trim_end_matches(" along the axis")
+                    .to_string()
+            })
             .collect();
         let moving = field.movie.is_some();
         let recorded = field.movie.as_ref().is_some_and(|m| !m.streams.is_empty());
