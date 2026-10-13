@@ -525,6 +525,8 @@ fn preconditioned(
     let mut q = vec![0.0; n];
     let mut iterations = 0;
     let mut residual = 1.0;
+    let mut best = 1.0f64;
+    let stage = crate::progress::stage("solving", None, "iterations");
     while iterations < limit {
         a.multiply(&p, &mut q);
         project(projectors, &mut q);
@@ -541,6 +543,11 @@ fn preconditioned(
             .for_each(|(ri, qi)| *ri -= alpha * qi);
         iterations += 1;
         residual = dot(&r, &r).sqrt() / norm;
+        best = best.min(residual);
+        stage.fraction(crate::progress::residual_fraction(1.0, best, tolerance));
+        stage.progress(iterations as f64, || {
+            format!("residual {residual:.1e}, aiming for {tolerance:.0e}")
+        });
         if residual < tolerance {
             break;
         }
@@ -733,10 +740,12 @@ impl<'a> Factored<'a> {
         direct_up_to: usize,
     ) -> Result<Self, String> {
         if a.nodes() * 3 <= direct_up_to {
+            let _stage = crate::progress::stage("factoring the stiffness", None, "");
             let reduced = Reduced::new(projectors);
             let llt = reduced.factor(&reduced.lower(a, None))?;
             Ok(Factored::Direct { reduced, llt })
         } else {
+            let _stage = crate::progress::stage("building the preconditioner", None, "");
             Ok(Factored::Iterative {
                 a,
                 projectors,

@@ -13,8 +13,8 @@ use egui_bench::viewer3d::{
 };
 use monstertruck::modeling::{Matrix4, Solid, SquareMatrix};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Default)]
@@ -260,11 +260,38 @@ pub struct App {
     editing: bool,
     source: String,
     cursor_row: Option<usize>,
-    sim_job: Option<(Receiver<Result<(), String>>, Instant)>,
+    sim_job: Option<SimJob>,
     sim_error: Option<String>,
 }
 
 const WEB: bool = cfg!(target_arch = "wasm32");
+
+type SimJob = (
+    Receiver<Result<(), String>>,
+    Instant,
+    Arc<Mutex<SimProgress>>,
+);
+
+#[derive(Default)]
+struct SimProgress {
+    live: Vec<crate::progress::Report>,
+    done: Vec<crate::progress::Report>,
+}
+
+impl SimProgress {
+    fn take(&mut self, report: &crate::progress::Report) {
+        let name = report.name();
+        self.live.retain(|r| r.name() != name);
+        if report.finished {
+            self.done.push(report.clone());
+            if self.done.len() > 5 {
+                self.done.remove(0);
+            }
+        } else {
+            self.live.push(report.clone());
+        }
+    }
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn changes_content(kind: &notify::EventKind) -> bool {
@@ -500,7 +527,7 @@ impl App {
                 }
             }
         }
-        if let Some((rx, _)) = &self.sim_job {
+        if let Some((rx, ..)) = &self.sim_job {
             match rx.try_recv() {
                 Ok(result) => {
                     self.sim_error = result.err();
@@ -980,13 +1007,35 @@ impl App {
                 }
                 if !WEB {
                     match &self.sim_job {
-                        Some((_, started)) => {
+                        Some((_, started, watched)) => {
                             lamp(
                                 ui,
-                                &format!("running {:.0} s", started.elapsed().as_secs_f32()),
+                                &format!(
+                                    "running {}",
+                                    crate::progress::duration(started.elapsed())
+                                ),
                                 true,
                                 false,
                             );
+                            let watched = watched.lock().unwrap_or_else(|e| e.into_inner());
+                            for report in &watched.done {
+                                note(ui, report.line(), LEGEND);
+                            }
+                            for report in &watched.live {
+                                let fraction = report.fraction();
+                                progress(
+                                    ui,
+                                    &report.name(),
+                                    fraction.unwrap_or(0.0) as f32,
+                                    fraction.map(|_| 1.0),
+                                    "",
+                                );
+                                Line::new()
+                                    .legend(&report.name())
+                                    .note(report.status())
+                                    .size(11.0)
+                                    .wrapped(ui);
+                            }
                         }
                         None => {
                             let label = if sim.outcome.is_some() {
@@ -1045,13 +1094,21 @@ impl App {
         let vars = self.vars.clone();
         let (tx, rx) = channel();
         let ctx = ctx.clone();
+        let watched = Arc::new(Mutex::new(SimProgress::default()));
+        let into = watched.clone();
         crate::host::spawn(move || {
+            let painter = ctx.clone();
+            let listening = crate::progress::listen(move |report| {
+                into.lock().unwrap_or_else(|e| e.into_inner()).take(report);
+                painter.request_repaint();
+            });
             let result = simulate_file(&path, &vars).map_err(|e| format!("{e:#}"));
+            drop(listening);
             let _ = tx.send(result);
             crate::host::wake(&ctx);
         });
         self.sim_error = None;
-        self.sim_job = Some((rx, Instant::now()));
+        self.sim_job = Some((rx, Instant::now(), watched));
     }
 
     fn measure_card(&mut self, ui: &mut Ui) {
@@ -2693,7 +2750,10 @@ fn readout(p: &egui::Painter, rect: Rect, at: Pos2, lines: Vec<String>) {
 }
 
 fn simulate_file(path: &std::path::Path, vars: &[(String, f64)]) -> anyhow::Result<()> {
-    let run = crate::model::run_path(path, vars, None)?;
+    let run = {
+        let _stage = crate::progress::stage("building the model", None, "");
+        crate::model::run_path(path, vars, None)?
+    };
     if let Some((line, Err(error))) = run.steps.last() {
         anyhow::bail!("line {}: {error:#}", line.number);
     }
@@ -2701,6 +2761,7 @@ fn simulate_file(path: &std::path::Path, vars: &[(String, f64)]) -> anyhow::Resu
         anyhow::bail!("{} is not a simulation", path.display());
     };
     let outcome = crate::sim::simulate(spec)?;
+    let _stage = crate::progress::stage("writing the result", None, "");
     crate::sim::save(path, vars, &outcome)?;
     Ok(())
 }
@@ -2979,6 +3040,7 @@ fn exploded(
 #[cfg(test)]
 mod tests {
     use monstertruck::modeling::*;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn run_writes_a_fresh_result() {
@@ -2996,8 +3058,25 @@ mod tests {
         )
         .expect("spec");
         let _ = std::fs::remove_file(crate::sim::result_path(&spec));
+        let _serial = crate::progress::SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let watched = Arc::new(Mutex::new(super::SimProgress::default()));
+        let into = watched.clone();
+        let listening = crate::progress::listen(move |report| {
+            into.lock().unwrap().take(report);
+        });
         super::simulate_file(&spec, &[]).expect("runs");
+        drop(listening);
         assert_eq!(crate::sim::stale(&spec, &[]), None);
+        let watched = watched.lock().unwrap();
+        assert!(watched.live.is_empty());
+        let names: Vec<String> = watched.done.iter().map(|r| r.name()).collect();
+        assert!(
+            names.contains(&"taking readings".to_string())
+                && names.last().map(String::as_str) == Some("writing the result"),
+            "{names:?}"
+        );
     }
 
     #[test]

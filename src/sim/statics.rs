@@ -245,11 +245,20 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
         });
     }
     use rayon::prelude::*;
+    let meshing = crate::progress::stage("meshing", Some(named.len()), "parts");
     let meshed: Vec<(String, Quadratic, f64)> = named
         .par_iter()
         .map(|(name, solid)| {
-            let (tets, used) =
-                super::mesh::mesh_part(solid, size).with_context(|| format!("meshing `{name}`"))?;
+            let (tets, used) = super::mesh::mesh_named(name, solid, size)
+                .with_context(|| format!("meshing `{name}`"))?;
+            meshing.advance(1.0);
+            meshing.detail(|| {
+                format!(
+                    "`{name}` has {} nodes at {} mm",
+                    tets.nodes.len(),
+                    crate::plot::label(used)
+                )
+            });
             Ok((name.clone(), Quadratic::from(&tets), used))
         })
         .collect::<Result<_>>()?;
@@ -424,6 +433,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         expansion: prepared.expansion(spec.warming.as_ref())?,
         wind: wind.as_ref(),
     })?;
+    let _reading = crate::progress::stage("taking readings", None, "");
     let mut readings = Vec::new();
     let mut notes = Vec::new();
     if let (Some(wind), Some(file)) = (&wind, &spec.wind_load) {

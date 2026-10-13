@@ -57,6 +57,9 @@ enum Command {
         /// Build the problem and print its size without solving it
         #[arg(long)]
         dry_run: bool,
+        /// Print no progress while it runs
+        #[arg(long, short)]
+        quiet: bool,
     },
     /// List the materials a file can use: materials.toml files above it, ~/.config/gcad, and the built-in ones; or the materials in one library file
     Materials { file: Option<String> },
@@ -167,12 +170,55 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
     Ok(())
 }
 
+fn progress_on_stderr() -> gcad::progress::Listening {
+    use std::io::{IsTerminal, Write};
+    struct Seen {
+        printed: std::collections::HashMap<String, std::time::Duration>,
+    }
+    let terminal = std::io::stderr().is_terminal();
+    let seen = std::sync::Mutex::new(Seen {
+        printed: Default::default(),
+    });
+    gcad::progress::listen(move |report| {
+        let mut seen = seen.lock().unwrap_or_else(|e| e.into_inner());
+        let mut err = std::io::stderr().lock();
+        let line = report.line();
+        if terminal {
+            let shown: String = line.chars().take(200).collect();
+            if report.finished && report.elapsed < std::time::Duration::from_millis(50) {
+                let _ = write!(err, "\r\x1b[2K");
+            } else if report.finished {
+                let _ = writeln!(err, "\r\x1b[2K{shown}");
+            } else {
+                let _ = write!(err, "\r\x1b[2K{shown}");
+            }
+            let _ = err.flush();
+            return;
+        }
+        let key = format!("{:?}/{}", report.phase, report.stage);
+        let every = std::time::Duration::from_secs(10);
+        let last = seen.printed.get(&key).copied().unwrap_or_default();
+        if report.finished {
+            seen.printed.remove(&key);
+            if report.elapsed >= std::time::Duration::from_millis(50) {
+                let _ = writeln!(err, "{line}");
+            }
+        } else if report.elapsed >= last + every {
+            let _ = writeln!(err, "{line}");
+            seen.printed.insert(key, report.elapsed);
+        }
+    })
+}
+
 fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
     let path = std::path::Path::new(file);
     if !gcad::sim::is_sim(path) {
         bail!("`gcad sim` runs a .gsim file");
     }
-    let run = load(file, None, vars)?;
+    let run = {
+        let _building = gcad::progress::stage("building the model", None, "");
+        load(file, None, vars)?
+    };
     finished(&run)?;
     let spec = run
         .model
@@ -184,7 +230,10 @@ fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
         return Ok(());
     }
     let outcome = gcad::sim::simulate(spec)?;
-    let out = gcad::sim::save(path, vars, &outcome)?;
+    let out = {
+        let _writing = gcad::progress::stage("writing the result", None, "");
+        gcad::sim::save(path, vars, &outcome)?
+    };
     print!("{}", outcome.table());
     println!("wrote {}", out.display());
     let failed = outcome.failed();
@@ -271,7 +320,14 @@ fn main() -> Result<()> {
             }
             export::export_model(&run.model, std::path::Path::new(&file), &output)
         }
-        Command::Sim { file, dry_run } => simulate(&file, &vars, dry_run),
+        Command::Sim {
+            file,
+            dry_run,
+            quiet,
+        } => {
+            let _listening = (!quiet).then(progress_on_stderr);
+            simulate(&file, &vars, dry_run)
+        }
         Command::Materials { file } => {
             println!(
                 "{}",

@@ -186,8 +186,14 @@ fn assemble_with(mesh: &Quadratic, materials: &[(f64, f64)], all: bool) -> Resul
     let mut blocks = Blocks::pattern_with(mesh.nodes.len(), &mesh.tets, &groups);
     let flat = spacing(mesh).powi(3) * 1.0e-6;
     let batch = 4096;
+    let stage = crate::progress::stage(
+        "assembling the stiffness",
+        Some(mesh.tets.len()),
+        "elements",
+    );
     for start in (0..mesh.tets.len()).step_by(batch) {
         let end = (start + batch).min(mesh.tets.len());
+        stage.set(start as f64);
         let matrices: Vec<Option<Vec<Block>>> = (start..end)
             .into_par_iter()
             .map(|t| {
@@ -233,6 +239,7 @@ fn assemble_with(mesh: &Quadratic, materials: &[(f64, f64)], all: bool) -> Resul
             add_tie(&mut blocks, tie, penalty, &IDENTITY);
         }
     }
+    stage.set(mesh.tets.len() as f64);
     Ok(blocks)
 }
 
@@ -750,9 +757,22 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     let mut solved_to;
     let mut bonded_scale = 0.0;
     let mut inner = 0;
+    let settling = if contacts {
+        crate::progress::stage("settling contacts", None, "rounds")
+    } else {
+        crate::progress::Stage::silent()
+    };
     loop {
         rounds += 1;
         inner += 1;
+        settling.progress(rounds as f64, || {
+            let closed = touches.iter().filter(|t| t.closed).count();
+            let slipping = touches.iter().filter(|t| t.closed && t.slipping).count();
+            format!(
+                "{closed} of {} node pairs touching, {slipping} slipping",
+                touches.len()
+            )
+        });
         let mut tangent = stiffness.clone();
         add_contacts(&mut tangent, mesh, penalty, &touches);
         let step = Factored::new(&tangent, &projectors, &coarse, largest)
@@ -848,6 +868,8 @@ pub fn solve(problem: &Problem) -> Result<Answer> {
     if contacts {
         solved_to = norm(&r) / reference;
     }
+    drop(settling);
+    let _recovering = crate::progress::stage("working out stresses and reactions", None, "");
     let touching = touches.iter().filter(|t| t.closed).count();
     let slipping = touches.iter().filter(|t| t.slipping && t.closed).count();
     let mut ku = vec![0.0; u.len()];

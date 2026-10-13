@@ -1,5 +1,5 @@
 use super::Spec;
-use super::tet::{TetMesh, mesh_solid};
+use super::tet::TetMesh;
 use crate::geometry;
 use anyhow::{Context, Result, bail};
 use monstertruck::modeling::*;
@@ -34,11 +34,15 @@ pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
         bail!("there is nothing to mesh");
     }
     use rayon::prelude::*;
+    let meshing = crate::progress::stage("meshing", Some(named.len()), "parts");
     named
         .par_iter()
         .map(|(name, solid)| {
             let clock = crate::host::Instant::now();
-            let (mesh, _) = mesh_part(solid, size).with_context(|| format!("meshing `{name}`"))?;
+            let (mesh, _) =
+                mesh_named(name, solid, size).with_context(|| format!("meshing `{name}`"))?;
+            meshing.advance(1.0);
+            meshing.detail(|| format!("`{name}` has {} nodes", mesh.nodes.len()));
             Ok(Body {
                 name: name.clone(),
                 volume: geometry::volume(solid),
@@ -52,12 +56,37 @@ pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
 const FLATTEST: f64 = 0.5;
 
 pub fn mesh_part(solid: &Solid, size: f64) -> Result<(TetMesh, f64)> {
+    mesh_reporting(solid, size, &crate::progress::Stage::silent())
+}
+
+pub fn mesh_named(name: &str, solid: &Solid, size: f64) -> Result<(TetMesh, f64)> {
+    let stage = crate::progress::stage_after(
+        format!("meshing `{name}`"),
+        None,
+        "",
+        std::time::Duration::from_secs(2),
+    );
+    mesh_reporting(solid, size, &stage)
+}
+
+fn mesh_reporting(
+    solid: &Solid,
+    size: f64,
+    stage: &crate::progress::Stage,
+) -> Result<(TetMesh, f64)> {
     let own = size.min(geometry::bounds(solid).diameter() / 6.0);
     let mut tried = own;
     let mut best: Option<(TetMesh, f64, f64)> = None;
     let mut last = None;
-    for _ in 0..5 {
-        match mesh_solid(solid, tried) {
+    for attempt in 1..=5 {
+        let at = crate::plot::label(tried);
+        let retry = match &best {
+            Some((_, _, worst)) => format!(", try {attempt} (worst angle {worst:.1}°)"),
+            None if attempt > 1 => format!(", try {attempt} (the last failed)"),
+            None => String::new(),
+        };
+        let report = |what: String| stage.detail(|| format!("{at} mm{retry}: {what}"));
+        match super::tet::mesh_solid_reporting(solid, tried, &report) {
             Ok(mesh) => {
                 let worst = mesh.quality().min_dihedral;
                 if worst >= FLATTEST {

@@ -685,8 +685,18 @@ impl Model {
         }
         let depth = self.depth + 1;
         let cache = &self.cache;
+        let building = if self.depth <= 1 {
+            crate::progress::stage("building parts", Some(wanted.len()), "files")
+        } else {
+            crate::progress::Stage::silent()
+        };
         crate::host::each(wanted, |(key, path, vars)| {
             let _ = cache.part(key, || super::load_model(&path, &vars, depth, cache));
+            building.advance(1.0);
+            building.detail(|| {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+                format!("`{}`", name.unwrap_or_default())
+            });
         });
     }
 
@@ -1228,13 +1238,35 @@ impl Model {
         let named = self.named_solids();
         let names: Vec<String> = named.iter().map(|(n, _)| n.clone()).collect();
         let solids: Vec<&Solid> = named.iter().map(|(_, s)| *s).collect();
-        let meshes = geometry::meshed_all(&solids);
+        let meshes = {
+            let _stage = if self.depth <= 1 {
+                crate::progress::stage(
+                    format!("tessellating {} parts for interference", solids.len()),
+                    None,
+                    "",
+                )
+            } else {
+                crate::progress::Stage::silent()
+            };
+            geometry::meshed_all(&solids)
+        };
         let pairs: Vec<(usize, usize)> = (0..names.len())
             .flat_map(|i| (i + 1..names.len()).map(move |j| (i, j)))
             .collect();
         let mut still: std::collections::HashMap<(usize, usize), Option<f64>> = Default::default();
         let mut out = Vec::new();
-        for &value in values {
+        let joint = &self.joints[index].name;
+        let sweeping = if self.depth <= 1 {
+            crate::progress::stage(
+                format!("checking `{joint}` for interference"),
+                Some(values.len()),
+                "poses",
+            )
+        } else {
+            crate::progress::Stage::silent()
+        };
+        for (k, &value) in values.iter().enumerate() {
+            sweeping.progress(k as f64, || format!("at {}", crate::plot::label(value)));
             let pose = posed(&self.joints, &self.settled(index, value)?);
             let deltas: Vec<Matrix4> = names
                 .iter()
@@ -1281,6 +1313,7 @@ impl Model {
                     .collect(),
             ));
         }
+        sweeping.set(values.len() as f64);
         Ok(out)
     }
 

@@ -128,6 +128,8 @@ pub fn smallest(
     let mut values = vec![0.0; x.len()];
     let mut iterations = 0;
     let mut worst = f64::INFINITY;
+    let mut first = None;
+    let stage = crate::progress::stage("finding modes", Some(limit), "iterations");
     for round in 0..=limit {
         let mut basis = x.clone();
         basis.extend(p.clone());
@@ -186,6 +188,11 @@ pub fn smallest(
             .iter()
             .copied()
             .fold(0.0, f64::max);
+        let start = *first.get_or_insert(worst);
+        stage.fraction(crate::progress::residual_fraction(start, worst, tolerance));
+        stage.progress(round as f64, || {
+            format!("{count} wanted, worst residual {worst:.1e}, aiming for {tolerance:.0e}")
+        });
         if worst < tolerance || round == limit {
             break;
         }

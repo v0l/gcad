@@ -406,14 +406,28 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let mut unreachable = 0;
     for sweep in &spec.sweeps {
         let poses = grid(&setup, &sweep.joints, sweep.steps);
+        let joints: Vec<String> = sweep
+            .joints
+            .iter()
+            .map(|&j| format!("`{}`", setup.rig.joints[j].name))
+            .collect();
+        let sweeping = crate::progress::stage(
+            format!("sweeping {}", joints.join(" and ")),
+            Some(poses.len()),
+            "poses",
+        );
         let solved: Vec<Option<(Vec<f64>, Vec<f64>)>> = poses
             .par_iter()
             .map(|targets| {
-                let values = reach(&setup.rig, &base, targets)?;
-                let loads = setup.loads(&values);
-                Some((values, loads))
+                let found = reach(&setup.rig, &base, targets).map(|values| {
+                    let loads = setup.loads(&values);
+                    (values, loads)
+                });
+                sweeping.advance(1.0);
+                found
             })
             .collect();
+        drop(sweeping);
         let first = sweep.joints[0];
         let xs = setup.sweep_values(first, sweep.steps);
         let mut curves: Vec<Vec<f64>> = vec![vec![f64::NAN; xs.len()]; names.len()];

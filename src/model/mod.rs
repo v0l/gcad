@@ -656,7 +656,7 @@ pub(crate) fn load_model(
     }
     let mut start = start_for(path, vars, depth);
     start.cache = cache.clone();
-    let run = run_model(start, &read_lines(path)?);
+    let run = run_model(start, &read_lines(path)?, Some(path));
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{}:{}: {error:#}", path.display(), line.number);
     }
@@ -666,7 +666,7 @@ pub(crate) fn load_model(
 fn standard_model(spec: &str) -> Result<Model> {
     let part = standard::standard(spec)?;
     let lines = crate::parse::parse_program(&part.source)?;
-    let run = run_model(start(None), &lines);
+    let run = run_model(start(None), &lines, None);
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{spec}: line {} `{}`: {error:#}", line.number, line.text);
     }
@@ -706,7 +706,7 @@ pub fn run_path(
         .into_iter()
         .filter(|line| until.is_none_or(|last| line.number <= last))
         .collect();
-    Ok(run_model(start_for(path, vars, 0), &lines))
+    Ok(run_model(start_for(path, vars, 0), &lines, Some(path)))
 }
 
 pub fn snapshots_path(
@@ -768,16 +768,33 @@ pub struct Run {
 }
 
 pub fn run_in(dir: Option<PathBuf>, lines: &[Line]) -> Run {
-    run_model(start(dir), lines)
+    run_model(start(dir), lines, None)
 }
 
-fn run_model(mut model: Model, lines: &[Line]) -> Run {
+fn run_model(mut model: Model, lines: &[Line], path: Option<&std::path::Path>) -> Run {
     if model.assembly {
         model.prefetch(lines);
     }
     let mut steps = Vec::new();
     let mut took = Vec::new();
-    for line in lines {
+    let file = path
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned());
+    let running = if let Some(file) = file.filter(|_| model.depth <= 1) {
+        crate::progress::stage_after(
+            format!("running `{file}`"),
+            Some(lines.len()),
+            "lines",
+            std::time::Duration::from_secs(1),
+        )
+    } else {
+        crate::progress::Stage::silent()
+    };
+    for (index, line) in lines.iter().enumerate() {
+        running.progress(index as f64, || {
+            let text: String = line.text.chars().take(60).collect();
+            format!("line {}: `{text}`", line.number)
+        });
         let before = model.clone();
         let clock = crate::host::Instant::now();
         let result = model.apply(line);
@@ -805,12 +822,12 @@ pub fn run_with(vars: &[(String, f64)], lines: &[Line]) -> Run {
 pub fn run_assembly(dir: Option<PathBuf>, lines: &[Line]) -> Run {
     let mut model = start(dir);
     model.assembly = true;
-    run_model(model, lines)
+    run_model(model, lines, None)
 }
 
 pub fn run_full(dir: Option<PathBuf>, vars: &[(String, f64)], lines: &[Line]) -> Run {
     let mut model = start(dir);
     model.fixed = vars.iter().cloned().collect();
     model.scope = model.fixed.clone();
-    run_model(model, lines)
+    run_model(model, lines, None)
 }

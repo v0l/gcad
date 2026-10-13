@@ -173,6 +173,10 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
         let mut coarse = spec.clone();
         coarse.mesh = Some(size * 1.5);
         coarse.converge = None;
+        let _phase = crate::progress::phase(format!(
+            "convergence check at {} mm",
+            crate::plot::label(size * 1.5)
+        ));
         let rough = solve(&coarse)?;
         outcome
             .notes

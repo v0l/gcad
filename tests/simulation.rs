@@ -359,6 +359,30 @@ fn small_part_keeps_its_own_stress_band() {
 }
 
 #[test]
+fn static_run_reports_its_stages() {
+    let seen: std::sync::Arc<std::sync::Mutex<Vec<gcad::progress::Report>>> = Default::default();
+    let into = seen.clone();
+    let listening = gcad::progress::listen(move |r| into.lock().unwrap().push(r.clone()));
+    simulated(
+        "static_run_reports_its_stages",
+        &[("beam.gcad", BEAM)],
+        "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\nmesh 4",
+    );
+    drop(listening);
+    let seen = seen.lock().unwrap();
+    let finished = |name: &str| seen.iter().any(|r| r.finished && r.stage == name);
+    for stage in ["meshing", "assembling the stiffness", "taking readings"] {
+        assert!(finished(stage), "{stage} in {seen:?}");
+    }
+    assert!(finished("solving") || finished("factoring the stiffness"));
+    let meshing = seen
+        .iter()
+        .rfind(|r| r.stage == "meshing")
+        .expect("meshing");
+    assert_eq!((meshing.done, meshing.total), (1.0, Some(1.0)));
+}
+
+#[test]
 fn field_reads_at_a_point() {
     let path = written(
         "field_reads_at_a_point",

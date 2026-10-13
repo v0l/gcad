@@ -309,7 +309,13 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         ..Domain::new(size)
     };
     let mut unseen = Vec::new();
+    let voxelizing = crate::progress::stage(
+        "placing parts in the grid",
+        Some(setup.parts.len()),
+        "parts",
+    );
     for (k, part) in setup.parts.iter().enumerate() {
+        voxelizing.progress(k as f64, || format!("`{}`", part.name));
         let points: Vec<Point3> = part.points.iter().map(|&p| setup.to_lattice(p)).collect();
         let placed = place_surface(
             &mut domain,
@@ -322,6 +328,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             unseen.push(part.name.clone());
         }
     }
+    voxelizing.set(setup.parts.len() as f64);
+    drop(voxelizing);
     if unseen.len() == setup.parts.len() {
         bail!("every part is thinner than a cell; use a finer `mesh`");
     }
@@ -394,21 +402,61 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         )
     })?;
     let (ramp, settle, average) = steps(&setup, spec);
+    let cells = setup.cells() as f64;
+    let rate = |done: usize, since: crate::host::Instant| {
+        let seconds = since.elapsed().as_secs_f64().max(1.0e-9);
+        format!(
+            "{:.0} million cell updates a second",
+            done as f64 * cells / seconds / 1.0e6
+        )
+    };
+    let settling = crate::progress::stage(
+        format!(
+            "settling the flow in {} x {} x {} cells",
+            size[0], size[1], size[2]
+        ),
+        Some(ramp.div_ceil(20) * 20 + settle),
+        "steps",
+    );
+    let started = crate::host::Instant::now();
+    let mut done = 0;
+    let chunk_of = (setup.pass() / 20).clamp(1, 200);
     for k in 1..=20 {
         settings.inflow = k as f64 / 20.0;
-        lattice.run(&settings, ramp.div_ceil(20))?;
+        let mut left = ramp.div_ceil(20);
+        while left > 0 {
+            let chunk = left.min(chunk_of);
+            lattice.run(&settings, chunk)?;
+            left -= chunk;
+            done += chunk;
+            settling.progress(done as f64, || {
+                format!("ramping the wind up, {}", rate(done, started))
+            });
+        }
     }
     let velocity_scale = setup.wind.speed / speed;
     let early = settle * 2 / 3;
-    lattice.run(&settings, early)?;
-    let every_settle = (setup.pass() / 20).clamp(1, 200);
+    let mut left = early;
+    while left > 0 {
+        let chunk = left.min(chunk_of);
+        lattice.run(&settings, chunk)?;
+        left -= chunk;
+        done += chunk;
+        settling.progress(done as f64, || rate(done, started));
+    }
+    let every_settle = chunk_of;
     let mut left = settle - early;
     while left > 0 {
         let chunk = left.min(every_settle);
         lattice.run(&settings, chunk)?;
         lattice.accumulate();
         left -= chunk;
+        done += chunk;
+        settling.progress(done as f64, || {
+            format!("taking the mean for streamlines, {}", rate(done, started))
+        });
     }
+    drop(settling);
     let (seeds, probes): (Vec<[f64; 3]>, Vec<Vec<[f64; 3]>>) = {
         let all = stream_seeds(&setup);
         let traced = streamlines(&setup, &lattice.mean_field()?, velocity_scale, &all);
@@ -447,6 +495,10 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let mut temperatures: Vec<f64> = Vec::new();
     let mut requested_ticks = 0;
     let mut converged = None;
+    let averaging = crate::progress::stage("averaging the forces", Some(samples * every), "steps");
+    let averaging_from = crate::host::Instant::now();
+    let to_newtons = setup.wind.speed / speed;
+    let to_newtons = air.0 * to_newtons * to_newtons * (setup.grid.spacing * 1.0e-3).powi(2);
     loop {
         let requested = (converged.is_none() && requested_ticks < samples)
             .then(|| -> Result<Ticked> {
@@ -515,6 +567,18 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         }
         let values = lattice.take_links(ready.links)?;
         drags.push(values.iter().map(|v| v[WIND] as f64).sum());
+        averaging.progress((drags.len() * every) as f64, || {
+            let mean = drags.iter().sum::<f64>() / drags.len() as f64 * to_newtons;
+            let known = match standard_error(&drags, batch) {
+                Some(e) => format!(", known to {:.1}% (stops at 1%)", e * 100.0),
+                None => String::new(),
+            };
+            format!(
+                "drag {} N{known}, {}",
+                super::result::short(mean),
+                rate(drags.len() * every, averaging_from)
+            )
+        });
         for (sum, value) in sums.iter_mut().zip(values) {
             for d in 0..4 {
                 sum[d] += value[d] as f64;
@@ -537,6 +601,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             converged = Some(error);
         }
     }
+    drop(averaging);
+    let _finishing = crate::progress::stage("streamlines and the surface pressure", None, "");
     let samples = drags.len();
     let error = converged.or_else(|| standard_error(&drags, batch));
     let mean = lattice.mean_field()?;

@@ -614,9 +614,11 @@ pub fn merge(
         .flat_map(|m| (0..skins.len()).map(move |s| (m, s)))
         .filter(|&(m, s)| m != s && near(m, s, gaps[m].min(gaps[s])))
         .collect();
+    let bonding = crate::progress::stage("bonding parts", Some(pairs.len()), "pairs");
     let found: Vec<(usize, usize, Vec<Tie>)> = pairs
         .par_iter()
         .map(|&(master, slave)| {
+            bonding.advance(1.0);
             let gap = gaps[master].min(gaps[slave]);
             let key = keys(gaps[master]);
             let grid = &grids[master];

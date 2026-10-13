@@ -8,6 +8,7 @@ pub mod model;
 pub mod offset;
 pub mod parse;
 pub mod plot;
+pub mod progress;
 pub mod render;
 pub mod select;
 pub mod sim;

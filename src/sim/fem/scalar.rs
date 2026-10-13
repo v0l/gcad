@@ -97,6 +97,7 @@ pub fn factor(a: &Csr) -> Result<faer::sparse::linalg::solvers::Llt<usize, f64>,
 
 pub fn direct(a: &Csr, b: &[f64]) -> Result<Vec<f64>, String> {
     use faer::linalg::solvers::Solve;
+    let _stage = crate::progress::stage("factoring", None, "");
     let llt = factor(a)?;
     let x = llt.solve(faer::Mat::<f64>::from_fn(b.len(), 1, |i, _| b[i]));
     Ok((0..b.len()).map(|i| x[(i, 0)]).collect())
@@ -249,6 +250,8 @@ pub fn two_level(
     let mut q = vec![0.0; n];
     let mut iterations = 0;
     let mut residual = 1.0;
+    let mut best = 1.0f64;
+    let stage = crate::progress::stage("solving", None, "iterations");
     while iterations < limit {
         a.multiply(&p, &mut q);
         let pq = dot(&p, &q);
@@ -264,6 +267,11 @@ pub fn two_level(
             .for_each(|(ri, qi)| *ri -= alpha * qi);
         iterations += 1;
         residual = dot(&r, &r).sqrt() / norm;
+        best = best.min(residual);
+        stage.fraction(crate::progress::residual_fraction(1.0, best, tolerance));
+        stage.progress(iterations as f64, || {
+            format!("residual {residual:.1e}, aiming for {tolerance:.0e}")
+        });
         if residual < tolerance {
             break;
         }

@@ -103,10 +103,19 @@ const RATIO: f64 = 2.0;
 const SLIVER: f64 = 10.0;
 
 pub fn mesh_solid(solid: &Solid, size: f64) -> Result<TetMesh> {
+    mesh_solid_reporting(solid, size, &|_| {})
+}
+
+pub fn mesh_solid_reporting(solid: &Solid, size: f64, report: &dyn Fn(String)) -> Result<TetMesh> {
     if size <= 0.0 {
         bail!("the mesh size must be above zero");
     }
+    report("meshing the surface".into());
     let mut surface = surface_mesh(solid, size)?;
+    report(format!(
+        "{} surface triangles, filling the volume",
+        surface.triangles.len()
+    ));
     let bounds: BoundingBox<Point3> = surface.points.iter().copied().collect();
     let (low, high) = (bounds.min(), bounds.max());
     let span = (high - low).magnitude().max(1.0e-9);
@@ -130,6 +139,11 @@ pub fn mesh_solid(solid: &Solid, size: f64) -> Result<TetMesh> {
         if missing.is_empty() {
             break;
         }
+        report(format!(
+            "recovering the surface, round {}, {} triangles missing",
+            round + 1,
+            missing.len()
+        ));
         if round > 40 || surface.points.len() > start * 6 + 1000 {
             bail!(
                 "the mesher could not recover {} surface triangle(s); try a smaller `mesh` size",
@@ -189,7 +203,12 @@ pub fn mesh_solid(solid: &Solid, size: f64) -> Result<TetMesh> {
         .map(|t| t as u32)
         .collect();
     let mut rejected: HashSet<[u32; 4]> = HashSet::default();
+    let mut reported = dt.points.len();
     while let Some(t) = queue.pop() {
+        if dt.points.len() >= reported + 20_000 {
+            reported = dt.points.len();
+            report(format!("refining, {reported} points"));
+        }
         if !bad(&dt, t as usize) || rejected.contains(&dt.tets[t as usize]) {
             continue;
         }
@@ -230,6 +249,7 @@ pub fn mesh_solid(solid: &Solid, size: f64) -> Result<TetMesh> {
         seed ^= seed << 17;
         (seed >> 11) as f64 / (1u64 << 53) as f64
     };
+    report(format!("{} points, removing slivers", dt.points.len()));
     let budget = dt.points.len() + dt.points.len() / 4;
     for _ in 0..6 {
         let slivers: Vec<u32> = dt

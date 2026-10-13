@@ -7,6 +7,10 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Progress for every simulation: `gcad sim` reports each stage on stderr (model and part files,
+  meshing, bonding, assembly, solver iterations and residual, eigen solves, flow steps with the
+  running drag, torque poses, writing) with counts and time left, and `-q` turns it off. The
+  viewer's simulation card shows the stages as bars while it runs.
 - Viewer simulation card with readings, `expect` checks, notes, sweep traces and a run button.
 - Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
   or for flow the parts in their duct or air box, the wind and the heated faces.
