@@ -73,7 +73,7 @@ fn job_of(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Job> {
         .collect();
     materials.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(Job {
-        gcad: env!("CARGO_PKG_VERSION").to_string(),
+        gcad: env!("GCAD_BUILD_VERSION").to_string(),
         spec,
         bodies: model
             .named_solids()
@@ -94,11 +94,11 @@ pub fn pack(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Vec<u8>> {
 }
 
 fn spec_of(job: Job) -> Result<Spec> {
-    if job.gcad != env!("CARGO_PKG_VERSION") {
+    if job.gcad != env!("GCAD_BUILD_VERSION") {
         bail!(
             "the job was packed by gcad {} and this is gcad {}",
             job.gcad,
-            env!("CARGO_PKG_VERSION")
+            env!("GCAD_BUILD_VERSION")
         );
     }
     let mut spec = job.spec;
@@ -125,7 +125,7 @@ pub fn unpack(bytes: &[u8]) -> Result<Unpacked> {
     let job: Job = ciborium::from_reader(flate2::read::GzDecoder::new(bytes)).map_err(|e| {
         anyhow!(
             "gcad {} cannot read the job ({e}); it needs the version that packed it",
-            env!("CARGO_PKG_VERSION")
+            env!("GCAD_BUILD_VERSION")
         )
     })?;
     let stamp = job.stamp.clone();

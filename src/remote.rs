@@ -300,7 +300,7 @@ pub fn simulate(
             file,
             Submit {
                 spec: name,
-                version: env!("CARGO_PKG_VERSION").to_string(),
+                version: env!("GCAD_BUILD_VERSION").to_string(),
                 hash,
                 max_seconds: limits.minutes * 60,
                 max_price: None,
@@ -360,7 +360,7 @@ fn submit(
 }
 
 fn ready(client: &Client, limits: &Limits) -> Result<u64> {
-    let version = env!("CARGO_PKG_VERSION");
+    let version = env!("GCAD_BUILD_VERSION");
     let status = status_at(&client.server)?;
     let able: Vec<&proto::Runner> = status
         .runners

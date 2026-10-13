@@ -6,7 +6,7 @@ use gcad::{export, render, select};
 #[derive(Parser)]
 #[command(
     about = "Parametric CAD written like G-code: one operation per line",
-    version,
+    version = env!("GCAD_BUILD_VERSION"),
     args_conflicts_with_subcommands = true
 )]
 struct Cli {

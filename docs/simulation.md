@@ -78,9 +78,10 @@ files. Project files never leave the machine. A `wind flow.gsim` load goes as th
 surface pressure samples, which needs a fresh local flow result, and a `warm heat.gsim`
 goes as that thermal simulation's own packed job, solved on the worker first. `torque` runs
 in seconds and stays local. Jobs are CBOR, gzipped, and only a worker on the same gcad
-version takes them (`gcad sim-job JOB OUT`, hidden, is what it runs).
+build takes them (`gcad sim-job JOB OUT`, hidden, is what it runs).
 
-A run goes to the first free runner on the same gcad version asking at most `--max-price`
+A run goes to the first free runner on the same gcad build (`gcad --version`: the version and
+the commit it was built from) asking at most `--max-price`
 (by default the dearest runner, so any of them). It holds `--max-minutes` (60 by default) at
 that price from the balance while it runs, charges the seconds it used at the price of the
 runner that took it, and gives back the rest. The runner stops it at the limit.
