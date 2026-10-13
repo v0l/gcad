@@ -66,6 +66,7 @@ gcad remote account                 # its id, balance and price; top up at the s
 gcad sim wind.gsim --remote         # build here, solve there, write wind.result.json here
 gcad sim wind.gsim --remote --max-minutes 20
 gcad sim wind.gsim --remote --max-price 2.50   # only runners asking at most €2.50 an hour
+gcad sim wind.gsim --remote --max-price 0      # only free runners; no balance needed
 gcad remote runners                 # the runners, their hardware and price
 gcad remote jobs                    # recent runs, their time and cost
 gcad remote cancel ID               # stop a run; the time it used is charged
@@ -81,8 +82,8 @@ in seconds and stays local. Jobs are CBOR, gzipped, and only a worker on the sam
 build takes them (`gcad sim-job JOB OUT`, hidden, is what it runs).
 
 A run goes to the first free runner on the same gcad build (`gcad --version`: the version and
-the commit it was built from) asking at most `--max-price`
-(by default the dearest runner, so any of them). It holds `--max-minutes` (60 by default) at
+the last commit that changed the code) asking at most `--max-price` (by default the dearest
+runner online, so any of them). A runner can ask nothing; a run capped at 0 needs no balance. It holds `--max-minutes` (60 by default) at
 that price from the balance while it runs, charges the seconds it used at the price of the
 runner that took it, and gives back the rest. The runner stops it at the limit.
 Rerunning the same command with unchanged files picks up the queued or running job instead

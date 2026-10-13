@@ -8,7 +8,11 @@ fn git(args: &[&str]) -> Option<String> {
 
 fn build_version() {
     let version = std::env::var("CARGO_PKG_VERSION").unwrap_or_default();
-    let full = match git(&["rev-parse", "--short=12", "HEAD"]) {
+    let code = [
+        "log", "-1", "--format=%h", "--abbrev=12", "--", "src", "sims-proto", "Cargo.toml",
+        "Cargo.lock", "build.rs",
+    ];
+    let full = match git(&code) {
         Some(commit) => format!("{version}+{commit}"),
         None => version,
     };
