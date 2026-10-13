@@ -876,8 +876,82 @@ pub(crate) fn step_model(path: &std::path::Path) -> Result<Model> {
     Ok(model)
 }
 
+fn step_curve(curve: &monstertruck::step::load::step_geometry::Curve3D) -> Option<Curve> {
+    if let Ok(curve) = Curve::try_from(curve) {
+        return Some(curve);
+    }
+    const SAMPLES: usize = 33;
+    let (start, end) = curve.try_range_tuple()?;
+    let points: Vec<Point3> = (0..SAMPLES)
+        .map(|i| curve.subs(start + (end - start) * i as f64 / (SAMPLES - 1) as f64))
+        .collect();
+    let params = super::skin::uniform(SAMPLES);
+    let knots = super::skin::knots(&params, 3);
+    let control = super::skin::interpolate(&points, &params, &knots).ok()?;
+    Some(Curve::BsplineCurve(BsplineCurve::new(knots, control)))
+}
+
+fn step_surface(surface: &monstertruck::step::load::step_geometry::Surface) -> Option<Surface> {
+    use monstertruck::step::load::step_geometry::{
+        Conic3D, Curve3D, Surface as StepSurface, SweepSurface,
+    };
+    if let Ok(surface) = Surface::try_from(surface) {
+        return Some(surface);
+    }
+    let StepSurface::SweepSurface(SweepSurface::RevolutionSurface(revolved)) = surface else {
+        return None;
+    };
+    let Curve3D::Conic(Conic3D::Ellipse(ellipse)) = revolved.entity().entity_curve() else {
+        return None;
+    };
+    let place = *revolved.transform() * *ellipse.transform();
+    let centre = Point3::from_homogeneous(place * Vector4::unit_w());
+    let (x, y) = (
+        (place * Vector4::unit_x()).truncate(),
+        (place * Vector4::unit_y()).truncate(),
+    );
+    let origin = revolved
+        .transform()
+        .transform_point(revolved.entity().origin());
+    let axis = revolved
+        .transform()
+        .transform_vector(revolved.entity().axis())
+        .normalize();
+    let small = x.magnitude();
+    let normal = x.cross(y).normalize();
+    let hub = origin + axis * (centre - origin).dot(axis);
+    let large = (centre - hub).magnitude();
+    let tiny = 1.0e-9 * (large + small);
+    if (y.magnitude() - small).abs() > tiny
+        || x.dot(y).abs() > tiny * small
+        || normal.dot(axis).abs() > 1.0e-9
+        || normal.dot(centre - hub).abs() > tiny
+        || large <= small
+    {
+        return None;
+    }
+    let across = (centre - hub) / large;
+    let frame = Matrix4::from_cols(
+        across.extend(0.0),
+        axis.cross(across).extend(0.0),
+        axis.extend(0.0),
+        hub.to_homogeneous(),
+    );
+    let mut torus =
+        monstertruck::geometry::prelude::Processor::new(Torus::new(Point3::origin(), large, small));
+    torus.transform_by(frame);
+    let (u, v) = revolved.try_range_tuple();
+    let ((u0, u1), (v0, v1)) = (u?, v?);
+    let (u, v) = ((u0 + u1) / 2.0, (v0 + v1) / 2.0);
+    let point = revolved.subs(u, v);
+    let (tu, tv) = torus.search_nearest_parameter(point, None, 100)?;
+    if revolved.normal(u, v).dot(torus.normal(tu, tv)) < 0.0 {
+        torus.invert();
+    }
+    Some(Surface::ToroidalSurface(torus))
+}
+
 fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSolid>> {
-    use monstertruck::step::load::step_geometry::{Curve3D, Surface as StepSurface};
     let text = crate::host::read(path)?;
     let table = StepTable::from_step_bytes(&text).map_err(|error| anyhow!("{error}"))?;
     let raw = super::step_raw::Raw::parse(&String::from_utf8_lossy(&text));
@@ -948,11 +1022,7 @@ fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSoli
                 )
             })?
             .erase_trims()
-            .try_mapped(
-                |point| Some(*point),
-                |curve: &Curve3D| Curve::try_from(curve).ok(),
-                |surface: &StepSurface| Surface::try_from(surface).ok(),
-            )
+            .try_mapped(|point| Some(*point), step_curve, step_surface)
             .ok_or_else(|| anyhow!("a curve or surface type gcad has no kernel form for"))?;
         let closed = solid.boundaries().iter().all(|shell| {
             shell.shell_condition() == monstertruck::topology::shell::ShellCondition::Closed

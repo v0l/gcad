@@ -32,6 +32,9 @@ All notable changes to gcad are listed here. The format follows
 ### Fixed
 - STEP imports read each solid in its own length unit; inch vendor models came in 25.4 times too
   small.
+- STEP surfaces of revolution with a circle profile, like the groove on KiCad electrolytic
+  capacitors, import as tori, and curves on surfaces the kernel cannot convert import as cubic
+  fits, instead of the solid becoming a box.
 - STEP assemblies that monstertruck cannot walk, like KiCad and agentee board exports, come in with
   every part in place instead of all at the origin. Faceted breps and surface models are built
   from their polygons, and a solid that still cannot be read becomes a box and is named in the

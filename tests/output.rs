@@ -298,6 +298,15 @@ fn step_import_boxes_what_it_cannot_read() {
 }
 
 #[test]
+fn step_import_reads_a_revolved_circle() {
+    let source = format!("import {}", fixture("revolved-groove.step"));
+    let groove = 5.0 * std::f64::consts::PI.powi(2) - 4.0 * std::f64::consts::PI / 3.0;
+    assert_volume(&build(&source), 250.0 * std::f64::consts::PI - groove, 1.0e-3);
+    let text = summary(&source);
+    assert!(!text.contains("stands in"), "{text}");
+}
+
+#[test]
 fn step_import_asks_which_solid() {
     let error = failure(&format!("import {}", fixture("occt-two-solids.step")));
     assert!(

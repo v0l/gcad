@@ -249,7 +249,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | STL export | supported | `gcad export part.gcad part.stl` | `output::stl` |
 | simulation parts export | supported | `gcad export wind.gsim parts.stl` writes the parts the simulation keeps after `leave` | `output::simulation_parts_export` |
 | PNG views | supported | `gcad render part.gcad part.png` | `output::png` |
-| STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid`, `output::step_import_boxes_what_it_cannot_read` |
+| STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid`, `output::step_import_boxes_what_it_cannot_read`, `output::step_import_reads_a_revolved_circle` |
 | STEP instances placed | supported | `import rig.step solid=4` puts a repeated part where the file places it | `output::step_import_places_instances` |
 | OBJ export | supported | `gcad export part.gcad part.obj` | `output::obj` |
 | 3MF export | supported | `gcad export part.gcad part.3mf` | `output::three_mf` |
