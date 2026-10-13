@@ -182,7 +182,11 @@ fn progress_on_stderr() -> gcad::progress::Listening {
     gcad::progress::listen(move |report| {
         let mut seen = seen.lock().unwrap_or_else(|e| e.into_inner());
         let mut err = std::io::stderr().lock();
-        let line = report.line();
+        let line = match (&report.parent, terminal) {
+            (Some(parent), true) => format!("{parent}: {}", report.line()),
+            (Some(_), false) => format!("  {}", report.line()),
+            (None, _) => report.line(),
+        };
         if terminal {
             let shown: String = line.chars().take(200).collect();
             if report.finished && report.elapsed < std::time::Duration::from_millis(50) {
