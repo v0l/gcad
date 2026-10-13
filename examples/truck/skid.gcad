@@ -1,0 +1,16 @@
+let w=44 t=6 tf=4 base=48 top=114 len=80 lx=26.5 lo=55 up=85 bolt=107.5
+plane YZ
+poly -w,base w,base w,top w-t,top w-t,base+tf -w+t,base+tf -w+t,top -w,top
+skid: extrude len both
+plane XZ offset=w
+pivots: hole 3.2 lx,lo -lx,lo lx,up -lx,up
+plane XZ offset=-w ry=180
+bolts: hole 3.2 30,bolt -30,bolt 0,bolt depth=t+1
+plane XZ offset=w
+bolts_r: hole 3.2 30,bolt -30,bolt 0,bolt depth=t+1
+slot 26 12 at=0,(lo+up)/2
+windows: cut thru
+plane XY offset=base+tf
+mounts: hole M3 15,12 -15,12 15,-12 -15,-12
+color #8e9aa6
+material aluminium

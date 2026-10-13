@@ -1,0 +1,35 @@
+let hi=118 ex=-206 ey=-22
+let z=hi+27.5
+plane XY offset=z
+rect 36 32 at=ex,ey r=3
+case: extrude 18
+plane case.end
+rect 36 2.5 at=ex,ey-12
+array count=7 step=0,4
+fins: cut 6
+plane YZ offset=ex+18
+rect 14 8 at=ey,z+6 r=1
+leads: extrude 6
+color #212f3d
+material abs density=1.6
+body rx
+plane XY offset=z
+rect 30 20 at=-206,20 r=2
+rx: extrude 12
+plane rx.end
+circle 4 at=-196,25
+mast: extrude 4
+plane mast.end
+circle 2.5 at=-196,25
+tube: extrude 12
+color #7d3c98
+material abs
+body switch
+plane XY offset=z
+rect 18 12 at=-206,39 r=2
+switch: extrude 9
+plane switch.end
+rect 6 4 at=-206,39
+toggle: extrude 3
+color #d35400
+material abs

@@ -1,0 +1,21 @@
+let s=1 kp=74 hub=116 arm=30 ay=68
+plane XY offset=-13
+circle 16 at=0,s*kp
+pivot: extrude 26
+plane XZ offset=-s*kp
+circle 12
+spindle: extrude -s*(hub+6-kp)
+plane XZ offset=-s*(hub+6)
+circle 5
+nub: extrude -s*8
+plane XZ offset=-s*(hub+6.5)
+ngon 9.24 6 angle=30
+nut: extrude -s*5
+plane XY offset=-4
+slot hypot(arm,kp-ay)+10 10 at=arm/2,s*(kp+ay)/2 angle=atan2(s*(ay-kp),arm)
+steer: extrude 8
+plane XY offset=13
+kingpin: hole 3.2 0,s*kp
+tierod: hole 3.2 arm,s*ay
+color #c9a227
+material aluminium

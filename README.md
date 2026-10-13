@@ -57,6 +57,20 @@ explode slider and the section tool show the gears inside.
 ![The robot arm example in the viewer](docs/robot-arm.png)
 ![A section through the shoulder reducer](docs/robot-arm-section.png)
 
+`examples/truck/truck.gasm` is a 1:10 scale crawler in 90 parts: carbon ladder rails, a
+four-link solid axle at each end, coil-over shocks, an axle-mounted steering servo, a 540
+motor through a spur gear and telescoping driveshafts, a battery, electronics and a hard
+body. Posing the suspension swings the links while the shocks and driveshafts follow, and
+posing the steering drives the drag link, both knuckles and the tie rod. Its variables pose
+it; the springs are sized from `front` and `rear`, so pose the suspension through them.
+
+```
+gcad check examples/truck/truck.gasm --set front=14 --set rear=-8 --set steer=30
+gcad bom examples/truck/truck.gasm
+```
+
+![The crawler example, articulated and steered](docs/truck.png)
+
 `examples/robot/wind.gsim` puts the arm in a 20 m/s wind. The flow is solved on the GPU
 with a lattice Boltzmann solver (21 million cells in about two minutes), then the viewer
 plays the streamlines back through the wake and `gcad render --flow` draws slices of the air

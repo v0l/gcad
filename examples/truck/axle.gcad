@@ -1,0 +1,66 @@
+let front=1 kp=74 hub=116 lx=-34 llo=-10 lup=20 ly=40 sy=55 sx=-9 sz=15 pin=-42
+let tube=front*61+(1-front)*kp
+plane YZ offset=-16
+circle 44 at=0,3
+pumpkin: extrude 32
+plane pumpkin.end
+circle 36 at=0,3
+cover: extrude 4
+chamfer 1.5 cover.end&cover.side
+plane pumpkin.start
+circle 22
+nose: extrude 14
+plane nose.end
+circle 14
+stub: extrude 18
+plane XY offset=10
+rect 14 7 at=pin-1,0
+fork: cut thru
+plane XZ offset=20
+yoke: hole 3.2 pin,0
+plane XZ
+circle 22
+tubes: extrude 2*tube both
+plane XZ offset=-sy
+slot 24 8 at=sx/2,sz/2 angle=atan2(sz,sx)
+tab: extrude -3
+mirror XZ of=tab
+plane XZ offset=-sy-3 ry=180
+shock: hole 3.2 -sx,sz depth=3.5
+plane XZ offset=sy+3
+shock_r: hole 3.2 sx,sz depth=3.5
+if front plane YZ
+if front poly tube-2,-19 kp+8,-19 kp+8,-14 tube+2,-14 tube+2,14 kp+8,14 kp+8,19 tube-2,19
+if front reflect y
+c: if front extrude 16 both
+if front plane XY offset=25
+if front poly 9,kp+2 9,kp+9 2,kp+9
+if front poly -9,kp+2 -2,kp+9 -9,kp+9
+if front poly 9,-kp-2 2,-kp-9 9,-kp-9
+if front poly -9,-kp-2 -9,-kp-9 -2,-kp-9
+tips: if front cut thru
+if front plane XY offset=20
+kingpins: if front hole 3.2 0,kp 0,-kp
+plane XZ offset=-ly
+poly 8,-15 -41,-15 -41,24.5 -32,24.5 8,10 r=4
+links: extrude -4
+mirror XZ of=links
+plane XZ offset=60
+pivots: hole 3.2 lx,llo lx,lup
+if front plane XY offset=14
+if front rect 20 56 at=0,-2 r=3
+mount: if front extrude 12
+if 1-front plane XZ offset=-kp
+if 1-front circle 12
+spindle: if 1-front extrude kp-hub-6
+if 1-front plane spindle.end
+if 1-front circle 5
+nub: if 1-front extrude 8
+if 1-front plane XZ offset=-hub-6.5
+if 1-front ngon 9.24 6 angle=30
+nut: if 1-front extrude -5
+if 1-front mirror XZ of=spindle
+if 1-front mirror XZ of=nub
+if 1-front mirror XZ of=nut
+color #5b6470
+material aluminium

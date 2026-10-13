@@ -1,0 +1,9 @@
+let teeth=45 m=0.8 x0=-34 w=6 cz=72 bore=14.4 a=90 holes=1
+plane YZ offset=x0
+gear teeth m at=0,cz angle=a
+circle bore at=0,cz
+gear: extrude w
+if holes plane gear.end
+pockets: if holes hole 8 0,cz+12 0,cz-12 12,cz -12,cz
+color #ecf0f1
+material nylon

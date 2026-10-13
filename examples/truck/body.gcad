@@ -1,0 +1,36 @@
+let wb=313 arch=140 az=70
+plane XZ
+poly -250,125 245,125 245,163 225,185 110,193 60,250 -55,250 -72,190 -250,190
+shell: extrude 200 both
+fillet 8 shell.side&shell.end|shell.side&shell.start
+body cavity
+plane XZ
+poly -250,125 245,125 245,163 225,185 110,193 60,250 -55,250 -72,190 -250,190
+inner: extrude 200 both
+fillet 8 inner.side&inner.end|inner.side&inner.start
+scale 0.992,0.985,0.977 about=-2.5,0,125
+combine main cavity mode=cut
+plane XZ offset=110
+circle arch at=wb/2,az
+circle arch at=-wb/2,az
+arches: cut thru
+plane XZ offset=110
+poly 92,200 59,238 6,238 6,200
+poly -2,200 -2,238 -44,238 -56,200
+windows: cut thru
+plane 110,-100,193 110,100,193 60,-100,250
+rect 170 60 at=100,38 r=6
+windshield: cut 4
+plane -72,100,190 -72,-100,190 -55,100,250
+rect 160 36 at=100,36 r=5
+rear: cut 4
+plane >X
+rect 70 5 at=0,150
+array count=3 step=0,-7
+grille: cut 4
+plane >X
+circle 22 at=70,148
+circle 22 at=-70,148
+lamps: extrude 3
+color #e74c3c
+material polycarbonate

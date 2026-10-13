@@ -1,0 +1,226 @@
+let front=0 rear=0 steer=0 drive=0
+let hi=126 rlo=95 wb=313 xa=wb/2 az=55 link=96 lo=55 up=85 ldz=10 ly=48.5 lx=34 cx=xa-lx-link
+part rail_l rail.gcad y=35 lo=rlo hi=hi
+part rail_r rail.gcad y=-38 lo=rlo hi=hi
+part skid skid.gcad lo=lo up=up top=rlo+19 bolt=rlo+12.5
+part cross_f cross.gcad hi=hi cx=212.5
+part cross_r cross.gcad hi=hi cx=-212.5
+part tray tray.gcad z=rlo+25 bz=rlo+12.5
+part plate_f plate.gcad hi=hi cx=212.5 cross=212.5 len=30
+part plate_r plate.gcad hi=hi cx=-206 len=44
+part tower_fl tower.gcad s=1 sd=1 hi=hi
+part tower_fr tower.gcad s=1 sd=-1 hi=hi
+part tower_rl tower.gcad s=-1 sd=1 hi=hi
+part tower_rr tower.gcad s=-1 sd=-1 hi=hi
+part axle_f axle.gcad front=1
+move axle_f xa,0,az
+part axle_r axle.gcad front=0
+rotate axle_r 180 axis=z
+move axle_r -xa,0,az
+part lo_fl link.gcad x0=cx y0=ly z0=lo x1=xa-lx y1=ly z1=lo-ldz
+part lo_fr link.gcad x0=cx y0=-ly z0=lo x1=xa-lx y1=-ly z1=lo-ldz
+part up_fl link.gcad x0=cx y0=ly z0=up x1=xa-lx y1=ly z1=up-ldz
+part up_fr link.gcad x0=cx y0=-ly z0=up x1=xa-lx y1=-ly z1=up-ldz
+part lo_rl link.gcad x0=-cx y0=ly z0=lo x1=-xa+lx y1=ly z1=lo-ldz
+part lo_rr link.gcad x0=-cx y0=-ly z0=lo x1=-xa+lx y1=-ly z1=lo-ldz
+part up_rl link.gcad x0=-cx y0=ly z0=up x1=-xa+lx y1=ly z1=up-ldz
+part up_rr link.gcad x0=-cx y0=-ly z0=up x1=-xa+lx y1=-ly z1=up-ldz
+axis f_lo cx,0,lo cx,-1,lo
+axis f_up cx,0,up cx,-1,up
+axis f_ax xa-lx,0,lo-ldz xa-lx,-1,lo-ldz
+axis r_lo -cx,0,lo -cx,1,lo
+axis r_up -cx,0,up -cx,1,up
+axis r_ax -xa+lx,0,lo-ldz -xa+lx,1,lo-ldz
+joint fsus lo_fl skid turn about=f_lo min=-8 max=14
+joint fsus_r lo_fr skid turn about=f_lo
+joint fsus_u up_fl skid turn about=f_up
+joint fsus_ur up_fr skid turn about=f_up
+joint faxle axle_f lo_fl turn about=f_ax
+couple fsus_r fsus ratio=1
+couple fsus_u fsus ratio=1
+couple fsus_ur fsus ratio=1
+couple faxle fsus ratio=-1
+joint rsus lo_rl skid turn about=r_lo min=-8 max=14
+joint rsus_r lo_rr skid turn about=r_lo
+joint rsus_u up_rl skid turn about=r_up
+joint rsus_ur up_rr skid turn about=r_up
+joint raxle axle_r lo_rl turn about=r_ax
+couple rsus_r rsus ratio=1
+couple rsus_u rsus ratio=1
+couple rsus_ur rsus ratio=1
+couple raxle rsus ratio=-1
+let sx=21 sz=92 sy=52 ux=xa-30 uz=162 L0=hypot(sx,sz) tilt=atan2(sx,sz)
+let Lf=hypot(sx+link*(cos(front)-1)+ldz*sin(front),sz-link*sin(front)-ldz*(1-cos(front))) Lr=hypot(sx+link*(cos(rear)-1)+ldz*sin(rear),sz-link*sin(rear)-ldz*(1-cos(rear)))
+part sh_fl shock.gcad L0=L0 L=Lf
+part sh_fr shock.gcad L0=L0 L=Lf
+part sh_rl shock.gcad L0=L0 L=Lr
+part sh_rr shock.gcad L0=L0 L=Lr
+rotate sh_fl -tilt axis=y
+rotate sh_fr -tilt axis=y
+rotate sh_rl tilt axis=y
+rotate sh_rr tilt axis=y
+move sh_fl ux,sy,uz
+move sh_fr ux,-sy,uz
+move sh_rl -ux,sy,uz
+move sh_rr -ux,-sy,uz
+axis fs_l ux,sy,uz ux,sy+1,uz
+axis fs_r ux,-sy,uz ux,-sy+1,uz
+axis rs_l -ux,sy,uz -ux,sy+1,uz
+axis rs_r -ux,-sy,uz -ux,-sy+1,uz
+joint fsh_l sh_fl.main tower_fl turn about=fs_l
+joint fsh_r sh_fr.main tower_fr turn about=fs_r
+joint rsh_l sh_rl.main tower_rl turn about=rs_l
+joint rsh_r sh_rr.main tower_rr turn about=rs_r
+joint fst_l sh_fl.shaft sh_fl.main slide along=sx,0,-sz min=69-L0 max=110-L0
+joint fst_r sh_fr.shaft sh_fr.main slide along=sx,0,-sz min=69-L0 max=110-L0
+joint rst_l sh_rl.shaft sh_rl.main slide along=-sx,0,-sz min=69-L0 max=110-L0
+joint rst_r sh_rr.shaft sh_rr.main slide along=-sx,0,-sz min=69-L0 max=110-L0
+joint fsp_l sh_fl.spring sh_fl.main slide along=0,0,1 min=0 max=0
+joint fsp_r sh_fr.spring sh_fr.main slide along=0,0,1 min=0 max=0
+joint rsp_l sh_rl.spring sh_rl.main slide along=0,0,1 min=0 max=0
+joint rsp_r sh_rr.spring sh_rr.main slide along=0,0,1 min=0 max=0
+concentric sh_fl.shaft:pin.side axle_f:shock.side
+concentric sh_fr.shaft:pin.side axle_f:shock_r.side
+concentric sh_rl.shaft:pin.side axle_r:shock_r.side
+concentric sh_rr.shaft:pin.side axle_r:shock.side
+part trans trans.gcad
+part motor motor.gcad
+part spur gear.gcad
+part pinion gear.gcad teeth=17 w=7 cz=96.8 bore=3.2 a=270+180/17 holes=0
+color pinion #c9a227
+material pinion brass
+axis outp 0,0,72 1,0,72
+axis mot 0,0,96.8 1,0,96.8
+joint drive pinion trans turn about=mot
+joint spin spur trans turn about=outp
+couple spin drive ratio=-17/45
+let tz=72 fdx=xa-42-30 rdx=xa-42-48
+part ds_f dshaft.gcad L=hypot(fdx,tz-az)
+rotate ds_f atan2(tz-az,fdx) axis=y
+move ds_f 30,0,tz
+part ds_r dshaft.gcad L=hypot(rdx,tz-az)
+rotate ds_r 180 axis=z
+rotate ds_r -atan2(tz-az,rdx) axis=y
+move ds_r -48,0,tz
+axis fd 30,0,tz 30,1,tz
+axis rd -48,0,tz -48,1,tz
+joint fds ds_f.main trans turn about=fd
+joint rds ds_r.main trans turn about=rd
+joint fds_s ds_f.inner ds_f.main slide along=fdx,0,az-tz min=-10 max=10
+joint rds_s ds_r.inner ds_r.main slide along=-rdx,0,az-tz min=-10 max=10
+concentric ds_f.inner:pin.side axle_f:yoke.side
+concentric ds_r.inner:pin.side axle_r:yoke.side
+part kn_fl knuckle.gcad s=1
+part kn_fr knuckle.gcad s=-1
+move kn_fl xa,0,az
+move kn_fr xa,0,az
+axis kp_l xa,74,0 xa,74,1
+axis kp_r xa,-74,0 xa,-74,1
+joint steer_l kn_fl axle_f turn about=kp_l
+joint steer_r kn_fr axle_f turn about=kp_r
+part servo servo.gcad
+move servo xa,0,az
+flush servo.main:case.start axle_f:mount.end
+axis sv xa,-16,0 xa,-16,1
+joint steer servo.horn servo.main turn about=sv min=-30 max=30
+part drag link.gcad v=1 x0=xa+18 y0=-16 z0=az+79 x1=xa+30 y1=68 z1=az+8.25
+axis dl xa+18,-16,0 xa+18,-16,1
+joint dragj drag servo.horn turn about=dl
+concentric drag:bore1.side kn_fl:tierod.side
+part tie link.gcad v=1 x0=xa+30 y0=68 z0=az-8.25 x1=xa+30 y1=-68 z1=az-8.25
+axis tr xa+30,68,0 xa+30,68,1
+joint tiej tie kn_fl turn about=tr
+concentric tie:bore1.side kn_fr:tierod.side
+part wfl wheel.gcad
+part wfr wheel.gcad
+part wrl wheel.gcad
+part wrr wheel.gcad
+rotate wfr 180 axis=z
+rotate wrr 180 axis=z
+move wfl xa,100,az
+move wfr xa,-100,az
+move wrl -xa,100,az
+move wrr -xa,-100,az
+axis w_f xa,0,az xa,1,az
+axis w_r -xa,0,az -xa,1,az
+joint wheel_rl wrl.rim axle_r turn about=w_r
+joint wheel_rr wrr.rim axle_r turn about=w_r
+joint wheel_fl wfl.rim kn_fl turn about=w_f
+joint wheel_fr wfr.rim kn_fr turn about=w_f
+couple wheel_rr wheel_rl ratio=1
+couple wheel_fl wheel_rl ratio=1
+couple wheel_fr wheel_rl ratio=1
+concentric wfl.main:bead.side wfl.rim:flange.side near=xa,80,az
+concentric wfr.main:bead.side wfr.rim:flange.side near=xa,-80,az
+concentric wrl.main:bead.side wrl.rim:flange.side near=-xa,80,az
+concentric wrr.main:bead.side wrr.rim:flange.side near=-xa,-80,az
+couple wheel_rl spin ratio=-1/10.8
+part battery battery.gcad z=rlo+25
+part esc esc.gcad hi=hi
+part body body.gcad
+part ts_fl shcs:M3x10
+rotate ts_fl -90 axis=x
+concentric ts_fl:shank.side tower_fl:bolts.side near=160,41,hi+12.5
+flush ts_fl:head.start tower_fl:plate.end
+part tn_fl nut:M3
+rotate tn_fl 90 axis=x
+concentric tn_fl:bore.side tower_fl:bolts.side near=160,41,hi+12.5
+distance tn_fl:nut.start tower_fl:plate.start 3
+pattern ts_fl holes=tower_fl:bolts.side
+pattern tn_fl holes=tower_fl:bolts.side
+part ts_fr shcs:M3x10
+rotate ts_fr 90 axis=x
+concentric ts_fr:shank.side tower_fr:bolts.side near=160,-41,hi+12.5
+flush ts_fr:head.start tower_fr:plate.end
+part tn_fr nut:M3
+rotate tn_fr -90 axis=x
+concentric tn_fr:bore.side tower_fr:bolts.side near=160,-41,hi+12.5
+distance tn_fr:nut.start tower_fr:plate.start 3
+pattern ts_fr holes=tower_fr:bolts.side
+pattern tn_fr holes=tower_fr:bolts.side
+part ts_rl shcs:M3x10
+rotate ts_rl -90 axis=x
+concentric ts_rl:shank.side tower_rl:bolts.side near=-160,41,hi+12.5
+flush ts_rl:head.start tower_rl:plate.end
+part tn_rl nut:M3
+rotate tn_rl 90 axis=x
+concentric tn_rl:bore.side tower_rl:bolts.side near=-160,41,hi+12.5
+distance tn_rl:nut.start tower_rl:plate.start 3
+pattern ts_rl holes=tower_rl:bolts.side
+pattern tn_rl holes=tower_rl:bolts.side
+part ts_rr shcs:M3x10
+rotate ts_rr 90 axis=x
+concentric ts_rr:shank.side tower_rr:bolts.side near=-160,-41,hi+12.5
+flush ts_rr:head.start tower_rr:plate.end
+part tn_rr nut:M3
+rotate tn_rr -90 axis=x
+concentric tn_rr:bore.side tower_rr:bolts.side near=-160,-41,hi+12.5
+distance tn_rr:nut.start tower_rr:plate.start 3
+pattern ts_rr holes=tower_rr:bolts.side
+pattern tn_rr holes=tower_rr:bolts.side
+part ss_l shcs:M3x16
+rotate ss_l -90 axis=x
+concentric ss_l:shank.side skid:bolts.side near=30,44,100.5
+flush ss_l:head.start skid:>Y
+part sn_l nut:M3
+rotate sn_l 90 axis=x
+concentric sn_l:bore.side skid:bolts.side near=30,44,100.5
+distance sn_l:nut.start skid:>Y 10.5
+pattern ss_l holes=skid:bolts.side
+pattern sn_l holes=skid:bolts.side
+part ss_r shcs:M3x16
+rotate ss_r 90 axis=x
+concentric ss_r:shank.side skid:bolts_r.side near=30,-44,100.5
+flush ss_r:head.start skid:<Y
+part sn_r nut:M3
+rotate sn_r -90 axis=x
+concentric sn_r:bore.side skid:bolts_r.side near=30,-44,100.5
+distance sn_r:nut.start skid:<Y 10.5
+pattern ss_r holes=skid:bolts_r.side
+pattern sn_r holes=skid:bolts_r.side
+pose fsus front
+pose rsus rear
+pose steer steer
+pose drive drive
+interference none
+interference none joint=steer steps=6

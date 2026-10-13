@@ -1,0 +1,25 @@
+let z=113 l=139 w=47 h=25 tray=1.5 slot=28
+plane XY offset=z
+rect l w r=4
+pack: extrude h
+fillet 2 pack.end&pack.side
+plane pack.end
+rect 70 30 at=-20,0 r=2
+label: cut 0.4
+plane YZ offset=l/2
+rect 8 6 at=-12,z+h/2
+rect 8 6 at=0,z+h/2
+plug: extrude 10
+color #2c3e50
+material steel density=2.1
+body strap
+plane YZ offset=32.5
+rect 2*slot+2 h+tray+3 at=0,z+(h-tray)/2+0.5
+rect 2*slot h+tray+1 at=0,z+(h-tray)/2+0.5
+front: extrude 15
+plane YZ offset=-47.5
+rect 2*slot+2 h+tray+3 at=0,z+(h-tray)/2+0.5
+rect 2*slot h+tray+1 at=0,z+(h-tray)/2+0.5
+back: extrude 15
+color #111111
+material nylon

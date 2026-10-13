@@ -1,0 +1,18 @@
+let w=32 len=140 z=113 t=1.5 drop=18 bz=100.5
+sheet t r=t
+plane XY offset=z-t
+rect len 2*w
+base: tab
+plane base.end
+slot 22 4 at=40,28
+slot 22 4 at=-40,28
+slot 22 4 at=40,-28
+slot 22 4 at=-40,-28
+cut thru
+slot 50 14 at=0,0
+cut thru
+sides: flange base.start&>Y|base.start&<Y drop
+plane XZ offset=-w-t-t ry=180
+bolts: hole M3 60,bz 30,bz 0,bz -30,bz -60,bz
+color #b0b6bc
+material aluminium

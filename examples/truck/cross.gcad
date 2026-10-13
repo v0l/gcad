@@ -1,0 +1,16 @@
+let cx=212.5 w=35 hi=118 h=20 len=25
+let z0=hi+5 bz=hi+12.5
+plane XZ offset=w
+rect len h at=cx,z0+h/2 r=3
+beam: extrude -2*w
+plane XZ offset=w
+left: hole M3 cx-7.5,bz cx+7.5,bz depth=10 fit=tap
+plane XZ offset=-w ry=180
+right: hole M3 -cx+7.5,bz -cx-7.5,bz depth=10 fit=tap
+plane XY offset=z0+h
+top: hole M3 cx-7.5,20 cx+7.5,20 cx-7.5,-20 cx+7.5,-20 depth=8 fit=tap
+plane XY offset=z0 rx=180
+rect 10 36 at=cx,0 r=3
+pocket: cut 10
+color #8e9aa6
+material aluminium

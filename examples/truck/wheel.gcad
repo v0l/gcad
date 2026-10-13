@@ -1,0 +1,44 @@
+let d=104 w=45 bore=58.4 lug=3 lugs=18
+let C=pi*d p=C/lugs
+plane XZ offset=w/2
+circle d
+tyre: extrude -w
+plane XZ offset=w/2
+bead: hole bore 0,0
+fillet 9 tyre.end&tyre.side|tyre.start&tyre.side
+plane XY
+poly -C/2-5,1.5 -C/2+4,1.5 -C/2+9,13 -C/2,13
+array count=lugs step=p,0
+poly -C/2+p/2-5,-1.5 -C/2+p/2+4,-1.5 -C/2+p/2+9,-13 -C/2+p/2,-13
+array count=lugs step=p,0
+lugs: wrap tyre.side depth=lug raise
+color #34373c
+material tyre
+body rim
+plane XZ offset=20
+circle 48
+circle 40
+barrel: extrude -42.6
+plane XZ offset=20
+circle 58
+circle 44
+flange: extrude -4
+plane XZ offset=-16
+circle 44
+circle 12.4
+pen 9,-3.2
+line 17,-6.9
+arc 17,6.9 via=18.35,0
+line 9,3.2
+arc 9,-3.2 via=9.57,0
+close
+array count=6 angle=360 at=0,0
+face: extrude -6
+plane XZ offset=-22.6
+circle 64
+circle 46
+beadlock: extrude -4
+plane beadlock.end
+bolts: hole 2.5 28.5*cos(0),28.5*sin(0) 28.5*cos(30),28.5*sin(30) 28.5*cos(60),28.5*sin(60) 28.5*cos(90),28.5*sin(90) 28.5*cos(120),28.5*sin(120) 28.5*cos(150),28.5*sin(150) 28.5*cos(180),28.5*sin(180) 28.5*cos(210),28.5*sin(210) 28.5*cos(240),28.5*sin(240) 28.5*cos(270),28.5*sin(270) 28.5*cos(300),28.5*sin(300) 28.5*cos(330),28.5*sin(330) depth=1.5
+color #b03a2e
+material aluminium

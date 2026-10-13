@@ -1,0 +1,13 @@
+let cx=-197.5 cross=-212.5 len=60 w=90 hi=118 t=2.5
+let z=hi+25
+plane XY offset=z
+rect len w at=cx,0 r=6
+plate: extrude t
+plane plate.end
+mounts: hole M3 cross-7.5,20 cross+7.5,20 cross-7.5,-20 cross+7.5,-20 csink=M3
+slot 30 5 at=cx+12,30
+slot 30 5 at=cx+12,-30
+slot 24 5 at=cx-3,0 angle=90
+lighten: cut thru
+color #1c1c1e
+material carbon

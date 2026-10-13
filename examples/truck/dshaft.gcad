@@ -1,0 +1,27 @@
+let L=84.5 w=6.5 tube=11 bar=6
+plane XZ
+circle 10
+circle 3.2
+eye: extrude w both
+plane YZ offset=3
+circle bar
+neck: extrude 7
+plane neck.end
+circle tube
+tube: extrude 0.6*L-10
+plane tube.end
+bore: hole bar+0.4 0,0 depth=0.6*L-12
+chamfer 0.8 tube.end&tube.side
+color #7f8c8d
+material steel
+body inner
+plane XZ
+circle 10 at=L,0
+eye: extrude w both
+plane XZ offset=-w/2 ry=180
+pin: hole 3.2 -L,0
+plane YZ offset=L-3
+circle bar
+bar: extrude -(0.7*L-3)
+color #bdc3c7
+material steel

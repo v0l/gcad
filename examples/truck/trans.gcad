@@ -1,0 +1,27 @@
+let base=52 top=78 out=72 mz=96.8 front=30 rear=-48
+plane XY offset=base
+rect 44 40 r=6
+housing: extrude top-base
+chamfer 2 housing.end&housing.side
+plane YZ offset=-26
+rect 46 mz+18-base at=0,(base+2+mz+20)/2 r=5
+plate: extrude 5
+plane YZ offset=22
+circle 12 at=0,out
+nose: extrude front+7-22
+plane YZ offset=-26
+circle 12 at=0,out
+tail: extrude rear-7+26
+plane XY offset=out+10
+rect 14 7 at=front+1,0
+rect 14 7 at=rear-1,0
+forks: cut thru
+plane XZ offset=20
+pins: hole 3.2 front,out rear,out
+plane YZ offset=-21
+shaft: hole 10 0,mz
+motor: hole M3 12.5,mz -12.5,mz
+plane XY offset=base rx=180
+mounts: hole M3 15,12 -15,12 15,-12 -15,-12 depth=6 fit=tap
+color #3d4249
+material aluminium

@@ -1,0 +1,19 @@
+let face=-21 mz=96.8 can=38 bell=14
+plane YZ offset=face
+circle 36 at=0,mz
+can: extrude can
+plane can.end
+circle 34 at=0,mz
+bell: extrude bell
+chamfer 1.5 bell.end&bell.side
+plane YZ offset=face
+circle 3.175 at=0,mz
+shaft: extrude -16
+plane YZ offset=face+can+bell
+rect 6 1.2 at=0,mz+11
+rect 6 1.2 at=0,mz-11
+tabs: extrude 6
+plane YZ offset=face+can+bell
+brushes: hole 5 11,mz -11,mz depth=2
+color #9aa3ad
+material steel density=5.5

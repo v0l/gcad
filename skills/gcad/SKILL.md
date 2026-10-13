@@ -328,5 +328,10 @@ gcad bom asm.gasm --csv
   planetary reducer whose ring is cut into the housing; suns and planets are coupled at their
   ratios and the planets are patterned. The gripper is two racks on one pinion. Copy its
   patterns before inventing new ones. `examples/robot/arm.gsim` sizes its motors.
+- `examples/truck/truck.gasm`: a 90-part 1:10 crawler. Four-link solid axles kept level by
+  couples, coil-over shocks, telescoping driveshafts and the drag link and tie rod are closed
+  loops that settle when `fsus`, `rsus` or `steer` is posed. Shared heights (`hi`, `rlo`) go
+  from the `.gasm` into every part file. Fasteners are library screws and nuts placed with
+  `concentric` and `distance` and patterned into hole sets.
 - `examples/parts/bracket.gsim` (static stress) and `examples/parts/heatsink.gsim` (heat with
   convection).

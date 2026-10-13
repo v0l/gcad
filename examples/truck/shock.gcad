@@ -1,0 +1,44 @@
+let L0=94.6 L=94.6 cup=7.5 w=5.5 turns=7 wire=1.4 coil=19 stroke=60.5
+plane XZ
+circle 10
+eye: extrude w both
+plane XZ offset=-w/2 ry=180
+top: hole 3.2 0,0
+plane XY offset=-58
+circle 16
+can: extrude 49
+plane can.end
+circle 14
+cap: extrude 4.8
+plane XY offset=-21
+circle 20
+collar: extrude 3
+plane XY offset=-58 rx=180
+bore: hole 4.4 0,0 depth=52
+chamfer 1 can.start&can.side
+color #c0392b
+material aluminium
+body shaft
+plane XZ
+circle 10 at=0,-L0
+eye: extrude w both
+plane XZ offset=-w/2 ry=180
+pin: hole 3.2 0,-L0
+plane XY offset=-L0+4
+circle 5.5
+hub: extrude cup-4
+plane hub.end
+circle 20
+cup: extrude 3
+plane cup.end
+circle 4
+rod: extrude stroke-cup-3
+color #d5d8dc
+material steel
+body spring
+plane XY offset=-21-wire/2 rx=180
+helix r=coil/2 pitch=(L-24-cup-wire)/turns turns=turns
+circle wire
+coil: sweep
+color #e5c100
+material steel

@@ -1,0 +1,23 @@
+let x0=0 y0=0 z0=0 x1=100 y1=0 z1=0 v=0 eye=10 w=8 rod=6
+let len=sqrt((x1-x0)*(x1-x0)+(y1-y0)*(y1-y0)+(z1-z0)*(z1-z0)) k=v*(eye/2-0.5)/len
+if 1-v plane XZ offset=-y0
+if 1-v circle eye at=x0,z0
+if 1-v circle eye at=x1,z1
+eyes: if 1-v extrude w both
+if v plane XY offset=z0-w/2
+if v circle eye at=x0,y0
+ends: if v extrude w
+if v plane XY offset=z1-w/2
+if v circle eye at=x1,y1
+ends1: if v extrude w
+path x0+k*(x1-x0),y0+k*(y1-y0),z0+k*(z1-z0) x1-k*(x1-x0),y1-k*(y1-y0),z1-k*(z1-z0)
+circle rod
+rod: sweep
+if 1-v plane XZ offset=-y0-w/2 ry=180
+bores: if 1-v hole 3.2 -x0,z0 -x1,z1
+if v plane XY offset=z0+w/2
+bore0: if v hole 3.2 x0,y0
+if v plane XY offset=z1+w/2
+bore1: if v hole 3.2 x1,y1
+color #b0b6bc
+material aluminium

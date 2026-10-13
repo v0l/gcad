@@ -68,3 +68,23 @@ fn linkage() {
         );
     }
 }
+
+#[test]
+fn truck() {
+    let path = std::path::PathBuf::from(format!(
+        "{}/examples/truck/truck.gasm",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    for pose in [[0.0, 0.0, 0.0], [14.0, -8.0, 30.0], [-8.0, 14.0, -30.0]] {
+        let vars: Vec<(String, f64)> = ["front", "rear", "steer"]
+            .iter()
+            .map(|n| n.to_string())
+            .zip(pose)
+            .collect();
+        let run = gcad::model::run_path(&path, &vars, None).expect("runs");
+        for (line, step) in &run.steps {
+            assert!(step.is_ok(), "{pose:?}: line {}: {step:?}", line.number);
+        }
+        assert_eq!(run.model.body_names().len(), 90);
+    }
+}

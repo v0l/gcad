@@ -1,0 +1,14 @@
+let s=1 sd=1 t=3 y=38 hi=118 ux=126.5 uz=162 boss=8 b1=160 b2=175
+let sx=-s*sd bz=hi+12.5 mid=(hi+12.5+uz)/2
+plane XZ offset=-sd*y
+poly s*110,hi s*(b2+7),hi s*(b2+7),hi+18 s*140,uz+8 s*118,uz+8 s*110,hi+22 r=4
+plate: extrude -sd*t
+plane XZ offset=-sd*(y+t)
+circle 7 at=s*ux,uz
+boss: extrude -sd*boss
+plane XZ offset=-sd*(y+t+boss) ry=90+sd*90
+shock: hole 3.2 sx*ux,uz
+bolts: hole 3.2 sx*b1,bz sx*b2,bz
+lighten: hole 7 sx*120,mid sx*142,mid sx*162,mid-4
+color #1c1c1e
+material carbon

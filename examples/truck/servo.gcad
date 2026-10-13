@@ -1,0 +1,28 @@
+let z0=26 sy=-16 arm=18
+plane XY offset=z0
+rect 20 40 at=0,-2 r=1
+case: extrude 37
+plane XY offset=z0+24
+rect 20 54 at=0,-2 r=1
+ears: extrude 2.5
+plane ears.end
+lugs: hole 4.2 0,-27 0,23
+plane case.end
+circle 12 at=0,sy
+boss: extrude 1.5
+plane boss.end
+circle 5.8 at=0,sy
+spline: extrude 2.5
+color #1f3a93
+material abs
+body horn
+plane XY offset=z0+41
+slot arm+9 8 at=arm/2,sy
+arm: extrude 3
+plane arm.end
+circle 9 at=0,sy
+hub: extrude 1.5
+plane hub.end
+tip: hole 3.2 arm,sy
+color #e5e7e9
+material aluminium

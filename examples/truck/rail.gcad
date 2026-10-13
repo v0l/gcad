@@ -1,0 +1,14 @@
+let y=35 t=3 h=25 lo=88 hi=118 x0=95 x1=120 end=230 r=5
+plane XZ offset=-y
+poly -end,hi -x1,hi -x0,lo x0,lo x1,hi end,hi end,hi+h x1,hi+h x0,lo+h -x0,lo+h -x1,hi+h -end,hi+h r=r
+circle 3 at=-90,lo+h/2
+array count=13 step=15,0
+circle 3 at=130,hi+h/2
+array count=7 step=15,0
+circle 3 at=-130,hi+h/2
+array count=7 step=-15,0
+slot 24 7 at=-(x0+x1)/2,(lo+hi+h)/2 angle=-atan2(hi-lo,x1-x0)
+slot 24 7 at=(x0+x1)/2,(lo+hi+h)/2 angle=atan2(hi-lo,x1-x0)
+rail: extrude -t
+color #1c1c1e
+material carbon
