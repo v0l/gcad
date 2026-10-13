@@ -69,6 +69,15 @@ gcad examples/robot/wind.gsim
 gcad render examples/robot/wind.gsim wind.png --flow
 ```
 
+A machine without a big enough GPU can run a simulation on a paid remote worker at
+[sims.gcad.sh](https://sims.gcad.sh). gcad builds the parts here, sends the built bodies (not
+the project files) and writes the result beside the `.gsim` as if it had run locally.
+
+```
+gcad remote signup
+gcad sim examples/robot/wind.gsim --remote
+```
+
 ![Streamlines past the robot arm, ranked by turbulence](docs/robot-arm-wind.png)
 ![Air speed on slices through the arm and its wake](docs/robot-arm-wind-slices.png)
 

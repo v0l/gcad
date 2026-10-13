@@ -23,6 +23,10 @@ monstertruck-io = { version = "0.4.1", features = ["step"] }
 monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
 monstertruck-topology = "0.4.1"
 serde_json = "1.0.151"
+serde = { version = "1", features = ["derive"] }
+ciborium = "0.2"
+flate2 = "1"
+sha2 = "0.10"
 spade = "2.15"
 robust = "1.2"
 faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
@@ -41,6 +45,7 @@ gpu-tests = []
 eframe = { version = "0.35", default-features = false, features = ["wayland", "x11"] }
 faer = { version = "0.24", features = ["rayon"] }
 notify = "8"
+ureq = { version = "2.12", features = ["json"] }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Storage"] }

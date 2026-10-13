@@ -53,6 +53,42 @@ drawn, with a warning saying what changed. Before there is a result it draws the
 with its loads, supports and thermal boundaries for the meshed kinds, and for `flow` the parts
 inside the duct or the air box, the wind arrow and the heated faces.
 
+## Remote runs
+
+`gcad sim x.gsim --remote` solves on a runner of the job server at https://sims.gcad.sh, paid
+from a prepaid balance per second of the runner's time. Each runner sets its own price an hour;
+the site and `gcad remote runners` list them with their GPU, measured FP32 TFLOPS and memory
+bandwidth (`gcad gpu-bench`, hidden, measures both), video memory and CPU.
+
+```sh
+gcad remote signup                  # make an account, keep its token in ~/.config/gcad/remote.toml
+gcad remote account                 # its id, balance and price; top up at the shop with the id
+gcad sim wind.gsim --remote         # build here, solve there, write wind.result.json here
+gcad sim wind.gsim --remote --max-minutes 20
+gcad sim wind.gsim --remote --max-price 2.50   # only runners asking at most €2.50 an hour
+gcad remote runners                 # the runners, their hardware and price
+gcad remote jobs                    # recent runs, their time and cost
+gcad remote cancel ID               # stop a run; the time it used is charged
+gcad remote login TOKEN             # use the account on another machine
+```
+
+The model is built locally and the job holds what the solvers read: the spec with its faces
+already selected, every body as compressed B-rep, the materials, and the `stamp` of the local
+files. Project files never leave the machine. A `wind flow.gsim` load goes as the flow's
+surface pressure samples, which needs a fresh local flow result, and a `warm heat.gsim`
+goes as that thermal simulation's own packed job, solved on the worker first. `torque` runs
+in seconds and stays local. Jobs are CBOR, gzipped, and only a worker on the same gcad
+version takes them (`gcad sim-job JOB OUT`, hidden, is what it runs).
+
+A run goes to the first free runner on the same gcad version asking at most `--max-price`
+(by default the dearest runner, so any of them). It holds `--max-minutes` (60 by default) at
+that price from the balance while it runs, charges the seconds it used at the price of the
+runner that took it, and gives back the rest. The runner stops it at the limit.
+Rerunning the same command with unchanged files picks up the queued or running job instead
+of sending another, and a finished one when the result here is missing or stale, so a client
+that stopped while it waited loses nothing. `GCAD_SIMS_SERVER` and `GCAD_SIMS_TOKEN` override
+the saved server and token.
+
 ## Materials
 
 `material` gains the properties the solvers need, beside density: Young's modulus, Poisson's

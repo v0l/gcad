@@ -116,7 +116,7 @@ fn run_spec(spec: &Spec) -> Result<Outcome> {
     })
 }
 
-pub fn temperatures(file: &std::path::Path) -> Result<Vec<f64>> {
+pub fn thermal_spec(file: &std::path::Path) -> Result<Spec> {
     let run = crate::model::run_path(file, &[], None)?;
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{}:{}: {error:#}", file.display(), line.number);
@@ -127,6 +127,14 @@ pub fn temperatures(file: &std::path::Path) -> Result<Vec<f64>> {
     if spec.kind != Some(super::Kind::Thermal) {
         bail!("{} is not a `sim thermal`", file.display());
     }
+    Ok(spec.clone())
+}
+
+pub fn temperatures(file: &std::path::Path) -> Result<Vec<f64>> {
+    solved_temperatures(&thermal_spec(file)?)
+}
+
+pub fn solved_temperatures(spec: &Spec) -> Result<Vec<f64>> {
     let outcome = run_spec(spec)?;
     Ok(outcome.field.map(|f| f.values).unwrap_or_default())
 }

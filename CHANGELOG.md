@@ -7,6 +7,10 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Remote simulations: `gcad sim x.gsim --remote` builds the model locally, sends the built
+  bodies, materials and selected faces to a paid GPU worker at sims.gcad.sh and writes the
+  result beside the spec. `gcad remote signup|login|account|runners|jobs|cancel` manage the
+  account; runners set their own price an hour and `--max-price` caps it.
 - `bearing housing:bore shaft` in a static simulation joins two parts on a ball bearing: radial
   force at the ball row, free to turn and tilt, thrust with `axial`, stiffness from
   `stiffness=`, and the load against the static rating with `C0=`.

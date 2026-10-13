@@ -10,7 +10,7 @@ use anyhow::{Result, bail};
 use monstertruck::modeling::*;
 use rayon::prelude::*;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Hold {
     Fixed,
     Slide,
@@ -25,14 +25,14 @@ pub enum Hold {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Support {
     pub label: String,
     pub faces: Vec<usize>,
     pub hold: Hold,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Push {
     Force(Vector3),
     Pressure(f64),
@@ -71,7 +71,7 @@ fn polar(mesh: &Quadratic, faces: &[usize], point: Point3, axis: Vector3) -> f64
         .sum()
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Load {
     pub label: String,
     pub faces: Vec<usize>,

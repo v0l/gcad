@@ -72,7 +72,7 @@ impl Prepared {
             Warm::By(list) => list
                 .iter()
                 .any(|(part, by)| *by != 0.0 && part.as_ref().is_none_or(|n| *n == p.name)),
-            Warm::From { .. } => true,
+            Warm::From { .. } | Warm::Solved { .. } => true,
         };
         let alphas: Vec<f64> = self
             .parts
@@ -107,8 +107,14 @@ impl Prepared {
                     .collect();
                 body.iter().map(|b| per[*b]).collect()
             }
-            Warm::From { file, reference } => {
-                let heat = super::heat::temperatures(file)?;
+            Warm::From { file, reference }
+            | Warm::Solved {
+                file, reference, ..
+            } => {
+                let heat = match warming {
+                    Warm::Solved { spec, .. } => super::heat::solved_temperatures(&spec.0)?,
+                    _ => super::heat::temperatures(file)?,
+                };
                 if heat.len() != self.mesh.nodes.len() {
                     bail!(
                         "{} meshes the part differently; give it the same `part` and `mesh` lines",
@@ -508,11 +514,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             .map(|p| g * (p.density * 1.0e-6))
             .collect()
     });
-    let wind = spec
-        .wind_load
-        .as_deref()
-        .map(super::wind::surface_pressure)
-        .transpose()?;
+    let wind = wind_pressure(spec)?;
     let answer = solve(&Problem {
         mesh,
         materials: &materials,
@@ -1169,11 +1171,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
     {
         bail!("buckling needs a `load`, `pressure`, `torque`, `warm` or `wind` to scale");
     }
-    let wind = spec
-        .wind_load
-        .as_deref()
-        .map(super::wind::surface_pressure)
-        .transpose()?;
+    let wind = wind_pressure(spec)?;
     let wanted = spec.modes.unwrap_or(3);
     let buckles = super::fem::buckling::solve(
         &Problem {
@@ -1463,4 +1461,15 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
         });
     }
     marks
+}
+
+fn wind_pressure(spec: &Spec) -> Result<Option<super::fem::elastic::SurfacePressure>> {
+    Ok(match (&spec.wind_samples, &spec.wind_load) {
+        (Some((samples, reach)), _) => Some(super::fem::elastic::SurfacePressure::new(
+            samples.iter().copied(),
+            *reach,
+        )),
+        (None, Some(file)) => Some(super::wind::surface_pressure(file)?),
+        (None, None) => None,
+    })
 }

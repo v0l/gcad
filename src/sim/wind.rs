@@ -6,7 +6,7 @@ use anyhow::{Result, bail};
 use monstertruck::modeling::*;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Wind {
     pub speed: f64,
     pub toward: Vector3,
@@ -1676,6 +1676,11 @@ fn creases(points: &[Point3], triangles: &[[usize; 3]]) -> Vec<[usize; 2]> {
 }
 
 pub fn surface_pressure(file: &std::path::Path) -> Result<super::fem::elastic::SurfacePressure> {
+    let (samples, reach) = surface_samples(file)?;
+    Ok(super::fem::elastic::SurfacePressure::new(samples, reach))
+}
+
+pub fn surface_samples(file: &std::path::Path) -> Result<(Vec<(Point3, f64)>, f64)> {
     let run = crate::model::run_path(file, &[], None)?;
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{}:{}: {error:#}", file.display(), line.number);
@@ -1716,10 +1721,11 @@ pub fn surface_pressure(file: &std::path::Path) -> Result<super::fem::elastic::S
             file.display()
         );
     }
-    Ok(super::fem::elastic::SurfacePressure::new(
+    Ok((
         samples
             .into_iter()
-            .zip(field.values.iter().map(|pa| pa * 1.0e-6)),
+            .zip(field.values.iter().map(|pa| pa * 1.0e-6))
+            .collect(),
         2.0 * setup.grid.spacing,
     ))
 }
