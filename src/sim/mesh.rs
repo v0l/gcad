@@ -49,7 +49,7 @@ pub fn bodies(spec: &Spec) -> Result<Vec<Body>> {
         .collect()
 }
 
-const FLATTEST: f64 = 2.0;
+const FLATTEST: f64 = 0.5;
 
 pub fn mesh_part(solid: &Solid, size: f64) -> Result<(TetMesh, f64)> {
     let own = size.min(geometry::bounds(solid).diameter() / 6.0);

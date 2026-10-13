@@ -846,6 +846,18 @@ fn tet_mesh_of_stacked_cylinders() {
 }
 
 #[test]
+fn slightly_flat_elements_keep_the_mesh_size() {
+    let mut source = String::from("circle 20\ns0: extrude 10");
+    for (k, length) in [4, 86, 4, 86].into_iter().enumerate() {
+        source += &format!("\nplane s{k}.end\ncircle 20\ns{}: extrude {length}", k + 1);
+    }
+    let (mesh, used) = gcad::sim::mesh::mesh_part(&solid_of(&source), 4.0).expect("meshes");
+    let worst = mesh.quality().min_dihedral;
+    assert!(worst > 0.5 && worst < 2.0, "{worst}");
+    assert_eq!(used, 4.0);
+}
+
+#[test]
 fn tet_mesh_of_a_bore_with_a_tiny_step() {
     let solid = solid_of(
         "circle 18\ncircle 8.04\nshaft: extrude 20\nplane shaft.end\ncircle 13.4\ncircle 8.06\nextrude 12",

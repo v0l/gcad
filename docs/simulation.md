@@ -249,7 +249,7 @@ box, curved parts, thin walls and the example parts.
 
 In an assembly each part is meshed at the `mesh` size or a sixth of its own diagonal,
 whichever is smaller, so an M4 screw is not meshed at the 65 mm a whole rotator would get;
-a part that fails to mesh, or meshes with an element flatter than 2 degrees, is tried again
+a part that fails to mesh, or meshes with an element flatter than half a degree, is tried again
 at 0.6 of the size, up to five times, keeping the best. Flat elements wreck the solve rather
 than the answer: the rotator mast tube at 50 mm elements had 0.0 degree slivers, and with them
 the conjugate gradients stalled at a residual of 0.84 against a direct coarse solve and grew
@@ -257,11 +257,17 @@ without bound against the three-level one. A 2 mm wall boom needed 14 mm element
 assembly pose (5.1 degrees at 23 mm on its own). Two parts bond within a tenth of the smaller of
 their two sizes. Elements of zero volume (under a millionth of the mean element volume) left
 inverted after straightening are skipped; any other inverted element is an error that names
-the part and the spot.
+the part and the spot. Elements
+between half a degree and 2 degrees do no harm, and the line used to sit at 2: the rotator's
+electronics box at `mesh 3` (worst 1.0 degree) solved in 180 iterations and read within 1% of
+a 1.8 mm mesh, but no retry reached 2 degrees, so it was meshed at 0.4 mm with 15.7 million
+nodes instead of 78 thousand. The whole rotator reads within 0.3% either way, with 7% fewer
+nodes at half a degree.
 
-The whole rotator (44 parts, 2.8 million nodes, 8.5 million unknowns) solves in 256 s: 24 s
-meshing, the bonding in parallel over pairs whose boxes come within the bond gap (it was 32 s
-serial over all 1,900 pairs), 8 s assembly and 480 iterations.
+The whole rotator (2.8 million nodes, 8.5 million unknowns) solved in 256 s on 2026-10-11:
+24 s meshing, the bonding in parallel over pairs whose boxes come within the bond gap (it was
+32 s serial over all 1,900 pairs), 8 s assembly and 480 iterations. On 2026-10-13 its
+`sims/rotator.gsim` meshes to 4.5 million nodes and takes 1,372 iterations and 22 minutes.
 
 Smoothing works through colour classes of points that share no element, in parallel.
 

@@ -21,6 +21,10 @@ All notable changes to gcad are listed here. The format follows
 - A boss glued onto a face, including twisted faces and over an edge; twisted extrudes with holes.
 
 ### Changed
+- Simulation meshes are only refined again when an element is flatter than half a degree
+  (was 2 degrees). Elements between the two solve fine, and parts that never reached 2 degrees
+  were meshed far finer than asked: the rotator's electronics box at `mesh 3` made 15.7 million
+  nodes instead of 78 thousand.
 - `stress` and `safety` leave out one element size of each part around its supports and bonds,
   where a rigid hold is singular. A part smaller than the `mesh` size uses a sixth of its own
   diagonal, so a key or pin in a large assembly still counts towards `safety`.

@@ -3,11 +3,13 @@
 Problems found while sizing the rotator (`~/git/rotator`, `sims/`) with `gcad sim`. Each
 item has a way to reproduce it. Take one, fix it, delete it from this file.
 
-## `elbox.gsim` meshes 30 times finer than it did
+## The whole rotator takes three times the iterations it did
 
-`~/git/rotator/sims/elbox.gsim` at `mesh 3` made 526 thousand nodes on gcad 0.2.0 and makes
-15.7 million now (about 8 minutes and 50 GB). The box has a 0.05 mm deep `seat` cut, which the
-mesh has to resolve; whether the growth comes from that is not known yet.
+`~/git/rotator/sims/rotator.gsim` solved in 480 conjugate gradient iterations on 2026-10-11 (2.8
+million nodes) and takes 1,372 now (4.5 million nodes, 22 minutes). The residual first climbs
+to about 470 times its start before it falls. Whether the model grew (joint drag, bearings, more
+parts) or the preconditioner got worse is not known; solving the 2026-10-11 rotator at its own
+commit with today's gcad would tell.
 
 ## Five board STEP bodies still come in as boxes
 
