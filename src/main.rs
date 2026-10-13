@@ -437,11 +437,11 @@ fn main() -> Result<()> {
             let bench = gcad::flow::bench::run()?;
             println!(
                 "{}",
-                serde_json::json!({
-                    "gpu": bench.gpu,
-                    "tflops": (bench.tflops * 10.0).round() / 10.0,
-                    "bandwidth_gbs": bench.bandwidth.round(),
-                })
+                serde_json::to_string(&gcad_sims_proto::GpuBench {
+                    gpu: bench.gpu,
+                    tflops: (bench.tflops * 10.0).round() / 10.0,
+                    bandwidth_gbs: bench.bandwidth.round(),
+                })?
             );
             Ok(())
         }

@@ -1392,6 +1392,7 @@ dependencies = [
  "epaint_default_fonts",
  "faer",
  "flate2",
+ "gcad-sims-proto",
  "getrandom 0.4.3",
  "image",
  "monstertruck",
@@ -1415,6 +1416,14 @@ dependencies = [
  "wgpu",
  "winresource",
  "yaml-rust2",
+]
+
+[[package]]
+name = "gcad-sims-proto"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
 ]
 
 [[package]]

@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/v0l/gcad"
 
 [workspace]
-members = [".", "web"]
+members = [".", "web", "sims-proto"]
 
 [dependencies]
 anyhow = "1.0.104"
@@ -46,6 +46,7 @@ eframe = { version = "0.35", default-features = false, features = ["wayland", "x
 faer = { version = "0.24", features = ["rayon"] }
 notify = "8"
 ureq = { version = "2.12", features = ["json"] }
+gcad-sims-proto = { path = "sims-proto" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Storage"] }
