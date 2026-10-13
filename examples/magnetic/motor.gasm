@@ -1,0 +1,30 @@
+part stator stator.gcad
+part rotor rotor.gcad
+axis shaft 0,0,0 0,0,1
+joint spin rotor.main stator turn about=shaft
+concentric rotor.north:north.side rotor.main:core.side
+concentric rotor.south:south.side rotor.main:core.side
+part c0 coil.gcad
+part c1 coil.gcad
+rotate c1 30 axis=z
+part c2 coil.gcad
+rotate c2 60 axis=z
+part c3 coil.gcad
+rotate c3 90 axis=z
+part c4 coil.gcad
+rotate c4 120 axis=z
+part c5 coil.gcad
+rotate c5 150 axis=z
+part c6 coil.gcad
+rotate c6 180 axis=z
+part c7 coil.gcad
+rotate c7 210 axis=z
+part c8 coil.gcad
+rotate c8 240 axis=z
+part c9 coil.gcad
+rotate c9 270 axis=z
+part c10 coil.gcad
+rotate c10 300 axis=z
+part c11 coil.gcad
+rotate c11 330 axis=z
+interference none

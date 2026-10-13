@@ -7,6 +7,11 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- `spin joint rpm=` in `sim flow`: a fan or propeller turns through the lattice and reads its
+  torque, shaft power, thrust and flow (`examples/flow/fan.gsim`).
+- `sim magnetic`: a 2D slice through a motor with `magnet`, `iron` (M-19 and 1010 B-H curves) and
+  `coil` lines, swept with `turn joint sweep= steps=` for torque, cogging, ripple and back-EMF
+  (`examples/magnetic/cogging.gsim`).
 - Viewer simulation card with readings, `expect` checks, notes, sweep traces and a run button.
 - Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
   or for flow the parts in their duct or air box, the wind and the heated faces.

@@ -429,7 +429,7 @@ expect shoulder<15 sun_s_turn<4
 
 | operation | arguments | does |
 |---|---|---|
-| `sim` | `kind` | what to simulate. Comes first. `torque`, `static`, `thermal`, `modal` and `buckling`. All but `torque` mesh the part; `--dry-run` shows the mesh without solving |
+| `sim` | `kind` | what to simulate. Comes first. `torque`, `static`, `thermal`, `modal`, `buckling`, `flow` and `magnetic`. `static`, `thermal`, `modal` and `buckling` mesh the part in tetrahedra, `magnetic` meshes a slice of it and `flow` puts it on a grid; `--dry-run` shows the mesh without solving. `flow` is described in `docs/simulation.md` |
 | `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line. Every body of it is simulated |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
@@ -450,6 +450,13 @@ expect shoulder<15 sun_s_turn<4
 | `temperature` | `faces value` | holds the faces at that temperature in °C (thermal). The heat leaving the part through them, in watts, is a reading named after the line's label (negative where heat comes in) |
 | `convect` | `faces h= ambient=` | the faces lose heat to air at `ambient` °C (20 unless given) with a film coefficient `h` in W/m²·K: about 5 to 10 for still air, 20 to 100 with a fan (thermal). The heat lost is a reading named after the label |
 | `heat` | `faces watts` | puts that much heat into the faces, spread by area (thermal, flow). In a flow simulation the air carries it away, and the line's label reads the mean temperature of those faces |
+| `spin` | `joint rpm=` | turns a part on its `turn` joint through the air at that speed (flow), see `docs/simulation.md` |
+| `turn` | `joint` `sweep=` `steps=` | the rotor's `turn` joint (magnetic). Its axis is the slice's normal and everything it carries turns. With `sweep` the rotor turns through that many degrees in `steps` (12 unless given), and the step must divide a whole turn |
+| `slice` | `at=` | where the slice cuts, in mm along the joint axis from the joint's point; the middle of the turning parts unless given (magnetic) |
+| `length` | `mm` | the stack length the slice's answer is multiplied by; the turning parts' length along the axis unless given (magnetic) |
+| `magnet` | `parts ...` `Br=` `mu=` `toward=` | the parts are permanent magnets of remanence `Br` in tesla and recoil permeability `mu` (1.05 unless given), magnetized `toward=radial` (the default), `-radial` or along a direction like `0,1,0` that turns with the rotor (magnetic) |
+| `iron` | `parts ...` `material=` or `mu=` | the parts are steel with the B-H curve of `material`: `m19` (the default, lamination) or `1010` (solid low carbon); or iron of constant relative permeability `mu` (magnetic) |
+| `coil` | `parts ...` `turns=` `current=` `axis=` | the parts are windings of `turns` turns carrying `current` amps (0 unless given). A coil part the slice cuts in two pieces, one each side of the tooth it is wound round, carries the current one way in one and back in the other: positive current goes counterclockwise about `axis`, the direction from the motor's axis out through the coil unless given. Negative `turns` winds it the other way. Lines with the same label are one phase, and the label names its readings (magnetic) |
 | `source` | `watts` | makes that much heat evenly through the part's volume (thermal) |
 | `modes` | `count` | how many natural frequencies `modal` finds, 6 unless given |
 | `contact` | `part part` `friction=` | the two parts press on each other where they touch instead of being bonded, and may part (static). Without `friction` they slide freely, so give them supports that stop that; with it (a coefficient, 0.3 for dry steel) they hold until the sideways force passes `friction` times the pressing force, and the run reports how many node pairs slip. A load that friction cannot hold is an error that says the parts slide. Frequencies and buckling treat the pair as bonded |

@@ -1,0 +1,10 @@
+let top=26.4 bottom=33.6 near=7.9 far=14.6 height=40
+pen top*cos(near),top*sin(near)
+line bottom*cos(near),bottom*sin(near)
+arc bottom*cos(far),bottom*sin(far) center=0,0 turn=ccw
+line top*cos(far),top*sin(far)
+arc top*cos(near),top*sin(near) center=0,0 turn=cw
+close
+reflect x
+sides: extrude height both
+material copper

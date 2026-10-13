@@ -1,0 +1,17 @@
+let outer=40 bore=24 top=26 bottom=34 half=7.5 open=2.4 stack=30
+circle 2*outer
+core: extrude stack both
+plane core.end
+hole 2*bore 0,0
+pen (bore-1)*cos(15-open),(bore-1)*sin(15-open)
+line top*cos(15-open),top*sin(15-open)
+arc top*cos(15-half),top*sin(15-half) center=0,0 turn=cw
+line bottom*cos(15-half),bottom*sin(15-half)
+arc bottom*cos(15+half),bottom*sin(15+half) center=0,0 turn=ccw
+line top*cos(15+half),top*sin(15+half)
+arc top*cos(15+open),top*sin(15+open) center=0,0 turn=cw
+line (bore-1)*cos(15+open),(bore-1)*sin(15+open)
+close
+array count=12 angle=360 at=0,0
+slots: cut thru
+material steel

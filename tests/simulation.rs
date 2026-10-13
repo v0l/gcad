@@ -2166,3 +2166,78 @@ fn a_spinning_fan_pushes_air() {
     close(reading(&back, "spin.thrust"), -thrust, 0.15);
     close(reading(&back, "spin.flow"), -flow, 0.15);
 }
+
+#[test]
+fn a_wire_turns_a_magnet_from_parts() {
+    let files = [
+        ("magnet.gcad", "circle 20\nextrude 30 both\n"),
+        ("wire.gcad", "circle 4 at=30,0\nextrude 30 both\n"),
+        (
+            "pair.gasm",
+            "part wire wire.gcad\npart magnet magnet.gcad\naxis a 0,0,0 0,0,1\njoint spin magnet wire turn about=a\n",
+        ),
+    ];
+    let outcome = simulated(
+        "a_wire_turns_a_magnet_from_parts",
+        &files,
+        "sim magnetic\npart pair.gasm\nturn spin\nmagnet magnet Br=1.2 mu=1 toward=1,0,0\ncoil wire current=200\nmesh 0.4",
+    );
+    let (br, radius, amps, distance, stack) = (1.2, 0.01, 200.0, 0.03, 0.03);
+    let field = br * radius * radius / (2.0 * distance * distance);
+    close(
+        reading(&outcome, "torque"),
+        -distance * amps * field * stack,
+        0.01,
+    );
+    let turned = simulated(
+        "a_wire_turns_a_magnet_from_parts_turned",
+        &files,
+        "sim magnetic\npart pair.gasm\nturn spin sweep=90 steps=4\nmagnet magnet Br=1.2 mu=1 toward=1,0,0\ncoil wire current=200\nmesh 0.4",
+    );
+    close(
+        reading(&turned, "torque.min"),
+        -distance * amps * field * stack,
+        0.01,
+    );
+    let series = &turned.series[0].curves[0].values;
+    assert!(series[4].abs() < 0.02 * series[0].abs(), "{series:?}");
+}
+
+#[test]
+fn magnetic_lines_need_their_simulation() {
+    let files = [
+        ("magnet.gcad", "circle 20\nextrude 30 both\n"),
+        ("wire.gcad", "circle 4 at=30,0\nextrude 30 both\n"),
+        (
+            "pair.gasm",
+            "part wire wire.gcad\npart magnet magnet.gcad\naxis a 0,0,0 0,0,1\njoint spin magnet wire turn about=a\n",
+        ),
+    ];
+    let failing = |test: &str, spec: &str| {
+        let path = written(test, &files, spec);
+        let run = gcad::model::run_path(&path, &[], None).expect("runs");
+        let (_, step) = run.steps.last().expect("a step");
+        format!("{:#}", step.as_ref().expect_err("refused"))
+    };
+    assert!(
+        failing(
+            "magnet_in_flow",
+            "sim flow\npart pair.gasm\nmagnet magnet Br=1"
+        )
+        .contains("magnetic simulation")
+    );
+    assert!(
+        failing(
+            "magnet_missing",
+            "sim magnetic\npart pair.gasm\nmagnet nothing Br=1"
+        )
+        .contains("matches no part")
+    );
+    assert!(
+        failing(
+            "steel_unknown",
+            "sim magnetic\npart pair.gasm\niron magnet material=cheese"
+        )
+        .contains("no steel called `cheese`")
+    );
+}

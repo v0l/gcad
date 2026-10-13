@@ -1,6 +1,6 @@
 pub mod fem;
-pub mod magnetic;
 mod heat;
+pub mod magnetic;
 pub mod mesh;
 mod result;
 pub mod statics;
@@ -26,9 +26,12 @@ pub enum Kind {
     Modal,
     Buckling,
     Flow,
+    Magnetic,
 }
 
-pub const KINDS: &[&str] = &["torque", "static", "thermal", "modal", "buckling", "flow"];
+pub const KINDS: &[&str] = &[
+    "torque", "static", "thermal", "modal", "buckling", "flow", "magnetic",
+];
 
 impl Kind {
     pub fn named(name: &str) -> Result<Kind> {
@@ -39,6 +42,7 @@ impl Kind {
             "modal" => Ok(Kind::Modal),
             "buckling" => Ok(Kind::Buckling),
             "flow" => Ok(Kind::Flow),
+            "magnetic" => Ok(Kind::Magnetic),
             other => bail!(
                 "unknown simulation `{other}`; kinds are {}",
                 KINDS.join(", ")
@@ -54,11 +58,12 @@ impl Kind {
             Kind::Modal => "modal",
             Kind::Buckling => "buckling",
             Kind::Flow => "flow",
+            Kind::Magnetic => "magnetic",
         }
     }
 
     pub fn meshed(self) -> bool {
-        !matches!(self, Kind::Torque | Kind::Flow)
+        !matches!(self, Kind::Torque | Kind::Flow | Kind::Magnetic)
     }
 }
 
@@ -113,6 +118,10 @@ pub struct Spec {
     pub duct: Option<[f64; 2]>,
     pub wind_load: Option<PathBuf>,
     pub spins: Vec<Spin>,
+    pub turn: Option<magnetic::Turn>,
+    pub stack: Option<f64>,
+    pub slice: Option<f64>,
+    pub roles: Vec<magnetic::Assigned>,
 }
 
 #[derive(Clone, Debug)]
@@ -166,6 +175,7 @@ pub fn plan(spec: &Spec) -> Result<String> {
     match spec.kind {
         Some(Kind::Torque) => torque::plan(spec),
         Some(Kind::Flow) => wind::plan(spec),
+        Some(Kind::Magnetic) => magnetic::plan(spec),
         Some(_) => mesh::plan(spec),
         None => bail!("the file has no `sim` line"),
     }
@@ -176,6 +186,7 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
     if let Some(within) = spec.converge {
         let size = match spec.kind {
             Some(Kind::Flow) => wind::cell(spec)?,
+            Some(Kind::Magnetic) => magnetic::size(spec)?,
             _ => mesh::size(spec)?,
         };
         let mut coarse = spec.clone();
@@ -269,6 +280,7 @@ fn solve(spec: &Spec) -> Result<Outcome> {
         Some(Kind::Modal) => vibration::run(spec)?,
         Some(Kind::Buckling) => statics::buckle(spec)?,
         Some(Kind::Flow) => wind::run(spec)?,
+        Some(Kind::Magnetic) => magnetic::run(spec)?,
         None => bail!("the file has no `sim` line"),
     };
     Ok(outcome)
@@ -285,6 +297,9 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
         }
         (Some(Kind::Flow), Some(outcome)) => {
             statics::draw(&wind::field_view(spec, &outcome)?, output)
+        }
+        (Some(Kind::Magnetic), Some(outcome)) => {
+            statics::draw(&magnetic::field_view(spec, Some(&outcome))?, output)
         }
         (Some(kind), _) if kind.meshed() => mesh::render(&mesh::bodies(spec)?, output),
         _ => bail!("there is no result to draw yet; run `gcad sim` first"),
@@ -306,11 +321,13 @@ pub fn picture(spec: &Spec, vars: &[(String, f64)]) -> Option<Picture> {
         .filter(|o| o.kind == kind.name());
     let shown = outcome.as_ref().and_then(|outcome| match kind {
         Kind::Flow => wind::field_view(spec, outcome).ok(),
+        Kind::Magnetic => magnetic::field_view(spec, Some(outcome)).ok(),
         Kind::Torque => None,
         _ => statics::field_view(spec, outcome).ok(),
     });
     let field = shown.or_else(|| match kind {
         Kind::Flow => wind::setup_view(spec).ok(),
+        Kind::Magnetic => magnetic::field_view(spec, None).ok(),
         Kind::Torque => None,
         _ => statics::setup_view(spec).ok(),
     });

@@ -1,0 +1,28 @@
+let radius=20 shaft=6 stack=30 outside=23 half=15.3
+circle 2*radius
+core: extrude stack both
+plane core.end
+hole 2*shaft 0,0
+material steel
+body north
+plane XY
+pen radius*cos(-half),radius*sin(-half)
+line outside*cos(-half),outside*sin(-half)
+line outside*cos(half),outside*sin(half)
+line radius*cos(half),radius*sin(half)
+arc radius*cos(-half),radius*sin(-half) center=0,0 turn=cw
+close
+array count=5 angle=360 at=0,0
+north: extrude stack both
+material ndfeb density=7.5
+body south
+plane XY
+pen radius*cos(36-half),radius*sin(36-half)
+line outside*cos(36-half),outside*sin(36-half)
+line outside*cos(36+half),outside*sin(36+half)
+line radius*cos(36+half),radius*sin(36+half)
+arc radius*cos(36-half),radius*sin(36-half) center=0,0 turn=cw
+close
+array count=5 angle=360 at=0,0
+south: extrude stack both
+material ndfeb density=7.5

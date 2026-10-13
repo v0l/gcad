@@ -81,7 +81,7 @@ pub fn section_outlines(solid: &Solid, section: Section) -> Vec<Vec<Point3>> {
     section_loops(solid, normal, section.at)
 }
 
-fn section_loops(solid: &Solid, normal: Vector3, at: f64) -> Vec<Vec<Point3>> {
+pub(crate) fn section_loops(solid: &Solid, normal: Vector3, at: f64) -> Vec<Vec<Point3>> {
     section_of(
         &geometry::mesh(solid, geometry::mesh_tolerance(solid)),
         solid,

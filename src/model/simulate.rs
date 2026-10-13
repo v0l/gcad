@@ -60,6 +60,12 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "precision",
     "duct",
     "spin",
+    "turn",
+    "length",
+    "slice",
+    "magnet",
+    "iron",
+    "coil",
     "materials",
 ];
 
@@ -434,6 +440,7 @@ impl Model {
                 ))
             }
             "spin" => self.op_spin(line),
+            "turn" | "length" | "slice" | "magnet" | "iron" | "coil" => self.op_magnetic(line),
             "duct" => {
                 let args = Args::new(line, &["width", "height"], &[], false)?;
                 let width = positive(args.number("width", &self.scope)?, "the duct width")?;
@@ -698,6 +705,160 @@ impl Model {
         spec.target = Some(Box::new(model));
         spec.file = Some(path);
         Ok(format!("{bodies} bodies, {joints} moving joints"))
+    }
+
+    fn op_magnetic(&mut self, line: &Line) -> Result<String> {
+        use crate::sim::magnetic::{Assigned, Pointing, Role, Turn};
+        if self.spec().kind != Some(Kind::Magnetic) {
+            bail!("`{}` belongs in a magnetic simulation", line.op);
+        }
+        let scope = self.scope.clone();
+        match line.op.as_str() {
+            "turn" => {
+                let args = Args::new(line, &["joint"], &["sweep", "steps"], false)?;
+                let joint = args.text("joint")?.to_string();
+                let rig = self.target_mut()?.rig();
+                let Some(found) = rig.joints.iter().find(|j| j.name == joint) else {
+                    bail!("no joint called `{joint}`");
+                };
+                if !matches!(found.kind, JointKind::Turn { .. }) {
+                    bail!("`{joint}` is not a `turn` joint");
+                }
+                let sweep = args.optional_number("sweep", &scope)?.unwrap_or(0.0);
+                let steps = match args.optional_number("steps", &scope)? {
+                    Some(n) if n >= 1.0 && n.fract() == 0.0 && n <= 1000.0 => n as usize,
+                    Some(n) => bail!("`steps={n}` must be a whole number from 1 to 1000"),
+                    None if sweep != 0.0 => 12,
+                    None => 0,
+                };
+                if steps > 0 && sweep == 0.0 {
+                    bail!("give the angle to turn through with `sweep=`, in degrees");
+                }
+                self.spec().turn = Some(Turn {
+                    joint: joint.clone(),
+                    sweep,
+                    steps,
+                });
+                Ok(if steps > 0 {
+                    format!("{joint} turns through {sweep}° in {steps} steps")
+                } else {
+                    format!("{joint} carries the rotor")
+                })
+            }
+            "length" => {
+                let args = Args::new(line, &["mm"], &[], false)?;
+                let mm = positive(args.number("mm", &scope)?, "the stack length")?;
+                self.spec().stack = Some(mm);
+                Ok(format!("a {mm} mm stack"))
+            }
+            "slice" => {
+                let args = Args::new(line, &[], &["at"], false)?;
+                let at = args.number("at", &scope)?;
+                self.spec().slice = Some(at);
+                Ok(format!("the slice {at} mm along the axis from the joint"))
+            }
+            op => {
+                let args = Args::new(
+                    line,
+                    &[],
+                    &[
+                        "Br", "br", "mu", "toward", "material", "turns", "current", "axis",
+                    ],
+                    true,
+                )?;
+                if args.rest.is_empty() {
+                    bail!("name the parts, like `{op} rotor_core stator*`");
+                }
+                let number =
+                    |key: &str| -> Result<Option<f64>> { args.optional_number(key, &scope) };
+                let role = match op {
+                    "magnet" => {
+                        let br = number("Br")?.or(number("br")?).ok_or_else(|| {
+                            anyhow!("a magnet needs its remanence, like Br=1.2 (tesla)")
+                        })?;
+                        let mu = positive(number("mu")?.unwrap_or(1.05), "`mu`")?;
+                        let toward = match args.values.get("toward").map(|t| t.as_ref()) {
+                            None | Some("radial") => Pointing::Radial(1.0),
+                            Some("-radial") => Pointing::Radial(-1.0),
+                            Some(text) => Pointing::Along(super::args::direction(text, &scope)?),
+                        };
+                        Role::Magnet { br, mu, toward }
+                    }
+                    "iron" => {
+                        let material = args.values.get("material").map(|m| m.to_lowercase());
+                        match (material, number("mu")?) {
+                            (Some(m), _) => {
+                                if crate::sim::magnetic::steel::named(&m).is_none() {
+                                    bail!(
+                                        "no steel called `{m}`; steels are {}",
+                                        crate::sim::magnetic::steel::NAMES.join(", ")
+                                    );
+                                }
+                                Role::Iron {
+                                    curve: Some(m),
+                                    mu: 1.0,
+                                }
+                            }
+                            (None, Some(mu)) => Role::Iron {
+                                curve: None,
+                                mu: positive(mu, "`mu`")?,
+                            },
+                            (None, None) => Role::Iron {
+                                curve: Some("m19".into()),
+                                mu: 1.0,
+                            },
+                        }
+                    }
+                    _ => {
+                        let turns = number("turns")?.unwrap_or(1.0);
+                        if turns == 0.0 || !turns.is_finite() {
+                            bail!(
+                                "`turns` is how many times the coil is wound, negative for the other way"
+                            );
+                        }
+                        let current = number("current")?.unwrap_or(0.0);
+                        let axis = match args.values.get("axis") {
+                            Some(text) => Some(super::args::direction(text, &scope)?),
+                            None => None,
+                        };
+                        Role::Coil {
+                            turns,
+                            current,
+                            axis,
+                        }
+                    }
+                };
+                let label = line
+                    .label
+                    .clone()
+                    .unwrap_or_else(|| args.rest[0].to_string());
+                let names: Vec<String> = self
+                    .target_mut()?
+                    .named_solids()
+                    .into_iter()
+                    .map(|(n, _)| n)
+                    .collect();
+                for pattern in &args.rest {
+                    if !names.iter().any(|n| crate::sim::matches(pattern, n)) {
+                        bail!("`{pattern}` matches no part; parts are {names:?}");
+                    }
+                }
+                let summary = match &role {
+                    Role::Magnet { br, .. } => format!("magnets of {br} T"),
+                    Role::Iron { curve: Some(c), .. } => format!("{c} steel"),
+                    Role::Iron { mu, .. } => format!("iron of relative permeability {mu}"),
+                    Role::Coil { turns, current, .. } => {
+                        format!("`{label}`, {turns} turns carrying {current} A")
+                    }
+                };
+                self.spec().roles.push(Assigned {
+                    label,
+                    patterns: args.rest.iter().map(|p| p.to_string()).collect(),
+                    role,
+                });
+                Ok(format!("{}: {summary}", args.rest.join(" ")))
+            }
+        }
     }
 
     fn op_spin(&mut self, line: &Line) -> Result<String> {

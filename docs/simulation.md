@@ -220,6 +220,38 @@ nearest surface sample within two cells, and faces further than that from any sa
 none. The flow must have a fresh result. Wall shear is left out: on the cube it is 3% of the
 drag and, acting on the top face, 10% of the moment about the base.
 
+### magnetic
+
+The magnetic field of a motor, an actuator or a coupling, solved on a 2D slice through it
+the way FEMM does, times the stack length. The plan, the method and the checks are in
+`docs/magnetic.md`.
+
+```
+sim magnetic
+part motor.gasm
+turn spin sweep=6 steps=12
+iron stator rotor.main material=m19
+magnet rotor.north Br=1.2 toward=radial
+magnet rotor.south Br=1.2 toward=-radial
+a: coil c0 c7 turns=40 current=10
+a: coil c1 c6 turns=-40 current=10
+mesh 0.5
+```
+
+The slice is square to the `turn` joint's axis. Parts named in `magnet`, `iron` and `coil`
+lines are cut by it, everything else counts as air, and the parts the joint carries are the
+rotor. There must be an airgap all the way round between the rotor's parts and the rest:
+the solver splits it into rings and turns the rotor in whole steps of its mesh, so the mesh is
+never rebuilt during a sweep. `mesh` is the element size in mm, half the airgap unless given.
+
+Readings: `torque` on the rotor about the joint axis (N·m, the mean over a sweep),
+`torque.max`, `torque.min`, and over a sweep `cogging` (peak to peak, when no coil carries
+current) or `ripple`; `airgap`, the peak flux density in the gap (T); `part.b`, the peak in each
+iron part; and for each coil label `label.flux`, its flux linkage at the first pose (Wb), and
+over a sweep `label.emf`, the peak back-EMF at 1000 rpm (V) from the change of flux linkage.
+The sweep is drawn as torque and flux linkage against angle, and the field is the flux density
+on the slice at the first pose.
+
 ## Meshing
 
 Tetrahedra that follow the surface, written in Rust (`src/sim/tet/`). Built in phase 2:

@@ -1,0 +1,13 @@
+sim magnetic
+part motor.gasm
+turn spin sweep=6 steps=12
+iron stator rotor.main material=m19
+magnet rotor.north Br=1.2 toward=radial
+magnet rotor.south Br=1.2 toward=-radial
+a: coil c0 c7 turns=40
+a: coil c1 c6 turns=-40
+b: coil c3 c8 turns=40
+b: coil c2 c9 turns=-40
+c: coil c4 c11 turns=40
+c: coil c5 c10 turns=-40
+mesh 0.5
