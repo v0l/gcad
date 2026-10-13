@@ -5,6 +5,7 @@ use std::time::Duration;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Report {
     pub phase: Option<String>,
+    pub parent: Option<String>,
     pub stage: String,
     pub done: f64,
     pub total: Option<f64>,
@@ -39,14 +40,7 @@ impl Report {
 
     pub fn status(&self) -> String {
         let mut parts = Vec::new();
-        let count = match self.total {
-            Some(total) => format!("{} of {} {}", whole(self.done), whole(total), self.unit),
-            None if self.done > 0.0 => format!("{} {}", whole(self.done), self.unit),
-            None => String::new(),
-        };
-        if !count.trim().is_empty() {
-            parts.push(count.trim().to_string());
-        }
+        parts.extend(self.count());
         if let Some(fraction) = self.fraction()
             && !self.finished
         {
@@ -64,6 +58,24 @@ impl Report {
             }
         }
         parts.join(", ")
+    }
+
+    pub fn count(&self) -> Option<String> {
+        let count = match self.total {
+            Some(total) => format!("{} of {} {}", whole(self.done), whole(total), self.unit),
+            None if self.done > 0.0 => format!("{} {}", whole(self.done), self.unit),
+            None => return None,
+        };
+        Some(count.trim().to_string())
+    }
+
+    pub fn summary(&self) -> Option<String> {
+        let parts: Vec<String> = self
+            .count()
+            .into_iter()
+            .chain((!self.detail.is_empty()).then(|| self.detail.clone()))
+            .collect();
+        (!parts.is_empty()).then(|| parts.join(", "))
     }
 
     pub fn line(&self) -> String {
@@ -96,6 +108,8 @@ type Sink = Arc<dyn Fn(&Report) + Send + Sync>;
 
 static SINK: RwLock<Option<Sink>> = RwLock::new(None);
 static PHASE: Mutex<Vec<String>> = Mutex::new(Vec::new());
+static OPEN: Mutex<Vec<(u64, String)>> = Mutex::new(Vec::new());
+static NEXT: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
 
 const EVERY: Duration = Duration::from_millis(100);
 
@@ -151,8 +165,10 @@ struct State {
 }
 
 struct Inner {
+    id: u64,
     sink: Sink,
     phase: Option<String>,
+    parent: Option<String>,
     name: String,
     total: Option<f64>,
     unit: &'static str,
@@ -176,10 +192,20 @@ pub fn stage_after(
     let Some(sink) = sink() else {
         return Stage(None);
     };
+    let name = name.into();
+    let id = NEXT.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+    let parent = {
+        let mut open = OPEN.lock().unwrap_or_else(|e| e.into_inner());
+        let parent = open.first().map(|(_, n)| n.clone());
+        open.push((id, name.clone()));
+        parent
+    };
     let stage = Stage(Some(Inner {
+        id,
         sink,
         phase: current_phase(),
-        name: name.into(),
+        parent,
+        name,
         total: total.map(|t| t as f64),
         unit,
         started: Instant::now(),
@@ -265,6 +291,7 @@ impl Stage {
             }
             Report {
                 phase: inner.phase.clone(),
+                parent: inner.parent.clone(),
                 stage: inner.name.clone(),
                 done: state.done,
                 total: inner.total,
@@ -282,6 +309,11 @@ impl Stage {
 impl Drop for Stage {
     fn drop(&mut self) {
         self.send(true);
+        if let Some(inner) = &self.0 {
+            OPEN.lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .retain(|(id, _)| *id != inner.id);
+        }
     }
 }
 
@@ -323,6 +355,35 @@ mod tests {
                 .starts_with("coarse check: meshing, 4 of 4 parts, took")
         );
         assert!(!stage("unheard", None, "").active());
+    }
+
+    #[test]
+    fn stages_inside_a_stage_name_it_as_their_parent() {
+        let _serial = SERIAL.lock().unwrap_or_else(|e| e.into_inner());
+        let seen: Arc<Mutex<Vec<Report>>> = Arc::default();
+        let into = seen.clone();
+        let listening = listen(move |r| into.lock().unwrap().push(r.clone()));
+        {
+            let _outer = stage("building the model", None, "");
+            let _inner = stage("building parts", Some(2), "files");
+        }
+        let _after = stage("solving", None, "iterations");
+        drop(_after);
+        drop(listening);
+        let seen = seen.lock().unwrap();
+        let parent_of = |name: &str| {
+            seen.iter()
+                .find(|r| r.stage == name)
+                .unwrap()
+                .parent
+                .clone()
+        };
+        assert_eq!(
+            parent_of("building parts").as_deref(),
+            Some("building the model")
+        );
+        assert_eq!(parent_of("building the model"), None);
+        assert_eq!(parent_of("solving"), None);
     }
 
     #[test]

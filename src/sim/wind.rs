@@ -411,10 +411,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         )
     };
     let settling = crate::progress::stage(
-        format!(
-            "settling the flow in {} x {} x {} cells",
-            size[0], size[1], size[2]
-        ),
+        "settling the flow",
         Some(ramp.div_ceil(20) * 20 + settle),
         "steps",
     );
@@ -1599,14 +1596,38 @@ pub fn setup_view(spec: &Spec) -> Result<FieldView> {
     };
     let base = positions.len() as u32;
     positions.extend((0..8).map(corner));
+    let mut outline = Vec::new();
     for a in 0..8u32 {
         for d in 0..3 {
             let b = a | 1 << d;
             if b != a {
-                edges.push([base + a, base + a, base + b]);
+                outline.push([base + a, base + a, base + b]);
             }
         }
     }
+    let metres = |d: usize| {
+        crate::plot::label(((grid.size[d] - 2) as f64 * grid.spacing * 1.0e-2).round() / 10.0)
+    };
+    marks.push(Mark {
+        kind: Stimulus::Wind,
+        text: format!(
+            "{} {} x {} x {} m, {} mm cells",
+            if spec.duct.is_some() {
+                "duct"
+            } else {
+                "air box"
+            },
+            metres(SIDE),
+            metres(UP),
+            metres(WIND),
+            crate::plot::label(grid.spacing)
+        ),
+        nodes: Vec::new(),
+        outline,
+        spot: Some(base + 7),
+        at: corner(7),
+        toward: None,
+    });
     let count = positions.len();
     Ok(FieldView {
         shade: vec![0.0; count],

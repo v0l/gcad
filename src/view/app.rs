@@ -262,6 +262,7 @@ pub struct App {
     cursor_row: Option<usize>,
     sim_job: Option<SimJob>,
     sim_error: Option<String>,
+    sim_every_part: bool,
 }
 
 const WEB: bool = cfg!(target_arch = "wasm32");
@@ -274,22 +275,213 @@ type SimJob = (
 
 #[derive(Default)]
 struct SimProgress {
-    live: Vec<crate::progress::Report>,
-    done: Vec<crate::progress::Report>,
+    rows: Vec<StageRow>,
+}
+
+struct StageRow {
+    report: crate::progress::Report,
+    inside: Option<crate::progress::Report>,
 }
 
 impl SimProgress {
     fn take(&mut self, report: &crate::progress::Report) {
-        let name = report.name();
-        self.live.retain(|r| r.name() != name);
-        if report.finished {
-            self.done.push(report.clone());
-            if self.done.len() > 5 {
-                self.done.remove(0);
-            }
-        } else {
-            self.live.push(report.clone());
+        if let Some(parent) = &report.parent
+            && let Some(row) = self
+                .rows
+                .iter_mut()
+                .rev()
+                .find(|r| !r.report.finished && r.report.stage == *parent)
+        {
+            row.inside = (!report.finished).then(|| report.clone());
+            return;
         }
+        let name = report.name();
+        match self
+            .rows
+            .iter_mut()
+            .rev()
+            .find(|r| !r.report.finished && r.report.name() == name)
+        {
+            Some(row) => {
+                row.report = report.clone();
+                if report.finished {
+                    row.inside = None;
+                }
+            }
+            None => self.rows.push(StageRow {
+                report: report.clone(),
+                inside: None,
+            }),
+        }
+    }
+
+    fn show(&self, ui: &mut Ui) {
+        const SHOWN: usize = 6;
+        let done: Vec<&StageRow> = self.rows.iter().filter(|r| r.report.finished).collect();
+        if done.len() > SHOWN {
+            Line::new()
+                .note(format!("{} earlier steps", done.len() - SHOWN))
+                .size(11.0)
+                .show(ui);
+        }
+        for row in done.iter().skip(done.len().saturating_sub(SHOWN)) {
+            stage_row(
+                ui,
+                &row.report.name(),
+                &crate::progress::duration(row.report.elapsed),
+                OK,
+            );
+        }
+        for row in self.rows.iter().filter(|r| !r.report.finished) {
+            let report = &row.report;
+            let fraction = report.fraction();
+            let right = match fraction {
+                Some(f) => format!("{:.0}%", f * 100.0),
+                None => crate::progress::duration(report.elapsed),
+            };
+            stage_row(ui, &report.name(), &right, TRACE);
+            progress(
+                ui,
+                "",
+                fraction.unwrap_or(0.0) as f32,
+                fraction.map(|_| 1.0),
+                "",
+            );
+            let what = match &row.inside {
+                Some(inside) => {
+                    let mut text = inside.stage.clone();
+                    if let Some(summary) = inside.summary() {
+                        text += &format!(": {summary}");
+                    }
+                    Some(text)
+                }
+                None => report.summary(),
+            };
+            let when = match report.remaining() {
+                Some(left) => format!("about {} left", crate::progress::duration(left)),
+                None => format!("{} so far", crate::progress::duration(report.elapsed)),
+            };
+            let text = match what {
+                Some(what) => format!("{when}; {what}"),
+                None => when,
+            };
+            Line::new()
+                .note(&text)
+                .size(11.0)
+                .elided(ui)
+                .on_hover_text(text);
+        }
+    }
+}
+
+fn stage_row(ui: &mut Ui, name: &str, right: &str, mark: egui::Color32) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(value(right));
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 14.0), egui::Sense::hover());
+                ui.painter().circle_filled(rect.center(), 2.5, mark);
+                ui.add(egui::Label::new(legend(name)).truncate());
+            });
+        });
+    });
+}
+
+type Group<'a> = (&'a str, Vec<&'a crate::sim::Reading>);
+
+fn tail(r: &crate::sim::Reading) -> String {
+    r.name.split_once('.').map_or("", |(_, t)| t).to_string()
+}
+
+fn reading_groups(readings: &[crate::sim::Reading]) -> (Vec<Group<'_>>, Vec<Group<'_>>) {
+    let mut groups: Vec<Group> = Vec::new();
+    for reading in readings {
+        if let Some((head, _)) = reading.name.split_once('.') {
+            match groups.iter_mut().find(|(h, _)| *h == head) {
+                Some((_, list)) => list.push(reading),
+                None => groups.push((head, vec![reading])),
+            }
+        }
+    }
+    let vector = |list: &[&crate::sim::Reading]| {
+        list.iter()
+            .all(|r| matches!(tail(r).as_str(), "x" | "y" | "z"))
+    };
+    let (vectors, mut parts): (Vec<Group>, Vec<Group>) =
+        groups.into_iter().partition(|(_, list)| vector(list));
+    parts.sort_by(|a, b| b.1[0].value.abs().total_cmp(&a.1[0].value.abs()));
+    (vectors, parts)
+}
+
+fn readings_list(ui: &mut Ui, readings: &[crate::sim::Reading], every_part: &mut bool) {
+    const FEW: usize = 8;
+    let short = crate::sim::short;
+    let (vectors, parts) = reading_groups(readings);
+    let line = |ui: &mut Ui, r: &crate::sim::Reading| {
+        Line::new()
+            .legend(&r.name)
+            .value(short(r.value))
+            .note(&r.unit)
+            .size(11.0)
+            .show(ui);
+    };
+    let joined = |list: &[&crate::sim::Reading]| {
+        list.iter()
+            .map(|r| format!("{} {} {}", tail(r), short(r.value), r.unit))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    let row = |ui: &mut Ui, head: &str, text: String| {
+        Line::new()
+            .legend(head)
+            .note(&text)
+            .size(11.0)
+            .elided(ui)
+            .on_hover_text(text);
+    };
+    let collapse = parts.len() > FEW;
+    let mut shown_vectors: Vec<&str> = Vec::new();
+    for r in readings {
+        let head = r.name.split_once('.').map(|(h, _)| h);
+        match head {
+            None => line(ui, r),
+            Some(head) => {
+                if let Some((_, list)) = vectors.iter().find(|(h, _)| *h == head) {
+                    if !shown_vectors.contains(&head) {
+                        shown_vectors.push(head);
+                        row(ui, head, joined(list));
+                    }
+                } else if !collapse {
+                    line(ui, r);
+                }
+            }
+        }
+    }
+    if !collapse {
+        return;
+    }
+    let first = tail(parts[0].1[0]);
+    let order = &parts;
+    let count = order.len();
+    Line::new()
+        .legend(&format!("{count} parts"))
+        .note(if *every_part {
+            format!("by {first}")
+        } else {
+            format!("the {FEW} with the most {first}")
+        })
+        .size(11.0)
+        .show(ui);
+    for (head, list) in order.iter().take(if *every_part { count } else { FEW }) {
+        row(ui, head, joined(list));
+    }
+    let label = if *every_part {
+        "fewer parts".to_string()
+    } else {
+        format!("all {count} parts")
+    };
+    if toggle(ui, &label, *every_part).clicked() {
+        *every_part = !*every_part;
     }
 }
 
@@ -422,6 +614,7 @@ impl App {
             source: String::new(),
             cursor_row: None,
             sim_job: None,
+            sim_every_part: false,
             sim_error: None,
         };
         match path {
@@ -1002,12 +1195,18 @@ impl App {
                     .show(ui);
             },
             |ui| {
-                if let Some(why) = &sim.stale {
+                let running = self
+                    .sim_job
+                    .as_ref()
+                    .map(|(_, started, watched)| (*started, watched.clone()));
+                if running.is_none()
+                    && let Some(why) = &sim.stale
+                {
                     note(ui, why, if sim.outcome.is_some() { WARN } else { LEGEND });
                 }
                 if !WEB {
-                    match &self.sim_job {
-                        Some((_, started, watched)) => {
+                    match &running {
+                        Some((started, watched)) => {
                             lamp(
                                 ui,
                                 &format!(
@@ -1017,25 +1216,7 @@ impl App {
                                 true,
                                 false,
                             );
-                            let watched = watched.lock().unwrap_or_else(|e| e.into_inner());
-                            for report in &watched.done {
-                                note(ui, report.line(), LEGEND);
-                            }
-                            for report in &watched.live {
-                                let fraction = report.fraction();
-                                progress(
-                                    ui,
-                                    &report.name(),
-                                    fraction.unwrap_or(0.0) as f32,
-                                    fraction.map(|_| 1.0),
-                                    "",
-                                );
-                                Line::new()
-                                    .legend(&report.name())
-                                    .note(report.status())
-                                    .size(11.0)
-                                    .wrapped(ui);
-                            }
+                            watched.lock().unwrap_or_else(|e| e.into_inner()).show(ui);
                         }
                         None => {
                             let label = if sim.outcome.is_some() {
@@ -1050,17 +1231,13 @@ impl App {
                 if let Some(error) = &self.sim_error {
                     note(ui, error, FAULT);
                 }
+                if running.is_some() {
+                    return;
+                }
                 let Some(outcome) = &sim.outcome else {
                     return;
                 };
-                for r in &outcome.readings {
-                    Line::new()
-                        .legend(&r.name)
-                        .value(short(r.value))
-                        .note(&r.unit)
-                        .size(11.0)
-                        .show(ui);
-                }
+                readings_list(ui, &outcome.readings, &mut self.sim_every_part);
                 for (text, value, pass) in &outcome.checks {
                     Line::new()
                         .legend("expect")
@@ -1077,7 +1254,11 @@ impl App {
                     series_traces(ui, series);
                 }
                 for line in &outcome.notes {
-                    note(ui, line, LEGEND);
+                    Line::new()
+                        .note(line)
+                        .size(11.0)
+                        .elided(ui)
+                        .on_hover_text(line);
                 }
             },
         );
@@ -2631,7 +2812,18 @@ fn field_marks(
     let font = egui::FontId::proportional(12.0);
     let label = |at: Pos2, text: &str, colour: Color32| {
         let galley = p.layout_no_wrap(text.to_string(), font.clone(), colour);
-        let corner = at + Vec2::new(6.0, -galley.size().y - 4.0);
+        let size = galley.size();
+        let wanted = at + Vec2::new(6.0, -size.y - 4.0);
+        let corner = Pos2::new(
+            wanted
+                .x
+                .min(rect.right() - size.x - 6.0)
+                .max(rect.left() + 6.0),
+            wanted
+                .y
+                .min(rect.bottom() - size.y - 6.0)
+                .max(rect.top() + 6.0),
+        );
         p.rect_filled(
             Rect::from_min_size(corner, galley.size()).expand(3.0),
             3.0,
@@ -3070,13 +3262,52 @@ mod tests {
         drop(listening);
         assert_eq!(crate::sim::stale(&spec, &[]), None);
         let watched = watched.lock().unwrap();
-        assert!(watched.live.is_empty());
-        let names: Vec<String> = watched.done.iter().map(|r| r.name()).collect();
+        assert!(
+            watched
+                .rows
+                .iter()
+                .all(|r| r.report.finished && r.inside.is_none())
+        );
+        let names: Vec<String> = watched.rows.iter().map(|r| r.report.name()).collect();
+        assert_eq!(
+            names.first().map(String::as_str),
+            Some("building the model")
+        );
         assert!(
             names.contains(&"taking readings".to_string())
                 && names.last().map(String::as_str) == Some("writing the result"),
             "{names:?}"
         );
+        assert!(
+            !names.contains(&"running `bar.gsim`".to_string()),
+            "{names:?}"
+        );
+    }
+
+    #[test]
+    fn readings_group_into_vectors_and_parts_by_size() {
+        let reading = |name: &str, value: f64| crate::sim::Reading {
+            name: name.into(),
+            value,
+            unit: "N".into(),
+            at: String::new(),
+        };
+        let readings = vec![
+            reading("drag", 10.0),
+            reading("moment.x", 1.0),
+            reading("moment.y", 2.0),
+            reading("moment.z", 3.0),
+            reading("mast.drag", 2.0),
+            reading("mast.lift", 0.5),
+            reading("boom.drag", -7.0),
+        ];
+        let (vectors, parts) = super::reading_groups(&readings);
+        assert_eq!(vectors.iter().map(|g| g.0).collect::<Vec<_>>(), ["moment"]);
+        assert_eq!(
+            parts.iter().map(|g| g.0).collect::<Vec<_>>(),
+            ["boom", "mast"]
+        );
+        assert_eq!(parts[1].1.len(), 2);
     }
 
     #[test]
