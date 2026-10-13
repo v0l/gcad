@@ -1,6 +1,6 @@
 use super::Model;
 use super::args::{Args, describe_point, label_of, point3, positive};
-use super::solids::{loft_wires, loops, oriented, regions};
+use super::solids::{loops, oriented, regions};
 use crate::geometry::Frame;
 use crate::parse::Line;
 use crate::select;
@@ -116,7 +116,7 @@ fn pieces(points: &[Point3], bend: f64) -> Result<(Vector3, Vec<Piece>)> {
 }
 
 fn helix_frames(frame: &Frame, radius: f64, pitch: f64, turns: f64) -> Vec<Frame> {
-    let stations = ((turns * 72.0).ceil() as usize).max(2);
+    let stations = ((turns * 16.0).ceil() as usize).max(2);
     (0..=stations)
         .map(|i| {
             let t = i as f64 / stations as f64;
@@ -332,19 +332,7 @@ impl Model {
                 radius,
                 pitch,
                 turns,
-            } => {
-                let frames = helix_frames(&frame, radius, pitch, turns);
-                let shapes = loops(&frames[0], &profiles)?;
-                if shapes.len() != 1 {
-                    bail!("a helix sweep takes one profile without holes");
-                }
-                let wires = frames
-                    .iter()
-                    .map(|f| profiles[0].wires(f).map(|mut w| w.remove(0)))
-                    .collect::<std::result::Result<Vec<_>, _>>()
-                    .map_err(|e| anyhow!(e))?;
-                vec![loft_wires(&wires)?]
-            }
+            } => skin_frames(&helix_frames(&frame, radius, pitch, turns), &profiles)?,
         };
         self.place_swept(&label, tools, start_point, end_point, combine)
     }
