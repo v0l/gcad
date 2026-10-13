@@ -266,7 +266,7 @@ impl Model {
                     let spec = self.spec();
                     match &mut spec.warming {
                         Some(crate::sim::Warm::By(list)) => list.push((part, by)),
-                        Some(crate::sim::Warm::From { .. }) => {
+                        Some(crate::sim::Warm::From { .. } | crate::sim::Warm::Solved { .. }) => {
                             bail!(
                                 "this simulation already takes its temperatures from a heat simulation"
                             )

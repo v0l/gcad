@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 
 pub const LIBRARY: &str = "materials.toml";
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Axes {
     pub young: [Option<f64>; 3],
     pub poisson: [Option<f64>; 3],

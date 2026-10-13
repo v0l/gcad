@@ -6,7 +6,7 @@ pub const DIRECT_LIMIT: usize = 150_000;
 use monstertruck::modeling::*;
 use rayon::prelude::*;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Boundary {
     Temperature {
         label: String,

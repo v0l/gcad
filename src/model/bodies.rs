@@ -1214,7 +1214,7 @@ fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSoli
     Ok(out)
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Material {
     pub name: String,
     pub density: f64,
@@ -1222,7 +1222,7 @@ pub struct Material {
     pub axes: Option<super::materials::Axes>,
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Mechanics {
     pub young: Option<f64>,
     pub poisson: Option<f64>,
