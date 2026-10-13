@@ -1,0 +1,5 @@
+sim flow
+part rotor.gasm
+leave column
+spin spin rpm=1250
+mesh 13

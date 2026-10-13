@@ -312,3 +312,34 @@ fan wake, would settle it.
 The flow through the disc agrees within 5% at every size. The thrust climbs toward OpenFOAM's as the cells
 shrink. The torque does not settle: at 30 degrees the blades meet the air near 18 degrees and
 are stalled, and both solvers model that separated flow, not resolve it.
+
+### Hover rotor (Caradonna and Tung)
+
+`examples/flow/caradonna/hover.gsim` is the Caradonna-Tung rotor of NASA TM 81232 (1981): two
+untwisted, untapered NACA 0012 blades, R = 1.143 m, aspect ratio 6 (chord 190.5 mm), 8 degrees
+collective, 1250 rpm, measured CT = 0.00459 (507 N in air of 1.204 kg/m³). The report gives no
+root cutout; the model's blades start at 0.09 R on a hub of 0.1 R, which adds under 1% of the
+thrust. At 13 mm cells (73 million, 15 cells on the chord, 1.8 through the thickness, 40 minutes
+on the GPU with 17 GB free) the lattice is far off:
+
+| | thrust | CT | torque |
+|---|---|---|---|
+| measured | 507 N | 0.00459 | |
+| lattice, 13 mm | 309 N | 0.00280 | 139 N·m (CQ 0.0011, about 3x what a figure of merit near 0.6 implies) |
+
+and its wake opens into a cone, where a hovering rotor's contracts to about 0.78 R.
+
+Two causes were found:
+
+- **Eddy viscosity at the wall.** Smagorinsky's model gives the first fluid cell an eddy
+  viscosity of about `(Cs dx)^2 U/dx`, a skin friction coefficient near `2 Cs^2 = 0.04`
+  against 0.003 for a turbulent plate at this Reynolds number. Scaling it down in cells that
+  touch a wall, at 20 mm cells: factor 1 read 110 N and 294 N·m, 0.3 read 140 N and 213 N·m,
+  0.1 read 173 N and 92 N·m; 0 diverged at 13 mm, the wall cells then sitting at tau 0.5000003.
+  A wall-adapting model (WALE, or Vreman) or a wall function is needed, not a factor.
+- **Resolution.** On a uniform grid a 2.3 m rotor in a box 7 H across leaves 15 cells on the
+  chord and under 2 through the blade; thrust went from 110 N at 20 mm to 309 N at 13 mm and
+  has not settled. Rotor codes refine the grid round the blades; this lattice is uniform.
+
+Refilling uncovered cells with the surrounding air's velocity instead of the blade's made it
+worse (181 N, 179 N·m at 13 mm), so the blade's own velocity stays.

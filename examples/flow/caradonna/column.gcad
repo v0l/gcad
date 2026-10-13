@@ -1,0 +1,5 @@
+let R=1143
+plane XY offset=-3*R
+circle 100
+extrude 200
+material steel

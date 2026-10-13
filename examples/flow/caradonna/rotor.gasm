@@ -1,0 +1,4 @@
+part column column.gcad
+part rotor rotor.gcad
+axis shaft 0,0,0 0,0,1
+joint spin rotor column turn about=shaft
