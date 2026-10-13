@@ -9,7 +9,8 @@ All notable changes to gcad are listed here. The format follows
 ### Added
 - Remote simulations: `gcad sim x.gsim --remote` builds the model locally, sends the built
   bodies, materials and selected faces to a paid GPU worker at sims.gcad.sh and writes the
-  result beside the spec. `gcad remote signup|login|account|jobs|cancel` manage the account.
+  result beside the spec. `gcad remote signup|login|account|runners|jobs|cancel` manage the
+  account; runners set their own price an hour and `--max-price` caps it.
 - Gear drives in `sim torque`: `couple ... module= face= teeth= pressure= gear= pinion=` reads
   each mesh's efficiency, torque, tangential, radial and axial forces, Lewis bending and Hertz
   contact stress and bending safety; `speed joint rpm` adds each joint's power, each mesh's

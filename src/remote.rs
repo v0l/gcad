@@ -210,10 +210,7 @@ pub fn account() -> Result<()> {
             String::new()
         }
     );
-    println!(
-        "price    {} an hour of worker time",
-        euros(me["price_cents_per_hour"].as_i64().unwrap_or(0))
-    );
+    println!("runners  `gcad remote runners` lists them and their prices");
     if let Some(shop) = me["shop_url"].as_str() {
         println!("top up   {shop}");
     }
@@ -231,10 +228,11 @@ pub fn jobs() -> Result<()> {
         let charged = job["charged_cents"].as_i64().map(euros).unwrap_or_default();
         let took = job["seconds"].as_f64().map(duration).unwrap_or_default();
         println!(
-            "{}  {:<10} {:<24} {:>8} {:>7}  {}",
+            "{}  {:<10} {:<24} {:<12} {:>8} {:>7}  {}",
             job["id"].as_str().unwrap_or_default(),
             job["state"].as_str().unwrap_or_default(),
             job["spec"].as_str().unwrap_or_default(),
+            job["runner"].as_str().unwrap_or("-"),
             took,
             charged,
             job["error"].as_str().unwrap_or_default()
@@ -268,10 +266,15 @@ fn hash_of(name: &str, stamp: &[(String, String)]) -> String {
 
 const LIVE: &[&str] = &["queued", "running", "cancelling", "succeeded"];
 
+pub struct Limits {
+    pub minutes: u64,
+    pub price_cents: Option<u64>,
+}
+
 pub fn simulate(
     file: &Path,
     vars: &[(String, f64)],
-    max_minutes: u64,
+    limits: &Limits,
     build: impl FnOnce() -> Result<crate::model::Run>,
 ) -> Result<()> {
     let client = Client::open()?;
@@ -302,16 +305,7 @@ pub fn simulate(
             );
             job
         }
-        None => submit(
-            &client,
-            file,
-            &name,
-            vars,
-            &stamp,
-            &hash,
-            max_minutes,
-            build,
-        )?,
+        None => submit(&client, file, &name, vars, &stamp, &hash, limits, build)?,
     };
     let id = job["id"].as_str().context("the job has no id")?.to_string();
     let done = wait(&client, &id)?;
@@ -326,10 +320,10 @@ fn submit(
     vars: &[(String, f64)],
     stamp: &[(String, String)],
     hash: &str,
-    max_minutes: u64,
+    limits: &Limits,
     build: impl FnOnce() -> Result<crate::model::Run>,
 ) -> Result<Value> {
-    ready(client, max_minutes)?;
+    let price = ready(client, limits)?;
     let run = build()?;
     let spec = run
         .model
@@ -338,10 +332,10 @@ fn submit(
         .context("a .gsim file runs as a simulation")?;
     let packed = crate::sim::job::pack(spec, stamp.to_vec())?;
     let mut url = format!(
-        "jobs?spec={}&version={}&hash={hash}&max_seconds={}",
+        "jobs?spec={}&version={}&hash={hash}&max_seconds={}&max_price={price}",
         encode(name),
         env!("CARGO_PKG_VERSION"),
-        max_minutes * 60
+        limits.minutes * 60
     );
     for (key, value) in vars {
         url.push_str(&format!("&set={}", encode(&format!("{key}={value}"))));
@@ -362,22 +356,35 @@ fn submit(
         .into_json()?;
     let id = job["id"].as_str().unwrap_or_default();
     eprintln!(
-        "job {id} holds {} for up to {max_minutes} minutes; if this stops, rerun the same command to pick it up, or `gcad remote cancel {id}`",
-        euros(job["held_cents"].as_i64().unwrap_or(0))
+        "job {id} holds {} for up to {} minutes at up to {} an hour; if this stops, rerun the same command to pick it up, or `gcad remote cancel {id}`",
+        euros(job["held_cents"].as_i64().unwrap_or(0)),
+        limits.minutes,
+        euros(price as i64)
     );
     Ok(job)
 }
 
-fn ready(client: &Client, max_minutes: u64) -> Result<()> {
+fn runners_of(status: &Value) -> Vec<Value> {
+    status["runners"].as_array().cloned().unwrap_or_default()
+}
+
+fn price_of(runner: &Value) -> u64 {
+    runner["price_cents_per_hour"].as_u64().unwrap_or(0)
+}
+
+fn ready(client: &Client, limits: &Limits) -> Result<u64> {
     let version = env!("CARGO_PKG_VERSION");
     let status = client.get("status")?;
-    let versions: Vec<&str> = status["versions"]
-        .as_array()
-        .map(|a| a.iter().filter_map(Value::as_str).collect())
-        .unwrap_or_default();
-    if !versions.contains(&version) {
+    let all = runners_of(&status);
+    let able: Vec<&Value> = all
+        .iter()
+        .filter(|r| r["version"].as_str() == Some(version))
+        .collect();
+    if able.is_empty() {
+        let mut versions: Vec<&str> = all.iter().filter_map(|r| r["version"].as_str()).collect();
+        versions.dedup();
         bail!(
-            "no remote worker runs gcad {version}{}",
+            "no remote runner runs gcad {version}{}",
             if versions.is_empty() {
                 String::new()
             } else {
@@ -385,19 +392,91 @@ fn ready(client: &Client, max_minutes: u64) -> Result<()> {
             }
         );
     }
+    let cheapest = able.iter().map(|r| price_of(r)).min().unwrap_or(0);
+    let price = match limits.price_cents {
+        Some(cap) if cap < cheapest => bail!(
+            "the cheapest runner on gcad {version} asks {} an hour, above --max-price {}; `gcad remote runners` lists them",
+            euros(cheapest as i64),
+            euros(cap as i64)
+        ),
+        Some(cap) => cap,
+        None => able.iter().map(|r| price_of(r)).max().unwrap_or(0),
+    };
     let me = client.get("account")?;
-    let price = me["price_cents_per_hour"].as_i64().unwrap_or(0);
-    let hold = (max_minutes * price.max(0) as u64).div_ceil(60) as i64;
+    let hold = (limits.minutes * price).div_ceil(60) as i64;
     let balance = me["balance_cents"].as_i64().unwrap_or(0);
     if balance < hold {
         bail!(
-            "a {max_minutes} minute run holds {}, the balance is {}; top up at {} with account id {}, or lower --max-minutes",
+            "a {} minute run at up to {} an hour holds {}, the balance is {}; top up at {} with account id {}, or lower --max-minutes or --max-price",
+            limits.minutes,
+            euros(price as i64),
             euros(hold),
             euros(balance),
             me["shop_url"].as_str().unwrap_or("the shop"),
             me["id"].as_str().unwrap_or_default()
         );
     }
+    Ok(price)
+}
+
+pub fn runners() -> Result<()> {
+    let status: Value = agent()
+        .get(&format!("{}/api/status", server_of(None)))
+        .call()
+        .map_err(explain)?
+        .into_json()?;
+    let all = runners_of(&status);
+    if all.is_empty() {
+        println!("no runner has been seen in the last day");
+    }
+    for runner in all {
+        let info = &runner["info"];
+        let number = |key: &str, unit: &str| {
+            info[key]
+                .as_f64()
+                .map(|v| format!("{v} {unit}"))
+                .unwrap_or_else(|| "-".into())
+        };
+        println!(
+            "{:<12} {}/h  gcad {}  {}{}",
+            runner["name"].as_str().unwrap_or_default(),
+            euros(price_of(&runner) as i64),
+            runner["version"].as_str().unwrap_or_default(),
+            if runner["online"].as_bool() == Some(true) {
+                if runner["busy"].as_bool() == Some(true) {
+                    "busy"
+                } else {
+                    "idle"
+                }
+            } else {
+                "offline"
+            },
+            if runner["info"]["sandbox"].as_bool() == Some(false) {
+                ", not sandboxed"
+            } else {
+                ""
+            }
+        );
+        println!(
+            "             {}, {} FP32, {}, {} video memory ({} free)",
+            info["gpu"].as_str().unwrap_or("no GPU"),
+            number("tflops", "TFLOPS"),
+            number("bandwidth_gbs", "GB/s"),
+            number("vram_gb", "GB"),
+            number("vram_free_gb", "GB")
+        );
+        println!(
+            "             {}, {} threads, {} RAM",
+            info["cpu"].as_str().unwrap_or("unknown CPU"),
+            info["threads"]
+                .as_u64()
+                .map(|v| v.to_string())
+                .unwrap_or("-".into()),
+            number("ram_gb", "GB")
+        );
+    }
+    let queued = status["queued"].as_u64().unwrap_or(0);
+    println!("{queued} queued");
     Ok(())
 }
 
@@ -430,9 +509,10 @@ fn wait(client: &Client, id: &str) -> Result<Value> {
             "running" | "cancelling" => {
                 let progress = job["progress"].as_str().unwrap_or("starting");
                 let took = duration(job["seconds"].as_f64().unwrap_or(0.0));
+                let runner = job["runner"].as_str().unwrap_or("-");
                 (
                     format!("{state} {progress}"),
-                    format!("remote {state} {took}: {progress}"),
+                    format!("{runner} {state} {took}: {progress}"),
                 )
             }
             _ => {
@@ -483,8 +563,10 @@ fn finish(client: &Client, file: &Path, job: &Value) -> Result<()> {
         print!("{table}");
     }
     eprintln!(
-        "{state} on the remote worker in {}, charged {}",
+        "{state} on runner {} in {} at {} an hour, charged {}",
+        job["runner"].as_str().unwrap_or("-"),
         duration(job["seconds"].as_f64().unwrap_or(0.0)),
+        euros(job["price_cents_per_hour"].as_i64().unwrap_or(0)),
         euros(job["charged_cents"].as_i64().unwrap_or(0))
     );
     if let Some(out) = &wrote {

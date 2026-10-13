@@ -55,14 +55,18 @@ inside the duct or the air box, the wind arrow and the heated faces.
 
 ## Remote runs
 
-`gcad sim x.gsim --remote` solves on a worker of the job server at https://sims.gcad.sh, paid
-from a prepaid balance per second of worker time.
+`gcad sim x.gsim --remote` solves on a runner of the job server at https://sims.gcad.sh, paid
+from a prepaid balance per second of the runner's time. Each runner sets its own price an hour;
+the site and `gcad remote runners` list them with their GPU, measured FP32 TFLOPS and memory
+bandwidth (`gcad gpu-bench`, hidden, measures both), video memory and CPU.
 
 ```sh
 gcad remote signup                  # make an account, keep its token in ~/.config/gcad/remote.toml
 gcad remote account                 # its id, balance and price; top up at the shop with the id
 gcad sim wind.gsim --remote         # build here, solve there, write wind.result.json here
 gcad sim wind.gsim --remote --max-minutes 20
+gcad sim wind.gsim --remote --max-price 2.50   # only runners asking at most €2.50 an hour
+gcad remote runners                 # the runners, their hardware and price
 gcad remote jobs                    # recent runs, their time and cost
 gcad remote cancel ID               # stop a run; the time it used is charged
 gcad remote login TOKEN             # use the account on another machine
@@ -76,8 +80,10 @@ goes as that thermal simulation's own packed job, solved on the worker first. `t
 in seconds and stays local. Jobs are CBOR, gzipped, and only a worker on the same gcad
 version takes them (`gcad sim-job JOB OUT`, hidden, is what it runs).
 
-A run holds `--max-minutes` (60 by default) of its price from the balance while it runs,
-charges the seconds it used and gives back the rest. The worker stops it at the limit.
+A run goes to the first free runner on the same gcad version asking at most `--max-price`
+(by default the dearest runner, so any of them). It holds `--max-minutes` (60 by default) at
+that price from the balance while it runs, charges the seconds it used at the price of the
+runner that took it, and gives back the rest. The runner stops it at the limit.
 Rerunning the same command with unchanged files picks up the queued or running job instead
 of sending another, and a finished one when the result here is missing or stale, so a client
 that stopped while it waited loses nothing. `GCAD_SIMS_SERVER` and `GCAD_SIMS_TOKEN` override

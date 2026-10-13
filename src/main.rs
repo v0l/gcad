@@ -19,6 +19,17 @@ struct Cli {
     set: Vec<(String, f64)>,
 }
 
+fn parse_price(text: &str) -> std::result::Result<u64, String> {
+    let euro: f64 = text
+        .trim_start_matches('€')
+        .parse()
+        .map_err(|_| format!("`{text}` is not a price in euro an hour, like 2.50"))?;
+    if !(euro > 0.0 && euro <= 1000.0) {
+        return Err("the price should be above 0 and at most 1000 euro an hour".into());
+    }
+    Ok((euro * 100.0).round() as u64)
+}
+
 fn parse_set(text: &str) -> std::result::Result<(String, f64), String> {
     let (name, value) = text.split_once('=').ok_or("write it as name=value")?;
     let value = value
@@ -66,12 +77,18 @@ enum Command {
         /// The longest a remote run may take; its cost is held from the balance while it runs
         #[arg(long, default_value_t = 60, requires = "remote")]
         max_minutes: u64,
+        /// The most a remote runner may charge, in euro an hour (default: any runner)
+        #[arg(long, requires = "remote", value_parser = parse_price)]
+        max_price: Option<u64>,
     },
     /// Manage the account that pays for `gcad sim --remote`
     Remote {
         #[command(subcommand)]
         action: RemoteAction,
     },
+    /// Measure the GPU the flow solver uses: FP32 TFLOPS and memory bandwidth, as JSON
+    #[command(hide = true)]
+    GpuBench,
     /// Solve a job packed by `gcad sim --remote` (the remote worker runs this)
     #[command(hide = true)]
     SimJob {
@@ -127,8 +144,10 @@ enum RemoteAction {
         #[arg(long)]
         server: Option<String>,
     },
-    /// Show the account id, balance and price
+    /// Show the account id and balance
     Account,
+    /// List the runners: their GPU, measured speed and price an hour
+    Runners,
     /// List recent remote runs
     Jobs,
     /// Stop a remote run; the time it used is still charged
@@ -141,6 +160,7 @@ fn remote(action: RemoteAction) -> Result<()> {
         RemoteAction::Signup { server } => remote::signup(server.as_deref()),
         RemoteAction::Login { token, server } => remote::login(&token, server.as_deref()),
         RemoteAction::Account => remote::account(),
+        RemoteAction::Runners => remote::runners(),
         RemoteAction::Jobs => remote::jobs(),
         RemoteAction::Cancel { id } => remote::cancel(&id),
     }
@@ -149,14 +169,14 @@ fn remote(action: RemoteAction) -> Result<()> {
 fn simulate_remote(
     file: &str,
     vars: &[(String, f64)],
-    max_minutes: u64,
+    limits: gcad::remote::Limits,
     quiet: bool,
 ) -> Result<()> {
     let path = std::path::Path::new(file);
     if !gcad::sim::is_sim(path) {
         bail!("`gcad sim` runs a .gsim file");
     }
-    gcad::remote::simulate(path, vars, max_minutes, || {
+    gcad::remote::simulate(path, vars, &limits, || {
         let _listening = (!quiet).then(progress_on_stderr);
         let run = {
             let _building = gcad::progress::stage("building the model", None, "");
@@ -401,9 +421,30 @@ fn main() -> Result<()> {
             quiet,
             remote: true,
             max_minutes,
+            max_price,
             ..
-        } => simulate_remote(&file, &vars, max_minutes, quiet),
+        } => simulate_remote(
+            &file,
+            &vars,
+            gcad::remote::Limits {
+                minutes: max_minutes,
+                price_cents: max_price,
+            },
+            quiet,
+        ),
         Command::Remote { action } => remote(action),
+        Command::GpuBench => {
+            let bench = gcad::flow::bench::run()?;
+            println!(
+                "{}",
+                serde_json::json!({
+                    "gpu": bench.gpu,
+                    "tflops": (bench.tflops * 10.0).round() / 10.0,
+                    "bandwidth_gbs": bench.bandwidth.round(),
+                })
+            );
+            Ok(())
+        }
         Command::SimJob { job, out, quiet } => {
             let _listening = (!quiet).then(progress_on_stderr);
             gcad::remote::run_job(std::path::Path::new(&job), std::path::Path::new(&out))

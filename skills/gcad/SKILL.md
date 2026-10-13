@@ -197,7 +197,8 @@ readings, writes `x.result.json`, and fails when an `expect` line does not hold.
 Progress goes to stderr, one line per finished stage and one every 10 s while a stage runs, with
 the iterations, residual and time left; `-q` turns it off. `gcad sim x.gsim --remote` builds
 the model here and solves it on a paid GPU worker (needs `gcad remote signup` and credit; not
-for `torque`), writing the same result file.
+for `torque`), writing the same result file. `gcad remote runners` lists the runners and their
+prices; `--max-price 2.50` caps the euro an hour.
 
 ```
 sim torque
