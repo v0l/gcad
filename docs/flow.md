@@ -227,3 +227,37 @@ laminar separation of a round section at Re 55,000 and gives it post-crisis drag
 solver is right on this assembly, then; the lattice converges toward the measured cylinder
 drag as its cells shrink and the RANS model does not, so the head takes about 55 to 60 N in
 this wind, not 35.
+
+## Fans
+
+A fan is a part on a `turn` joint, and the gsim spins it: `spin fan rpm=4000`. The rotor
+moves through the lattice as solid cells, so the blades push the air, shed wakes and feel
+their own torque, with no fan curve supplied.
+
+- **Moving geometry.** The rotor is voxelized once in its own frame on a grid twice as fine
+  as the lattice. Each step a GPU pass over the cells its blades sweep turns each cell centre
+  back by the rotor's angle and samples that grid: those cells become walls of the rotor and
+  the rest air. Cells the blades leave are filled at equilibrium with the blade's own
+  velocity and the density of the air beside them.
+- **Wall velocity per body.** Bounce-back on a moving wall adds `6 w rho c.u`, with `u = omega
+  x r` at the link, from a table of each body's angular velocity and axis point; the
+  cavity's single lid speed stays as body 0. Momentum exchange takes the same term back off,
+  so the torque on the shaft is the moment of the link forces about the axis.
+- **Time step from the tip.** The tip speed sets the lattice speed (0.05 at most) when it is
+  above the wind, so a fan in still air has a step too.
+- **Open ends.** With no wind both ends of the box are pressure boundaries, so the fan draws
+  its own flow; with a `duct` the walls close it and the fan meets the duct's resistance.
+
+Readings: `fan.torque` (N·m about the joint axis), `fan.power` (W), `fan.thrust` (N along the
+axis), `flow` (m³/s through the outlet) and `pressure` rise across the fan.
+
+Checks:
+
+1. Taylor-Couette: a cylinder turning inside a fixed one, axially periodic, against
+   `T = 4 pi mu L omega R1² R2² / (R2² - R1²)`. The rotor is round, so no cell flips: this
+   checks the wall velocity and the momentum exchange only.
+2. A square rod turning inside a fixed round wall at Re near 1, against the same rod held
+   still inside a wall turning the other way. In creeping flow the two are the same flow seen
+   from two frames and the torques match; this checks the flipping cells.
+3. A propeller in open air against OpenFOAM with a sliding (AMI) mesh, and a known small
+   propeller's thrust and torque coefficients.

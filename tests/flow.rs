@@ -1,5 +1,7 @@
 use gcad::flow::gpu::Gpu;
-use gcad::flow::lattice::{C, Collision, Domain, Heat, INLET, Lattice, MOVING, OUTLET, Settings, WALL};
+use gcad::flow::lattice::{
+    C, Collision, Domain, Heat, INLET, Lattice, MOVING, OUTLET, Settings, WALL,
+};
 
 static DEVICE: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
@@ -20,7 +22,10 @@ fn domain(size: [usize; 3], flags: Vec<u8>) -> Domain {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn poiseuille_between_plates() {
     let (_device, gpu) = device();
     let size = [4, 34, 4];
@@ -98,7 +103,10 @@ fn against_ghia(u: impl Fn(f64) -> f64, table: &[(f64, f64)], tolerance: f64) {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn lid_driven_cavity_re100() {
     let ghia = [
         (0.9766, 0.84123),
@@ -121,7 +129,10 @@ fn lid_driven_cavity_re100() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn lid_driven_cavity_re1000() {
     let ghia = [
         (0.9766, 0.65928),
@@ -263,7 +274,10 @@ struct Channel {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn cylinder_in_a_channel_re20() {
     let Channel {
         drag,
@@ -283,7 +297,10 @@ fn cylinder_in_a_channel_re20() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn cylinder_in_a_channel_re100() {
     let run = schaefer_turek(40, 100.0, 300_000, 1500, 40);
     let drag = run.history.iter().map(|h| h.0).fold(f64::MIN, f64::max);
@@ -380,7 +397,10 @@ fn sphere_drag(gpu: &Gpu, d: f64) -> f64 {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn sphere_drag_re50() {
     let (_device, gpu) = device();
     let drag = sphere_drag(&gpu, 20.0);
@@ -403,7 +423,10 @@ fn sphere_drag_re50_fine() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn pipe_flow_with_curved_walls() {
     let (_device, gpu) = device();
     let radius = 10.3;
@@ -584,7 +607,10 @@ fn square_cylinder_re22000() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn conduction_through_two_materials() {
     let (_device, gpu) = device();
     let size = [43, 1, 1];
@@ -610,9 +636,7 @@ fn conduction_through_two_materials() {
         probes: Vec::new(),
     });
     let mut lattice = Lattice::new(&gpu, &domain).expect("lattice");
-    lattice
-        .run(&Settings::laminar(0.1), 60_000)
-        .expect("runs");
+    lattice.run(&Settings::laminar(0.1), 60_000).expect("runs");
     let theta = lattice.temperatures().expect("temperatures");
     let (l, s) = (last as f64 - 1.0, split as f64);
     let c = q * s * s / (2.0 * a) / ((l - s) + s * b / a);
@@ -636,7 +660,10 @@ fn conduction_through_two_materials() {
 }
 
 #[test]
-#[cfg_attr(not(feature = "gpu-tests"), ignore = "GPU, run with --features gpu-tests")]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
 fn heated_channel_reaches_its_nusselt_number() {
     let (_device, gpu) = device();
     let height = 20;
@@ -664,7 +691,9 @@ fn heated_channel_reaches_its_nusselt_number() {
         let (inlet, outlet) = (domain.at(0, y, 0), domain.at(size[0] - 1, y, 0));
         domain.flags[inlet] = INLET;
         domain.flags[outlet] = OUTLET;
-        domain.inflow.push((inlet, domain.at(1, y, 0), [u0, 0.0, 0.0]));
+        domain
+            .inflow
+            .push((inlet, domain.at(1, y, 0), [u0, 0.0, 0.0]));
         domain.outflow.push((outlet, domain.at(size[0] - 2, y, 0)));
     }
     domain.heat = Some(Heat {
@@ -695,4 +724,208 @@ fn heated_channel_reaches_its_nusselt_number() {
             "Nu {nusselt} at x {x} against 8.235"
         );
     }
+}
+
+fn turning(
+    size: [usize; 3],
+    centre: [f64; 2],
+    omega: f64,
+    body: u16,
+    inside: impl Fn(f64, f64) -> bool,
+    reach: f64,
+    flags: &[u8],
+) -> gcad::flow::rotor::Rotor {
+    let fine = [2 * size[0], 2 * size[1], 2 * size[2]];
+    let mut solid = vec![false; fine.iter().product()];
+    for z in 0..fine[2] {
+        for y in 0..fine[1] {
+            for x in 0..fine[0] {
+                let (px, py) = (-0.25 + 0.5 * x as f64, -0.25 + 0.5 * y as f64);
+                solid[x + (y + z * fine[1]) * fine[0]] = inside(px - centre[0], py - centre[1]);
+            }
+        }
+    }
+    let mut cells = Vec::new();
+    for z in 0..size[2] {
+        for y in 0..size[1] {
+            for x in 0..size[0] {
+                let (dx, dy) = (x as f64 - centre[0], y as f64 - centre[1]);
+                let cell = at(size, x, y, z);
+                if (dx * dx + dy * dy).sqrt() <= reach && flags[cell] == 0 {
+                    cells.push(cell);
+                }
+            }
+        }
+    }
+    gcad::flow::rotor::Rotor {
+        body,
+        centre: [centre[0], centre[1], 0.0],
+        axis: [0.0, 0.0, 1.0],
+        omega,
+        start: [-0.25; 3],
+        size: fine,
+        solid,
+        cells,
+    }
+}
+
+fn axial_torque(lattice: &Lattice, centre: [f64; 2], size: [usize; 3], body: u32) -> f64 {
+    let samples = lattice.link_samples().expect("links");
+    lattice
+        .links
+        .iter()
+        .zip(&samples)
+        .filter(|(l, _)| l[1] == body)
+        .map(|(l, f)| {
+            let cell = l[0] as usize;
+            let (x, y) = ((cell % size[0]) as f64, ((cell / size[0]) % size[1]) as f64);
+            (x - centre[0]) * f[1] as f64 - (y - centre[1]) * f[0] as f64
+        })
+        .sum()
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
+fn taylor_couette_torque() {
+    let (_device, gpu) = device();
+    let (inner, outer) = (32.0, 64.0);
+    let n = 2 * outer as usize + 6;
+    let size = [n, n, 2];
+    let centre = [0.5 * (n - 1) as f64, 0.5 * (n - 1) as f64];
+    let mut domain = Domain::new(size);
+    for z in 0..size[2] {
+        for y in 0..n {
+            for x in 0..n {
+                let (dx, dy) = (x as f64 - centre[0], y as f64 - centre[1]);
+                if (dx * dx + dy * dy).sqrt() > outer {
+                    let cell = at(size, x, y, z);
+                    domain.flags[cell] = WALL;
+                }
+            }
+        }
+    }
+    let viscosity = 1.0 / 6.0;
+    let omega = 0.02 / inner;
+    let rotor = turning(
+        size,
+        centre,
+        omega,
+        1,
+        |x, y| x * x + y * y <= inner * inner,
+        inner + 2.0,
+        &domain.flags,
+    );
+    rotor.place(&mut domain, 0.0);
+    let fluid = domain.flags.iter().filter(|&&f| f == 0).count() as f64 / size[2] as f64;
+    let solid = domain.flags.iter().filter(|&&f| f == MOVING).count() as f64 / size[2] as f64;
+    let r1 = (solid / std::f64::consts::PI).sqrt();
+    let r2 = ((solid + fluid) / std::f64::consts::PI).sqrt();
+    domain.rotors.push(rotor);
+    let mut lattice = Lattice::new(&gpu, &domain).expect("lattice");
+    lattice
+        .run(&Settings::laminar(viscosity), 60_000)
+        .expect("runs");
+    let mut torque = 0.0;
+    let samples = 20;
+    for _ in 0..samples {
+        lattice
+            .run(&Settings::laminar(viscosity), 50)
+            .expect("runs");
+        torque += axial_torque(&lattice, centre, size, 1) / samples as f64;
+    }
+    let exact = -4.0 * std::f64::consts::PI * viscosity * omega * r1 * r1 * r2 * r2
+        / (r2 * r2 - r1 * r1)
+        * size[2] as f64;
+    println!("torque {torque} against {exact} (r1 {r1:.3}, r2 {r2:.3})");
+    assert!(
+        (torque - exact).abs() <= 0.01 * exact.abs(),
+        "torque {torque} against {exact}"
+    );
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
+fn turning_square_matches_the_turning_frame() {
+    let (_device, gpu) = device();
+    let (half, outer) = (24.0, 64.0);
+    let n = 2 * outer as usize + 8;
+    let size = [n, n, 2];
+    let centre = [0.5 * (n - 1) as f64, 0.5 * (n - 1) as f64];
+    let viscosity = 1.0 / 6.0;
+    let omega = 0.0005 / half;
+    let square = move |x: f64, y: f64| x.abs() <= half && y.abs() <= half;
+    let quarter = (std::f64::consts::FRAC_PI_2 / omega).round() as usize;
+    let mean_torque = |domain: &Domain, body: u32| {
+        let mut lattice = Lattice::new(&gpu, domain).expect("lattice");
+        let settings = Settings::laminar(viscosity);
+        lattice.run(&settings, 60_000).expect("runs");
+        let samples = 40;
+        let mut torque = 0.0;
+        for _ in 0..samples {
+            lattice.run(&settings, quarter / samples).expect("runs");
+            torque += axial_torque(&lattice, centre, size, body) / samples as f64;
+        }
+        torque
+    };
+
+    let mut turning_rod = Domain::new(size);
+    for z in 0..size[2] {
+        for y in 0..n {
+            for x in 0..n {
+                let (dx, dy) = (x as f64 - centre[0], y as f64 - centre[1]);
+                if (dx * dx + dy * dy).sqrt() > outer {
+                    turning_rod.flags[at(size, x, y, z)] = WALL;
+                }
+            }
+        }
+    }
+    let rotor = turning(
+        size,
+        centre,
+        omega,
+        1,
+        square,
+        half * std::f64::consts::SQRT_2 + 2.0,
+        &turning_rod.flags,
+    );
+    rotor.place(&mut turning_rod, 0.0);
+    turning_rod.rotors.push(rotor);
+    let moving = mean_torque(&turning_rod, 1);
+
+    let mut turning_wall = Domain::new(size);
+    for z in 0..size[2] {
+        for y in 0..n {
+            for x in 0..n {
+                let (dx, dy) = (x as f64 - centre[0], y as f64 - centre[1]);
+                if square(dx, dy) {
+                    let cell = at(size, x, y, z);
+                    turning_wall.flags[cell] = WALL;
+                    turning_wall.body[cell] = 1;
+                }
+            }
+        }
+    }
+    let ring = turning(
+        size,
+        centre,
+        -omega,
+        2,
+        move |x, y| (x * x + y * y).sqrt() > outer,
+        n as f64,
+        &turning_wall.flags,
+    );
+    ring.place(&mut turning_wall, 0.0);
+    turning_wall.rotors.push(ring);
+    let still = mean_torque(&turning_wall, 1);
+    println!("turning rod {moving}, still rod in a turning wall {still}");
+    assert!(
+        (moving - still).abs() <= 0.02 * still.abs(),
+        "turning rod {moving} against {still}"
+    );
 }

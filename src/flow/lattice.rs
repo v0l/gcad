@@ -1,4 +1,5 @@
 use super::gpu::{Gpu, Reading};
+use super::rotor::{COVERED, Rotor, SUBCELLS};
 use anyhow::{Result, bail};
 use wgpu::util::DeviceExt;
 
@@ -57,6 +58,7 @@ pub struct Domain {
     pub cuts: Vec<(usize, usize, f64)>,
     pub half: bool,
     pub heat: Option<Heat>,
+    pub rotors: Vec<Rotor>,
 }
 
 pub struct Heat {
@@ -76,6 +78,7 @@ impl Domain {
             cuts: Vec::new(),
             half: false,
             heat: None,
+            rotors: Vec::new(),
         }
     }
 
@@ -326,6 +329,8 @@ fn shader(heat: bool) -> String {
     s += "@group(0) @binding(0) var<uniform> p: Params;\n";
     s += "@group(0) @binding(1) var<storage, read> flags: array<u32>;\n";
     s += "@group(0) @binding(2) var<storage, read> cuts: array<f32>;\n";
+    s += "@group(0) @binding(4) var<storage, read> spins: array<vec4<f32>>;\n";
+    s += "fn wall_velocity(word: u32, at: vec3<f32>) -> vec3<f32> { let b = word >> 8u; if (b == 0u) { return vec3<f32>(p.wx, p.wy, p.wz); } return cross(spins[2u * b].xyz, at - spins[2u * b + 1u].xyz); }\n";
     for i in 0..Q {
         s += &format!("@group(1) @binding({i}) var<storage, read_write> a{i}: array<P>;\n");
         s += &format!("@group(2) @binding({i}) var<storage, read_write> b{i}: array<P>;\n");
@@ -359,14 +364,14 @@ fn shader(heat: bool) -> String {
         let w = weight(i);
         let o = opposite(i);
         s += &format!("  let s{i} = {};\n", offset(c, -1));
-        s += &format!("  fs = flags[s{i}] & KIND;\n");
+        s += &format!("  let w{i} = flags[s{i}]; fs = w{i} & KIND;\n");
         s += &format!(
-            "  g{i} = a{i}[s{i}];\n  if (fs == 1u || fs == 2u) {{ g{i} = a{o}[index]; if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {i}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = {}; let kn = flags[n] & KIND; if (kn == 0u || kn == 3u || kn == 4u) {{ g{i} = 2.0 * q * a{o}[index] + (1.0 - 2.0 * q) * a{o}[n]; }} }} else {{ g{i} = (0.5 / q) * a{o}[index] + (1.0 - 0.5 / q) * a{i}[index]; }} }} }} if (fs == 2u) {{ g{i} = g{i} + {:.17} * (({}.0) * p.wx + ({}.0) * p.wy + ({}.0) * p.wz); }} }}\n",
+            "  g{i} = a{i}[s{i}];\n  if (fs == 1u || fs == 2u) {{ g{i} = a{o}[index]; if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {i}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = {}; let kn = flags[n] & KIND; if (kn == 0u || kn == 3u || kn == 4u) {{ g{i} = 2.0 * q * a{o}[index] + (1.0 - 2.0 * q) * a{o}[n]; }} }} else {{ g{i} = (0.5 / q) * a{o}[index] + (1.0 - 0.5 / q) * a{i}[index]; }} }} }} if (fs == 2u) {{ let c = vec3<f32>({}.0, {}.0, {}.0); g{i} = g{i} + {:.17} * dot(c, wall_velocity(w{i}, vec3<f32>(f32(x), f32(y), f32(z)) - 0.5 * c)); }} }}\n",
             offset(c, 1),
-            6.0 * w,
             c[0],
             c[1],
             c[2],
+            6.0 * w,
         );
     }
     let sum = (0..Q)
@@ -648,6 +653,7 @@ fn force_shader() -> String {
     s += "@group(0) @binding(2) var<storage, read> links: array<Link>;\n";
     s += "@group(0) @binding(3) var<storage, read_write> out: array<vec4<f32>>;\n";
     s += "@group(0) @binding(4) var<storage, read> cuts: array<f32>;\n";
+    s += "@group(0) @binding(5) var<storage, read> spins: array<vec4<f32>>;\n";
     s += &populations(1, "a");
     s += "fn wrap(v: i32, n: u32) -> u32 { let m = i32(n); return u32(((v % m) + m) % m); }\n";
     s += "@compute @workgroup_size(64)\n";
@@ -655,14 +661,25 @@ fn force_shader() -> String {
     s += "  let k = id.x + id.y * groups.x * 64u;\n";
     s += "  if (k >= p.count) { return; }\n";
     s += "  let l = links[k];\n";
+    s +=
+        "  if ((flags[l.cell] & 255u) != 0u) { out[k] = vec4<f32>(0.0, 0.0, 0.0, 1.0); return; }\n";
     s += "  let x = i32(l.cell % p.nx); let y = i32((l.cell / p.nx) % p.ny); let z = i32(l.cell / (p.nx * p.ny));\n";
     s += "  var f = vec3<f32>(0.0, 0.0, 0.0); var s: u32; var fs: u32; var back: f32;\n";
     s += "  let slot = flags[l.cell] >> 8u;\n";
     for (i, c) in C.iter().enumerate().skip(1) {
         let o = opposite(i);
         s += &format!(
-            "  s = wrap(x + ({}), p.nx) + (wrap(y + ({}), p.ny) + wrap(z + ({}), p.nz) * p.ny) * p.nx;\n  fs = flags[s];\n  if (((fs & 255u) == 1u || (fs & 255u) == 2u) && (fs >> 8u) == l.body) {{\n    back = a{i}[l.cell];\n    if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {o}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x - ({}), p.nx) + (wrap(y - ({}), p.ny) + wrap(z - ({}), p.nz) * p.ny) * p.nx; let kn = flags[n] & 255u; if (kn == 0u || kn == 3u || kn == 4u) {{ back = 2.0 * q * a{i}[l.cell] + (1.0 - 2.0 * q) * a{i}[n]; }} }} else {{ back = (0.5 / q) * a{i}[l.cell] + (1.0 - 0.5 / q) * a{o}[l.cell]; }} }} }}\n    f = f + (a{i}[l.cell] + back) * vec3<f32>({}.0, {}.0, {}.0);\n  }}\n",
-            c[0], c[1], c[2], c[0], c[1], c[2], c[0], c[1], c[2]
+            "  s = wrap(x + ({}), p.nx) + (wrap(y + ({}), p.ny) + wrap(z + ({}), p.nz) * p.ny) * p.nx;\n  fs = flags[s];\n  if (((fs & 255u) == 1u || (fs & 255u) == 2u) && (fs >> 8u) == l.body) {{\n    back = a{i}[l.cell];\n    if (slot > 0u) {{ let q = cuts[(slot - 1u) * 19u + {o}u]; if (q >= 0.0) {{ if (q < 0.5) {{ let n = wrap(x - ({}), p.nx) + (wrap(y - ({}), p.ny) + wrap(z - ({}), p.nz) * p.ny) * p.nx; let kn = flags[n] & 255u; if (kn == 0u || kn == 3u || kn == 4u) {{ back = 2.0 * q * a{i}[l.cell] + (1.0 - 2.0 * q) * a{i}[n]; }} }} else {{ back = (0.5 / q) * a{i}[l.cell] + (1.0 - 0.5 / q) * a{o}[l.cell]; }} }} }}\n    let c = vec3<f32>({}.0, {}.0, {}.0);\n    let u = cross(spins[2u * l.body].xyz, vec3<f32>(f32(x), f32(y), f32(z)) + 0.5 * c - spins[2u * l.body + 1u].xyz);\n    let moved = back - {:.17} * dot(c, u);\n    f = f + (a{i}[l.cell] + moved) * c + (moved - a{i}[l.cell]) * u;\n  }}\n",
+            c[0],
+            c[1],
+            c[2],
+            c[0],
+            c[1],
+            c[2],
+            c[0],
+            c[1],
+            c[2],
+            6.0 * weight(i)
         );
     }
     s += &format!(
@@ -673,6 +690,116 @@ fn force_shader() -> String {
     );
     s += "}\n";
     s
+}
+
+fn rotor_shader(stage: &str) -> String {
+    let mut s = String::new();
+    s += "const KIND: u32 = 255u;\n";
+    s += "struct Turn { nx: u32, ny: u32, nz: u32, count: u32, body: u32, fx: u32, fy: u32, fz: u32, ox: f32, oy: f32, oz: f32, kx: f32, ky: f32, kz: f32, cos: f32, sin: f32, sx: f32, sy: f32, sz: f32, h: f32, wx: f32, wy: f32, wz: f32, covered: u32 }\n";
+    s += "@group(0) @binding(0) var<uniform> p: Turn;\n";
+    s += "@group(0) @binding(1) var<storage, read_write> flags: array<u32>;\n";
+    s += "@group(0) @binding(2) var<storage, read> cells: array<u32>;\n";
+    s += "@group(0) @binding(3) var<storage, read> bits: array<u32>;\n";
+    s += "@group(0) @binding(4) var<storage, read_write> fresh: array<u32>;\n";
+    s += &populations(1, "b");
+    s += "fn solid(q: vec3<f32>) -> bool {\n";
+    s += "  let i = round((q - vec3<f32>(p.sx, p.sy, p.sz)) / p.h);\n";
+    s += "  if (any(i < vec3<f32>(0.0)) || i.x >= f32(p.fx) || i.y >= f32(p.fy) || i.z >= f32(p.fz)) { return false; }\n";
+    s += "  let n = u32(i.x) + (u32(i.y) + u32(i.z) * p.fy) * p.fx;\n";
+    s += "  return ((bits[n / 32u] >> (n % 32u)) & 1u) == 1u;\n";
+    s += "}\n";
+    s += "@compute @workgroup_size(64)\n";
+    s += &format!(
+        "fn {stage}(@builtin(global_invocation_id) id: vec3<u32>, @builtin(num_workgroups) groups: vec3<u32>) {{\n"
+    );
+    s += "  let k = id.x + id.y * groups.x * 64u;\n";
+    s += "  if (k >= p.count) { return; }\n";
+    s += "  let cell = cells[k];\n";
+    s += &neighbours("cell");
+    s += "  let o = vec3<f32>(p.ox, p.oy, p.oz); let axis = vec3<f32>(p.kx, p.ky, p.kz);\n";
+    s += "  let here = vec3<f32>(f32(x), f32(y), f32(z));\n";
+    match stage {
+        "classify" => {
+            s += "  var count = 0u;\n";
+            s += "  for (var corner = 0u; corner < 8u; corner = corner + 1u) {\n";
+            s += "    let sign = vec3<f32>(f32(corner & 1u), f32((corner >> 1u) & 1u), f32((corner >> 2u) & 1u)) * 2.0 - 1.0;\n";
+            s += "    let v = here + 0.5 * p.h * sign - o;\n";
+            s += "    let q = o + v * p.cos - cross(axis, v) * p.sin + axis * dot(axis, v) * (1.0 - p.cos);\n";
+            s += "    if (solid(q)) { count = count + 1u; }\n";
+            s += "  }\n";
+            s += "  fresh[k] = select(0u, 2u | (p.body << 8u), count >= p.covered);\n";
+        }
+        "refill" => {
+            s += "  let old = flags[cell];\n";
+            s += "  if ((old & KIND) != 2u || fresh[k] != 0u) { return; }\n";
+            s += "  var rho = 0.0; var n = 0.0;\n";
+            for c in C.iter().skip(1) {
+                let sum = (0..Q)
+                    .map(|i| format!("b{i}[m]"))
+                    .collect::<Vec<_>>()
+                    .join(" + ");
+                s += &format!(
+                    "  {{ let m = {}; if ((flags[m] & KIND) == 0u) {{ rho = rho + 1.0 + {sum}; n = n + 1.0; }} }}\n",
+                    offset(c, 1)
+                );
+            }
+            s += "  if (n > 0.0) { rho = rho / n; } else { rho = 1.0; }\n";
+            s += "  let u = cross(vec3<f32>(p.wx, p.wy, p.wz), here - o);\n";
+            s += "  let uu = dot(u, u);\n";
+            for (i, c) in C.iter().enumerate() {
+                let w = weight(i);
+                s += &format!(
+                    "  {{ let cu = dot(vec3<f32>({}.0, {}.0, {}.0), u); b{i}[cell] = {w:.17} * (rho - 1.0 + rho * (3.0 * cu + 4.5 * cu * cu - 1.5 * uu)); }}\n",
+                    c[0], c[1], c[2]
+                );
+            }
+        }
+        _ => {
+            s += "  flags[cell] = fresh[k];\n";
+        }
+    }
+    s += "}\n";
+    s
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Turn {
+    nx: u32,
+    ny: u32,
+    nz: u32,
+    count: u32,
+    body: u32,
+    fx: u32,
+    fy: u32,
+    fz: u32,
+    ox: f32,
+    oy: f32,
+    oz: f32,
+    kx: f32,
+    ky: f32,
+    kz: f32,
+    cos: f32,
+    sin: f32,
+    sx: f32,
+    sy: f32,
+    sz: f32,
+    h: f32,
+    wx: f32,
+    wy: f32,
+    wz: f32,
+    covered: u32,
+}
+
+const TURN_SLOTS: usize = 200;
+
+struct Turning {
+    rotor: Rotor,
+    uniform: wgpu::Buffer,
+    stride: u64,
+    common: wgpu::BindGroup,
+    sides: [wgpu::BindGroup; 2],
+    count: u32,
 }
 
 #[repr(C)]
@@ -721,6 +848,9 @@ pub struct Lattice<'a> {
     last: Option<wgpu::SubmissionIndex>,
     half: bool,
     pub links: Vec<[u32; 2]>,
+    turning: Vec<Turning>,
+    turners: Option<[wgpu::ComputePipeline; 3]>,
+    turned: u64,
 }
 
 pub struct MeanField {
@@ -862,8 +992,17 @@ impl<'a> Lattice<'a> {
             .collect();
         let mut table: Vec<f32> = Vec::new();
         let mut slots: std::collections::HashMap<usize, u32> = std::collections::HashMap::new();
+        let swept: std::collections::HashSet<usize> = domain
+            .rotors
+            .iter()
+            .flat_map(|r| r.cells.iter().copied())
+            .collect();
         for &(cell, direction, q) in &domain.cuts {
-            if domain.flags[cell] != FLUID || direction >= Q || !(0.0..=1.0).contains(&q) {
+            if domain.flags[cell] != FLUID
+                || direction >= Q
+                || !(0.0..=1.0).contains(&q)
+                || swept.contains(&cell)
+            {
                 continue;
             }
             let slot = *slots.entry(cell).or_insert_with(|| {
@@ -884,6 +1023,38 @@ impl<'a> Lattice<'a> {
         let flags = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("flags"),
             contents: bytemuck::cast_slice(&words),
+            usage: wgpu::BufferUsages::STORAGE,
+        });
+        if domain.heat.is_some() && !domain.rotors.is_empty() {
+            bail!("a turning rotor cannot carry heat yet");
+        }
+        let bodies = domain
+            .body
+            .iter()
+            .copied()
+            .chain(domain.rotors.iter().map(|r| r.body))
+            .max()
+            .unwrap_or(0) as usize
+            + 1;
+        let mut spin_table = vec![[0.0f32; 4]; 2 * bodies];
+        for rotor in &domain.rotors {
+            let b = rotor.body as usize;
+            spin_table[2 * b] = [
+                (rotor.axis[0] * rotor.omega) as f32,
+                (rotor.axis[1] * rotor.omega) as f32,
+                (rotor.axis[2] * rotor.omega) as f32,
+                0.0,
+            ];
+            spin_table[2 * b + 1] = [
+                rotor.centre[0] as f32,
+                rotor.centre[1] as f32,
+                rotor.centre[2] as f32,
+                0.0,
+            ];
+        }
+        let spins = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+            label: Some("spins"),
+            contents: bytemuck::cast_slice(&spin_table),
             usage: wgpu::BufferUsages::STORAGE,
         });
         let params = device.create_buffer(&wgpu::BufferDescriptor {
@@ -917,6 +1088,20 @@ impl<'a> Lattice<'a> {
                 .enumerate()
                 .map(|(i, b)| wgpu::BindGroupEntry {
                     binding: i as u32,
+                    resource: b.as_entire_binding(),
+                })
+                .collect();
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout,
+                entries: &entries,
+            })
+        };
+        let numbered = |layout: &wgpu::BindGroupLayout, buffers: &[(u32, &wgpu::Buffer)]| {
+            let entries: Vec<wgpu::BindGroupEntry> = buffers
+                .iter()
+                .map(|(i, b)| wgpu::BindGroupEntry {
+                    binding: *i,
                     resource: b.as_entire_binding(),
                 })
                 .collect();
@@ -1004,13 +1189,21 @@ impl<'a> Lattice<'a> {
             .map(|(_, copies)| [thermal_group(copies, 0), thermal_group(copies, 1)]);
         let (common_layout, step, common) = match &heat {
             None => {
-                let common_layout = layout(&[entry(0, uniform), entry(1, read), entry(2, read)]);
+                let common_layout = layout(&[
+                    entry(0, uniform),
+                    entry(1, read),
+                    entry(2, read),
+                    entry(4, read),
+                ]);
                 let step = pipeline(
                     shader(false),
                     "step",
                     &[&common_layout, &side_layout, &side_layout],
                 );
-                let common = group(&common_layout, &[&params, &flags, &cuts]);
+                let common = numbered(
+                    &common_layout,
+                    &[(0, &params), (1, &flags), (2, &cuts), (4, &spins)],
+                );
                 (common_layout, step, common)
             }
             Some((cells, _)) => {
@@ -1019,13 +1212,14 @@ impl<'a> Lattice<'a> {
                     entry(1, read),
                     entry(2, read),
                     entry(3, read),
+                    entry(4, read),
                 ]);
                 let step = pipeline(
                     shader(true),
                     "step",
                     &[&common_layout, &side_layout, &side_layout, &thermal_layout],
                 );
-                let common = group(&common_layout, &[&params, &flags, &cuts, cells]);
+                let common = group(&common_layout, &[&params, &flags, &cuts, cells, &spins]);
                 (common_layout, step, common)
             }
         };
@@ -1083,9 +1277,21 @@ impl<'a> Lattice<'a> {
                 header: counter,
             }
         });
+        let rotor_cells: Vec<std::collections::HashSet<usize>> = domain
+            .rotors
+            .iter()
+            .map(|r| r.cells.iter().copied().collect())
+            .collect();
+        let swept_by = |r: &Rotor, cell: usize| {
+            domain
+                .rotors
+                .iter()
+                .position(|o| o.body == r.body)
+                .is_some_and(|k| rotor_cells[k].contains(&cell))
+        };
         let mut links: Vec<[u32; 2]> = Vec::new();
         for cell in 0..count {
-            if domain.flags[cell] != FLUID {
+            if domain.flags[cell] != FLUID && !swept.contains(&cell) {
                 continue;
             }
             let (x, y, z) = (
@@ -1101,10 +1307,19 @@ impl<'a> Lattice<'a> {
                     let s = w(x + c[0] as i64, size[0])
                         + (w(y + c[1] as i64, size[1]) + w(z + c[2] as i64, size[2]) * size[1])
                             * size[0];
-                    (matches!(domain.flags[s], WALL | MOVING) && domain.body[s] > 0)
-                        .then_some(domain.body[s])
+                    (matches!(domain.flags[s], WALL | MOVING)
+                        && domain.body[s] > 0
+                        && !domain.rotors.iter().any(|r| r.body == domain.body[s]))
+                    .then_some(domain.body[s])
                 })
                 .collect();
+            bodies.extend(
+                domain
+                    .rotors
+                    .iter()
+                    .filter(|r| swept_by(r, cell))
+                    .map(|r| r.body),
+            );
             bodies.sort_unstable();
             bodies.dedup();
             links.extend(bodies.into_iter().map(|b| [cell as u32, b as u32]));
@@ -1138,10 +1353,14 @@ impl<'a> Lattice<'a> {
                 entry(2, read),
                 entry(3, write),
                 entry(4, read),
+                entry(5, read),
             ]);
             let pass = Pass {
                 pipeline: pipeline(force_shader(), "force", &[&force_layout, &side_layout]),
-                common: group(&force_layout, &[&header, &flags, &list, &out, &cuts]),
+                common: group(
+                    &force_layout,
+                    &[&header, &flags, &list, &out, &cuts, &spins],
+                ),
                 sides: [side(0), side(1)],
                 count: n,
                 header: header.clone(),
@@ -1279,6 +1498,95 @@ impl<'a> Lattice<'a> {
             }
             _ => None,
         };
+        let alignment = device.limits().min_uniform_buffer_offset_alignment as u64;
+        let stride = (std::mem::size_of::<Turn>() as u64).next_multiple_of(alignment);
+        let turn_layout = layout(&[
+            wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::COMPUTE,
+                ty: wgpu::BindingType::Buffer {
+                    ty: uniform,
+                    has_dynamic_offset: true,
+                    min_binding_size: wgpu::BufferSize::new(std::mem::size_of::<Turn>() as u64),
+                },
+                count: None,
+            },
+            entry(1, write),
+            entry(2, read),
+            entry(3, read),
+            entry(4, write),
+        ]);
+        let turners = (!domain.rotors.is_empty()).then(|| {
+            ["classify", "refill", "commit"]
+                .map(|stage| pipeline(rotor_shader(stage), stage, &[&turn_layout, &side_layout]))
+        });
+        let turning: Vec<Turning> = domain
+            .rotors
+            .iter()
+            .map(|rotor| {
+                let uniform_buffer = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("turn"),
+                    size: stride * TURN_SLOTS as u64,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
+                });
+                let cells: Vec<u32> = rotor.cells.iter().map(|&c| c as u32).collect();
+                let list = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("rotor cells"),
+                    contents: bytemuck::cast_slice(if cells.is_empty() { &[0u32] } else { &cells }),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+                let bits = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("rotor bits"),
+                    contents: bytemuck::cast_slice(&rotor.bits()),
+                    usage: wgpu::BufferUsages::STORAGE,
+                });
+                let fresh = device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("rotor fresh"),
+                    size: cells.len().max(1) as u64 * 4,
+                    usage: wgpu::BufferUsages::STORAGE,
+                    mapped_at_creation: false,
+                });
+                let common = device.create_bind_group(&wgpu::BindGroupDescriptor {
+                    label: None,
+                    layout: &turn_layout,
+                    entries: &[
+                        wgpu::BindGroupEntry {
+                            binding: 0,
+                            resource: wgpu::BindingResource::Buffer(wgpu::BufferBinding {
+                                buffer: &uniform_buffer,
+                                offset: 0,
+                                size: wgpu::BufferSize::new(std::mem::size_of::<Turn>() as u64),
+                            }),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 1,
+                            resource: flags.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 2,
+                            resource: list.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 3,
+                            resource: bits.as_entire_binding(),
+                        },
+                        wgpu::BindGroupEntry {
+                            binding: 4,
+                            resource: fresh.as_entire_binding(),
+                        },
+                    ],
+                });
+                Turning {
+                    rotor: rotor.clone(),
+                    uniform: uniform_buffer,
+                    stride,
+                    common,
+                    sides: [side(1), side(0)],
+                    count: cells.len() as u32,
+                }
+            })
+            .collect();
         Ok(Lattice {
             gpu,
             size,
@@ -1297,6 +1605,9 @@ impl<'a> Lattice<'a> {
             last: None,
             half,
             links,
+            turning,
+            turners,
+            turned: 0,
         })
     }
 
@@ -1340,9 +1651,47 @@ impl<'a> Lattice<'a> {
         let (gx, gy) = dispatch(count);
         let mut left = steps;
         while left > 0 {
-            let batch = left.min(200);
+            let batch = left.min(200).min(TURN_SLOTS);
+            for turning in &self.turning {
+                let r = &turning.rotor;
+                let mut bytes = vec![0u8; turning.stride as usize * batch];
+                for j in 0..batch {
+                    let angle = r.omega * (self.turned + j as u64 + 1) as f64;
+                    let angle = angle.rem_euclid(std::f64::consts::TAU);
+                    let turn = Turn {
+                        nx: self.size[0] as u32,
+                        ny: self.size[1] as u32,
+                        nz: self.size[2] as u32,
+                        count: turning.count,
+                        body: r.body as u32,
+                        fx: r.size[0] as u32,
+                        fy: r.size[1] as u32,
+                        fz: r.size[2] as u32,
+                        ox: r.centre[0] as f32,
+                        oy: r.centre[1] as f32,
+                        oz: r.centre[2] as f32,
+                        kx: r.axis[0] as f32,
+                        ky: r.axis[1] as f32,
+                        kz: r.axis[2] as f32,
+                        cos: angle.cos() as f32,
+                        sin: angle.sin() as f32,
+                        sx: r.start[0] as f32,
+                        sy: r.start[1] as f32,
+                        sz: r.start[2] as f32,
+                        h: (1.0 / SUBCELLS as f64) as f32,
+                        wx: (r.axis[0] * r.omega) as f32,
+                        wy: (r.axis[1] * r.omega) as f32,
+                        wz: (r.axis[2] * r.omega) as f32,
+                        covered: COVERED,
+                    };
+                    let at = j * turning.stride as usize;
+                    bytes[at..at + std::mem::size_of::<Turn>()]
+                        .copy_from_slice(bytemuck::bytes_of(&turn));
+                }
+                self.gpu.queue.write_buffer(&turning.uniform, 0, &bytes);
+            }
             let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
-            for _ in 0..batch {
+            for step in 0..batch {
                 let mut pass = encoder.begin_compute_pass(&Default::default());
                 pass.set_pipeline(&self.pipeline);
                 pass.set_bind_group(0, &self.common, &[]);
@@ -1361,9 +1710,22 @@ impl<'a> Lattice<'a> {
                     }
                     pass.dispatch_workgroups(edges.count.div_ceil(64), 1, 1);
                 }
+                if let Some(turners) = &self.turners {
+                    for turning in &self.turning {
+                        let offset = (step * turning.stride as usize) as u32;
+                        let (tx, ty) = dispatch(turning.count);
+                        for stage in turners {
+                            pass.set_pipeline(stage);
+                            pass.set_bind_group(0, &turning.common, &[offset]);
+                            pass.set_bind_group(1, &turning.sides[self.parity], &[]);
+                            pass.dispatch_workgroups(tx, ty, 1);
+                        }
+                    }
+                }
                 drop(pass);
                 self.parity ^= 1;
             }
+            self.turned += batch as u64;
             let index = self.gpu.queue.submit([encoder.finish()]);
             if let Some(previous) = self.last.replace(index) {
                 self.gpu.wait(previous)?;
