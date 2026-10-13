@@ -136,10 +136,7 @@ pub fn start() {
             .and_then(|d| d.get_element_by_id("gcad"))
             .and_then(|e| e.dyn_into::<web_sys::HtmlCanvasElement>().ok())
             .expect("the page has no <canvas id=\"gcad\">");
-        let options = eframe::WebOptions {
-            depth_buffer: 24,
-            ..Default::default()
-        };
+        let options = eframe::WebOptions::default();
         let started = eframe::WebRunner::new()
             .start(
                 canvas,

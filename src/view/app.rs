@@ -759,6 +759,9 @@ impl App {
         vars: Vec<(String, f64)>,
     ) -> Self {
         egui_bench::install(&cc.egui_ctx);
+        if let Some(state) = &cc.wgpu_render_state {
+            egui_bench::viewer3d::install(state);
+        }
         let activity = Arc::new(Mutex::new(SimProgress::default()));
         let listening = {
             let into = activity.clone();
@@ -3481,8 +3484,6 @@ pub fn run(
                 eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon-256.png"))
                     .unwrap_or_default(),
             ),
-        depth_buffer: 24,
-        multisampling: 4,
         ..Default::default()
     };
     eframe::run_native(

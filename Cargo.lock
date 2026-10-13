@@ -820,7 +820,6 @@ dependencies = [
  "egui-wgpu",
  "egui-winit",
  "egui_glow",
- "glow",
  "glutin",
  "glutin-winit",
  "image",
@@ -831,6 +830,7 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "parking_lot",
  "percent-encoding",
+ "pollster",
  "profiling",
  "raw-window-handle",
  "static_assertions",
@@ -838,6 +838,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
+ "wgpu",
  "windows-sys 0.61.2",
  "winit",
 ]
@@ -904,14 +905,15 @@ dependencies = [
 
 [[package]]
 name = "egui_bench"
-version = "0.2.3"
+version = "0.3.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07e62928ebfe3cd7bd4a6976064f28288565a9e6ca1c43935b3198573bac3eb9"
+checksum = "0d816714add577fe6a942be04a56da13755940cba286e437d0ff7823e5fec355"
 dependencies = [
+ "bytemuck",
  "egui",
- "egui_glow",
- "three-d",
+ "egui-wgpu",
  "web-time",
+ "wgpu",
 ]
 
 [[package]]
@@ -1934,15 +1936,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c033f80b2c113cdf91ab7a33faa9cbc014726dcad99880c8609af2a370edf37d"
 dependencies = [
  "libc",
-]
-
-[[package]]
-name = "instant"
-version = "0.1.13"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
-dependencies = [
- "cfg-if",
 ]
 
 [[package]]
@@ -3123,26 +3116,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
-name = "open-enum"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dade6588e04b299d95e626bdb419f0331060c58f1ea585ee4cf1891e02141c47"
-dependencies = [
- "open-enum-derive",
-]
-
-[[package]]
-name = "open-enum-derive"
-version = "0.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3ac466f80b5b36d07713a3d46c7a49d7ea666b857999d714ef0a1aaa1fb4ac6b"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.119",
-]
-
-[[package]]
 name = "orbclient"
 version = "0.3.55"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4282,32 +4255,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "three-d"
-version = "0.19.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e73bbcfd30f69623bed55b90bcc084d316fab03a490c2087935c2aa287bd6995"
-dependencies = [
- "cgmath",
- "glow",
- "instant",
- "open-enum",
- "thiserror 2.0.21",
- "three-d-asset",
-]
-
-[[package]]
-name = "three-d-asset"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd4e4e9bc05e4010efbaa0a0296870b2d28102171deffbf69de7b305cff2d47a"
-dependencies = [
- "cgmath",
- "half",
- "thiserror 2.0.21",
- "web-sys",
-]
-
-[[package]]
 name = "tiff"
 version = "0.11.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4900,6 +4847,7 @@ dependencies = [
  "thiserror 2.0.21",
  "wgpu-core-deps-apple",
  "wgpu-core-deps-emscripten",
+ "wgpu-core-deps-wasm",
  "wgpu-core-deps-windows-linux-android",
  "wgpu-hal",
  "wgpu-naga-bridge",
@@ -4920,6 +4868,15 @@ name = "wgpu-core-deps-emscripten"
 version = "29.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "01e09be551dc939498bdd5f6b2c66e55ab275dad25825267a08605a80fc9f0af"
+dependencies = [
+ "wgpu-hal",
+]
+
+[[package]]
+name = "wgpu-core-deps-wasm"
+version = "29.0.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "af1fb1798be2a912497d4c224f72d39bb0cb34af50e8bcc29865bc339c943059"
 dependencies = [
  "wgpu-hal",
 ]
