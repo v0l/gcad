@@ -62,3 +62,6 @@ monstertruck-fillet = { git = "https://github.com/v0l/monstertruck", rev = "2053
 monstertruck-healing = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
 monstertruck-assembly = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
 monstertruck-io = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"
