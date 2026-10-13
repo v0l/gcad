@@ -13,8 +13,8 @@ use egui_bench::viewer3d::{
 };
 use monstertruck::modeling::{Matrix4, Solid, SquareMatrix};
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, TryRecvError, channel};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 #[derive(Default)]
@@ -260,11 +260,416 @@ pub struct App {
     editing: bool,
     source: String,
     cursor_row: Option<usize>,
-    sim_job: Option<(Receiver<Result<(), String>>, Instant)>,
+    sim_job: Option<SimJob>,
     sim_error: Option<String>,
+    sim_every_part: bool,
+    sim_notes: bool,
+    activity: Arc<Mutex<SimProgress>>,
+    _listening: crate::progress::Listening,
 }
 
 const WEB: bool = cfg!(target_arch = "wasm32");
+
+type SimJob = (
+    Receiver<Result<(), String>>,
+    Instant,
+    Arc<Mutex<SimProgress>>,
+);
+
+#[derive(Default)]
+struct SimProgress {
+    rows: Vec<StageRow>,
+}
+
+struct StageRow {
+    report: crate::progress::Report,
+    inside: Option<crate::progress::Report>,
+    seen: Instant,
+}
+
+impl StageRow {
+    fn elapsed(&self) -> Duration {
+        if self.report.finished {
+            self.report.elapsed
+        } else {
+            self.seen.elapsed()
+        }
+    }
+
+    fn remaining(&self) -> Option<Duration> {
+        let mut report = self.report.clone();
+        report.elapsed = self.elapsed();
+        report.remaining()
+    }
+}
+
+impl SimProgress {
+    fn take(&mut self, report: &crate::progress::Report) {
+        if let Some(parent) = &report.parent
+            && let Some(row) = self
+                .rows
+                .iter_mut()
+                .rev()
+                .find(|r| !r.report.finished && r.report.stage == *parent)
+        {
+            row.inside = (!report.finished).then(|| report.clone());
+            return;
+        }
+        let name = report.name();
+        match self
+            .rows
+            .iter_mut()
+            .rev()
+            .find(|r| !r.report.finished && r.report.name() == name)
+        {
+            Some(row) => {
+                row.report = report.clone();
+                if report.finished {
+                    row.inside = None;
+                }
+            }
+            None => self.rows.push(StageRow {
+                report: report.clone(),
+                inside: None,
+                seen: Instant::now() - report.elapsed,
+            }),
+        }
+    }
+
+    fn show(&self, ui: &mut Ui) {
+        const SHOWN: usize = 6;
+        let done: Vec<&StageRow> = self.rows.iter().filter(|r| r.report.finished).collect();
+        if done.len() > SHOWN {
+            Line::new()
+                .note(format!("{} earlier steps", done.len() - SHOWN))
+                .size(11.0)
+                .show(ui);
+        }
+        for row in done.iter().skip(done.len().saturating_sub(SHOWN)) {
+            stage_row(
+                ui,
+                &row.report.name(),
+                &crate::progress::duration(row.elapsed()),
+                OK,
+            );
+        }
+        for row in self.rows.iter().filter(|r| !r.report.finished) {
+            let report = &row.report;
+            let fraction = report.fraction();
+            let right = match fraction {
+                Some(f) => format!("{:.0}%", f * 100.0),
+                None => crate::progress::duration(row.elapsed()),
+            };
+            stage_row(ui, &report.name(), &right, TRACE);
+            progress(
+                ui,
+                "",
+                fraction.unwrap_or(0.0) as f32,
+                fraction.map(|_| 1.0),
+                "",
+            );
+            let what = match &row.inside {
+                Some(inside) => {
+                    let mut text = inside.stage.clone();
+                    if let Some(summary) = inside.summary() {
+                        text += &format!(": {summary}");
+                    }
+                    Some(text)
+                }
+                None => report.summary(),
+            };
+            let when = match row.remaining() {
+                Some(left) => format!("about {} left", crate::progress::duration(left)),
+                None => format!("{} so far", crate::progress::duration(row.elapsed())),
+            };
+            let text = match what {
+                Some(what) => format!("{when}; {what}"),
+                None => when,
+            };
+            Line::new()
+                .note(&text)
+                .size(11.0)
+                .elided(ui)
+                .on_hover_text(text);
+            ui.ctx().request_repaint_after(Duration::from_millis(250));
+        }
+    }
+}
+
+fn stage_row(ui: &mut Ui, name: &str, right: &str, mark: egui::Color32) {
+    ui.horizontal(|ui| {
+        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+            ui.label(value(right));
+            ui.with_layout(egui::Layout::left_to_right(egui::Align::Center), |ui| {
+                let (rect, _) = ui.allocate_exact_size(egui::vec2(8.0, 14.0), egui::Sense::hover());
+                ui.painter().circle_filled(rect.center(), 2.5, mark);
+                ui.add(egui::Label::new(legend(name)).truncate());
+            });
+        });
+    });
+}
+
+type Vector = (String, String, Vec<(String, String)>);
+
+#[derive(Debug, PartialEq)]
+struct ReadingsLayout {
+    tiles: Vec<(String, String)>,
+    vectors: Vec<Vector>,
+    columns: Vec<String>,
+    rows: Vec<(String, Vec<Option<String>>)>,
+    blocks: Vec<(String, Vec<(String, String)>)>,
+    total: usize,
+}
+
+fn bare_name(unit: &str) -> &'static str {
+    match unit {
+        "N·m" => "torque",
+        "N" => "force",
+        "MPa" => "stress",
+        "mm" => "displacement",
+        _ => "value",
+    }
+}
+
+type Labelled<'a> = (String, Vec<(String, &'a crate::sim::Reading)>);
+
+fn layout_readings(readings: &[crate::sim::Reading], few: Option<usize>) -> ReadingsLayout {
+    use crate::sim::Reading;
+    let short = crate::sim::short;
+    let split = |r: &Reading| {
+        r.name
+            .rsplit_once('.')
+            .map(|(h, t)| (h.to_string(), t.to_string()))
+    };
+    let mut groups: Vec<Labelled> = Vec::new();
+    for r in readings {
+        if let Some((head, tail)) = split(r) {
+            match groups.iter_mut().find(|(h, _)| *h == head) {
+                Some((_, list)) => list.push((tail, r)),
+                None => groups.push((head, vec![(tail, r)])),
+            }
+        }
+    }
+    let vector = |list: &[(String, &Reading)]| {
+        list.iter()
+            .all(|(t, _)| matches!(t.as_str(), "x" | "y" | "z"))
+    };
+    let mut tiles = Vec::new();
+    let with_unit = |r: &Reading| format!("{} {}", short(r.value), r.unit).trim().to_string();
+    for r in readings {
+        if split(r).is_none() && !groups.iter().any(|(h, list)| *h == r.name && !vector(list)) {
+            tiles.push((r.name.clone(), with_unit(r)));
+        }
+    }
+    let vectors = groups
+        .iter()
+        .filter(|(_, list)| vector(list))
+        .map(|(head, list)| {
+            let unit = list.first().map_or(String::new(), |(_, r)| r.unit.clone());
+            let values = list
+                .iter()
+                .map(|(tail, r)| (tail.clone(), short(r.value)))
+                .collect();
+            (head.clone(), unit, values)
+        })
+        .collect();
+    let mut parts: Vec<Labelled> = groups
+        .into_iter()
+        .filter(|(_, list)| !vector(list))
+        .map(|(head, mut list)| {
+            if let Some(bare) = readings.iter().find(|r| r.name == head) {
+                list.insert(0, (bare_name(&bare.unit).to_string(), bare));
+            }
+            (head, list)
+        })
+        .collect();
+    let mut columns: Vec<String> = Vec::new();
+    for (_, list) in &parts {
+        for (tail, _) in list {
+            if !columns.contains(tail) {
+                columns.push(tail.clone());
+            }
+        }
+    }
+    let unit_of = |column: &str| {
+        let units: Vec<&str> = parts
+            .iter()
+            .flat_map(|(_, list)| list.iter().filter(|(t, _)| t == column))
+            .map(|(_, r)| r.unit.as_str())
+            .collect();
+        units
+            .first()
+            .filter(|u| units.iter().all(|v| v == *u))
+            .map(|u| u.to_string())
+    };
+    let units: Vec<Option<String>> = columns.iter().map(|c| unit_of(c)).collect();
+    let total = parts.len();
+    if let Some(few) = few.filter(|few| total > *few) {
+        let first = |list: &[(String, &Reading)]| {
+            list.iter()
+                .find(|(t, _)| *t == columns[0])
+                .map_or(0.0, |(_, r)| r.value.abs())
+        };
+        parts.sort_by(|a, b| first(&b.1).total_cmp(&first(&a.1)));
+        parts.truncate(few);
+    }
+    let rows = parts
+        .iter()
+        .map(|(head, list)| {
+            let cells = columns
+                .iter()
+                .zip(&units)
+                .map(|(column, unit)| {
+                    list.iter()
+                        .find(|(t, _)| t == column)
+                        .map(|(_, r)| match unit {
+                            Some(_) => short(r.value),
+                            None => with_unit(r),
+                        })
+                })
+                .collect();
+            (head.clone(), cells)
+        })
+        .collect();
+    let blocks = parts
+        .iter()
+        .map(|(head, list)| {
+            let tiles = list
+                .iter()
+                .map(|(tail, r)| (tail.clone(), with_unit(r)))
+                .collect();
+            (head.clone(), tiles)
+        })
+        .collect();
+    let columns = columns
+        .iter()
+        .zip(&units)
+        .map(|(c, u)| match u {
+            Some(u) if !u.is_empty() => format!("{c} {u}"),
+            _ => c.clone(),
+        })
+        .collect();
+    ReadingsLayout {
+        tiles,
+        vectors,
+        columns,
+        rows,
+        blocks,
+        total,
+    }
+}
+
+fn tile_grid(ui: &mut Ui, tiles: &[(String, String)]) {
+    const PER_ROW: usize = 3;
+    let width = ui.available_width() / PER_ROW as f32;
+    for row in tiles.chunks(PER_ROW) {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            for (label, value) in row {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_width(width);
+                        ui.spacing_mut().item_spacing.y = 1.0;
+                        ui.add(egui::Label::new(legend(label)).truncate());
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(value)
+                                    .font(egui_bench::theme::figure(14.0))
+                                    .color(VALUE),
+                            )
+                            .truncate(),
+                        );
+                    },
+                );
+            }
+        });
+        ui.add_space(4.0);
+    }
+}
+
+fn readings_list(ui: &mut Ui, readings: &[crate::sim::Reading], every_part: &mut bool) {
+    const FEW: usize = 8;
+    let layout = layout_readings(readings, (!*every_part).then_some(FEW));
+    tile_grid(ui, &layout.tiles);
+    for (head, unit, values) in &layout.vectors {
+        ui.add_space(2.0);
+        ui.horizontal(|ui| {
+            ui.label(legend(format!("{head} {unit}")));
+            for (axis, value) in values {
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new(axis)
+                        .font(egui_bench::theme::figure(11.0))
+                        .color(LEGEND),
+                );
+                ui.label(
+                    egui::RichText::new(value)
+                        .font(egui_bench::theme::figure(12.0))
+                        .color(VALUE),
+                );
+            }
+        });
+    }
+    if layout.rows.is_empty() {
+        return;
+    }
+    ui.add_space(4.0);
+    if layout.total > FEW {
+        let what = layout.columns[0]
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_string();
+        Line::new()
+            .legend(&format!("{} parts", layout.total))
+            .note(if *every_part {
+                format!("by {what}")
+            } else {
+                format!("the {FEW} with the most {what}")
+            })
+            .size(11.0)
+            .show(ui);
+    }
+    if layout.columns.len() > 4 {
+        for (head, tiles) in &layout.blocks {
+            ui.add_space(4.0);
+            ui.label(legend(head).color(VALUE));
+            tile_grid(ui, tiles);
+        }
+    } else {
+        parts_table(ui, &layout);
+    }
+    if layout.total > FEW {
+        ui.add_space(4.0);
+        let label = if *every_part {
+            "fewer parts".to_string()
+        } else {
+            format!("all {} parts", layout.total)
+        };
+        if toggle(ui, &label, *every_part).clicked() {
+            *every_part = !*every_part;
+        }
+    }
+}
+
+fn parts_table(ui: &mut Ui, layout: &ReadingsLayout) {
+    let width = ui.available_width();
+    let first = (width * 0.34).max(90.0);
+    let rest = (width - first) / layout.columns.len().max(1) as f32;
+    let mut header: Vec<(&str, f32)> = vec![("", first)];
+    header.extend(layout.columns.iter().map(|c| (c.as_str(), rest)));
+    Table::new(&header, layout.rows.len()).show(ui, |i, p, row, at| {
+        let (head, cells) = &layout.rows[i];
+        cell(p, row, at(0), first, head, LEGEND);
+        for (k, value) in cells.iter().enumerate() {
+            if let Some(value) = value {
+                cell(p, row, at(k + 1), rest, value, VALUE);
+            }
+        }
+    });
+}
 
 #[cfg(not(target_arch = "wasm32"))]
 fn changes_content(kind: &notify::EventKind) -> bool {
@@ -354,6 +759,18 @@ impl App {
         vars: Vec<(String, f64)>,
     ) -> Self {
         egui_bench::install(&cc.egui_ctx);
+        if let Some(state) = &cc.wgpu_render_state {
+            egui_bench::viewer3d::install(state);
+        }
+        let activity = Arc::new(Mutex::new(SimProgress::default()));
+        let listening = {
+            let into = activity.clone();
+            let painter = cc.egui_ctx.clone();
+            crate::progress::listen(move |report| {
+                into.lock().unwrap_or_else(|e| e.into_inner()).take(report);
+                painter.request_repaint();
+            })
+        };
         let mut app = App {
             path: None,
             vars,
@@ -395,6 +812,10 @@ impl App {
             source: String::new(),
             cursor_row: None,
             sim_job: None,
+            sim_every_part: false,
+            sim_notes: false,
+            activity,
+            _listening: listening,
             sim_error: None,
         };
         match path {
@@ -474,8 +895,17 @@ impl App {
         };
         let (tx, rx) = channel();
         let (ctx, vars) = (ctx.clone(), self.vars.clone());
+        self.activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rows
+            .clear();
         crate::host::spawn(move || {
-            let _ = tx.send(evaluate(&path, &vars));
+            let program = {
+                let _stage = crate::progress::stage("building the model", None, "");
+                evaluate(&path, &vars)
+            };
+            let _ = tx.send(program);
             crate::host::wake(&ctx);
         });
         self.loading = Some((rx, Instant::now()));
@@ -500,12 +930,12 @@ impl App {
                 }
             }
         }
-        if let Some((rx, _)) = &self.sim_job {
+        if let Some((rx, ..)) = &self.sim_job {
             match rx.try_recv() {
                 Ok(result) => {
                     self.sim_error = result.err();
                     self.sim_job = None;
-                    self.reload(ctx);
+                    self.generation += 1;
                 }
                 Err(TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(500)),
                 Err(TryRecvError::Disconnected) => {
@@ -602,6 +1032,8 @@ impl App {
         let ctx = ctx.clone();
         let vars = self.vars.clone();
         crate::host::spawn(move || {
+            let _stage =
+                crate::progress::stage_after("drawing the scene", None, "", Duration::from_secs(1));
             let snapshot = &program.snapshots[index];
             let started = Instant::now();
             if let Some(mut shown) = build_shown(snapshot, job_key, &vars) {
@@ -975,18 +1407,39 @@ impl App {
                     .show(ui);
             },
             |ui| {
-                if let Some(why) = &sim.stale {
-                    note(ui, why, if sim.outcome.is_some() { WARN } else { LEGEND });
+                let running = self
+                    .sim_job
+                    .as_ref()
+                    .map(|(_, started, watched)| (*started, watched.clone()));
+                if running.is_none()
+                    && let Some(why) = &sim.stale
+                {
+                    let brief = why
+                        .split_once(" is stale (")
+                        .and_then(|(_, rest)| rest.rsplit_once(')'))
+                        .map(|(changed, _)| format!("stale: {changed}"))
+                        .unwrap_or_else(|| why.clone());
+                    let tint = if sim.outcome.is_some() { WARN } else { LEGEND };
+                    Line::new()
+                        .note(&brief)
+                        .tint(tint)
+                        .size(11.0)
+                        .elided(ui)
+                        .on_hover_text(why);
                 }
                 if !WEB {
-                    match &self.sim_job {
-                        Some((_, started)) => {
+                    match &running {
+                        Some((started, watched)) => {
                             lamp(
                                 ui,
-                                &format!("running {:.0} s", started.elapsed().as_secs_f32()),
+                                &format!(
+                                    "running {}",
+                                    crate::progress::duration(started.elapsed())
+                                ),
                                 true,
                                 false,
                             );
+                            watched.lock().unwrap_or_else(|e| e.into_inner()).show(ui);
                         }
                         None => {
                             let label = if sim.outcome.is_some() {
@@ -1001,34 +1454,30 @@ impl App {
                 if let Some(error) = &self.sim_error {
                     note(ui, error, FAULT);
                 }
+                if running.is_some() {
+                    return;
+                }
                 let Some(outcome) = &sim.outcome else {
                     return;
                 };
-                for r in &outcome.readings {
-                    Line::new()
-                        .legend(&r.name)
-                        .value(short(r.value))
-                        .note(&r.unit)
-                        .size(11.0)
-                        .show(ui);
-                }
+                readings_list(ui, &outcome.readings, &mut self.sim_every_part);
                 for (text, value, pass) in &outcome.checks {
-                    Line::new()
-                        .legend("expect")
-                        .value(text)
-                        .note(format!(
-                            "{} ({})",
-                            if *pass { "ok" } else { "FAILED" },
-                            short(*value)
-                        ))
-                        .size(11.0)
-                        .wrapped(ui);
+                    status(ui, *pass, &format!("{text}, reads {}", short(*value)));
                 }
                 for series in &outcome.series {
                     series_traces(ui, series);
                 }
-                for line in &outcome.notes {
-                    note(ui, line, LEGEND);
+                if !outcome.notes.is_empty() {
+                    ui.add_space(4.0);
+                    let label = format!("notes ({})", outcome.notes.len());
+                    if toggle(ui, &label, self.sim_notes).clicked() {
+                        self.sim_notes = !self.sim_notes;
+                    }
+                    if self.sim_notes {
+                        for line in &outcome.notes {
+                            note(ui, line, LEGEND);
+                        }
+                    }
                 }
             },
         );
@@ -1045,13 +1494,27 @@ impl App {
         let vars = self.vars.clone();
         let (tx, rx) = channel();
         let ctx = ctx.clone();
+        let built =
+            (self.dirty.is_none() && self.loading.is_none() && self.program.error.is_none())
+                .then(|| self.program.snapshots.last())
+                .flatten()
+                .filter(|snapshot| snapshot.result.is_ok())
+                .and_then(|snapshot| snapshot.model.sim.clone());
+        self.activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rows
+            .clear();
         crate::host::spawn(move || {
-            let result = simulate_file(&path, &vars).map_err(|e| format!("{e:#}"));
-            let _ = tx.send(result);
+            let result = match built {
+                Some(spec) => simulate_spec(&path, &vars, &spec),
+                None => simulate_file(&path, &vars),
+            };
+            let _ = tx.send(result.map_err(|e| format!("{e:#}")));
             crate::host::wake(&ctx);
         });
         self.sim_error = None;
-        self.sim_job = Some((rx, Instant::now()));
+        self.sim_job = Some((rx, Instant::now(), self.activity.clone()));
     }
 
     fn measure_card(&mut self, ui: &mut Ui) {
@@ -2085,6 +2548,29 @@ impl App {
         )
     }
 
+    fn activity_panel(&self, ctx: &egui::Context, at: Pos2, pivot: egui::Align2) -> bool {
+        let activity = self.activity.lock().unwrap_or_else(|e| e.into_inner());
+        if activity.rows.is_empty() {
+            return false;
+        }
+        egui::Area::new(egui::Id::new("building progress"))
+            .fixed_pos(at)
+            .pivot(pivot)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(BACKGROUND.gamma_multiply(0.92))
+                    .stroke(egui::Stroke::new(1.0, ETCH))
+                    .corner_radius(3.0)
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_width(340.0);
+                        activity.show(ui);
+                    });
+            });
+        true
+    }
+
     fn viewport(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
         let resp = ui.allocate_rect(rect, Sense::click_and_drag());
@@ -2092,6 +2578,12 @@ impl App {
         let Some(shown) = &self.shown else {
             p.rect_filled(rect, 0.0, BACKGROUND);
             let status = crate::host::status();
+            if status.is_none()
+                && (self.loading.is_some() || self.building.is_some())
+                && self.activity_panel(ui.ctx(), rect.center(), egui::Align2::CENTER_CENTER)
+            {
+                return;
+            }
             let message = match (
                 &self.path,
                 self.loading.is_some() || self.building.is_some(),
@@ -2296,7 +2788,22 @@ impl App {
         );
         p.galley(corner, stats, Color32::from_gray(170));
         let status = crate::host::status();
-        if status.is_some() || self.loading.is_some() || self.building.is_some() {
+        let live = self
+            .activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rows
+            .iter()
+            .any(|r| !r.report.finished);
+        let panel = status.is_none()
+            && self.sim_job.is_none()
+            && (self.loading.is_some() || self.building.is_some() && live)
+            && self.activity_panel(
+                ui.ctx(),
+                rect.left_top() + Vec2::new(10.0, 28.0),
+                egui::Align2::LEFT_TOP,
+            );
+        if !panel && (status.is_some() || self.loading.is_some() || self.building.is_some()) {
             p.text(
                 rect.left_top() + Vec2::new(10.0, 30.0),
                 egui::Align2::LEFT_TOP,
@@ -2579,7 +3086,18 @@ fn field_marks(
     let font = egui::FontId::proportional(12.0);
     let label = |at: Pos2, text: &str, colour: Color32| {
         let galley = p.layout_no_wrap(text.to_string(), font.clone(), colour);
-        let corner = at + Vec2::new(6.0, -galley.size().y - 4.0);
+        let size = galley.size();
+        let wanted = at + Vec2::new(6.0, -size.y - 4.0);
+        let corner = Pos2::new(
+            wanted
+                .x
+                .min(rect.right() - size.x - 6.0)
+                .max(rect.left() + 6.0),
+            wanted
+                .y
+                .min(rect.bottom() - size.y - 6.0)
+                .max(rect.top() + 6.0),
+        );
         p.rect_filled(
             Rect::from_min_size(corner, galley.size()).expand(3.0),
             3.0,
@@ -2698,14 +3216,26 @@ fn readout(p: &egui::Painter, rect: Rect, at: Pos2, lines: Vec<String>) {
 }
 
 fn simulate_file(path: &std::path::Path, vars: &[(String, f64)]) -> anyhow::Result<()> {
-    let run = crate::model::run_path(path, vars, None)?;
+    let run = {
+        let _stage = crate::progress::stage("building the model", None, "");
+        crate::model::run_path(path, vars, None)?
+    };
     if let Some((line, Err(error))) = run.steps.last() {
         anyhow::bail!("line {}: {error:#}", line.number);
     }
     let Some(spec) = run.model.sim.as_deref() else {
         anyhow::bail!("{} is not a simulation", path.display());
     };
+    simulate_spec(path, vars, spec)
+}
+
+fn simulate_spec(
+    path: &std::path::Path,
+    vars: &[(String, f64)],
+    spec: &crate::sim::Spec,
+) -> anyhow::Result<()> {
     let outcome = crate::sim::simulate(spec)?;
+    let _stage = crate::progress::stage("writing the result", None, "");
     crate::sim::save(path, vars, &outcome)?;
     Ok(())
 }
@@ -2954,9 +3484,11 @@ pub fn run(
     let options = eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_inner_size([1500.0, 950.0])
-            .with_title(title.clone()),
-        depth_buffer: 24,
-        multisampling: 4,
+            .with_title(title.clone())
+            .with_icon(
+                eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon-256.png"))
+                    .unwrap_or_default(),
+            ),
         ..Default::default()
     };
     eframe::run_native(
@@ -2980,6 +3512,7 @@ fn exploded(
 #[cfg(test)]
 mod tests {
     use monstertruck::modeling::*;
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn run_writes_a_fresh_result() {
@@ -2997,8 +3530,85 @@ mod tests {
         )
         .expect("spec");
         let _ = std::fs::remove_file(crate::sim::result_path(&spec));
+        let _serial = crate::progress::SERIAL
+            .lock()
+            .unwrap_or_else(|e| e.into_inner());
+        let watched = Arc::new(Mutex::new(super::SimProgress::default()));
+        let into = watched.clone();
+        let listening = crate::progress::listen(move |report| {
+            into.lock().unwrap().take(report);
+        });
         super::simulate_file(&spec, &[]).expect("runs");
+        drop(listening);
         assert_eq!(crate::sim::stale(&spec, &[]), None);
+        let watched = watched.lock().unwrap();
+        assert!(
+            watched
+                .rows
+                .iter()
+                .all(|r| r.report.finished && r.inside.is_none())
+        );
+        let names: Vec<String> = watched.rows.iter().map(|r| r.report.name()).collect();
+        assert_eq!(
+            names.first().map(String::as_str),
+            Some("building the model")
+        );
+        assert!(
+            names.contains(&"taking readings".to_string())
+                && names.last().map(String::as_str) == Some("writing the result"),
+            "{names:?}"
+        );
+        assert!(
+            !names.contains(&"running `bar.gsim`".to_string()),
+            "{names:?}"
+        );
+    }
+
+    #[test]
+    fn readings_lay_out_as_tiles_and_a_part_table() {
+        let reading = |name: &str, value: f64, unit: &str| crate::sim::Reading {
+            name: name.into(),
+            value,
+            unit: unit.into(),
+            at: String::new(),
+        };
+        let readings = vec![
+            reading("drag", 10.0, "N"),
+            reading("moment.x", 1.0, "N·m"),
+            reading("moment.y", 2.0, "N·m"),
+            reading("moment.z", 3.0, "N·m"),
+            reading("mast", 2.0, "N"),
+            reading("mast.moment", 0.5, "N·m"),
+            reading("boom.moment", 7.0, "N·m"),
+            reading("tip.stress", 4.0, "MPa"),
+            reading("clamp.main.moment", 1.0, "N·m"),
+        ];
+        let layout = super::layout_readings(&readings, None);
+        let tiles: Vec<&str> = layout.tiles.iter().map(|t| t.0.as_str()).collect();
+        assert_eq!(tiles, ["drag"]);
+        assert_eq!(layout.vectors.len(), 1);
+        assert_eq!(
+            (layout.vectors[0].0.as_str(), layout.vectors[0].2.len()),
+            ("moment", 3)
+        );
+        assert_eq!(layout.columns, ["force N", "moment N·m", "stress MPa"]);
+        assert_eq!(
+            layout.blocks[0].1,
+            [
+                ("force".to_string(), "2.000 N".to_string()),
+                ("moment".to_string(), "0.5000 N·m".to_string())
+            ]
+        );
+        let heads: Vec<&str> = layout.rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(heads, ["mast", "boom", "tip", "clamp.main"]);
+        assert_eq!(
+            layout.rows[0].1,
+            [Some("2.000".to_string()), Some("0.5000".to_string()), None]
+        );
+        let few = super::layout_readings(&readings, Some(2));
+        assert_eq!(few.total, 4);
+        let heads: Vec<&str> = few.rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(heads, ["mast", "boom"]);
     }
 
     #[test]

@@ -1,5 +1,5 @@
 use super::Model;
-use super::args::{Args, point3};
+use super::args::{Args, point3, positive};
 use crate::geometry;
 use crate::parse::Line;
 use anyhow::{Result, anyhow, bail};
@@ -174,7 +174,7 @@ pub struct Source {
     pub vars: Vec<(String, f64)>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Couple {
     pub driven: String,
     pub driver: String,
@@ -182,6 +182,19 @@ pub struct Couple {
     pub offset: f64,
     pub efficiency: f64,
     pub back: f64,
+    pub lead: Option<f64>,
+    pub friction: f64,
+    pub mesh: Option<Mesh>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Mesh {
+    pub module: f64,
+    pub face: f64,
+    pub teeth: f64,
+    pub pressure: f64,
+    pub gear: Option<String>,
+    pub pinion: Option<String>,
 }
 
 type PartKey = (String, std::path::PathBuf, Vec<(String, f64)>);
@@ -596,13 +609,39 @@ impl Model {
     }
 
     fn move_subtree(&mut self, root: &str, transform: Matrix4) -> Result<Vec<String>> {
-        let moving = subtree(&self.joints, root);
+        self.move_group(&[root.to_string()], root, transform)
+    }
+
+    fn move_group(
+        &mut self,
+        roots: &[String],
+        group: &str,
+        transform: Matrix4,
+    ) -> Result<Vec<String>> {
+        let mut moving: Vec<String> = Vec::new();
+        for root in roots {
+            for body in subtree(&self.joints, root) {
+                if !moving.contains(&body) {
+                    moving.push(body);
+                }
+            }
+        }
         for body in &moving {
             self.move_body(body, transform)?;
         }
         for other in self.joints.iter_mut() {
             if moving.contains(&other.parent) {
                 *other = other.moved(transform);
+            }
+        }
+        let owned = |axis: &str| {
+            axis.starts_with(&format!("{group}."))
+                || moving.iter().any(|b| axis.starts_with(&format!("{b}.")))
+        };
+        for (name, (through, along)) in self.axes.iter_mut() {
+            if owned(name) {
+                *through = transform.transform_point(*through);
+                *along = transform.transform_vector(*along).normalize();
             }
         }
         Ok(moving)
@@ -685,8 +724,18 @@ impl Model {
         }
         let depth = self.depth + 1;
         let cache = &self.cache;
+        let building = if self.depth <= 1 {
+            crate::progress::stage("building parts", Some(wanted.len()), "files")
+        } else {
+            crate::progress::Stage::silent()
+        };
         crate::host::each(wanted, |(key, path, vars)| {
             let _ = cache.part(key, || super::load_model(&path, &vars, depth, cache));
+            building.advance(1.0);
+            building.detail(|| {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+                format!("`{}`", name.unwrap_or_default())
+            });
         });
     }
 
@@ -771,6 +820,9 @@ impl Model {
                 });
             }
         }
+        for (axis, line) in &loaded.axes {
+            self.axes.insert(format!("{name}.{axis}"), *line);
+        }
         for couple in &loaded.couples {
             let ours = |joint: &str| {
                 loaded.joints.iter().any(|j| {
@@ -781,6 +833,11 @@ impl Model {
                 self.couples.push(Couple {
                     driven: format!("{name}.{}", couple.driven),
                     driver: format!("{name}.{}", couple.driver),
+                    mesh: couple.mesh.clone().map(|mesh| Mesh {
+                        gear: mesh.gear.as_deref().map(&rename),
+                        pinion: mesh.pinion.as_deref().map(&rename),
+                        ..mesh
+                    }),
                     ..couple.clone()
                 });
             }
@@ -844,11 +901,26 @@ impl Model {
             .positional
             .first()
             .ok_or_else(|| anyhow!("name the part to move"))?;
-        if !self.body_names().contains(name) {
-            bail!("no part called `{name}`; parts are {:?}", self.body_names());
+        let names = self.body_names();
+        let roots: Vec<String> = if names.contains(name) {
+            vec![name.clone()]
+        } else {
+            let prefix = format!("{name}.");
+            names
+                .iter()
+                .filter(|n| n.starts_with(&prefix))
+                .cloned()
+                .collect()
+        };
+        if roots.is_empty() {
+            bail!("no part or sub-assembly called `{name}`; parts are {names:?}");
         }
-        let moved = self.move_subtree(name, transform)?;
-        Ok(format!("moved {}", moved.join(", ")))
+        let moved = self.move_group(&roots, name, transform)?;
+        Ok(if moved.len() > 12 {
+            format!("moved {} parts", moved.len())
+        } else {
+            format!("moved {}", moved.join(", "))
+        })
     }
 
     fn op_explode(&mut self, line: &Line) -> Result<String> {
@@ -956,6 +1028,56 @@ impl Model {
         Ok(values)
     }
 
+    fn couple_mesh(&self, args: &Args<'_>, worm: bool, ratio: f64) -> Result<Option<Mesh>> {
+        let given = |name: &str| args.optional_number(name, &self.scope);
+        let (module, face) = match (given("module")?, given("face")?) {
+            (None, None) => {
+                for name in ["teeth", "pressure", "gear", "pinion"] {
+                    if args.values.contains_key(name) {
+                        bail!("`{name}=` goes with `module=` and `face=`, the teeth's size");
+                    }
+                }
+                return Ok(None);
+            }
+            (Some(module), Some(face)) => (
+                positive(module, "the module")?,
+                positive(face, "the face width")?,
+            ),
+            _ => bail!("give `module=` and `face=` together: the tooth size and the face width"),
+        };
+        let teeth = match given("teeth")? {
+            Some(teeth) => positive(teeth, "the tooth count")?,
+            None if worm => 1.0,
+            None => bail!(
+                "give `teeth=`, the teeth on the driven side, so the gear sizes follow from the ratio"
+            ),
+        };
+        if ratio == 0.0 {
+            bail!("a couple with geometry needs a ratio other than 0");
+        }
+        let pressure = given("pressure")?.unwrap_or(20.0);
+        if pressure <= 0.0 || pressure >= 45.0 {
+            bail!("`pressure={pressure}` is the pressure angle in degrees, between 0 and 45");
+        }
+        let body = |name: &str| -> Result<Option<String>> {
+            let Some(text) = args.values.get(name) else {
+                return Ok(None);
+            };
+            if !self.body_names().iter().any(|b| b == text) {
+                bail!("`{name}={text}` names no part of the assembly");
+            }
+            Ok(Some(text.to_string()))
+        };
+        Ok(Some(Mesh {
+            module,
+            face,
+            teeth,
+            pressure,
+            gear: body("gear")?,
+            pinion: body("pinion")?,
+        }))
+    }
+
     fn couple_losses(&self, args: &Args<'_>) -> Result<(f64, f64)> {
         let given = |name: &str| args.optional_number(name, &self.scope);
         let fraction = |value: f64, name: &str| -> Result<f64> {
@@ -1003,7 +1125,19 @@ impl Model {
         let args = Args::new(
             line,
             &["driven", "driver"],
-            &["ratio", "efficiency", "back", "lead", "friction"],
+            &[
+                "ratio",
+                "efficiency",
+                "back",
+                "lead",
+                "friction",
+                "module",
+                "face",
+                "teeth",
+                "pressure",
+                "gear",
+                "pinion",
+            ],
             false,
         )?;
         let (driven, driver) = (args.text("driven")?, args.text("driver")?);
@@ -1030,6 +1164,19 @@ impl Model {
         }
         let ratio = args.optional_number("ratio", &self.scope)?.unwrap_or(1.0);
         let (efficiency, back) = self.couple_losses(&args)?;
+        let lead = args.optional_number("lead", &self.scope)?;
+        let friction = args
+            .optional_number("friction", &self.scope)?
+            .unwrap_or(0.0);
+        let mesh = self.couple_mesh(&args, lead.is_some(), ratio)?;
+        let geometry = mesh.as_ref().map_or(String::new(), |mesh| {
+            let teeth = mesh.teeth * ratio.abs();
+            format!(
+                "; `{driver}` has {} teeth, {} mm across the pitch circle",
+                crate::plot::label(teeth),
+                crate::plot::label(teeth * mesh.module)
+            )
+        });
         self.couples.push(Couple {
             driven: driven.to_string(),
             driver: driver.to_string(),
@@ -1037,6 +1184,9 @@ impl Model {
             offset: follower.value - ratio * leader.value,
             efficiency,
             back,
+            lead,
+            friction,
+            mesh,
         });
         let losses = if efficiency == 1.0 && back == 1.0 {
             String::new()
@@ -1053,7 +1203,7 @@ impl Model {
             )
         };
         Ok(format!(
-            "`{driven}` moves {ratio}{} for each {} `{driver}` moves{losses}",
+            "`{driven}` moves {ratio}{} for each {} `{driver}` moves{losses}{geometry}",
             follower.unit(),
             leader.unit().trim()
         ))
@@ -1228,13 +1378,35 @@ impl Model {
         let named = self.named_solids();
         let names: Vec<String> = named.iter().map(|(n, _)| n.clone()).collect();
         let solids: Vec<&Solid> = named.iter().map(|(_, s)| *s).collect();
-        let meshes = geometry::meshed_all(&solids);
+        let meshes = {
+            let _stage = if self.depth <= 1 {
+                crate::progress::stage(
+                    format!("tessellating {} parts for interference", solids.len()),
+                    None,
+                    "",
+                )
+            } else {
+                crate::progress::Stage::silent()
+            };
+            geometry::meshed_all(&solids)
+        };
         let pairs: Vec<(usize, usize)> = (0..names.len())
             .flat_map(|i| (i + 1..names.len()).map(move |j| (i, j)))
             .collect();
         let mut still: std::collections::HashMap<(usize, usize), Option<f64>> = Default::default();
         let mut out = Vec::new();
-        for &value in values {
+        let joint = &self.joints[index].name;
+        let sweeping = if self.depth <= 1 {
+            crate::progress::stage(
+                format!("checking `{joint}` for interference"),
+                Some(values.len()),
+                "poses",
+            )
+        } else {
+            crate::progress::Stage::silent()
+        };
+        for (k, &value) in values.iter().enumerate() {
+            sweeping.progress(k as f64, || format!("at {}", crate::plot::label(value)));
             let pose = posed(&self.joints, &self.settled(index, value)?);
             let deltas: Vec<Matrix4> = names
                 .iter()
@@ -1281,6 +1453,7 @@ impl Model {
                     .collect(),
             ));
         }
+        sweeping.set(values.len() as f64);
         Ok(out)
     }
 

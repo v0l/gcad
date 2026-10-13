@@ -41,6 +41,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "material",
     "gravity",
     "payload",
+    "speed",
     "sweep",
     "expect",
     "mesh",
@@ -69,6 +70,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "materials",
 ];
 
+const BEARING_STIFFNESS: f64 = 1.0e5;
 impl Model {
     fn spec(&mut self) -> &mut Spec {
         self.sim.get_or_insert_with(Default::default)
@@ -118,6 +120,7 @@ impl Model {
                 Ok(format!("gravity {},{},{} m/s²", g.x, g.y, g.z))
             }
             "payload" => self.op_payload(line),
+            "speed" => self.op_joint_speed(line),
             "sweep" => self.op_sim_sweep(line),
             "expect" => self.op_expect(line),
             "fix" => self.op_support(line, Hold::Fixed),
@@ -128,6 +131,7 @@ impl Model {
                 let (point, axis) = self.target_axis(selector)?;
                 let short = self
                     .target_band(selector, point, axis)?
+                    .map(|(low, high, radius)| (high - low, radius))
                     .filter(|(length, radius)| length < radius);
                 let summary = self.op_support(line, Hold::Pin { point, axis })?;
                 Ok(match short {
@@ -138,6 +142,7 @@ impl Model {
                     None => summary,
                 })
             }
+            "bearing" if line.positional.get(1).is_some_and(|w| w != "axial") => self.op_seat(line),
             "bearing" => {
                 let args = Args::new(line, &["faces", "axial"], &[], false)?;
                 let axial = match args.values.get("axial").copied() {
@@ -272,7 +277,7 @@ impl Model {
                     let spec = self.spec();
                     match &mut spec.warming {
                         Some(crate::sim::Warm::By(list)) => list.push((part, by)),
-                        Some(crate::sim::Warm::From { .. }) => {
+                        Some(crate::sim::Warm::From { .. } | crate::sim::Warm::Solved { .. }) => {
                             bail!(
                                 "this simulation already takes its temperatures from a heat simulation"
                             )
@@ -515,7 +520,7 @@ impl Model {
         selector: &str,
         point: Point3,
         axis: Vector3,
-    ) -> Result<Option<(f64, f64)>> {
+    ) -> Result<Option<(f64, f64, f64)>> {
         let target = self.target_mut()?;
         let (solid, faces) = if target.assembly || selector.contains(':') {
             let (_, solid, faces) = target.reference(selector)?;
@@ -545,7 +550,7 @@ impl Model {
             .collect();
         let low = along.iter().copied().fold(f64::INFINITY, f64::min);
         let high = along.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-        Ok((high > low).then_some((high - low, radius)))
+        Ok((high > low).then_some((low, high, radius)))
     }
 
     fn target_axis(&mut self, selector: &str) -> Result<(Point3, Vector3)> {
@@ -621,6 +626,85 @@ impl Model {
         line.label
             .clone()
             .unwrap_or_else(|| format!("{}{count}", line.op))
+    }
+
+    fn op_seat(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(
+            line,
+            &["faces", "shaft", "axial"],
+            &["at", "C0", "stiffness"],
+            false,
+        )?;
+        let axial = match args.values.get("axial").copied() {
+            None => false,
+            Some("axial") => true,
+            Some(other) => bail!(
+                "`bearing faces shaft` takes `axial` to carry thrust along its axis, not `{other}`"
+            ),
+        };
+        let selector = args.text("faces")?;
+        let Some((housing, _)) = selector.split_once(':') else {
+            bail!("`bearing {selector} ...` needs the housing's bore as `part:faces`");
+        };
+        let housing = housing.to_string();
+        let shaft = args.text("shaft")?.to_string();
+        let names: Vec<String> = self
+            .target_mut()?
+            .named_solids()
+            .into_iter()
+            .map(|(n, _)| n)
+            .collect();
+        for part in [&housing, &shaft] {
+            if !names.contains(part) {
+                bail!("no part called `{part}`; parts are {names:?}");
+            }
+        }
+        if housing == shaft {
+            bail!("a bearing joins two parts, the housing and the shaft in it");
+        }
+        let (point, axis) = self.target_axis(selector)?;
+        let axis = axis.normalize();
+        let row = match args.values.get("at") {
+            Some(at) => {
+                let at = point3(at, &self.scope)?;
+                point + axis * (at - point).dot(axis)
+            }
+            None => match self.target_band(selector, point, axis)? {
+                Some((low, high, _)) => point + axis * ((low + high) / 2.0),
+                None => point,
+            },
+        };
+        let rating = args
+            .optional_number("C0", &self.scope)?
+            .map(|c| positive(c, "the static rating `C0`"))
+            .transpose()?;
+        let stiffness = positive(
+            args.optional_number("stiffness", &self.scope)?
+                .unwrap_or(BEARING_STIFFNESS),
+            "the bearing's `stiffness`",
+        )?;
+        let label = line.label.clone().unwrap_or_else(|| housing.clone());
+        self.spec().seats.push(crate::sim::Seat {
+            label: label.clone(),
+            housing: housing.clone(),
+            shaft: shaft.clone(),
+            point: row,
+            axis,
+            axial,
+            rating,
+            stiffness,
+        });
+        let carries = if axial {
+            "sideways and along its axis"
+        } else {
+            "sideways only"
+        };
+        Ok(format!(
+            "`{shaft}` turns in `{housing}` on a ball row at {},{},{}, carried {carries}, free to turn and tilt; its load reads as `{label}`",
+            crate::plot::label(row.x),
+            crate::plot::label(row.y),
+            crate::plot::label(row.z)
+        ))
     }
 
     fn op_support(&mut self, line: &Line, hold: Hold) -> Result<String> {
@@ -919,6 +1003,33 @@ impl Model {
             }
         }
         Ok(said)
+    }
+
+    fn op_joint_speed(&mut self, line: &Line) -> Result<String> {
+        if self.spec().kind != Some(crate::sim::Kind::Torque) {
+            bail!("`speed` sets a joint's speed in a `sim torque`");
+        }
+        let args = Args::new(line, &["joint", "value"], &[], false)?;
+        let name = args.text("joint")?.to_string();
+        let value = args.number("value", &self.scope)?;
+        let rig = self.target_mut()?.rig();
+        let joint = rig
+            .joints
+            .iter()
+            .find(|j| j.name == name)
+            .ok_or_else(|| anyhow!("no joint called `{name}`"))?;
+        if !joint.movable() {
+            bail!("`{name}` does not move");
+        }
+        if value <= 0.0 {
+            bail!("the speed must be above zero");
+        }
+        if self.spec().speeds.iter().any(|(n, _)| *n == name) {
+            bail!("`{name}` already has a speed");
+        }
+        let unit = if joint.unit() == "°" { "rpm" } else { "mm/s" };
+        self.spec().speeds.push((name.clone(), value));
+        Ok(format!("`{name}` turning at {value} {unit}"))
     }
 
     fn op_joint_torque(&mut self, line: &Line) -> Result<String> {

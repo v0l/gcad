@@ -7,15 +7,15 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/v0l/gcad"
 
 [workspace]
-members = [".", "web"]
+members = [".", "web", "sims-proto"]
 
 [dependencies]
 anyhow = "1.0.104"
 rayon = "1.12"
 clap = { version = "4.6.7", features = ["derive"] }
-eframe = { version = "0.35", default-features = false, features = ["default_fonts", "glow"] }
+eframe = { version = "0.35", default-features = false, features = ["default_fonts", "wgpu"] }
 egui = "0.35"
-egui_bench = { version = "0.2.3", features = ["viewer3d"] }
+egui_bench = { version = "0.3.0", features = ["viewer3d"] }
 epaint_default_fonts = "0.35"
 image = { version = "0.25.10", default-features = false, features = ["png"] }
 monstertruck = { version = "0.4.1", features = ["solid", "step"] }
@@ -23,11 +23,19 @@ monstertruck-io = { version = "0.4.1", features = ["step"] }
 monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
 monstertruck-topology = "0.4.1"
 serde_json = "1.0.151"
+serde = { version = "1", features = ["derive"] }
+ciborium = "0.2"
+flate2 = "1"
+sha2 = "0.10"
 spade = "2.15"
 robust = "1.2"
 faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
 ttf-parser = "0.25"
 wgpu = "29"
+sims-field = { git = "https://github.com/v0l/sims", rev = "f4784d0a2603c8878cb009b660d8ef5f108b76e3" }
+sims-fem = { git = "https://github.com/v0l/sims", rev = "f4784d0a2603c8878cb009b660d8ef5f108b76e3" }
+sims-tet = { git = "https://github.com/v0l/sims", rev = "f4784d0a2603c8878cb009b660d8ef5f108b76e3" }
+sims-progress = { git = "https://github.com/v0l/sims", rev = "f4784d0a2603c8878cb009b660d8ef5f108b76e3" }
 pollster = "0.4"
 bytemuck = "1"
 toml = "1.1.8"
@@ -41,6 +49,8 @@ gpu-tests = []
 eframe = { version = "0.35", default-features = false, features = ["wayland", "x11"] }
 faer = { version = "0.24", features = ["rayon"] }
 notify = "8"
+ureq = { version = "2.12", features = ["json"] }
+gcad-sims-proto = { path = "sims-proto" }
 
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 web-sys = { version = "0.3", features = ["Window", "Storage"] }
@@ -62,3 +72,6 @@ monstertruck-fillet = { git = "https://github.com/v0l/monstertruck", rev = "2053
 monstertruck-healing = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
 monstertruck-assembly = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
 monstertruck-io = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
+
+[target.'cfg(windows)'.build-dependencies]
+winresource = "0.1"

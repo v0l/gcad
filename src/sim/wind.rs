@@ -6,7 +6,7 @@ use anyhow::{Result, bail};
 use monstertruck::modeling::*;
 use std::collections::HashMap;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Wind {
     pub speed: f64,
     pub toward: Vector3,
@@ -406,7 +406,13 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         bail!("`heat` with a part that spins is not supported yet");
     }
     let mut unseen = Vec::new();
+    let voxelizing = crate::progress::stage(
+        "placing parts in the grid",
+        Some(setup.parts.len()),
+        "parts",
+    );
     for (k, part) in setup.parts.iter().enumerate() {
+        voxelizing.progress(k as f64, || format!("`{}`", part.name));
         if setup.spun(k).is_some() {
             continue;
         }
@@ -422,6 +428,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             unseen.push(part.name.clone());
         }
     }
+    voxelizing.set(setup.parts.len() as f64);
+    drop(voxelizing);
     if unseen.len() == setup.parts.len() {
         bail!("every part is thinner than a cell; use a finer `mesh`");
     }
@@ -552,14 +560,46 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         )
     })?;
     let (ramp, settle, average) = steps(&setup, spec);
+    let cells = setup.cells() as f64;
+    let rate = |done: usize, since: crate::host::Instant| {
+        let seconds = since.elapsed().as_secs_f64().max(1.0e-9);
+        format!(
+            "{:.0} million cell updates a second",
+            done as f64 * cells / seconds / 1.0e6
+        )
+    };
+    let settling = crate::progress::stage(
+        "settling the flow",
+        Some(ramp.div_ceil(20) * 20 + settle),
+        "steps",
+    );
+    let started = crate::host::Instant::now();
+    let mut done = 0;
+    let chunk_of = 200;
     for k in 1..=20 {
         settings.inflow = k as f64 / 20.0;
         lattice.throttle(settings.inflow);
-        lattice.run(&settings, ramp.div_ceil(20))?;
+        let mut left = ramp.div_ceil(20);
+        while left > 0 {
+            let chunk = left.min(chunk_of);
+            lattice.run(&settings, chunk)?;
+            left -= chunk;
+            done += chunk;
+            settling.progress(done as f64, || {
+                format!("ramping the wind up, {}", rate(done, started))
+            });
+        }
     }
     let velocity_scale = setup.speed / speed;
     let early = settle * 2 / 3;
-    lattice.run(&settings, early)?;
+    let mut left = early;
+    while left > 0 {
+        let chunk = left.min(chunk_of);
+        lattice.run(&settings, chunk)?;
+        left -= chunk;
+        done += chunk;
+        settling.progress(done as f64, || rate(done, started));
+    }
     let every_settle = (setup.pass() / 20).clamp(1, 200);
     let mut left = settle - early;
     while left > 0 {
@@ -567,7 +607,12 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         lattice.run(&settings, chunk)?;
         lattice.accumulate();
         left -= chunk;
+        done += chunk;
+        settling.progress(done as f64, || {
+            format!("taking the mean for streamlines, {}", rate(done, started))
+        });
     }
+    drop(settling);
     let (seeds, probes): (Vec<[f64; 3]>, Vec<Vec<[f64; 3]>>) = {
         let all = if setup.wind.speed > 0.0 {
             stream_seeds(&setup)
@@ -658,6 +703,10 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let mut temperatures: Vec<f64> = Vec::new();
     let mut requested_ticks = 0;
     let mut converged = None;
+    let averaging = crate::progress::stage("averaging the forces", Some(samples * every), "steps");
+    let averaging_from = crate::host::Instant::now();
+    let to_newtons = setup.wind.speed / speed;
+    let to_newtons = air.0 * to_newtons * to_newtons * (setup.grid.spacing * 1.0e-3).powi(2);
     loop {
         let requested = (converged.is_none() && requested_ticks < samples)
             .then(|| -> Result<Ticked> {
@@ -737,6 +786,22 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             Some(&torque) => torque,
             None => values.iter().map(|v| v[WIND] as f64).sum(),
         });
+        averaging.progress((drags.len() * every) as f64, || {
+            let (name, unit, scale) = match setup.spins.first() {
+                Some(spin) => (format!("torque on {}", spin.joint), "N·m", 1.0),
+                None => ("drag".to_string(), "N", to_newtons),
+            };
+            let mean = drags.iter().sum::<f64>() / drags.len() as f64 * scale;
+            let known = match standard_error(&drags, batch) {
+                Some(e) => format!(", known to {:.1}% (stops at 1%)", e * 100.0),
+                None => String::new(),
+            };
+            format!(
+                "{name} {} {unit}{known}, {}",
+                super::result::short(mean),
+                rate(drags.len() * every, averaging_from)
+            )
+        });
         for ((series, disc), plane) in disc_flows.iter_mut().zip(&discs).zip(ready.discs) {
             let (_, plane) = lattice.take_plane(plane)?;
             let sign = setup.spins[disc.0].axis.dot(setup.axes[WIND]).signum();
@@ -792,6 +857,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             converged = Some(error);
         }
     }
+    drop(averaging);
+    let _finishing = crate::progress::stage("streamlines and the surface pressure", None, "");
     let samples = drags.len();
     let error = converged.or_else(|| standard_error(&drags, batch));
     let mean = lattice.mean_field()?;
@@ -1901,14 +1968,38 @@ pub fn setup_view(spec: &Spec) -> Result<FieldView> {
     };
     let base = positions.len() as u32;
     positions.extend((0..8).map(corner));
+    let mut outline = Vec::new();
     for a in 0..8u32 {
         for d in 0..3 {
             let b = a | 1 << d;
             if b != a {
-                edges.push([base + a, base + a, base + b]);
+                outline.push([base + a, base + a, base + b]);
             }
         }
     }
+    let metres = |d: usize| {
+        crate::plot::label(((grid.size[d] - 2) as f64 * grid.spacing * 1.0e-2).round() / 10.0)
+    };
+    marks.push(Mark {
+        kind: Stimulus::Wind,
+        text: format!(
+            "{} {} x {} x {} m, {} mm cells",
+            if spec.duct.is_some() {
+                "duct"
+            } else {
+                "air box"
+            },
+            metres(SIDE),
+            metres(UP),
+            metres(WIND),
+            crate::plot::label(grid.spacing)
+        ),
+        nodes: Vec::new(),
+        outline,
+        spot: Some(base + 7),
+        at: corner(7),
+        toward: None,
+    });
     let count = positions.len();
     Ok(FieldView {
         shade: vec![0.0; count],
@@ -1957,6 +2048,11 @@ fn creases(points: &[Point3], triangles: &[[usize; 3]]) -> Vec<[usize; 2]> {
 }
 
 pub fn surface_pressure(file: &std::path::Path) -> Result<super::fem::elastic::SurfacePressure> {
+    let (samples, reach) = surface_samples(file)?;
+    Ok(super::fem::elastic::SurfacePressure::new(samples, reach))
+}
+
+pub fn surface_samples(file: &std::path::Path) -> Result<(Vec<(Point3, f64)>, f64)> {
     let run = crate::model::run_path(file, &[], None)?;
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{}:{}: {error:#}", file.display(), line.number);
@@ -1997,10 +2093,11 @@ pub fn surface_pressure(file: &std::path::Path) -> Result<super::fem::elastic::S
             file.display()
         );
     }
-    Ok(super::fem::elastic::SurfacePressure::new(
+    Ok((
         samples
             .into_iter()
-            .zip(field.values.iter().map(|pa| pa * 1.0e-6)),
+            .zip(field.values.iter().map(|pa| pa * 1.0e-6))
+            .collect(),
         2.0 * setup.grid.spacing,
     ))
 }

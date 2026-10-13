@@ -1,9 +1,14 @@
+<img src="assets/icon.svg" width="64" alt="">
+
 # gcad
 
 Parametric CAD written like G-code: one operation per line, built for agents to write
 and check.
 It is pure Rust on the [monstertruck](https://github.com/v0l/monstertruck) B-rep
 kernel and exports STEP, STL, OBJ, 3MF and SVG drawings.
+
+Part of the [bench suite](https://github.com/v0l/bench-suite), a launcher that installs, updates
+and starts it alongside the other bench tools.
 
 ```
 let w=40 h=30 t=3
@@ -62,6 +67,15 @@ speed. The other simulations (torque, static, thermal, modal and buckling) are i
 gcad sim examples/robot/wind.gsim
 gcad examples/robot/wind.gsim
 gcad render examples/robot/wind.gsim wind.png --flow
+```
+
+A machine without a big enough GPU can run a simulation on a paid remote worker at
+[sims.gcad.sh](https://sims.gcad.sh). gcad builds the parts here, sends the built bodies (not
+the project files) and writes the result beside the `.gsim` as if it had run locally.
+
+```
+gcad remote signup
+gcad sim examples/robot/wind.gsim --remote
 ```
 
 ![Streamlines past the robot arm, ranked by turbulence](docs/robot-arm-wind.png)

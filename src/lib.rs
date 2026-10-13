@@ -8,6 +8,9 @@ pub mod model;
 pub mod offset;
 pub mod parse;
 pub mod plot;
+pub mod progress;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod remote;
 pub mod render;
 pub mod select;
 pub mod sim;

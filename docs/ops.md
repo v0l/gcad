@@ -221,7 +221,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | distance mate | supported | `distance b:rod.side a:rod.side 50` | `assembly::distance_between_axes` |
 | tangent mate | supported | `tangent rod:rod.side plate:plate.end` | `assembly::tangent_lays_a_rod_on_a_plate` |
 | mates hold parts together | supported | a screw mated to lid and box stops the hinge | `assembly::a_screw_locks_the_hinge` |
-| sub-assemblies | supported | `part kit boxed.gasm` keeps its joints and mates | `assembly::a_sub_assembly_keeps_its_mates` |
+| sub-assemblies | supported | `part kit boxed.gasm` keeps its joints, mates and axes; `move kit 50,0,0` moves it whole | `assembly::a_sub_assembly_keeps_its_mates`, `assembly::a_sub_assembly_moves_as_one` |
 | check holes line up | supported | `aligned lid:screws.side box:pilot.side tol=0.05` | `assembly::holes_line_up` |
 | turning joint | supported | `joint open box.lid box.main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
 | sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |
@@ -290,11 +290,13 @@ The plan for the rest is in `docs/simulation.md`.
 | torque through gears and racks | supported | a `couple` carries the load to the joint it drives | `simulation::torque_through_gears`, `simulation::robot_arm_motor_torque` |
 | gear and worm losses | supported | `couple ... efficiency=0.9 back=0.8`, `couple ... lead=3.6 friction=0.1` | `simulation::torque_through_lossy_gears`, `simulation::worm_that_locks` |
 | torque on a joint | supported | `torque az 6.3` in `sim torque` | `simulation::torque_on_a_joint` |
+| gear mesh forces, stresses, power and heat | supported | `couple ... module=1 face=10 gear=wheel pinion=worm`, `speed az 1` in `sim torque` | `simulation::worm_drive_forces_stresses_and_heat`, `simulation::spur_gear_mesh_forces`, `simulation::couple_geometry_needs_module_and_face` |
 | joint friction | supported | `joint ... drag=0.05` | `simulation::drag_on_joints` |
 | payloads | supported | `payload hand 300 at=x,y,z` | `simulation::torque_of_a_pendulum`, `simulation::payload_follows_the_pose` |
 | expectations | supported | `expect shoulder<2 drive>0.5` | `simulation::torque_through_gears` |
 | stale results and charts | supported | `gcad check x.gsim`, `gcad render x.gsim x.png` | `simulation::result_goes_stale` |
 | readings and sweeps in the viewer | supported | the simulation card lists readings and checks, traces each sweep, and runs the file | `simulation::torque_readings_without_a_field` |
+| progress while a simulation runs | supported | `gcad sim x.gsim` prints each stage to stderr (`-q` for none); the viewer's simulation card shows bars while it runs | `progress::static_run_reports_its_stages` |
 | setup before a result | supported | the viewer draws the mesh with its loads and supports, or the flow parts, duct, wind and heated faces | `simulation::setup_shown_before_a_result`, `simulation::flow_setup_shown_before_a_result` |
 | material libraries | supported | `materials.toml` beside or above a file, `~/.config/gcad/materials.toml`, `gcad materials` | `simulation::material_library_is_found` |
 | material files from other tools | supported | `materials workbench.xml`, `materials PLA.FCMat` | `simulation::material_files_import` |
@@ -305,6 +307,7 @@ The plan for the rest is in `docs/simulation.md`.
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::torque_about_a_named_axis`, `simulation::pinned_link` |
 | bearings | supported | `left: bearing seat.side axial`, `right: bearing seat2.side` | `simulation::bearings_carry_force_and_no_moment`, `simulation::bearings_need_one_held_along_the_axis` |
+| bearings between parts | supported | `bearing kfl:bore.side spindle axial C0=2900` | `simulation::bearing_between_parts_carries_no_moment`, `simulation::bearing_between_parts_takes_thrust`, `simulation::bearing_row_must_touch_the_shaft` |
 | leaving parts out | supported | `leave ctl* *screw*` | `simulation::leave_parts_out` |
 | mesh convergence check | supported | `converge`, `converge within=2` | `simulation::mesh_convergence_check` |
 | probes | supported | `top: probe 100,0,10`; a point on a curved face just outside the mesh reads on its surface | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure`, `simulation::probe_on_a_curved_face_snaps_to_the_mesh` |

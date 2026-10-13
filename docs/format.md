@@ -289,14 +289,14 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 
 | operation | parameters | does |
 |---|---|---|
-| `part` | `name file.gcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.gasm` file brings in its parts and joints too. A `.step` file brings in each solid where the file places it, named after its product (`box`, `pin`, `pin_2`, ...), and the bill of materials counts repeats of one product together. Units and unreadable solids are handled as for `import`; a KiCad or agentee board export comes in whole, its components in place |
+| `part` | `name file.gcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.gasm` file brings in its parts, joints and axes too, as a sub-assembly: `az.spindle`, `pose az.spin`, `about=az.wa`. A `.step` file brings in each solid where the file places it, named after its product (`box`, `pin`, `pin_2`, ...), and the bill of materials counts repeats of one product together. Units and unreadable solids are handled as for `import`; a KiCad or agentee board export comes in whole, its components in place |
 | `part` | `name kind:size` | brings in a standard part, see below |
-| `move` | `part x,y,z` | moves a part and everything jointed to it |
-| `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it |
+| `move` | `part x,y,z` | moves a part and everything jointed to it; given a sub-assembly's name (`az` for `part az drive.gasm`) or a multi-body part's, moves all of its parts and its axes |
+| `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it, or a whole sub-assembly as for `move` |
 | `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
 | `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` `drag=` | joins two parts; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now; `drag` is the friction that resists it, in N·m (N on a slide): bearings and seals, which `sim torque` adds to the torque to drive it |
 | `pose` | `joint value` | moves a joint to a new value |
-| `couple` | `driven driver` `ratio=` `efficiency=` `back=`, or `lead=` `friction=` | makes one joint follow another: `driven` moves `ratio` of its units (degrees or millimetres) for each unit `driver` moves, from where both are now. Gears turn at `ratio=-teeth_a/teeth_b`; a rack slides `ratio=pi*d/360` mm per degree of its pinion. A driven joint cannot be posed itself. `efficiency` is the share of power that gets through when `driven` turns `driver` (a motor driving its load), `back` when `driver` turns `driven` (the load turning the motor), the same unless given, and 0 for a pair that locks. For a worm give its `lead` angle in degrees and the mesh `friction` instead (about 0.05 to 0.15 greased): efficiency is tan(lead)/tan(lead+atan(friction)), back tan(lead-atan(friction))/tan(lead), and a worm whose friction is over tan(lead) locks |
+| `couple` | `driven driver` `ratio=` `efficiency=` `back=`, or `lead=` `friction=`; `module=` `face=` `teeth=` `pressure=` `gear=` `pinion=` | makes one joint follow another: `driven` moves `ratio` of its units (degrees or millimetres) for each unit `driver` moves, from where both are now. Gears turn at `ratio=-teeth_a/teeth_b`; a rack slides `ratio=pi*d/360` mm per degree of its pinion. A driven joint cannot be posed itself. `efficiency` is the share of power that gets through when `driven` turns `driver` (a motor driving its load), `back` when `driver` turns `driven` (the load turning the motor), the same unless given, and 0 for a pair that locks. For a worm give its `lead` angle in degrees and the mesh `friction` instead (about 0.05 to 0.15 greased): efficiency is tan(lead)/tan(lead+atan(friction)), back tan(lead-atan(friction))/tan(lead), and a worm whose friction is over tan(lead) locks. `module` (mm) and `face` (the face width, mm) size the teeth so `sim torque` reads the mesh forces and stresses: `teeth` is the count on the `driven` side (a worm's starts, 1 unless given), the `driver` gear has `ratio` times as many, `pressure` is the pressure angle (20 unless given), and `gear` and `pinion` name the `driver` and `driven` gear bodies so their materials are used (a pinion or worm not named is taken as steel) |
 | `concentric` | `moving:faces fixed:faces` `near=x,y,z` `flip` | turns and moves the moving part so its round faces share an axis with a hole in the fixed one; `near` picks the hole nearest a point, otherwise the one nearest where the part is; it can still slide along and spin about that axis |
 | `flush` | `moving:faces fixed:faces` `offset=` | turns and moves the moving part so its flat faces lie on the fixed part's, facing each other, `offset` apart |
 | `parallel` | `moving:faces fixed:faces` | turns the moving part so its face or axis is parallel to the fixed one; an axis and a face are parallel when the axis lies along the face |
@@ -440,8 +440,9 @@ expect shoulder<15 sun_s_turn<4
 | `fix` | `faces` | holds the faces still (static). Its reaction force is a reading named after the line's label, or `fix1`, `fix2`, ... |
 | `slide` | `faces` | holds the faces only along their normal, free to slide along them (static); a symmetry plane, or a part resting on a flat. Reading as for `fix` |
 | `pin` | `faces` | holds every point of a round face on its axis, free to turn about it, like a link on a pin; the face cannot tilt, so a short band acts as a clamp (static). Reading as for `fix` |
-| `bearing` | `faces` `axial` | holds a round band sideways at one ring of nodes, on the edge nearer the middle of the part, free to turn and tilt, like a shaft in a ball bearing: it carries force and no moment. With `axial` it also holds the band along its axis at one node; give that to one bearing of a shaft (static). Reading as for `fix` |
+| `bearing` | `faces` `axial` | holds a round band sideways at one ring of nodes, on the edge nearer the middle of the part, free to turn and tilt, like a shaft in a ball bearing: it carries force and no moment. With `axial` it also holds the band along its axis at one node; give that to one bearing of a shaft (static). Reading as for `fix`. `bearing part:faces shaft` `axial` `at=` `C0=` `stiffness=` instead joins two parts of an assembly: `shaft` turns in the housing's bore `faces` on a ball row at the middle of the bore, or across from `at=`, free to turn and tilt, so it carries force and no moment; with `axial` it also carries thrust, through the axis. `stiffness` is its radial stiffness in N/mm (1e5, a small ball bearing, unless given). It reads the radial load as the line's label (the housing's name unless labelled), `.axial` the thrust, and with the static rating `C0` in newtons `.safety`, C0 over the equivalent load max(Fr, 0.6 Fr + 0.5 Fa) |
 | `torque` | `faces moment` `axis=x,y,z` `at=x,y,z` | twists the faces by `moment` N·m about their axis: the axis of a round face, or the normal through the middle of a flat one, unless `axis=` and `at=` say; `axis=` also takes `x`, `y`, `z` or `-z` (static) |
+| `speed` | `joint value` | how fast a joint runs, in rpm (mm/s on a `slide`); joints it drives or is driven by follow through the couples, and each reads its power and each mesh its heat (torque) |
 | `torque` | `joint value` | a steady torque in N·m (a force in N on a `slide`) on the joint, pushing it positive, like wind on an antenna (torque) |
 | `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
 | `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |
@@ -476,7 +477,18 @@ the torque the motor needs. Through couples with an `efficiency` or a worm's `le
 way, and a second reading `joint.back` is the torque the load turns the joint back with,
 0 where a pair locks; a note names the joints that lock. A joint's `drag` and the drag of
 every joint it moves add to the torque to drive it, through the same ratios and losses, and
-take away from the torque the load turns it back with. Joints that would read the same as another, like the copies a
+take away from the torque the load turns it back with. A joint behind lossy couples also reads
+`joint.ideal` (the torque with no losses), `joint.friction` (lost in the meshes) and
+`joint.drag`, which add up to its torque. Each couple reads `mesh.driver.efficiency` and
+`.back` in %, and `.torque`, the torque through the mesh at the `driver` gear at the worst pose.
+With `module` and `face` it also reads, on the `driver` gear, the `.tangential` force on the
+pitch circle (a worm's thrust), the `.radial` force pushing the shafts apart and for a worm the
+`.axial` force along the gear's axis (the worm's turning force), each in N; `.bending`, the
+Lewis root stress with form factor 0.484 - 2.87/z; `.contact`, the Hertz flank stress (the
+worm as a rack) when the gear's material has a stiffness; and `.safety`, its strength over the
+bending stress. With a `speed`, each joint reads `.speed` and `.power` (W at its worst torque)
+and each mesh its `.heat` (W lost to friction) and a worm its `.sliding` speed (m/s).
+Joints that would read the same as another, like the copies a
 `pattern` makes, are listed in a note instead, and their names still work in `expect`.
 Parts with no material weigh nothing, and a note lists them.
 

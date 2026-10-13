@@ -27,6 +27,9 @@ export and `bom` the `.gasm`, not a part file. A part file holds one part, or se
 bodies when they share sizes, like a box and the lid that fits it; the `.gasm` brings each in as
 `part.body`. Sketch and solid operations are errors in a `.gasm`, joints are errors in a
 `.gcad`.
+Split a big design into sub-assemblies: `part az drive.gasm` brings one in with its parts,
+joints and axes as `az.spindle`, `az.spin`, `az.wa`; `move az x,y,z` and `rotate az ...` place it
+whole, and a `.gsim` can simulate the sub-assembly's file on its own.
 
 ## Installing
 
@@ -194,6 +197,11 @@ A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`
 readings, writes `x.result.json`, and fails when an `expect` line does not hold. Kinds:
 `torque`, `static`, `thermal`, `modal`, `buckling` (load factor before buckling under the
 `static` lines; keep it above about 3), `flow` (wind on the GPU); the plan and limits are in `docs/simulation.md`.
+Progress goes to stderr, one line per finished stage and one every 10 s while a stage runs, with
+the iterations, residual and time left; `-q` turns it off. `gcad sim x.gsim --remote` builds
+the model here and solves it on a paid GPU worker (needs `gcad remote signup` and credit; not
+for `torque`), writing the same result file. `gcad remote runners` lists the runners and their
+prices; `--max-price 2.50` caps the euro an hour.
 
 ```
 sim torque
@@ -209,7 +217,10 @@ gravity and where it happened. Couples pass the load on, so a sun gear driven by
 at `ratio=4` reads a quarter of it: that is the motor's torque. With lossy couples that
 reading is the torque to drive the load and `joint.back` the torque the load pushes back with
 (0 when a worm locks). `torque az 6.3` adds a steady joint torque, like wind, and `joint ...
-drag=0.05` gives a joint bearing and seal friction in N·m (N on a slide). Parts need a `material` to
+drag=0.05` gives a joint bearing and seal friction in N·m (N on a slide). Add `module=1 face=10
+gear=wheel pinion=worm` to a `couple` for its mesh forces (tangential, radial, axial), Lewis
+bending and Hertz contact stress and safety, and `speed az 1` (rpm) for power, mesh heat and
+worm sliding speed; motor torque also splits into `.ideal`, `.friction` and `.drag`. Parts need a `material` to
 weigh anything. `gcad check x.gsim` says when the result is stale and `gcad render x.gsim
 x.png` plots the sweeps. The viewer shows the readings, draws the setup before a result
 exists, and has a run button. Materials also carry `E= nu= yield= k= alpha=`.
@@ -228,7 +239,7 @@ expect stress<80 safety>2
 ```
 
 `slide faces` holds only the normal (symmetry planes), `bearing seat.side` holds a shaft's bearing band sideways but free to tilt (add `axial` on one of them), `pin h.side` holds a round face free to
-turn, `pressure faces 10` pushes in MPa, `torque shaft.end 5` twists in N·m, `warm 40` heats the whole part (thermal expansion stress); `warm -100 part=bolt` cools one part, which preloads a bolted joint.
+turn, `bearing kfl:bore.side spindle axial C0=2900` lets one part turn in another's bore on a ball row (radial load, `.axial` and `.safety` against C0, no moment), `pressure faces 10` pushes in MPa, `torque shaft.end 5` twists in N·m, `warm 40` heats the whole part (thermal expansion stress); `warm -100 part=bolt` cools one part, which preloads a bolted joint.
 Readings: `stress`, `displacement`, `safety`, each support's reaction, `probe.stress`. `stress`
 and `safety` leave out one element size of each part around its supports and bonds, whose singular peak reads as
 `support_stress`. A sharp inside corner is a singularity too: fillet it or probe away from it. `gcad render x.gsim x.png` draws the

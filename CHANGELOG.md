@@ -12,6 +12,34 @@ All notable changes to gcad are listed here. The format follows
 - `sim magnetic`: a 2D slice through a motor with `magnet`, `iron` (M-19 and 1010 B-H curves) and
   `coil` lines, swept with `turn joint sweep= steps=` for torque, cogging, ripple and back-EMF
   (`examples/magnetic/cogging.gsim`).
+- Sub-assemblies move as one: `move az 0,0,10` and `rotate az ...` take a sub-assembly's name
+  (or a multi-body part's) and move all its parts, and its axes come in as `az.axis` for joints
+  in the parent.
+- Remote simulations: `gcad sim x.gsim --remote` builds the model locally, sends the built
+  bodies, materials and selected faces to a paid GPU worker at sims.gcad.sh and writes the
+  result beside the spec. `gcad remote signup|login|account|runners|jobs|cancel` manage the
+  account; runners set their own price an hour and `--max-price` caps it.
+- `bearing housing:bore shaft` in a static simulation joins two parts on a ball bearing: radial
+  force at the ball row, free to turn and tilt, thrust with `axial`, stiffness from
+  `stiffness=`, and the load against the static rating with `C0=`.
+- Gear drives in `sim torque`: `couple ... module= face= teeth= pressure= gear= pinion=` reads
+  each mesh's efficiency, torque, tangential, radial and axial forces, Lewis bending and Hertz
+  contact stress and bending safety; `speed joint rpm` adds each joint's power, each mesh's
+  friction heat and a worm's sliding speed; and a motor's torque splits into the ideal load,
+  mesh friction and drag. The viewer shows readings with more than four values per part as a
+  block of figures for each.
+- Progress for every simulation: `gcad sim` reports each stage on stderr (model and part files,
+  meshing, bonding, assembly, solver iterations and residual, eigen solves, flow steps with the
+  running drag, torque poses, writing) with counts and time left, and `-q` turns it off. The
+  viewer's simulation card shows one row per stage with its time, and a bar, the time left
+  and one line of detail for the running stage; work inside a stage (part files, per-part
+  meshing, interference) feeds that line instead of adding rows. The old result and its stale
+  warning are hidden while it runs.
+- The simulation card lays readings out as figures three to a row, x/y/z readings on one line,
+  and per-part or per-probe readings as a table (the 8 largest, with a button for the rest); a
+  reading named after a part fills its `value` column. Checks show as ok/fail lines, notes fold
+  behind a button, and the stale warning is one line naming what changed.
+- Opening or rebuilding a file in the viewer shows the same progress panel over the viewport.
 - Viewer simulation card with readings, `expect` checks, notes, sweep traces and a run button.
 - Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
   or for flow the parts in their duct or air box, the wind and the heated faces.
@@ -21,11 +49,15 @@ All notable changes to gcad are listed here. The format follows
 - `torque axis=` and `wind toward=` take `x`, `y`, `z` and `-z`.
 - Gear and worm losses on couples: `efficiency=` and `back=`, or a worm's `lead=` and `friction=`,
   with `joint.back` readings and worms that lock.
+- `tools/fluidx3d/`: the cube, sphere and tube flow benchmarks set up in FluidX3D, for speed and
+  accuracy comparisons with `sim flow`.
 - `torque joint value` in `sim torque`: a steady torque on a joint, like wind.
 - `joint ... drag=`: bearing and seal friction on a joint, added to the torque to drive it.
 - A boss glued onto a face, including twisted faces and over an edge; twisted extrudes with holes.
 
 ### Changed
+- The viewer's run button simulates the model it has already built instead of building the file
+  again, and after the run only redraws the scene to pick up the result instead of reloading.
 - Simulation meshes are only refined again when an element is flatter than half a degree
   (was 2 degrees). Elements between the two solve fine, and parts that never reached 2 degrees
   were meshed far finer than asked: the rotator's electronics box at `mesh 3` made 15.7 million
@@ -39,6 +71,8 @@ All notable changes to gcad are listed here. The format follows
 - Viewer reloads when a result is written.
 
 ### Fixed
+- The wind setup's air box is drawn in the wind colour and labelled with its size; it was a
+  black line on the dark background. Viewer labels stay inside the view.
 - STEP imports read each solid in its own length unit; inch vendor models came in 25.4 times too
   small.
 - STEP surfaces of revolution with a circle profile, like the groove on KiCad electrolytic

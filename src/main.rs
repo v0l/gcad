@@ -6,7 +6,7 @@ use gcad::{export, render, select};
 #[derive(Parser)]
 #[command(
     about = "Parametric CAD written like G-code: one operation per line",
-    version,
+    version = env!("GCAD_BUILD_VERSION"),
     args_conflicts_with_subcommands = true
 )]
 struct Cli {
@@ -17,6 +17,17 @@ struct Cli {
     /// Set a variable, overriding the file's `let`, as name=value (repeatable)
     #[arg(long = "set", global = true, value_parser = parse_set)]
     set: Vec<(String, f64)>,
+}
+
+fn parse_price(text: &str) -> std::result::Result<u64, String> {
+    let euro: f64 = text
+        .trim_start_matches('€')
+        .parse()
+        .map_err(|_| format!("`{text}` is not a price in euro an hour, like 2.50"))?;
+    if !(0.0..=1000.0).contains(&euro) {
+        return Err("the price should be from 0 (free runners only) to 1000 euro an hour".into());
+    }
+    Ok((euro * 100.0).round() as u64)
 }
 
 fn parse_set(text: &str) -> std::result::Result<(String, f64), String> {
@@ -57,6 +68,34 @@ enum Command {
         /// Build the problem and print its size without solving it
         #[arg(long)]
         dry_run: bool,
+        /// Print no progress while it runs
+        #[arg(long, short)]
+        quiet: bool,
+        /// Build the parts here and solve them on a paid remote worker (see `gcad remote`)
+        #[arg(long, conflicts_with = "dry_run")]
+        remote: bool,
+        /// The longest a remote run may take; its cost is held from the balance while it runs
+        #[arg(long, default_value_t = 60, requires = "remote")]
+        max_minutes: u64,
+        /// The most a remote runner may charge, in euro an hour; 0 takes only free runners (default: any runner online)
+        #[arg(long, requires = "remote", value_parser = parse_price)]
+        max_price: Option<u64>,
+    },
+    /// Manage the account that pays for `gcad sim --remote`
+    Remote {
+        #[command(subcommand)]
+        action: RemoteAction,
+    },
+    /// Measure the GPU the flow solver uses: FP32 TFLOPS and memory bandwidth, as JSON
+    #[command(hide = true)]
+    GpuBench,
+    /// Solve a job packed by `gcad sim --remote` (the remote worker runs this)
+    #[command(hide = true)]
+    SimJob {
+        job: String,
+        out: String,
+        #[arg(long, short)]
+        quiet: bool,
     },
     /// List the materials a file can use: materials.toml files above it, ~/.config/gcad, and the built-in ones; or the materials in one library file
     Materials { file: Option<String> },
@@ -93,6 +132,62 @@ enum Command {
         #[arg(long)]
         line: Option<usize>,
     },
+}
+
+#[derive(Subcommand)]
+enum RemoteAction {
+    /// Make an account and keep its token in ~/.config/gcad/remote.toml
+    Signup {
+        #[arg(long)]
+        server: Option<String>,
+    },
+    /// Use an existing account token on this machine
+    Login {
+        token: String,
+        #[arg(long)]
+        server: Option<String>,
+    },
+    /// Show the account id and balance
+    Account,
+    /// List the runners: their GPU, measured speed and price an hour
+    Runners,
+    /// List recent remote runs
+    Jobs,
+    /// Stop a remote run; the time it used is still charged
+    Cancel { id: String },
+}
+
+fn remote(action: RemoteAction) -> Result<()> {
+    use gcad::remote;
+    match action {
+        RemoteAction::Signup { server } => remote::signup(server.as_deref()),
+        RemoteAction::Login { token, server } => remote::login(&token, server.as_deref()),
+        RemoteAction::Account => remote::account(),
+        RemoteAction::Runners => remote::runners(),
+        RemoteAction::Jobs => remote::jobs(),
+        RemoteAction::Cancel { id } => remote::cancel(&id),
+    }
+}
+
+fn simulate_remote(
+    file: &str,
+    vars: &[(String, f64)],
+    limits: gcad::remote::Limits,
+    quiet: bool,
+) -> Result<()> {
+    let path = std::path::Path::new(file);
+    if !gcad::sim::is_sim(path) {
+        bail!("`gcad sim` runs a .gsim file");
+    }
+    gcad::remote::simulate(path, vars, &limits, || {
+        let _listening = (!quiet).then(progress_on_stderr);
+        let run = {
+            let _building = gcad::progress::stage("building the model", None, "");
+            load(file, None, vars)?
+        };
+        finished(&run)?;
+        Ok(run)
+    })
 }
 
 fn load(file: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<Run> {
@@ -170,12 +265,59 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
     Ok(())
 }
 
+fn progress_on_stderr() -> gcad::progress::Listening {
+    use std::io::{IsTerminal, Write};
+    struct Seen {
+        printed: std::collections::HashMap<String, std::time::Duration>,
+    }
+    let terminal = std::io::stderr().is_terminal();
+    let seen = std::sync::Mutex::new(Seen {
+        printed: Default::default(),
+    });
+    gcad::progress::listen(move |report| {
+        let mut seen = seen.lock().unwrap_or_else(|e| e.into_inner());
+        let mut err = std::io::stderr().lock();
+        let line = match (&report.parent, terminal) {
+            (Some(parent), true) => format!("{parent}: {}", report.line()),
+            (Some(_), false) => format!("  {}", report.line()),
+            (None, _) => report.line(),
+        };
+        if terminal {
+            let shown: String = line.chars().take(200).collect();
+            if report.finished && report.elapsed < std::time::Duration::from_millis(50) {
+                let _ = write!(err, "\r\x1b[2K");
+            } else if report.finished {
+                let _ = writeln!(err, "\r\x1b[2K{shown}");
+            } else {
+                let _ = write!(err, "\r\x1b[2K{shown}");
+            }
+            let _ = err.flush();
+            return;
+        }
+        let key = format!("{:?}/{}", report.phase, report.stage);
+        let every = std::time::Duration::from_secs(10);
+        let last = seen.printed.get(&key).copied().unwrap_or_default();
+        if report.finished {
+            seen.printed.remove(&key);
+            if report.elapsed >= std::time::Duration::from_millis(50) {
+                let _ = writeln!(err, "{line}");
+            }
+        } else if report.elapsed >= last + every {
+            let _ = writeln!(err, "{line}");
+            seen.printed.insert(key, report.elapsed);
+        }
+    })
+}
+
 fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
     let path = std::path::Path::new(file);
     if !gcad::sim::is_sim(path) {
         bail!("`gcad sim` runs a .gsim file");
     }
-    let run = load(file, None, vars)?;
+    let run = {
+        let _building = gcad::progress::stage("building the model", None, "");
+        load(file, None, vars)?
+    };
     finished(&run)?;
     let spec = run
         .model
@@ -187,7 +329,10 @@ fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
         return Ok(());
     }
     let outcome = gcad::sim::simulate(spec)?;
-    let out = gcad::sim::save(path, vars, &outcome)?;
+    let out = {
+        let _writing = gcad::progress::stage("writing the result", None, "");
+        gcad::sim::save(path, vars, &outcome)?
+    };
     print!("{}", outcome.table());
     println!("wrote {}", out.display());
     let failed = outcome.failed();
@@ -274,7 +419,48 @@ fn main() -> Result<()> {
             }
             export::export_model(&run.model, std::path::Path::new(&file), &output)
         }
-        Command::Sim { file, dry_run } => simulate(&file, &vars, dry_run),
+        Command::Sim {
+            file,
+            quiet,
+            remote: true,
+            max_minutes,
+            max_price,
+            ..
+        } => simulate_remote(
+            &file,
+            &vars,
+            gcad::remote::Limits {
+                minutes: max_minutes,
+                price_cents: max_price,
+            },
+            quiet,
+        ),
+        Command::Remote { action } => remote(action),
+        Command::GpuBench => {
+            let bench = gcad::flow::bench::run()?;
+            println!(
+                "{}",
+                serde_json::to_string(&gcad_sims_proto::GpuBench {
+                    gpu: bench.gpu,
+                    tflops: (bench.tflops * 10.0).round() / 10.0,
+                    bandwidth_gbs: bench.bandwidth.round(),
+                })?
+            );
+            Ok(())
+        }
+        Command::SimJob { job, out, quiet } => {
+            let _listening = (!quiet).then(progress_on_stderr);
+            gcad::remote::run_job(std::path::Path::new(&job), std::path::Path::new(&out))
+        }
+        Command::Sim {
+            file,
+            dry_run,
+            quiet,
+            ..
+        } => {
+            let _listening = (!quiet).then(progress_on_stderr);
+            simulate(&file, &vars, dry_run)
+        }
         Command::Materials { file } => {
             println!(
                 "{}",

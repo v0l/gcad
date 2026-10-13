@@ -30,9 +30,18 @@ expect stress<60 displacement<0.2
 ```sh
 gcad sim bracket.gsim             # run it, write bracket.result.json, print the readings
 gcad sim bracket.gsim --dry-run   # build the mesh and print nodes, elements and memory
+gcad sim bracket.gsim -q          # no progress lines
 gcad render bracket.gsim x.png    # the part coloured by the result field, with a scale bar
 gcad check bracket.gsim           # also warns when the result is stale
 ```
+
+While it runs, `gcad sim` reports each stage on stderr: building the model and its part files,
+meshing (each part that takes over 2 s gets its own line, with its tries and refinement), bonding,
+assembly, the solver's iterations and residual, the frequency solver's residual, the flow's
+settling and averaging steps with the running drag, the torque poses, and writing the result.
+Each line has the count done, a percentage and the time left where it can be told. On a
+terminal one line updates in place; piped, a stage prints when it ends and every 10 s while it
+runs. The viewer's simulation card shows the same stages as bars while its run button is busy.
 
 `bracket.result.json` holds the readings, the field at each mesh node, and a hash of the spec,
 every part file it read, the `--set` variables and the gcad version; a mismatch makes the
@@ -43,6 +52,44 @@ trace, and has a run button that solves the file in the background. A stale resu
 drawn, with a warning saying what changed. Before there is a result it draws the setup: the mesh
 with its loads, supports and thermal boundaries for the meshed kinds, and for `flow` the parts
 inside the duct or the air box, the wind arrow and the heated faces.
+
+## Remote runs
+
+`gcad sim x.gsim --remote` solves on a runner of the job server at https://sims.gcad.sh, paid
+from a prepaid balance per second of the runner's time. Each runner sets its own price an hour;
+the site and `gcad remote runners` list them with their GPU, measured FP32 TFLOPS and memory
+bandwidth (`gcad gpu-bench`, hidden, measures both), video memory and CPU.
+
+```sh
+gcad remote signup                  # make an account, keep its token in ~/.config/gcad/remote.toml
+gcad remote account                 # its id, balance and price; top up at the shop with the id
+gcad sim wind.gsim --remote         # build here, solve there, write wind.result.json here
+gcad sim wind.gsim --remote --max-minutes 20
+gcad sim wind.gsim --remote --max-price 2.50   # only runners asking at most €2.50 an hour
+gcad sim wind.gsim --remote --max-price 0      # only free runners; no balance needed
+gcad remote runners                 # the runners, their hardware and price
+gcad remote jobs                    # recent runs, their time and cost
+gcad remote cancel ID               # stop a run; the time it used is charged
+gcad remote login TOKEN             # use the account on another machine
+```
+
+The model is built locally and the job holds what the solvers read: the spec with its faces
+already selected, every body as compressed B-rep, the materials, and the `stamp` of the local
+files. Project files never leave the machine. A `wind flow.gsim` load goes as the flow's
+surface pressure samples, which needs a fresh local flow result, and a `warm heat.gsim`
+goes as that thermal simulation's own packed job, solved on the worker first. `torque` runs
+in seconds and stays local. Jobs are CBOR, gzipped, and only a worker on the same gcad
+build takes them (`gcad sim-job JOB OUT`, hidden, is what it runs).
+
+A run goes to the first free runner on the same gcad build (`gcad --version`: the version and
+the last commit that changed the code) asking at most `--max-price` (by default the dearest
+runner online, so any of them). A runner can ask nothing; a run capped at 0 needs no balance. It holds `--max-minutes` (60 by default) at
+that price from the balance while it runs, charges the seconds it used at the price of the
+runner that took it, and gives back the rest. The runner stops it at the limit.
+Rerunning the same command with unchanged files picks up the queued or running job instead
+of sending another, and a finished one when the result here is missing or stale, so a client
+that stopped while it waited loses nothing. `GCAD_SIMS_SERVER` and `GCAD_SIMS_TOKEN` override
+the saved server and token.
 
 ## Materials
 
@@ -411,6 +458,18 @@ the arrows and lists the same lines under the plot, and `gcad sim` notes each ap
 `buckling`: the static solution gives the stress at each Gauss point, which builds a geometric
 stiffness; subspace iteration on K^-1 (-K_G) finds the largest positive eigenvalues, whose
 inverses are the load factors. A clamped column matches Euler's load within 0.05%.
+
+`bearing housing:bore shaft`: the ties between the two parts are kept only within half the
+coarser part's element size of the ball row and hold only the radial gap, each with an equal
+share of the bearing's stiffness (twice the stiffness over the number of ties, since a ring of
+radial springs is half as stiff in any one direction as their sum). With the bond penalty
+instead, a band 4 mm long clamped the shaft like a pin and took 21 N·m of the moment on the
+lever check below. With 1e5 N/mm the band's tilt stiffness is under 1% of a Ø20 shaft's over
+160 mm. Thrust goes through one tie joining the mean axial movement of three shaft nodes at
+120 degrees to three housing nodes at 120 degrees, so it acts on the axis and adds no tilt
+stiffness; one node off the axis put 3 N·m of couple on a 300 N thrust at 10 mm. A Ø20 shaft
+in two housings 160 mm apart with 1000 N on a 100 mm overhang reads 623 and 1623 N at mesh 4
+(lever rule 625 and 1625) and 623.8 and 1623.8 N at mesh 2.5.
 
 `contact a b`: the tie pairs between those parts become normal-only penalty springs along the
 master face's normal, switched on where they press and off where they would pull, re-solving

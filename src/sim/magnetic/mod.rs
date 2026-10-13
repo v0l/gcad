@@ -7,20 +7,20 @@ use anyhow::{Result, bail};
 use monstertruck::modeling::*;
 use plane::{Gap, Layout, Plane, Shape, Stuff, Toward};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Turn {
     pub joint: String,
     pub sweep: f64,
     pub steps: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Pointing {
     Radial(f64),
     Along(Vector3),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Role {
     Magnet {
         br: f64,
@@ -38,7 +38,7 @@ pub enum Role {
     },
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Assigned {
     pub label: String,
     pub patterns: Vec<String>,

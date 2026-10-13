@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64" role="img" aria-labelledby="t d">
+  <title id="t">gcad</title>
+  <desc id="d">An isometric block with a hole drilled in its top face, the lines of its part file etched into its side.</desc>
+  <rect width="64" height="64" rx="14" fill="#0B1014"/>
+  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M32 8 54 20.5V42.5L32 55 10 42.5V20.5Z" stroke="#2FD3E1" stroke-width="3"/>
+    <path d="M10 20.5 32 33 54 20.5M32 33V55" stroke="#2FD3E1" stroke-width="3"/>
+    <path d="M15 30.5 27 37.3M15 36.5 23 41M15 42.5 25 48.2" stroke="#2FD3E1" stroke-width="2.6" opacity=".55"/>
+    <ellipse cx="32" cy="20.5" rx="9" ry="5.2" stroke="#FFB020" stroke-width="3"/>
+  </g>
+</svg>

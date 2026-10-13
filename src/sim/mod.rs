@@ -1,5 +1,6 @@
 pub mod fem;
 mod heat;
+pub mod job;
 pub mod magnetic;
 pub mod mesh;
 mod result;
@@ -18,7 +19,7 @@ use anyhow::{Result, bail};
 use monstertruck::modeling::{Point3, Vector3};
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Kind {
     Torque,
     Static,
@@ -67,20 +68,20 @@ impl Kind {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Payload {
     pub part: String,
     pub grams: f64,
     pub at: Option<Point3>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Sweep {
     pub joints: Vec<usize>,
     pub steps: usize,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Expect {
     pub text: String,
     pub reading: String,
@@ -88,15 +89,18 @@ pub struct Expect {
     pub limit: f64,
 }
 
-#[derive(Clone, Default)]
+#[derive(Clone, Default, serde::Serialize, serde::Deserialize)]
 pub struct Spec {
+    #[serde(skip)]
     pub origin: Option<PathBuf>,
     pub kind: Option<Kind>,
+    #[serde(skip)]
     pub target: Option<Box<Model>>,
     pub file: Option<PathBuf>,
     pub gravity: Option<Vector3>,
     pub payloads: Vec<Payload>,
     pub joint_torques: Vec<(String, f64)>,
+    pub speeds: Vec<(String, f64)>,
     pub sweeps: Vec<Sweep>,
     pub expects: Vec<Expect>,
     pub mesh: Option<f64>,
@@ -108,6 +112,7 @@ pub struct Spec {
     pub modes: Option<usize>,
     pub warming: Option<Warm>,
     pub contacts: Vec<(String, String, f64)>,
+    pub seats: Vec<Seat>,
     pub converge: Option<f64>,
     pub leave: Vec<String>,
     pub wind: Option<wind::Wind>,
@@ -117,23 +122,60 @@ pub struct Spec {
     pub ambient: Option<f64>,
     pub duct: Option<[f64; 2]>,
     pub wind_load: Option<PathBuf>,
+    #[serde(default)]
+    pub wind_samples: Option<(Vec<(Point3, f64)>, f64)>,
+    #[serde(default)]
     pub spins: Vec<Spin>,
+    #[serde(default)]
     pub turn: Option<magnetic::Turn>,
+    #[serde(default)]
     pub stack: Option<f64>,
+    #[serde(default)]
     pub slice: Option<f64>,
+    #[serde(default)]
     pub roles: Vec<magnetic::Assigned>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Spin {
     pub joint: String,
     pub rpm: f64,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
+pub struct Seat {
+    pub label: String,
+    pub housing: String,
+    pub shaft: String,
+    pub point: Point3,
+    pub axis: Vector3,
+    pub axial: bool,
+    pub rating: Option<f64>,
+    pub stiffness: f64,
+}
+
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub enum Warm {
     By(Vec<(Option<String>, f64)>),
-    From { file: PathBuf, reference: f64 },
+    From {
+        file: PathBuf,
+        reference: f64,
+    },
+    #[serde(skip)]
+    Solved {
+        file: PathBuf,
+        spec: Nested,
+        reference: f64,
+    },
+}
+
+#[derive(Clone)]
+pub struct Nested(pub Box<Spec>);
+
+impl std::fmt::Debug for Nested {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Nested")
+    }
 }
 
 impl Spec {
@@ -171,6 +213,21 @@ pub fn movie_path(spec: &Path) -> PathBuf {
     spec.with_extension("frames.bin")
 }
 
+pub fn write(spec: &Path, outcome: &Outcome, stamp: &[(String, String)]) -> Result<PathBuf> {
+    let out = result_path(spec);
+    crate::host::write(
+        &out,
+        serde_json::to_string_pretty(&outcome.to_json(stamp))?.as_bytes(),
+    )?;
+    let frames = movie_path(spec);
+    match &outcome.movie {
+        Some(movie) => movie.write(&frames)?,
+        None if crate::host::is_file(&frames) => std::fs::remove_file(&frames)?,
+        None => {}
+    }
+    Ok(out)
+}
+
 pub fn plan(spec: &Spec) -> Result<String> {
     match spec.kind {
         Some(Kind::Torque) => torque::plan(spec),
@@ -192,6 +249,10 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
         let mut coarse = spec.clone();
         coarse.mesh = Some(size * 1.5);
         coarse.converge = None;
+        let _phase = crate::progress::phase(format!(
+            "convergence check at {} mm",
+            crate::plot::label(size * 1.5)
+        ));
         let rough = solve(&coarse)?;
         outcome
             .notes
@@ -351,18 +412,7 @@ pub fn picture(spec: &Spec, vars: &[(String, f64)]) -> Option<Picture> {
 }
 
 pub fn save(spec: &Path, vars: &[(String, f64)], outcome: &Outcome) -> Result<PathBuf> {
-    let out = result_path(spec);
-    crate::host::write(
-        &out,
-        serde_json::to_string_pretty(&outcome.to_json(&stamp(spec, vars)))?.as_bytes(),
-    )?;
-    let frames = movie_path(spec);
-    match &outcome.movie {
-        Some(movie) => movie.write(&frames)?,
-        None if crate::host::is_file(&frames) => std::fs::remove_file(&frames)?,
-        None => {}
-    }
-    Ok(out)
+    write(spec, outcome, &stamp(spec, vars))
 }
 
 pub fn matches(pattern: &str, name: &str) -> bool {

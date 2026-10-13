@@ -72,7 +72,7 @@ impl Prepared {
             Warm::By(list) => list
                 .iter()
                 .any(|(part, by)| *by != 0.0 && part.as_ref().is_none_or(|n| *n == p.name)),
-            Warm::From { .. } => true,
+            Warm::From { .. } | Warm::Solved { .. } => true,
         };
         let alphas: Vec<f64> = self
             .parts
@@ -107,8 +107,14 @@ impl Prepared {
                     .collect();
                 body.iter().map(|b| per[*b]).collect()
             }
-            Warm::From { file, reference } => {
-                let heat = super::heat::temperatures(file)?;
+            Warm::From { file, reference }
+            | Warm::Solved {
+                file, reference, ..
+            } => {
+                let heat = match warming {
+                    Warm::Solved { spec, .. } => super::heat::solved_temperatures(&spec.0)?,
+                    _ => super::heat::temperatures(file)?,
+                };
                 if heat.len() != self.mesh.nodes.len() {
                     bail!(
                         "{} meshes the part differently; give it the same `part` and `mesh` lines",
@@ -245,11 +251,20 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
         });
     }
     use rayon::prelude::*;
+    let meshing = crate::progress::stage("meshing", Some(named.len()), "parts");
     let meshed: Vec<(String, Quadratic, f64)> = named
         .par_iter()
         .map(|(name, solid)| {
-            let (tets, used) =
-                super::mesh::mesh_part(solid, size).with_context(|| format!("meshing `{name}`"))?;
+            let (tets, used) = super::mesh::mesh_named(name, solid, size)
+                .with_context(|| format!("meshing `{name}`"))?;
+            meshing.advance(1.0);
+            meshing.detail(|| {
+                format!(
+                    "`{name}` has {} nodes at {} mm",
+                    tets.nodes.len(),
+                    crate::plot::label(used)
+                )
+            });
             Ok((name.clone(), Quadratic::from(&tets), used))
         })
         .collect::<Result<_>>()?;
@@ -274,7 +289,38 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
                 _ => bail!("`contact {a} {b}` names a part the simulation does not have"),
             })
             .collect::<Result<Vec<_>>>()?;
-        super::fem::merge(meshes, &gaps, &touching)
+        let rows = spec
+            .seats
+            .iter()
+            .map(|seat| match (index(&seat.housing), index(&seat.shaft)) {
+                (Some(housing), Some(shaft)) => {
+                    if touching
+                        .iter()
+                        .any(|t| (t.0, t.1) == (housing.min(shaft), housing.max(shaft)))
+                    {
+                        bail!(
+                            "`{}` and `{}` are in contact and in a bearing; give them one",
+                            seat.housing,
+                            seat.shaft
+                        );
+                    }
+                    Ok(super::fem::Row {
+                        housing,
+                        shaft,
+                        point: seat.point,
+                        axis: seat.axis,
+                        axial: seat.axial,
+                        stiffness: seat.stiffness,
+                    })
+                }
+                _ => bail!(
+                    "`bearing` joins `{}` and `{}`, a part the simulation does not have",
+                    seat.housing,
+                    seat.shaft
+                ),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        super::fem::merge(meshes, &gaps, &touching, &rows)?
     };
     let mut mesh = mesh;
     let everything: Vec<String> = model.named_solids().into_iter().map(|(n, _)| n).collect();
@@ -298,6 +344,64 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
         parts,
         original,
     })
+}
+
+fn seat_readings(
+    spec: &Spec,
+    mesh: &Quadratic,
+    materials: &[(f64, f64)],
+    displacement: &[Vector3],
+) -> Vec<Reading> {
+    let penalty = super::fem::elastic::contact_penalty(mesh, materials);
+    let u: Vec<f64> = displacement.iter().flat_map(|d| [d.x, d.y, d.z]).collect();
+    let mut forces = vec![Vector3::zero(); spec.seats.len()];
+    for tie in &mesh.ties {
+        let (Some(n), Some((i, share))) = (tie.along, tie.seat) else {
+            continue;
+        };
+        forces[i] += n * (tie.spring.unwrap_or(penalty) * tie.gap(&u).dot(n) * share);
+    }
+    let mut readings = Vec::new();
+    for (seat, force) in spec.seats.iter().zip(forces) {
+        let axial = force.dot(seat.axis);
+        let radial = (force - seat.axis * axial).magnitude();
+        let axial = axial.abs();
+        readings.push(Reading {
+            name: seat.label.clone(),
+            value: radial,
+            unit: "N".into(),
+            at: format!(
+                "radial load on the bearing, `{}` in `{}`; total {},{},{}",
+                seat.shaft,
+                seat.housing,
+                short(force.x),
+                short(force.y),
+                short(force.z)
+            ),
+        });
+        if seat.axial {
+            readings.push(Reading {
+                name: format!("{}.axial", seat.label),
+                value: axial,
+                unit: "N".into(),
+                at: "thrust along the bearing's axis".into(),
+            });
+        }
+        if let Some(rating) = seat.rating {
+            let equivalent = radial.max(0.6 * radial + 0.5 * axial);
+            readings.push(Reading {
+                name: format!("{}.safety", seat.label),
+                value: rating / equivalent.max(1.0e-9),
+                unit: String::new(),
+                at: format!(
+                    "static rating C0 {} N over the equivalent load {} N",
+                    short(rating),
+                    short(equivalent)
+                ),
+            });
+        }
+    }
+    readings
 }
 
 pub fn place_probe(
@@ -410,11 +514,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             .map(|p| g * (p.density * 1.0e-6))
             .collect()
     });
-    let wind = spec
-        .wind_load
-        .as_deref()
-        .map(super::wind::surface_pressure)
-        .transpose()?;
+    let wind = wind_pressure(spec)?;
     let answer = solve(&Problem {
         mesh,
         materials: &materials,
@@ -424,6 +524,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         expansion: prepared.expansion(spec.warming.as_ref())?,
         wind: wind.as_ref(),
     })?;
+    let _reading = crate::progress::stage("taking readings", None, "");
     let mut readings = Vec::new();
     let mut notes = Vec::new();
     if let (Some(wind), Some(file)) = (&wind, &spec.wind_load) {
@@ -547,6 +648,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             });
         }
     }
+    readings.extend(seat_readings(spec, mesh, &materials, &answer.displacement));
     for (name, point) in &spec.probes {
         let (found, note) = place_probe(mesh, name, *point)?;
         readings.push(Reading {
@@ -1143,11 +1245,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
     {
         bail!("buckling needs a `load`, `pressure`, `torque`, `warm` or `wind` to scale");
     }
-    let wind = spec
-        .wind_load
-        .as_deref()
-        .map(super::wind::surface_pressure)
-        .transpose()?;
+    let wind = wind_pressure(spec)?;
     let wanted = spec.modes.unwrap_or(3);
     let buckles = super::fem::buckling::solve(
         &Problem {
@@ -1437,4 +1535,15 @@ pub fn stimuli(spec: &Spec, mesh: &Quadratic, outcome: Option<&Outcome>) -> Vec<
         });
     }
     marks
+}
+
+fn wind_pressure(spec: &Spec) -> Result<Option<super::fem::elastic::SurfacePressure>> {
+    Ok(match (&spec.wind_samples, &spec.wind_load) {
+        (Some((samples, reach)), _) => Some(super::fem::elastic::SurfacePressure::new(
+            samples.iter().copied(),
+            *reach,
+        )),
+        (None, Some(file)) => Some(super::wind::surface_pressure(file)?),
+        (None, None) => None,
+    })
 }
