@@ -800,7 +800,12 @@ impl Model {
             }
         }
         let mut reasons: Vec<(String, usize)> = Vec::new();
+        let mut filled = 0;
         for body in &picked {
+            if let Some(n) = loaded.filled.get(body) {
+                self.filled.insert(rename(body), *n);
+                filled += n;
+            }
             if let Some(why) = loaded.stand_ins.get(body) {
                 self.stand_ins.insert(rename(body), why.clone());
                 match reasons.iter_mut().find(|(r, _)| r == why) {
@@ -815,16 +820,23 @@ impl Model {
             added.join(", ")
         };
         let boxes: usize = reasons.iter().map(|(_, n)| n).sum();
-        Ok(if boxes == 0 {
-            format!("{listed} from {}", path.display())
-        } else {
+        let mut summary = format!("{listed} from {}", path.display());
+        if boxes > 0 {
             let why: Vec<String> = reasons.iter().map(|(r, n)| format!("{n} {r}")).collect();
-            format!(
-                "{listed} from {}; {boxes} are boxes standing in for solids gcad cannot read: {}",
-                path.display(),
+            summary += &format!(
+                "; {boxes} are boxes standing in for solids gcad cannot read: {}",
                 why.join(", ")
-            )
-        })
+            );
+        }
+        if filled > 0 {
+            let cavities = if filled == 1 {
+                "cavity gcad cannot read is"
+            } else {
+                "cavities gcad cannot read are"
+            };
+            summary += &format!("; {filled} {cavities} left solid");
+        }
+        Ok(summary)
     }
 
     fn part_transform(&mut self, line: &Line, transform: Matrix4) -> Result<String> {

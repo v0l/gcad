@@ -35,6 +35,9 @@ All notable changes to gcad are listed here. The format follows
 - STEP surfaces of revolution with a circle profile, like the groove on KiCad electrolytic
   capacitors, import as tori, and curves on surfaces the kernel cannot convert import as cubic
   fits, instead of the solid becoming a box.
+- STEP solids whose void shells lie outside them, as some vendor models write separate bodies,
+  come in as one solid per body instead of a box. A cavity that cannot be read is left solid
+  and counted in the line's summary.
 - STEP assemblies that monstertruck cannot walk, like KiCad and agentee board exports, come in with
   every part in place instead of all at the origin. Faceted breps and surface models are built
   from their polygons, and a solid that still cannot be read becomes a box and is named in the

@@ -9,9 +9,10 @@ item has a way to reproduce it. Take one, fix it, delete it from this file.
 15.7 million now (about 8 minutes and 50 GB). The box has a 0.05 mm deep `seat` cut, which the
 mesh has to resolve; whether the growth comes from that is not known yet.
 
-## Three board STEP solids still come in as boxes
+## Five board STEP bodies still come in as boxes
 
-`part board ctl.step` (from `agentee export ctl` in `~/git/rotator/board`) brings in 528 parts
-with 3 boxes. All three fail the kernel's healing with "This wire is not simple": U1
-(`~/git/rotator/board/models/Ag5400_simplified.step`), U2 (`SO-4_4.4x3.6mm_P2.54mm`) and
-part 2 of the RJ45 (`~/git/rotator/board/models/V8BR-1AX1-GH.stp`).
+All fail the kernel's healing (`monstertruck-healing`), so they need fork work. In
+`~/git/rotator/board/models/Ag5400_simplified.step` (123 bodies written as voids of one pin),
+three bodies are "not oriented and closed" and one has a wire that "is not simple". Part 2 of
+`~/git/rotator/board/models/V8BR-1AX1-GH.stp` (the RJ45) has a wire that "is not simple". Check
+with `part m <file>` in a `.gasm`; OpenCascade reads all of them.

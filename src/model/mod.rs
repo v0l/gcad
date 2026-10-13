@@ -105,6 +105,7 @@ pub struct Model {
     pub sources: HashMap<String, assembly::Source>,
     pub placements: HashMap<String, Matrix4>,
     pub stand_ins: HashMap<String, String>,
+    pub filled: HashMap<String, usize>,
     pub explode: Vec<(String, Vector3)>,
     pub revolves: HashMap<String, features::Revolve>,
     pub joints: Vec<assembly::Joint>,

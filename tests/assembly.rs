@@ -466,9 +466,21 @@ fn couple_losses_are_checked() {
     let parts = [("rod.gcad", ROD), ("plate.gcad", SLAB)];
     let pair = "part frame plate.gcad\npart a rod.gcad\npart b rod.gcad\nmove b 20,0,0\naxis ax 0,0,0 0,0,1\naxis bx 20,0,0 20,0,1\njoint ja a frame turn about=ax\njoint jb b frame turn about=bx\n";
     for (name, couple, wanted) in [
-        ("couple_over_one", "couple jb ja ratio=-2 efficiency=1.5", "at most 1"),
-        ("couple_friction_alone", "couple jb ja ratio=-2 friction=0.1", "goes with `lead=`"),
-        ("couple_both_ways", "couple jb ja ratio=-2 lead=5 efficiency=0.5", "or `efficiency=`"),
+        (
+            "couple_over_one",
+            "couple jb ja ratio=-2 efficiency=1.5",
+            "at most 1",
+        ),
+        (
+            "couple_friction_alone",
+            "couple jb ja ratio=-2 friction=0.1",
+            "goes with `lead=`",
+        ),
+        (
+            "couple_both_ways",
+            "couple jb ja ratio=-2 lead=5 efficiency=0.5",
+            "or `efficiency=`",
+        ),
     ] {
         let error = failed(name, &format!("{pair}{couple}\n"), &parts);
         assert!(error.contains(wanted), "{error}");
@@ -904,6 +916,23 @@ fn step_part_in_its_own_units() {
             "{small:?} {large:?}"
         );
     }
+}
+
+#[test]
+fn step_voids_outside_the_solid_are_parts() {
+    let step = format!(
+        "{}/tests/fixtures/voids-apart.step",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (model, summaries) = built("voids_apart", &format!("part m {step}"), &[]);
+    assert_eq!(
+        model.body_names(),
+        ["m.voids_apart", "m.voids_apart_2"],
+        "{summaries:?}"
+    );
+    let volume = |name: &str| gcad::geometry::volume(&model.named_body(name).expect("body"));
+    assert!((volume("m.voids_apart") - 1000.0).abs() < 1.0e-6);
+    assert!((volume("m.voids_apart_2") - 8.0).abs() < 1.0e-6);
 }
 
 #[test]

@@ -301,9 +301,24 @@ fn step_import_boxes_what_it_cannot_read() {
 fn step_import_reads_a_revolved_circle() {
     let source = format!("import {}", fixture("revolved-groove.step"));
     let groove = 5.0 * std::f64::consts::PI.powi(2) - 4.0 * std::f64::consts::PI / 3.0;
-    assert_volume(&build(&source), 250.0 * std::f64::consts::PI - groove, 1.0e-3);
+    assert_volume(
+        &build(&source),
+        250.0 * std::f64::consts::PI - groove,
+        1.0e-3,
+    );
     let text = summary(&source);
     assert!(!text.contains("stands in"), "{text}");
+}
+
+#[test]
+fn step_import_leaves_unreadable_cavities_solid() {
+    let source = format!("import {}", fixture("void-open.step"));
+    assert_volume(&build(&source), 992.0, 1.0e-9);
+    let text = summary(&source);
+    assert!(
+        text.contains("1 of its cavities gcad cannot read is left solid"),
+        "{text}"
+    );
 }
 
 #[test]
