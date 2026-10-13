@@ -259,6 +259,7 @@ impl Rig {
             .filter(|&k| {
                 k != index
                     && self.joints[k].movable()
+                    && self.joints[k].range.0 < self.joints[k].range.1
                     && self.driver_of(&self.joints[k].name).is_none()
                     && !self.drives(k, index)
             })
@@ -289,6 +290,12 @@ impl Rig {
                     .flat_map(|m| m.residuals([at(&m.parts[0]), at(&m.parts[1])]))
                     .collect()
             });
+            for (value, &k) in x.iter_mut().zip(&free) {
+                let joint = &self.joints[k];
+                if !joint.wraps {
+                    *value = value.clamp(joint.range.0, joint.range.1);
+                }
+            }
             self.settle(&place(&x, at))?;
         }
         self.settle(&place(&x, value))
