@@ -3,13 +3,16 @@
 Problems found while sizing the rotator (`~/git/rotator`, `sims/`) with `gcad sim`. Each
 item has a way to reproduce it. Take one, fix it, delete it from this file.
 
-## The whole rotator takes three times the iterations it did
+## Bonds reach across clearances
 
-`~/git/rotator/sims/rotator.gsim` solved in 480 conjugate gradient iterations on 2026-10-11 (2.8
-million nodes) and takes 1,372 now (4.5 million nodes, 22 minutes). The residual first climbs
-to about 470 times its start before it falls. Whether the model grew (joint drag, bearings, more
-parts) or the preconditioner got worse is not known; solving the 2026-10-11 rotator at its own
-commit with today's gcad would tell.
+Parts bond wherever they come within a tenth of their element size (`src/sim/statics.rs:256`),
+so a cover with a small clearance gets glued to the part it covers. In
+`~/git/rotator/sims/rotator.gsim`, `cover_el` bonds to `wheel_el` at 29,830 nodes and `cover_az` to
+`wheel_az` at 5,049, giving the gear covers a load path through the worm wheels (unverified
+that the clearance is what is bridged; measure the gap in `parts/gearcover.gcad`). The covers
+and the yagi parts together take the solve from 592 to 1,372 iterations; the 2026-10-11
+rotator (`030f6dd`) still solves in 550 with today's gcad, so the solver itself is fine. Bond only
+faces that touch, or list bonded pairs whose faces sit apart.
 
 ## Five board STEP bodies still come in as boxes
 
