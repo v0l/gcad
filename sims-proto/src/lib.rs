@@ -86,6 +86,24 @@ pub struct GpuBench {
     pub bandwidth_gbs: f64,
 }
 
+pub fn price_label(cents_per_hour: i64) -> String {
+    if cents_per_hour == 0 {
+        "free".into()
+    } else {
+        format!("€{}.{:02}/h", cents_per_hour / 100, cents_per_hour % 100)
+    }
+}
+
+pub fn default_price<'a>(runners: impl IntoIterator<Item = &'a Runner>) -> Option<i64> {
+    let runners: Vec<&Runner> = runners.into_iter().collect();
+    let online: Vec<&&Runner> = runners.iter().filter(|r| r.online).collect();
+    if online.is_empty() {
+        runners.iter().map(|r| r.price_cents_per_hour).max()
+    } else {
+        online.iter().map(|r| r.price_cents_per_hour).max()
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct Runner {
     pub name: String,
@@ -204,7 +222,9 @@ impl Submit {
         out
     }
 
-    pub fn from_pairs<'a>(pairs: impl IntoIterator<Item = (&'a str, &'a str)>) -> Result<Submit, String> {
+    pub fn from_pairs<'a>(
+        pairs: impl IntoIterator<Item = (&'a str, &'a str)>,
+    ) -> Result<Submit, String> {
         let mut submit = Submit {
             spec: String::new(),
             version: String::new(),
@@ -220,7 +240,9 @@ impl Submit {
                 "hash" => submit.hash = value.to_string(),
                 "max_seconds" => {
                     submit.max_seconds = value.parse().map_err(|_| {
-                        format!("`max_seconds` should be a whole number from 60 to {MAX_JOB_SECONDS}")
+                        format!(
+                            "`max_seconds` should be a whole number from 60 to {MAX_JOB_SECONDS}"
+                        )
                     })?
                 }
                 "max_price" => {
@@ -257,7 +279,12 @@ impl Submit {
         if !version_ok(&self.version) {
             return Err("`version` should be the gcad version that built the bundle".into());
         }
-        if self.hash.len() != 64 || !self.hash.bytes().all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b)) {
+        if self.hash.len() != 64
+            || !self
+                .hash
+                .bytes()
+                .all(|b| b.is_ascii_digit() || (b'a'..=b'f').contains(&b))
+        {
             return Err("`hash` should be the sha256 of the bundle in hex".into());
         }
         if !(60..=MAX_JOB_SECONDS).contains(&self.max_seconds) {
@@ -267,7 +294,7 @@ impl Submit {
         }
         if self
             .max_price
-            .is_some_and(|p| !(1..=MAX_PRICE_CENTS).contains(&p))
+            .is_some_and(|p| !(0..=MAX_PRICE_CENTS).contains(&p))
         {
             return Err("`max_price` should be whole cents an hour".into());
         }
@@ -453,7 +480,7 @@ mod tests {
             ("version", "0.3 1"),
             ("hash", "xyz"),
             ("max_seconds", "10"),
-            ("max_price", "0"),
+            ("max_price", "-1"),
             ("set", "1x=2"),
             ("set", "w=nan"),
         ] {

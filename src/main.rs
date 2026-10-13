@@ -24,8 +24,8 @@ fn parse_price(text: &str) -> std::result::Result<u64, String> {
         .trim_start_matches('€')
         .parse()
         .map_err(|_| format!("`{text}` is not a price in euro an hour, like 2.50"))?;
-    if !(euro > 0.0 && euro <= 1000.0) {
-        return Err("the price should be above 0 and at most 1000 euro an hour".into());
+    if !(0.0..=1000.0).contains(&euro) {
+        return Err("the price should be from 0 (free runners only) to 1000 euro an hour".into());
     }
     Ok((euro * 100.0).round() as u64)
 }
@@ -77,7 +77,7 @@ enum Command {
         /// The longest a remote run may take; its cost is held from the balance while it runs
         #[arg(long, default_value_t = 60, requires = "remote")]
         max_minutes: u64,
-        /// The most a remote runner may charge, in euro an hour (default: any runner)
+        /// The most a remote runner may charge, in euro an hour; 0 takes only free runners (default: any runner online)
         #[arg(long, requires = "remote", value_parser = parse_price)]
         max_price: Option<u64>,
     },

@@ -348,13 +348,19 @@ fn submit(
             .send_bytes(&packed)
             .map_err(explain)?,
     )?;
+    let cost = if price == 0 {
+        format!("runs free for up to {} minutes", limits.minutes)
+    } else {
+        format!(
+            "holds {} for up to {} minutes at up to {} an hour",
+            euros(job.held_cents),
+            limits.minutes,
+            euros(price as i64)
+        )
+    };
     eprintln!(
-        "job {} holds {} for up to {} minutes at up to {} an hour; if this stops, rerun the same command to pick it up, or `gcad remote cancel {}`",
-        job.id,
-        euros(job.held_cents),
-        limits.minutes,
-        euros(price as i64),
-        job.id
+        "job {} {cost}; if this stops, rerun the same command to pick it up, or `gcad remote cancel {}`",
+        job.id, job.id
     );
     Ok(job)
 }
@@ -386,7 +392,7 @@ fn ready(client: &Client, limits: &Limits) -> Result<u64> {
             euros(cap as i64)
         ),
         Some(cap) => cap,
-        None => able.iter().map(price_of).max().unwrap_or(0),
+        None => proto::default_price(able.iter().copied()).unwrap_or(0).max(0) as u64,
     };
     let me: proto::Account = client.get("account")?;
     let hold = (limits.minutes * price).div_ceil(60) as i64;
@@ -417,9 +423,9 @@ pub fn runners() -> Result<()> {
     for runner in &status.runners {
         let info = &runner.info;
         println!(
-            "{:<12} {}/h  gcad {}  {}{}",
+            "{:<12} {:<9} gcad {}  {}{}",
             runner.name,
-            euros(runner.price_cents_per_hour),
+            proto::price_label(runner.price_cents_per_hour),
             runner.version,
             match (runner.online, runner.busy) {
                 (true, true) => "busy",
@@ -521,11 +527,11 @@ fn finish(client: &Client, file: &Path, job: &Job) -> Result<()> {
         );
     }
     eprintln!(
-        "{} on runner {} in {} at {} an hour, charged {}",
+        "{} on runner {} ({}) in {}, charged {}",
         job.state.name(),
         job.runner.as_deref().unwrap_or("-"),
+        proto::price_label(job.price_cents_per_hour),
         duration(job.seconds.unwrap_or(0.0)),
-        euros(job.price_cents_per_hour),
         euros(job.charged_cents.unwrap_or(0))
     );
     if let Some(out) = &wrote {
