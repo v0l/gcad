@@ -40,6 +40,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "material",
     "gravity",
     "payload",
+    "speed",
     "sweep",
     "expect",
     "mesh",
@@ -110,6 +111,7 @@ impl Model {
                 Ok(format!("gravity {},{},{} m/s²", g.x, g.y, g.z))
             }
             "payload" => self.op_payload(line),
+            "speed" => self.op_joint_speed(line),
             "sweep" => self.op_sim_sweep(line),
             "expect" => self.op_expect(line),
             "fix" => self.op_support(line, Hold::Fixed),
@@ -708,6 +710,33 @@ impl Model {
             }
         }
         Ok(said)
+    }
+
+    fn op_joint_speed(&mut self, line: &Line) -> Result<String> {
+        if self.spec().kind != Some(crate::sim::Kind::Torque) {
+            bail!("`speed` sets a joint's speed in a `sim torque`");
+        }
+        let args = Args::new(line, &["joint", "value"], &[], false)?;
+        let name = args.text("joint")?.to_string();
+        let value = args.number("value", &self.scope)?;
+        let rig = self.target_mut()?.rig();
+        let joint = rig
+            .joints
+            .iter()
+            .find(|j| j.name == name)
+            .ok_or_else(|| anyhow!("no joint called `{name}`"))?;
+        if !joint.movable() {
+            bail!("`{name}` does not move");
+        }
+        if value <= 0.0 {
+            bail!("the speed must be above zero");
+        }
+        if self.spec().speeds.iter().any(|(n, _)| *n == name) {
+            bail!("`{name}` already has a speed");
+        }
+        let unit = if joint.unit() == "°" { "rpm" } else { "mm/s" };
+        self.spec().speeds.push((name.clone(), value));
+        Ok(format!("`{name}` turning at {value} {unit}"))
     }
 
     fn op_joint_torque(&mut self, line: &Line) -> Result<String> {

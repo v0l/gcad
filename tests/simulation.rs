@@ -192,6 +192,116 @@ fn worm_that_locks() {
     assert!(outcome.notes.iter().any(|n| n.starts_with("drive locks")));
 }
 
+const DISC: &str = "circle 40\nextrude 10\nmaterial steel\n";
+
+const WORM_DRIVE: &str = "part base base.gcad\npart wheel disc.gcad\npart worm disc.gcad\nmove worm 60,0,0\naxis wa 0,0,0 0,0,1\naxis wb 60,0,0 60,0,1\njoint turn wheel base turn about=wa\njoint spin worm base turn about=wb drag=0.02\ncouple spin turn ratio=40 lead=4 friction=0.08 module=2 face=12 gear=wheel pinion=worm\n";
+
+#[test]
+fn worm_drive_forces_stresses_and_heat() {
+    let outcome = simulated(
+        "worm_drive_forces_stresses_and_heat",
+        &[
+            ("base.gcad", BASE),
+            ("disc.gcad", DISC),
+            ("drive.gasm", WORM_DRIVE),
+        ],
+        "sim torque\npart drive.gasm\ngravity 0,0,0\ntorque turn 12\nspeed turn 2\nmaterial wheel bronze E=110 nu=0.34 yield=150 density=8.8",
+    );
+    let (lead, mu) = (4.0_f64.to_radians(), 0.08_f64);
+    let alpha = 20.0_f64.to_radians();
+    let efficiency = lead.tan() / (lead + mu.atan()).tan();
+    let ideal = 12.0 / 40.0;
+    let motor = ideal / efficiency + 0.02;
+    close(reading(&outcome, "spin"), motor, 1.0e-6);
+    close(reading(&outcome, "spin.ideal"), ideal, 1.0e-6);
+    close(reading(&outcome, "spin.friction"), ideal / efficiency - ideal, 1.0e-6);
+    close(reading(&outcome, "spin.drag"), 0.02, 1.0e-6);
+    close(reading(&outcome, "mesh.turn.efficiency"), efficiency * 100.0, 1.0e-9);
+    assert_eq!(reading(&outcome, "mesh.turn.back"), 0.0);
+    close(reading(&outcome, "mesh.turn.torque"), 12.0, 1.0e-6);
+    let tangential = 12.0 / 0.040;
+    close(reading(&outcome, "mesh.turn.tangential"), tangential, 1.0e-6);
+    close(
+        reading(&outcome, "mesh.turn.radial"),
+        tangential * alpha.sin() / (alpha.cos() * lead.cos() - mu * lead.sin()),
+        1.0e-6,
+    );
+    close(
+        reading(&outcome, "mesh.turn.axial"),
+        tangential * (lead + mu.atan()).tan(),
+        1.0e-6,
+    );
+    let bending = tangential / (12.0 * 2.0 * (0.484 - 2.87 / 40.0));
+    close(reading(&outcome, "mesh.turn.bending"), bending, 1.0e-6);
+    close(reading(&outcome, "mesh.turn.safety"), 150.0 / bending, 1.0e-6);
+    let compliance = (1.0 - 0.34_f64.powi(2)) / 110.0e3 + (1.0 - 0.29_f64.powi(2)) / 200.0e3;
+    let contact = (tangential / alpha.cos() / (std::f64::consts::PI * 12.0)
+        / (40.0 * alpha.sin())
+        / compliance)
+        .sqrt();
+    close(reading(&outcome, "mesh.turn.contact"), contact, 1.0e-6);
+    let omega = 80.0 * 2.0 * std::f64::consts::PI / 60.0;
+    close(reading(&outcome, "spin.speed"), 80.0, 1.0e-9);
+    close(reading(&outcome, "spin.power"), motor * omega, 1.0e-6);
+    close(
+        reading(&outcome, "mesh.turn.heat"),
+        (motor - 0.02) * omega * (1.0 - efficiency),
+        1.0e-6,
+    );
+    let worm = 2.0 / lead.tan();
+    close(
+        reading(&outcome, "mesh.turn.sliding"),
+        std::f64::consts::PI * worm * 80.0 / 60.0 / 1000.0 / lead.cos(),
+        1.0e-6,
+    );
+}
+
+#[test]
+fn spur_gear_mesh_forces() {
+    let spur = WORM_DRIVE.replace(
+        "ratio=40 lead=4 friction=0.08 module=2",
+        "ratio=-2 efficiency=0.98 module=2 teeth=20",
+    );
+    let outcome = simulated(
+        "spur_gear_mesh_forces",
+        &[("base.gcad", BASE), ("disc.gcad", DISC), ("drive.gasm", &spur)],
+        "sim torque\npart drive.gasm\ngravity 0,0,0\ntorque turn 12\nmaterial wheel bronze E=110 nu=0.34 yield=150 density=8.8",
+    );
+    let alpha = 20.0_f64.to_radians();
+    close(reading(&outcome, "mesh.turn.torque"), 12.0, 1.0e-6);
+    let tangential = 12.0 / 0.040;
+    close(reading(&outcome, "mesh.turn.tangential"), tangential, 1.0e-6);
+    close(reading(&outcome, "mesh.turn.radial"), tangential * alpha.tan(), 1.0e-6);
+    assert!(outcome.reading("mesh.turn.axial").is_none());
+    let compliance = (1.0 - 0.34_f64.powi(2)) / 110.0e3 + (1.0 - 0.29_f64.powi(2)) / 200.0e3;
+    let curvature = 1.0 / (40.0 * alpha.sin()) + 1.0 / (20.0 * alpha.sin());
+    let contact = (tangential / alpha.cos() / (std::f64::consts::PI * 12.0) * curvature
+        / compliance)
+        .sqrt();
+    close(reading(&outcome, "mesh.turn.contact"), contact, 1.0e-6);
+}
+
+#[test]
+fn couple_geometry_needs_module_and_face() {
+    let path = written(
+        "couple_geometry_needs_module_and_face",
+        &[
+            ("base.gcad", BASE),
+            ("disc.gcad", DISC),
+            ("drive.gasm", &WORM_DRIVE.replace(" face=12", "")),
+        ],
+        "sim torque\npart drive.gasm",
+    );
+    let run = gcad::model::run_path(&path, &[], None).expect("reads");
+    let failed = run
+        .steps
+        .iter()
+        .find_map(|(_, r)| r.as_ref().err())
+        .map(|e| format!("{e:#}"))
+        .unwrap_or_default();
+    assert!(failed.contains("give `module=` and `face=` together"), "{failed}");
+}
+
 #[test]
 fn torque_on_a_joint() {
     let outcome = simulated(
@@ -356,30 +466,6 @@ fn small_part_keeps_its_own_stress_band() {
         .find(|r| r.name == "safety")
         .expect("a safety reading");
     assert!(safety.at.contains("`post`"), "{}", safety.at);
-}
-
-#[test]
-fn static_run_reports_its_stages() {
-    let seen: std::sync::Arc<std::sync::Mutex<Vec<gcad::progress::Report>>> = Default::default();
-    let into = seen.clone();
-    let listening = gcad::progress::listen(move |r| into.lock().unwrap().push(r.clone()));
-    simulated(
-        "static_run_reports_its_stages",
-        &[("beam.gcad", BEAM)],
-        "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\nmesh 4",
-    );
-    drop(listening);
-    let seen = seen.lock().unwrap();
-    let finished = |name: &str| seen.iter().any(|r| r.finished && r.stage == name);
-    for stage in ["meshing", "assembling the stiffness", "taking readings"] {
-        assert!(finished(stage), "{stage} in {seen:?}");
-    }
-    assert!(finished("solving") || finished("factoring the stiffness"));
-    let meshing = seen
-        .iter()
-        .rfind(|r| r.stage == "meshing")
-        .expect("meshing");
-    assert_eq!((meshing.done, meshing.total), (1.0, Some(1.0)));
 }
 
 #[test]

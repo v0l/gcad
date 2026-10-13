@@ -91,6 +91,7 @@ pub struct Spec {
     pub gravity: Option<Vector3>,
     pub payloads: Vec<Payload>,
     pub joint_torques: Vec<(String, f64)>,
+    pub speeds: Vec<(String, f64)>,
     pub sweeps: Vec<Sweep>,
     pub expects: Vec<Expect>,
     pub mesh: Option<f64>,

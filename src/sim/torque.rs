@@ -541,6 +541,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             locked.join(", ")
         ));
     }
+    let worst: Vec<f64> = peaks.iter().map(|(value, _)| value.abs()).collect();
     let mut readings = Vec::new();
     for ((name, &j), (value, at)) in names.into_iter().zip(&setup.reported).zip(peaks) {
         let unit = unit(&setup.rig, j).to_string();
@@ -564,6 +565,9 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         });
         readings.extend(back);
     }
+    let (drive, drive_notes) = drive_readings(&setup, model, spec, &worst);
+    readings.extend(drive);
+    notes.extend(drive_notes);
     Ok(Outcome {
         kind: "torque".to_string(),
         readings,
@@ -576,4 +580,239 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         movie: None,
         field: None,
     })
+}
+
+fn drive_readings(
+    setup: &Setup,
+    model: &Model,
+    spec: &Spec,
+    worst: &[f64],
+) -> (Vec<Reading>, Vec<String>) {
+    use std::f64::consts::PI;
+    let rig = &setup.rig;
+    let index = |name: &str| rig.joints.iter().position(|j| j.name == name);
+    let peak_of = |joint: usize| {
+        setup
+            .reported
+            .iter()
+            .position(|&j| j == joint)
+            .map(|k| worst[k])
+    };
+    let turns = |joint: usize| matches!(rig.joints[joint].kind, JointKind::Turn { .. });
+    let reading = |name: String, value: f64, unit: &str, at: &str| Reading {
+        name,
+        value,
+        unit: unit.to_string(),
+        at: at.to_string(),
+    };
+    let rate = |joint: usize| -> Option<f64> {
+        spec.speeds.iter().find_map(|(name, value)| {
+            let given = index(name)?;
+            let (a, b) = (setup.roots[given], setup.roots[joint]);
+            (a.driver == b.driver).then(|| (value / a.ratio * b.ratio).abs())
+        })
+    };
+    let mut readings = Vec::new();
+    let mut notes = Vec::new();
+    for (k, &joint) in setup.reported.iter().enumerate() {
+        let name = &rig.joints[joint].name;
+        let root = setup.roots[joint];
+        let torque = worst[k];
+        let unit = unit(rig, joint);
+        if root.efficiency < 1.0 {
+            let ideal = ((torque - root.drag) * root.efficiency).max(0.0);
+            readings.push(reading(
+                format!("{name}.ideal"),
+                ideal,
+                unit,
+                "to hold the load with no losses",
+            ));
+            readings.push(reading(
+                format!("{name}.friction"),
+                ideal / root.efficiency - ideal,
+                unit,
+                "lost to friction in the gear meshes",
+            ));
+        }
+        if root.drag > 0.0 {
+            readings.push(reading(
+                format!("{name}.drag"),
+                root.drag,
+                unit,
+                "joint drag carried to this joint",
+            ));
+        }
+        if let Some(rate) = rate(joint) {
+            let (speed_unit, power) = if turns(joint) {
+                ("rpm", torque * rate * 2.0 * PI / 60.0)
+            } else {
+                ("mm/s", torque * rate / 1000.0)
+            };
+            readings.push(reading(format!("{name}.speed"), rate, speed_unit, ""));
+            readings.push(reading(
+                format!("{name}.power"),
+                power,
+                "W",
+                "at its peak torque",
+            ));
+        }
+    }
+    let mechanics = |part: &Option<String>| {
+        part.as_ref()
+            .and_then(|p| model.materials.get(p))
+            .map(|m| m.mechanics)
+    };
+    let mut sized = false;
+    let mut assumed_steel = Vec::new();
+    for couple in &rig.couples {
+        let (Some(m), Some(l)) = (index(&couple.driven), index(&couple.driver)) else {
+            continue;
+        };
+        let head = format!("mesh.{}", couple.driver);
+        if couple.efficiency < 1.0 || couple.back < 1.0 {
+            readings.push(reading(
+                format!("{head}.efficiency"),
+                couple.efficiency * 100.0,
+                "%",
+                "share of the power from the motor side that reaches the load",
+            ));
+            readings.push(reading(
+                format!("{head}.back"),
+                couple.back * 100.0,
+                "%",
+                "the same with the load turning the motor; 0 when it locks",
+            ));
+        }
+        let Some(motor) = peak_of(m) else { continue };
+        if !turns(m) || !turns(l) {
+            continue;
+        }
+        let into = (motor - rig.joints[m].drag).max(0.0);
+        let delivered = into * couple.efficiency * couple.ratio.abs();
+        readings.push(reading(
+            format!("{head}.torque"),
+            delivered,
+            "N·m",
+            "through the mesh at its worst",
+        ));
+        let motor_rate = rate(m);
+        let heat = motor_rate.map(|rpm| {
+            reading(
+                format!("{head}.heat"),
+                into * rpm * 2.0 * PI / 60.0 * (1.0 - couple.efficiency),
+                "W",
+                "friction heat in the mesh",
+            )
+        });
+        let Some(mesh) = &couple.mesh else {
+            readings.extend(heat);
+            continue;
+        };
+        sized = true;
+        let teeth = mesh.teeth * couple.ratio.abs();
+        let radius = teeth * mesh.module / 2.0;
+        let tangential = delivered / (radius / 1000.0);
+        let pressure = mesh.pressure.to_radians();
+        let (radial, axial) = match couple.lead {
+            Some(lead) => {
+                let (lead, mu) = (lead.to_radians(), couple.friction);
+                (
+                    tangential * pressure.sin() / (pressure.cos() * lead.cos() - mu * lead.sin()),
+                    Some(tangential * (lead + mu.atan()).tan()),
+                )
+            }
+            None => (tangential * pressure.tan(), None),
+        };
+        readings.push(reading(
+            format!("{head}.tangential"),
+            tangential,
+            "N",
+            "on the pitch circle; for a worm, also its thrust along its axis",
+        ));
+        readings.push(reading(
+            format!("{head}.radial"),
+            radial,
+            "N",
+            "pushing the shafts apart",
+        ));
+        if let Some(axial) = axial {
+            readings.push(reading(
+                format!("{head}.axial"),
+                axial,
+                "N",
+                "along the gear's axis: the worm's turning force",
+            ));
+        }
+        let form = (0.484 - 2.87 / teeth).max(0.1);
+        let bending = tangential / (mesh.face * mesh.module * form);
+        readings.push(reading(
+            format!("{head}.bending"),
+            bending,
+            "MPa",
+            "Lewis, at the root of the gear's teeth",
+        ));
+        let gear = mechanics(&mesh.gear);
+        let elastic = |m: Option<crate::model::Mechanics>| {
+            m.and_then(|m| Some((m.young?, m.poisson.unwrap_or(0.3))))
+        };
+        let pinion = match elastic(mechanics(&mesh.pinion)) {
+            Some(found) => Some(found),
+            None => {
+                assumed_steel.push(couple.driven.clone());
+                Some((200.0, 0.3))
+            }
+        };
+        if let (Some((e1, n1)), Some((e2, n2))) = (elastic(gear), pinion) {
+            let compliance = (1.0 - n1 * n1) / (e1 * 1000.0) + (1.0 - n2 * n2) / (e2 * 1000.0);
+            let curvature = 1.0 / (radius * pressure.sin())
+                + match couple.lead {
+                    Some(_) => 0.0,
+                    None => 1.0 / (mesh.teeth * mesh.module / 2.0 * pressure.sin()),
+                };
+            let normal = tangential / pressure.cos();
+            let contact = (normal / (PI * mesh.face) * curvature / compliance).sqrt();
+            readings.push(reading(
+                format!("{head}.contact"),
+                contact,
+                "MPa",
+                "Hertz, on the tooth flanks",
+            ));
+        }
+        if let Some(strength) = gear.and_then(|m| m.strength) {
+            readings.push(reading(
+                format!("{head}.safety"),
+                strength / bending,
+                "",
+                "the gear's strength over its bending stress",
+            ));
+        }
+        readings.extend(heat);
+        if let (Some(lead), Some(rpm)) = (couple.lead, motor_rate) {
+            let lead = lead.to_radians();
+            let diameter = mesh.teeth * mesh.module / lead.tan();
+            readings.push(reading(
+                format!("{head}.sliding"),
+                PI * diameter * rpm / 60.0 / 1000.0 / lead.cos(),
+                "m/s",
+                "between the worm and the wheel",
+            ));
+        }
+    }
+    if sized {
+        notes.push(
+            "mesh forces and stresses are at the worst pose: Lewis bending with form factor 0.484 - 2.87/z, Hertz contact with a worm taken as a rack"
+                .to_string(),
+        );
+    }
+    if !assumed_steel.is_empty() {
+        notes.push(format!(
+            "the pinion or worm of {} is taken as steel; name it with `pinion=` to use its material",
+            assumed_steel
+                .iter()
+                .map(|n| format!("`{n}`"))
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    (readings, notes)
 }

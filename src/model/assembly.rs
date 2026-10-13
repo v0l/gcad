@@ -1,5 +1,5 @@
 use super::Model;
-use super::args::{Args, point3};
+use super::args::{Args, point3, positive};
 use crate::geometry;
 use crate::parse::Line;
 use anyhow::{Result, anyhow, bail};
@@ -174,7 +174,7 @@ pub struct Source {
     pub vars: Vec<(String, f64)>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Couple {
     pub driven: String,
     pub driver: String,
@@ -182,6 +182,19 @@ pub struct Couple {
     pub offset: f64,
     pub efficiency: f64,
     pub back: f64,
+    pub lead: Option<f64>,
+    pub friction: f64,
+    pub mesh: Option<Mesh>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Mesh {
+    pub module: f64,
+    pub face: f64,
+    pub teeth: f64,
+    pub pressure: f64,
+    pub gear: Option<String>,
+    pub pinion: Option<String>,
 }
 
 type PartKey = (String, std::path::PathBuf, Vec<(String, f64)>);
@@ -791,6 +804,11 @@ impl Model {
                 self.couples.push(Couple {
                     driven: format!("{name}.{}", couple.driven),
                     driver: format!("{name}.{}", couple.driver),
+                    mesh: couple.mesh.clone().map(|mesh| Mesh {
+                        gear: mesh.gear.as_deref().map(&rename),
+                        pinion: mesh.pinion.as_deref().map(&rename),
+                        ..mesh
+                    }),
                     ..couple.clone()
                 });
             }
@@ -966,6 +984,56 @@ impl Model {
         Ok(values)
     }
 
+    fn couple_mesh(&self, args: &Args<'_>, worm: bool, ratio: f64) -> Result<Option<Mesh>> {
+        let given = |name: &str| args.optional_number(name, &self.scope);
+        let (module, face) = match (given("module")?, given("face")?) {
+            (None, None) => {
+                for name in ["teeth", "pressure", "gear", "pinion"] {
+                    if args.values.contains_key(name) {
+                        bail!("`{name}=` goes with `module=` and `face=`, the teeth's size");
+                    }
+                }
+                return Ok(None);
+            }
+            (Some(module), Some(face)) => (
+                positive(module, "the module")?,
+                positive(face, "the face width")?,
+            ),
+            _ => bail!("give `module=` and `face=` together: the tooth size and the face width"),
+        };
+        let teeth = match given("teeth")? {
+            Some(teeth) => positive(teeth, "the tooth count")?,
+            None if worm => 1.0,
+            None => bail!(
+                "give `teeth=`, the teeth on the driven side, so the gear sizes follow from the ratio"
+            ),
+        };
+        if ratio == 0.0 {
+            bail!("a couple with geometry needs a ratio other than 0");
+        }
+        let pressure = given("pressure")?.unwrap_or(20.0);
+        if pressure <= 0.0 || pressure >= 45.0 {
+            bail!("`pressure={pressure}` is the pressure angle in degrees, between 0 and 45");
+        }
+        let body = |name: &str| -> Result<Option<String>> {
+            let Some(text) = args.values.get(name) else {
+                return Ok(None);
+            };
+            if !self.body_names().iter().any(|b| b == text) {
+                bail!("`{name}={text}` names no part of the assembly");
+            }
+            Ok(Some(text.to_string()))
+        };
+        Ok(Some(Mesh {
+            module,
+            face,
+            teeth,
+            pressure,
+            gear: body("gear")?,
+            pinion: body("pinion")?,
+        }))
+    }
+
     fn couple_losses(&self, args: &Args<'_>) -> Result<(f64, f64)> {
         let given = |name: &str| args.optional_number(name, &self.scope);
         let fraction = |value: f64, name: &str| -> Result<f64> {
@@ -1013,7 +1081,19 @@ impl Model {
         let args = Args::new(
             line,
             &["driven", "driver"],
-            &["ratio", "efficiency", "back", "lead", "friction"],
+            &[
+                "ratio",
+                "efficiency",
+                "back",
+                "lead",
+                "friction",
+                "module",
+                "face",
+                "teeth",
+                "pressure",
+                "gear",
+                "pinion",
+            ],
             false,
         )?;
         let (driven, driver) = (args.text("driven")?, args.text("driver")?);
@@ -1040,6 +1120,17 @@ impl Model {
         }
         let ratio = args.optional_number("ratio", &self.scope)?.unwrap_or(1.0);
         let (efficiency, back) = self.couple_losses(&args)?;
+        let lead = args.optional_number("lead", &self.scope)?;
+        let friction = args.optional_number("friction", &self.scope)?.unwrap_or(0.0);
+        let mesh = self.couple_mesh(&args, lead.is_some(), ratio)?;
+        let geometry = mesh.as_ref().map_or(String::new(), |mesh| {
+            let teeth = mesh.teeth * ratio.abs();
+            format!(
+                "; `{driver}` has {} teeth, {} mm across the pitch circle",
+                crate::plot::label(teeth),
+                crate::plot::label(teeth * mesh.module)
+            )
+        });
         self.couples.push(Couple {
             driven: driven.to_string(),
             driver: driver.to_string(),
@@ -1047,6 +1138,9 @@ impl Model {
             offset: follower.value - ratio * leader.value,
             efficiency,
             back,
+            lead,
+            friction,
+            mesh,
         });
         let losses = if efficiency == 1.0 && back == 1.0 {
             String::new()
@@ -1063,7 +1157,7 @@ impl Model {
             )
         };
         Ok(format!(
-            "`{driven}` moves {ratio}{} for each {} `{driver}` moves{losses}",
+            "`{driven}` moves {ratio}{} for each {} `{driver}` moves{losses}{geometry}",
             follower.unit(),
             leader.unit().trim()
         ))

@@ -7,6 +7,12 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Gear drives in `sim torque`: `couple ... module= face= teeth= pressure= gear= pinion=` reads
+  each mesh's efficiency, torque, tangential, radial and axial forces, Lewis bending and Hertz
+  contact stress and bending safety; `speed joint rpm` adds each joint's power, each mesh's
+  friction heat and a worm's sliding speed; and a motor's torque splits into the ideal load,
+  mesh friction and drag. The viewer shows readings with more than four values per part as a
+  block of figures for each.
 - Progress for every simulation: `gcad sim` reports each stage on stderr (model and part files,
   meshing, bonding, assembly, solver iterations and residual, eigen solves, flow steps with the
   running drag, torque poses, writing) with counts and time left, and `-q` turns it off. The

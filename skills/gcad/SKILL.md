@@ -211,7 +211,10 @@ gravity and where it happened. Couples pass the load on, so a sun gear driven by
 at `ratio=4` reads a quarter of it: that is the motor's torque. With lossy couples that
 reading is the torque to drive the load and `joint.back` the torque the load pushes back with
 (0 when a worm locks). `torque az 6.3` adds a steady joint torque, like wind, and `joint ...
-drag=0.05` gives a joint bearing and seal friction in N·m (N on a slide). Parts need a `material` to
+drag=0.05` gives a joint bearing and seal friction in N·m (N on a slide). Add `module=1 face=10
+gear=wheel pinion=worm` to a `couple` for its mesh forces (tangential, radial, axial), Lewis
+bending and Hertz contact stress and safety, and `speed az 1` (rpm) for power, mesh heat and
+worm sliding speed; motor torque also splits into `.ideal`, `.friction` and `.drag`. Parts need a `material` to
 weigh anything. `gcad check x.gsim` says when the result is stale and `gcad render x.gsim
 x.png` plots the sweeps. The viewer shows the readings, draws the setup before a result
 exists, and has a run button. Materials also carry `E= nu= yield= k= alpha=`.

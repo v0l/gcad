@@ -417,7 +417,18 @@ struct ReadingsLayout {
     vectors: Vec<Vector>,
     columns: Vec<String>,
     rows: Vec<(String, Vec<Option<String>>)>,
+    blocks: Vec<(String, Vec<(String, String)>)>,
     total: usize,
+}
+
+fn bare_name(unit: &str) -> &'static str {
+    match unit {
+        "N·m" => "torque",
+        "N" => "force",
+        "MPa" => "stress",
+        "mm" => "displacement",
+        _ => "value",
+    }
 }
 
 type Labelled<'a> = (String, Vec<(String, &'a crate::sim::Reading)>);
@@ -467,7 +478,7 @@ fn layout_readings(readings: &[crate::sim::Reading], few: Option<usize>) -> Read
         .filter(|(_, list)| !vector(list))
         .map(|(head, mut list)| {
             if let Some(bare) = readings.iter().find(|r| r.name == head) {
-                list.insert(0, ("value".to_string(), bare));
+                list.insert(0, (bare_name(&bare.unit).to_string(), bare));
             }
             (head, list)
         })
@@ -520,6 +531,16 @@ fn layout_readings(readings: &[crate::sim::Reading], few: Option<usize>) -> Read
             (head.clone(), cells)
         })
         .collect();
+    let blocks = parts
+        .iter()
+        .map(|(head, list)| {
+            let tiles = list
+                .iter()
+                .map(|(tail, r)| (tail.clone(), with_unit(r)))
+                .collect();
+            (head.clone(), tiles)
+        })
+        .collect();
     let columns = columns
         .iter()
         .zip(&units)
@@ -533,6 +554,7 @@ fn layout_readings(readings: &[crate::sim::Reading], few: Option<usize>) -> Read
         vectors,
         columns,
         rows,
+        blocks,
         total,
     }
 }
@@ -610,6 +632,29 @@ fn readings_list(ui: &mut Ui, readings: &[crate::sim::Reading], every_part: &mut
             .size(11.0)
             .show(ui);
     }
+    if layout.columns.len() > 4 {
+        for (head, tiles) in &layout.blocks {
+            ui.add_space(4.0);
+            ui.label(legend(head).color(VALUE));
+            tile_grid(ui, tiles);
+        }
+    } else {
+        parts_table(ui, &layout);
+    }
+    if layout.total > FEW {
+        ui.add_space(4.0);
+        let label = if *every_part {
+            "fewer parts".to_string()
+        } else {
+            format!("all {} parts", layout.total)
+        };
+        if toggle(ui, &label, *every_part).clicked() {
+            *every_part = !*every_part;
+        }
+    }
+}
+
+fn parts_table(ui: &mut Ui, layout: &ReadingsLayout) {
     let width = ui.available_width();
     let first = (width * 0.34).max(90.0);
     let rest = (width - first) / layout.columns.len().max(1) as f32;
@@ -624,17 +669,6 @@ fn readings_list(ui: &mut Ui, readings: &[crate::sim::Reading], every_part: &mut
             }
         }
     });
-    if layout.total > FEW {
-        ui.add_space(4.0);
-        let label = if *every_part {
-            "fewer parts".to_string()
-        } else {
-            format!("all {} parts", layout.total)
-        };
-        if toggle(ui, &label, *every_part).clicked() {
-            *every_part = !*every_part;
-        }
-    }
 }
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -3551,7 +3585,14 @@ mod tests {
             (layout.vectors[0].0.as_str(), layout.vectors[0].2.len()),
             ("moment", 3)
         );
-        assert_eq!(layout.columns, ["value N", "moment N·m", "stress MPa"]);
+        assert_eq!(layout.columns, ["force N", "moment N·m", "stress MPa"]);
+        assert_eq!(
+            layout.blocks[0].1,
+            [
+                ("force".to_string(), "2.000 N".to_string()),
+                ("moment".to_string(), "0.5000 N·m".to_string())
+            ]
+        );
         let heads: Vec<&str> = layout.rows.iter().map(|r| r.0.as_str()).collect();
         assert_eq!(heads, ["mast", "boom", "tip", "clamp.main"]);
         assert_eq!(
