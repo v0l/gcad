@@ -322,47 +322,63 @@ pub fn place_probe(
     Ok((found, note))
 }
 
-fn singular_band(spec: &Spec, mesh: &Quadratic) -> Result<(Vec<bool>, f64)> {
-    let reach = super::mesh::size(spec)?;
+fn singular_band(spec: &Spec, mesh: &Quadratic) -> Result<Vec<bool>> {
+    use rayon::prelude::*;
+    use std::collections::HashMap;
+    let size = super::mesh::size(spec)?;
+    let mut bounds: Vec<BoundingBox<Point3>> = vec![BoundingBox::new(); mesh.bodies.len()];
+    let mut body_of = vec![0u16; mesh.nodes.len()];
+    for (tet, &body) in mesh.tets.iter().zip(&mesh.body) {
+        for &v in tet {
+            bounds[body as usize].push(mesh.nodes[v as usize]);
+            body_of[v as usize] = body;
+        }
+    }
+    let reach: Vec<f64> = bounds
+        .iter()
+        .map(|b| size.min(b.diameter() / 6.0))
+        .collect();
+    let key = |p: Point3, body: u16| {
+        let cell = reach[body as usize];
+        [p.x, p.y, p.z].map(|c| (c / cell).floor() as i64)
+    };
     let held: std::collections::HashSet<usize> = spec
         .supports
         .iter()
         .flat_map(|s| s.faces.iter().copied())
         .collect();
-    let seeds: Vec<Point3> = mesh
+    let mut seeds: HashMap<(u16, [i64; 3]), Vec<Point3>> = HashMap::new();
+    let mut seen = std::collections::HashSet::new();
+    for v in mesh
         .boundary
         .iter()
         .filter(|(_, tag)| held.contains(tag))
-        .flat_map(|(f, _)| f.iter().map(|&v| mesh.nodes[v as usize]))
-        .chain(
-            mesh.ties
-                .iter()
-                .flat_map(|t| t.group())
-                .map(|v| mesh.nodes[v as usize]),
-        )
-        .collect();
-    let key = |p: Point3| [p.x, p.y, p.z].map(|c| (c / reach).floor() as i64);
-    let mut cells: std::collections::HashMap<[i64; 3], Vec<Point3>> = Default::default();
-    for p in seeds {
-        cells.entry(key(p)).or_default().push(p);
+        .flat_map(|(f, _)| f.iter().copied())
+        .chain(mesh.ties.iter().flat_map(|t| t.group()))
+    {
+        if seen.insert(v) {
+            let (p, body) = (mesh.nodes[v as usize], body_of[v as usize]);
+            seeds.entry((body, key(p, body))).or_default().push(p);
+        }
     }
-    let near = mesh
+    Ok(mesh
         .nodes
-        .iter()
-        .map(|&p| {
-            let k = key(p);
+        .par_iter()
+        .zip(&body_of)
+        .map(|(&p, &body)| {
+            let k = key(p, body);
+            let h = reach[body as usize];
             (-1..=1).any(|x| {
                 (-1..=1).any(|y| {
                     (-1..=1).any(|z| {
-                        cells
-                            .get(&[k[0] + x, k[1] + y, k[2] + z])
-                            .is_some_and(|c| c.iter().any(|q| (q - p).magnitude() < reach))
+                        seeds
+                            .get(&(body, [k[0] + x, k[1] + y, k[2] + z]))
+                            .is_some_and(|c| c.iter().any(|q| (q - p).magnitude() < h))
                     })
                 })
             })
         })
-        .collect();
-    Ok((near, reach))
+        .collect())
 }
 
 pub fn at(p: Point3) -> String {
@@ -419,7 +435,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             triple(f)
         ));
     }
-    let (near, reach) = singular_band(spec, mesh)?;
+    let near = singular_band(spec, mesh)?;
     let counted = |v: usize| !near[v] || near.iter().all(|n| *n);
     let peak_of = |keep: &dyn Fn(usize) -> bool| {
         answer
@@ -440,9 +456,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         unit: "MPa".into(),
         at: if near.iter().any(|n| *n) {
             format!(
-                "peak von Mises {}, over {} mm from supports and bonds",
-                at(mesh.nodes[where_peak]),
-                crate::plot::label(reach)
+                "peak von Mises {}, over one element size from supports and bonds",
+                at(mesh.nodes[where_peak])
             )
         } else {
             format!("peak von Mises {}", at(mesh.nodes[where_peak]))
@@ -454,9 +469,8 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             value: held_peak,
             unit: "MPa".into(),
             at: format!(
-                "peak von Mises {} within {} mm of a support or bond; a rigid hold makes it rise without limit as the mesh gets finer",
-                at(mesh.nodes[where_held]),
-                crate::plot::label(reach)
+                "peak von Mises {} within one element size of a support or bond; a rigid hold makes it rise without limit as the mesh gets finer",
+                at(mesh.nodes[where_held])
             ),
         });
     }

@@ -337,6 +337,28 @@ fn peak_stress_leaves_out_the_fixed_edge() {
 }
 
 #[test]
+fn small_part_keeps_its_own_stress_band() {
+    let outcome = simulated(
+        "small_part_keeps_its_own_stress_band",
+        &[
+            ("slab.gcad", "rect 200 200\nextrude 20\nmaterial steel\n"),
+            (
+                "post.gcad",
+                "rect 6 6\nextrude 10\nmaterial aluminium E=70 nu=0.33 yield=50\n",
+            ),
+            ("post.gasm", "part slab slab.gcad\npart post post.gcad\nmove post 0,0,20\n"),
+        ],
+        "sim static\npart post.gasm\nfix slab:<Z\nload post:>Z force=100,0,0",
+    );
+    let safety = outcome
+        .readings
+        .iter()
+        .find(|r| r.name == "safety")
+        .expect("a safety reading");
+    assert!(safety.at.contains("`post`"), "{}", safety.at);
+}
+
+#[test]
 fn field_reads_at_a_point() {
     let path = written(
         "field_reads_at_a_point",

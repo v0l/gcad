@@ -12,7 +12,7 @@ All notable changes to gcad are listed here. The format follows
   or for flow the parts in their duct or air box, the wind and the heated faces.
 - `bearing faces axial`: a round band held sideways at one ring, free to turn and tilt, so it carries
   force and no moment. `pin` on a short band suggests it.
-- `support_stress` reading: the peak von Mises stress within one mesh size of supports and bonds.
+- `support_stress` reading: the peak von Mises stress within one element size of supports and bonds.
 - `torque axis=` and `wind toward=` take `x`, `y`, `z` and `-z`.
 - Gear and worm losses on couples: `efficiency=` and `back=`, or a worm's `lead=` and `friction=`,
   with `joint.back` readings and worms that lock.
@@ -21,8 +21,9 @@ All notable changes to gcad are listed here. The format follows
 - A boss glued onto a face, including twisted faces and over an edge; twisted extrudes with holes.
 
 ### Changed
-- `stress` and `safety` leave out one mesh size around supports and bonds, where a rigid hold
-  is singular.
+- `stress` and `safety` leave out one element size of each part around its supports and bonds,
+  where a rigid hold is singular. A part smaller than the `mesh` size uses a sixth of its own
+  diagonal, so a key or pin in a large assembly still counts towards `safety`.
 - A probe just outside a coarse curved face reads on the mesh surface with a note, instead of failing.
 - A `let` in an included file carries over to the file that includes it.
 - Viewer shows a stale simulation result with a warning instead of hiding it.

@@ -484,7 +484,8 @@ part coloured by it instead (deformed as in `render`), with the range in the par
 `sim static` is linear elasticity on curved 10-node tetrahedra.
 Units are millimetres, newtons and MPa. It needs a material with a stiffness and at least one
 `fix` or `slide`. Its readings are `stress` (the peak von Mises stress and where, more than one
-`mesh` size from any support or bonded face), `support_stress` (the peak inside that band, when it is
+element size from any support or bonded face of the same part: the `mesh` size, or a sixth of
+the part's diagonal when that is smaller), `support_stress` (the peak inside that band, when it is
 higher), `displacement` (the largest movement and where), `safety` (yield strength over `stress`,
 when the material has one), each support's reaction force (and `label.moment` in N·m when it also holds a twist) and each probe's values. A part its supports leave free to move or turn is refused before solving. The
 stress at the edge of a fixed face or a bond is a singularity: it keeps rising as the mesh is
