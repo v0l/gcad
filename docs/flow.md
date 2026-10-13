@@ -285,6 +285,30 @@ Checks:
 | lattice, 1 mm (55 M) | 0.694 | 0.0279 | 0.0119 | 782 s |
 | OpenFOAM MRF, 1.57 M cells | 0.906 | 0.0317 | 0.0116 | 27 min on 40 cores |
 
-The flow agrees within 5% at every size. The thrust climbs toward OpenFOAM's as the cells
+The wake does not agree. Axial speed in m/s along radial lines, the lattice from its two mean
+slices at 1.4 mm and OpenFOAM averaged over eight angles (`system/sampleDict` in the case):
+
+| z | r = 2 | 10 | 18 | 26 | 34 | 42 | 50 mm |
+|---|---|---|---|---|---|---|---|
+| +20, lattice | -1.02 | -1.12 | -1.23 | -1.20 | -1.06 | -0.77 | -0.50 |
+| +20, OpenFOAM | -1.22 | -1.30 | -1.38 | -1.32 | -1.08 | -0.71 | -0.40 |
+| -10, lattice | 0.19 | 0.19 | -0.76 | -3.31 | -4.17 | -0.88 | -0.52 |
+| -10, OpenFOAM | 0.14 | -0.22 | -3.09 | -4.54 | -2.88 | 0.49 | 0.23 |
+| -60, lattice | 0.82 | 0.79 | 0.73 | 0.54 | 0.23 | -0.22 | -0.46 |
+| -60, OpenFOAM | 0.02 | -1.51 | -3.30 | -2.45 | -1.59 | -1.67 | -1.33 |
+| -100, lattice | 0.30 | 0.29 | 0.28 | 0.25 | 0.22 | 0.18 | 0.14 |
+| -100, OpenFOAM | -2.40 | -2.36 | -2.08 | -1.67 | -1.26 | -1.04 | -0.95 |
+
+The air drawn in (z = +20) agrees within about 15%. Behind the rotor the lattice's jet is a
+hollow cone that opens outward, with air flowing back up the axis at 0.8 m/s behind the hub;
+OpenFOAM's closes onto the axis, 2.4 m/s there 100 mm down. The lattice's cone is the same at
+1 mm (back flow 0.9 m/s on the axis at z = -60, the cone a few millimetres wider), so it is
+not the grid. OpenFOAM's swirl number behind the rotor is 0.40 to 0.45, close to where
+swirling jets break down into exactly such a cone; steady k-omega SST is known to damp that
+breakdown and a frozen rotor carries no blade passing, so neither answer is settled. A
+transient OpenFOAM run with a sliding (AMI) rotor and a scale-resolving model, or a measured
+fan wake, would settle it.
+
+The flow through the disc agrees within 5% at every size. The thrust climbs toward OpenFOAM's as the cells
 shrink. The torque does not settle: at 30 degrees the blades meet the air near 18 degrees and
 are stalled, and both solvers model that separated flow, not resolve it.
