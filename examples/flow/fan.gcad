@@ -1,0 +1,9 @@
+let r=40 hub=10 chord=16 t=2 pitch=30 blades=4 depth=10
+circle 2*hub
+hub: extrude depth both
+plane YZ offset=hub-1 rz=pitch
+rect chord t
+blade: extrude r-hub+1
+plane XY
+repeat blade count=blades angle=360
+material abs

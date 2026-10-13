@@ -1,4 +1,5 @@
 use super::args::{Args, point3, positive};
+use super::assembly::{JointKind, subtree};
 use super::{Model, load_model, posed};
 use crate::parse::Line;
 use crate::sim::fem::STRIDE;
@@ -58,6 +59,7 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "average",
     "precision",
     "duct",
+    "spin",
     "materials",
 ];
 
@@ -431,6 +433,7 @@ impl Model {
                     "forces averaged while the wind travels {passes} times the width it meets"
                 ))
             }
+            "spin" => self.op_spin(line),
             "duct" => {
                 let args = Args::new(line, &["width", "height"], &[], false)?;
                 let width = positive(args.number("width", &self.scope)?, "the duct width")?;
@@ -695,6 +698,53 @@ impl Model {
         spec.target = Some(Box::new(model));
         spec.file = Some(path);
         Ok(format!("{bodies} bodies, {joints} moving joints"))
+    }
+
+    fn op_spin(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["joint"], &["rpm"], false)?;
+        let name = args.text("joint")?.to_string();
+        if self.spec().kind != Some(Kind::Flow) {
+            bail!("`spin` turns a part in a flow simulation");
+        }
+        let rpm = args.number("rpm", &self.scope)?;
+        if !rpm.is_finite() || rpm == 0.0 {
+            bail!("`rpm` is the speed the joint turns at, like rpm=3000");
+        }
+        let target = self.target_mut()?;
+        let rig = target.rig();
+        let Some(joint) = rig.joints.iter().find(|j| j.name == name) else {
+            let turns: Vec<&str> = rig
+                .joints
+                .iter()
+                .filter(|j| matches!(j.kind, JointKind::Turn { .. }))
+                .map(|j| j.name.as_str())
+                .collect();
+            bail!("no joint called `{name}`; turn joints are {turns:?}");
+        };
+        if !matches!(joint.kind, JointKind::Turn { .. }) {
+            bail!("`{name}` is not a `turn` joint");
+        }
+        if let Some(couple) = rig.driver_of(&name) {
+            bail!("`{name}` follows `{}`; spin that instead", couple.driver);
+        }
+        if let Some(couple) = rig.couples.iter().find(|c| c.driver == name) {
+            bail!(
+                "`{}` follows `{name}`; a spinning joint cannot drive others yet",
+                couple.driven
+            );
+        }
+        let carried = subtree(&rig.joints, &joint.child);
+        if self.spec().spins.iter().any(|s| s.joint == name) {
+            bail!("`{name}` already spins");
+        }
+        self.spec().spins.push(crate::sim::Spin {
+            joint: name.clone(),
+            rpm,
+        });
+        Ok(format!(
+            "{name} turns at {rpm} rpm, carrying {}",
+            carried.join(", ")
+        ))
     }
 
     fn op_sim_pose(&mut self, line: &Line) -> Result<String> {

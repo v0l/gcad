@@ -111,6 +111,13 @@ pub struct Spec {
     pub ambient: Option<f64>,
     pub duct: Option<[f64; 2]>,
     pub wind_load: Option<PathBuf>,
+    pub spins: Vec<Spin>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Spin {
+    pub joint: String,
+    pub rpm: f64,
 }
 
 #[derive(Clone, Debug)]

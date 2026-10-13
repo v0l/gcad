@@ -324,4 +324,5 @@ The plan for the rest is in `docs/simulation.md`.
 | air sealed inside parts | supported | a closed box in a `sim flow` is airtight even with walls thinner than a cell | `simulation::wind_seals_a_closed_box` |
 | flow slices, streamlines and playback | supported | `gcad render wind.gsim flow.png --flow`; the viewer draws 3D streamlines, particles along them and the slices moving through time, from `wind.frames.bin` | `simulation::wind_draws_the_flow` |
 | heat carried off by the air | supported | `heat <Z 10` in a `sim flow`, `air temperature=25`, `duct 40 25`; reads the heated faces' temperature, the hottest part and the resistance in K/W | `simulation::fan_cools_a_ducted_heatsink`, `simulation::flow_heat_lines_parse` |
+| fans and propellers | supported | `spin spin rpm=3000` in a `sim flow` turns the joint's part through the lattice; reads `spin.torque`, `spin.power`, `spin.thrust`, `spin.flow` | `simulation::a_spinning_fan_pushes_air`, `simulation::spin_needs_a_turn_joint_in_a_flow` |
 | wind on an assembly | supported | `part pair.gasm` in a `sim flow` reads `front.drag`, `back.drag` | `simulation::wind_shelters_a_part_behind` |

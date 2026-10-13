@@ -79,6 +79,24 @@ impl Gpu {
         Reading { staging, index }
     }
 
+    pub fn fetch_cleared(
+        &self,
+        mut encoder: wgpu::CommandEncoder,
+        buffer: &wgpu::Buffer,
+    ) -> Reading {
+        let size = buffer.size();
+        let staging = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("read"),
+            size,
+            usage: wgpu::BufferUsages::MAP_READ | wgpu::BufferUsages::COPY_DST,
+            mapped_at_creation: false,
+        });
+        encoder.copy_buffer_to_buffer(buffer, 0, &staging, 0, size);
+        encoder.clear_buffer(buffer, 0, None);
+        let index = self.queue.submit([encoder.finish()]);
+        Reading { staging, index }
+    }
+
     pub fn take(&self, reading: Reading) -> Result<Vec<f32>> {
         let slice = reading.staging.slice(..);
         let (send, receive) = std::sync::mpsc::channel();

@@ -644,7 +644,12 @@ fn theta_shader(name: &str, add: bool) -> String {
     s
 }
 
-fn force_shader() -> String {
+fn force_shader(add: bool) -> String {
+    let put = if add {
+        "out[k] = out[k] + "
+    } else {
+        "out[k] = "
+    };
     let mut s = String::new();
     s += "struct Params { nx: u32, ny: u32, nz: u32, count: u32 }\n";
     s += "struct Link { cell: u32, body: u32 }\n";
@@ -661,8 +666,9 @@ fn force_shader() -> String {
     s += "  let k = id.x + id.y * groups.x * 64u;\n";
     s += "  if (k >= p.count) { return; }\n";
     s += "  let l = links[k];\n";
-    s +=
-        "  if ((flags[l.cell] & 255u) != 0u) { out[k] = vec4<f32>(0.0, 0.0, 0.0, 1.0); return; }\n";
+    s += &format!(
+        "  if ((flags[l.cell] & 255u) != 0u) {{ {put}vec4<f32>(0.0, 0.0, 0.0, 1.0); return; }}\n"
+    );
     s += "  let x = i32(l.cell % p.nx); let y = i32((l.cell / p.nx) % p.ny); let z = i32(l.cell / (p.nx * p.ny));\n";
     s += "  var f = vec3<f32>(0.0, 0.0, 0.0); var s: u32; var fs: u32; var back: f32;\n";
     s += "  let slot = flags[l.cell] >> 8u;\n";
@@ -683,7 +689,7 @@ fn force_shader() -> String {
         );
     }
     s += &format!(
-        "  out[k] = vec4<f32>(f, 1.0{});\n",
+        "  {put}vec4<f32>(f, 1.0{});\n",
         (0..19)
             .map(|i| format!(" + a{i}[l.cell]"))
             .collect::<String>()
@@ -795,6 +801,8 @@ const TURN_SLOTS: usize = 200;
 
 struct Turning {
     rotor: Rotor,
+    omega: f64,
+    angle: f64,
     uniform: wgpu::Buffer,
     stride: u64,
     common: wgpu::BindGroup,
@@ -840,7 +848,8 @@ pub struct Lattice<'a> {
     common: wgpu::BindGroup,
     sides: [[wgpu::BindGroup; 2]; 2],
     edges: Option<Pass>,
-    forces: Option<(Pass, wgpu::Buffer)>,
+    forces: Option<(Pass, wgpu::Buffer, (Pass, wgpu::Buffer))>,
+    summing: std::cell::Cell<Option<u32>>,
     planes: (Pass, wgpu::Buffer),
     mean: (Pass, wgpu::Buffer, usize, [usize; 3]),
     now: (Pass, wgpu::Buffer),
@@ -850,7 +859,7 @@ pub struct Lattice<'a> {
     pub links: Vec<[u32; 2]>,
     turning: Vec<Turning>,
     turners: Option<[wgpu::ComputePipeline; 3]>,
-    turned: u64,
+    spins: (wgpu::Buffer, Vec<[f32; 4]>),
 }
 
 pub struct MeanField {
@@ -1055,7 +1064,7 @@ impl<'a> Lattice<'a> {
         let spins = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("spins"),
             contents: bytemuck::cast_slice(&spin_table),
-            usage: wgpu::BufferUsages::STORAGE,
+            usage: wgpu::BufferUsages::STORAGE | wgpu::BufferUsages::COPY_DST,
         });
         let params = device.create_buffer(&wgpu::BufferDescriptor {
             label: Some("params"),
@@ -1356,7 +1365,7 @@ impl<'a> Lattice<'a> {
                 entry(5, read),
             ]);
             let pass = Pass {
-                pipeline: pipeline(force_shader(), "force", &[&force_layout, &side_layout]),
+                pipeline: pipeline(force_shader(false), "force", &[&force_layout, &side_layout]),
                 common: group(
                     &force_layout,
                     &[&header, &flags, &list, &out, &cuts, &spins],
@@ -1365,7 +1374,25 @@ impl<'a> Lattice<'a> {
                 count: n,
                 header: header.clone(),
             };
-            (pass, out)
+            let total = device.create_buffer(&wgpu::BufferDescriptor {
+                label: Some("summed link forces"),
+                size: n as u64 * 16,
+                usage: wgpu::BufferUsages::STORAGE
+                    | wgpu::BufferUsages::COPY_SRC
+                    | wgpu::BufferUsages::COPY_DST,
+                mapped_at_creation: false,
+            });
+            let summing = Pass {
+                pipeline: pipeline(force_shader(true), "force", &[&force_layout, &side_layout]),
+                common: group(
+                    &force_layout,
+                    &[&header, &flags, &list, &total, &cuts, &spins],
+                ),
+                sides: [side(1), side(0)],
+                count: n,
+                header,
+            };
+            (pass, out, (summing, total))
         });
         let widest = (size[0] * size[1])
             .max(size[1] * size[2])
@@ -1579,10 +1606,12 @@ impl<'a> Lattice<'a> {
                 });
                 Turning {
                     rotor: rotor.clone(),
+                    omega: rotor.omega,
+                    angle: 0.0,
                     uniform: uniform_buffer,
                     stride,
                     common,
-                    sides: [side(1), side(0)],
+                    sides: [side(0), side(1)],
                     count: cells.len() as u32,
                 }
             })
@@ -1607,7 +1636,8 @@ impl<'a> Lattice<'a> {
             links,
             turning,
             turners,
-            turned: 0,
+            spins: (spins, spin_table),
+            summing: Default::default(),
         })
     }
 
@@ -1652,12 +1682,13 @@ impl<'a> Lattice<'a> {
         let mut left = steps;
         while left > 0 {
             let batch = left.min(200).min(TURN_SLOTS);
-            for turning in &self.turning {
+            for turning in &mut self.turning {
                 let r = &turning.rotor;
                 let mut bytes = vec![0u8; turning.stride as usize * batch];
                 for j in 0..batch {
-                    let angle = r.omega * (self.turned + j as u64 + 1) as f64;
-                    let angle = angle.rem_euclid(std::f64::consts::TAU);
+                    turning.angle =
+                        (turning.angle + turning.omega).rem_euclid(std::f64::consts::TAU);
+                    let angle = turning.angle;
                     let turn = Turn {
                         nx: self.size[0] as u32,
                         ny: self.size[1] as u32,
@@ -1679,9 +1710,9 @@ impl<'a> Lattice<'a> {
                         sy: r.start[1] as f32,
                         sz: r.start[2] as f32,
                         h: (1.0 / SUBCELLS as f64) as f32,
-                        wx: (r.axis[0] * r.omega) as f32,
-                        wy: (r.axis[1] * r.omega) as f32,
-                        wz: (r.axis[2] * r.omega) as f32,
+                        wx: (r.axis[0] * turning.omega) as f32,
+                        wy: (r.axis[1] * turning.omega) as f32,
+                        wz: (r.axis[2] * turning.omega) as f32,
                         covered: COVERED,
                     };
                     let at = j * turning.stride as usize;
@@ -1693,6 +1724,18 @@ impl<'a> Lattice<'a> {
             let mut encoder = self.gpu.device.create_command_encoder(&Default::default());
             for step in 0..batch {
                 let mut pass = encoder.begin_compute_pass(&Default::default());
+                if let Some(turners) = &self.turners {
+                    for turning in &self.turning {
+                        let offset = (step * turning.stride as usize) as u32;
+                        let (tx, ty) = dispatch(turning.count);
+                        for stage in turners {
+                            pass.set_pipeline(stage);
+                            pass.set_bind_group(0, &turning.common, &[offset]);
+                            pass.set_bind_group(1, &turning.sides[self.parity], &[]);
+                            pass.dispatch_workgroups(tx, ty, 1);
+                        }
+                    }
+                }
                 pass.set_pipeline(&self.pipeline);
                 pass.set_bind_group(0, &self.common, &[]);
                 pass.set_bind_group(1, &self.sides[self.parity][0], &[]);
@@ -1710,22 +1753,19 @@ impl<'a> Lattice<'a> {
                     }
                     pass.dispatch_workgroups(edges.count.div_ceil(64), 1, 1);
                 }
-                if let Some(turners) = &self.turners {
-                    for turning in &self.turning {
-                        let offset = (step * turning.stride as usize) as u32;
-                        let (tx, ty) = dispatch(turning.count);
-                        for stage in turners {
-                            pass.set_pipeline(stage);
-                            pass.set_bind_group(0, &turning.common, &[offset]);
-                            pass.set_bind_group(1, &turning.sides[self.parity], &[]);
-                            pass.dispatch_workgroups(tx, ty, 1);
-                        }
-                    }
+                if let (Some(_), Some((_, _, (summing, _)))) = (self.summing.get(), &self.forces) {
+                    pass.set_pipeline(&summing.pipeline);
+                    pass.set_bind_group(0, &summing.common, &[]);
+                    pass.set_bind_group(1, &summing.sides[self.parity], &[]);
+                    let (fx, fy) = dispatch(summing.count);
+                    pass.dispatch_workgroups(fx, fy, 1);
                 }
                 drop(pass);
                 self.parity ^= 1;
+                if let Some(steps) = self.summing.get() {
+                    self.summing.set(Some(steps + 1));
+                }
             }
-            self.turned += batch as u64;
             let index = self.gpu.queue.submit([encoder.finish()]);
             if let Some(previous) = self.last.replace(index) {
                 self.gpu.wait(previous)?;
@@ -1737,6 +1777,27 @@ impl<'a> Lattice<'a> {
 
     pub fn finish(&self) -> Result<()> {
         self.gpu.finish()
+    }
+
+    pub fn throttle(&mut self, share: f64) {
+        let (buffer, table) = &mut self.spins;
+        for turning in &mut self.turning {
+            let r = &turning.rotor;
+            turning.omega = r.omega * share;
+            let b = r.body as usize;
+            table[2 * b] = [0, 1, 2, 3].map(|d| {
+                if d < 3 {
+                    (r.axis[d] * turning.omega) as f32
+                } else {
+                    0.0
+                }
+            });
+        }
+        if !self.turning.is_empty() {
+            self.gpu
+                .queue
+                .write_buffer(buffer, 0, bytemuck::cast_slice(table));
+        }
     }
 
     fn encode(&self, pass: &Pass, count: u32) -> wgpu::CommandEncoder {
@@ -1904,7 +1965,7 @@ pub struct PendingPlane {
 
 pub struct PendingSnapshot(Reading);
 
-pub struct PendingLinks(Option<Reading>);
+pub struct PendingLinks(Option<(Reading, u32)>);
 
 pub struct PendingProbes(Option<Reading>);
 
@@ -1914,21 +1975,33 @@ impl<'a> Lattice<'a> {
     }
 
     pub fn request_links(&self) -> PendingLinks {
-        PendingLinks(self.forces.as_ref().map(|(pass, buffer)| {
-            let encoder = self.encode(pass, pass.count);
-            self.gpu.fetch(encoder, buffer)
+        let Some((pass, buffer, (_, total))) = &self.forces else {
+            return PendingLinks(None);
+        };
+        PendingLinks(Some(match self.summing.get() {
+            Some(steps) if steps > 0 => {
+                let encoder = self.gpu.device.create_command_encoder(&Default::default());
+                self.summing.set(Some(0));
+                (self.gpu.fetch_cleared(encoder, total), steps)
+            }
+            _ => (self.gpu.fetch(self.encode(pass, pass.count), buffer), 1),
         }))
     }
 
+    pub fn sum_forces(&mut self) {
+        self.summing.set(Some(0));
+    }
+
     pub fn take_links(&self, pending: PendingLinks) -> Result<Vec<[f32; 4]>> {
-        let Some(reading) = pending.0 else {
+        let Some((reading, steps)) = pending.0 else {
             return Ok(Vec::new());
         };
+        let share = 1.0 / steps as f32;
         Ok(self
             .gpu
             .take(reading)?
             .chunks_exact(4)
-            .map(|v| [v[0], v[1], v[2], v[3]])
+            .map(|v| [v[0], v[1], v[2], v[3]].map(|x| x * share))
             .collect())
     }
 

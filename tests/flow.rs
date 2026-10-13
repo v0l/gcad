@@ -828,6 +828,7 @@ fn taylor_couette_torque() {
     lattice
         .run(&Settings::laminar(viscosity), 60_000)
         .expect("runs");
+    lattice.sum_forces();
     let mut torque = 0.0;
     let samples = 20;
     for _ in 0..samples {
@@ -865,6 +866,7 @@ fn turning_square_matches_the_turning_frame() {
         let mut lattice = Lattice::new(&gpu, domain).expect("lattice");
         let settings = Settings::laminar(viscosity);
         lattice.run(&settings, 60_000).expect("runs");
+        lattice.sum_forces();
         let samples = 40;
         let mut torque = 0.0;
         for _ in 0..samples {

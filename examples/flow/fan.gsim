@@ -1,0 +1,4 @@
+sim flow
+part fan.gasm
+spin spin rpm=3000
+mesh 2

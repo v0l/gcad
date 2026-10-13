@@ -2097,3 +2097,72 @@ fn flow_heat_lines_parse() {
     assert_eq!(spec.ambient, Some(30.0));
     assert_eq!(spec.thermal.len(), 1);
 }
+
+const FAN: &str = "let r=40 hub=10 chord=16 t=3 pitch=30\ncircle 2*hub\nextrude 10 both\nplane YZ offset=hub-1 rz=pitch\nrect chord t\nblade: extrude r-hub+1\nplane XY\nrepeat blade count=4 angle=360\n";
+const FAN_POST: &str = "plane XY offset=-35\ncircle 8\nextrude 30\n";
+const FAN_GASM: &str = "part post post.gcad\npart rotor fan.gcad\naxis shaft 0,0,0 0,0,1\njoint spin rotor post turn about=shaft\n";
+
+fn fan_files() -> Vec<(&'static str, &'static str)> {
+    vec![
+        ("fan.gcad", FAN),
+        ("post.gcad", FAN_POST),
+        ("fan.gasm", FAN_GASM),
+    ]
+}
+
+#[test]
+fn spin_needs_a_turn_joint_in_a_flow() {
+    let files = fan_files();
+    let failing = |test: &str, spec: &str| {
+        let path = written(test, &files, spec);
+        let run = gcad::model::run_path(&path, &[], None).expect("runs");
+        let (_, step) = run.steps.last().expect("a step");
+        format!("{:#}", step.as_ref().expect_err("refused"))
+    };
+    assert!(
+        failing(
+            "spin_in_a_static",
+            "sim static\npart fan.gasm\nspin spin rpm=1000"
+        )
+        .contains("flow simulation")
+    );
+    assert!(
+        failing(
+            "spin_without_joint",
+            "sim flow\npart fan.gasm\nspin nothing rpm=1000"
+        )
+        .contains("no joint called `nothing`")
+    );
+    assert!(failing("spin_still", "sim flow\npart fan.gasm\nspin spin rpm=0").contains("rpm"));
+}
+
+#[test]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
+fn a_spinning_fan_pushes_air() {
+    let ahead = simulated(
+        "a_spinning_fan_pushes_air",
+        &fan_files(),
+        "sim flow\npart fan.gasm\nleave post\nspin spin rpm=3000\nmesh 2.5\naverage 12",
+    );
+    let torque = reading(&ahead, "spin.torque");
+    let omega = 3000.0 * std::f64::consts::TAU / 60.0;
+    assert!(torque > 0.0, "it takes torque to turn: {torque}");
+    close(reading(&ahead, "spin.power"), torque * omega, 1.0e-9);
+    close(reading(&ahead, "moment.z"), -torque, 1.0e-6);
+    let (thrust, flow) = (reading(&ahead, "spin.thrust"), reading(&ahead, "spin.flow"));
+    assert!(
+        thrust > 0.0 && flow < 0.0,
+        "the air goes down and pushes the fan up: thrust {thrust}, flow {flow}"
+    );
+    let back = simulated(
+        "a_spinning_fan_pushes_air_back",
+        &fan_files(),
+        "sim flow\npart fan.gasm\nleave post\nspin spin rpm=-3000\nmesh 2.5\naverage 12",
+    );
+    close(reading(&back, "spin.torque"), -torque, 0.15);
+    close(reading(&back, "spin.thrust"), -thrust, 0.15);
+    close(reading(&back, "spin.flow"), -flow, 0.15);
+}

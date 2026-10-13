@@ -1,0 +1,5 @@
+part housing housing.gcad
+part rotor fan.gcad
+axis shaft 0,0,0 0,0,1
+joint spin rotor housing turn about=shaft
+interference none

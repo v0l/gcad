@@ -1,0 +1,9 @@
+FoamFile { version 2.0; format ascii; class volScalarField; object omega; }
+dimensions [0 0 -1 0 0 0 0];
+internalField uniform OMEGA;
+boundaryField
+{
+    #includeEtc "caseDicts/setConstraintTypes"
+    open { type inletOutlet; inletValue uniform OMEGA; value uniform OMEGA; }
+    rotor { type omegaWallFunction; value uniform OMEGA; }
+}

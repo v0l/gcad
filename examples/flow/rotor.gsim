@@ -1,0 +1,5 @@
+sim flow
+part fan.gasm
+leave housing
+spin spin rpm=3000
+mesh 2

@@ -51,3 +51,21 @@ temperature of that face and the resistance from it to the inlet air.
 | `CELL` | 0.5 | cell size in mm (fins and gaps must be whole cells) |
 | `SPEED`, `WATTS` | 2, 10 | air entering the duct in m/s, heat into the base |
 | `ITERATIONS`, `PROCS` | 3000, 40 | |
+
+`fan.sh WORK` runs a rotor in still air as a frozen rotor: steady k-omega SST with an MRF zone
+in a cylinder just round the blades, every face of the box open (total pressure 0), the box
+as the lattice sizes it (4.5 H along the axis each way, 3 H to each side). The rotor is an STL
+in mm with its axis along z through the origin. It prints the force on the rotor (N), the
+moment about the origin (N·m) and the flow through the disc at z = 0 (m³/s).
+
+    gcad export examples/flow/fan.gcad rotor.stl
+    STL=rotor.stl RPM=3000 ACROSS=46.1684 ./fan.sh /tmp/foam/fan
+
+| variable | default | meaning |
+|---|---|---|
+| `RPM` | 3000 | turning about +z |
+| `ACROSS` | none | H in mm, from `gcad sim rotor.gsim --dry-run` |
+| `CELLS` | 8 | background cells across H |
+| `LOW`, `HIGH` | 4, 5 | refinement levels at the blades |
+| `NEAR`, `WAKE` | 3, 2 | levels in the rotating zone and in a cylinder 2 H past it each way |
+| `ITERATIONS`, `PROCS` | 3000, 40 | |

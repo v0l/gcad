@@ -139,6 +139,19 @@ expect drag<400
   state is meaningful: the parts are given the air's heat capacity so they warm in step with
   the flow.
 
+- `spin joint rpm=` turns a part of an assembly on its `turn` joint (negative rpm turns it
+  the other way), with everything the joint carries: a fan, a propeller or an impeller
+  (`examples/flow/fan.gsim`). The blades move through the lattice and push the air
+  themselves, so no fan curve is given. With no `wind` the box lies along the joint axis and
+  every face of it is open air, so the fan draws its own flow; with a `duct` the fan meets the
+  duct's resistance. The time step comes from the tip speed when that is above the wind.
+  Readings: `joint.torque` (N·m it takes to keep it turning, about the axis), `joint.power`
+  (W at the shaft), `joint.thrust` (N, the air's push on it along the joint axis) and
+  `joint.flow` (m³/s through the disc its blades sweep, along the joint axis, when that axis
+  lies along the box), and with a duct `flow` through its far end. Forces on a spinning part
+  are summed every step, and averaging waits for its torque and flow to be known to 1% (at most
+  160 passes). A part that spins cannot carry `heat` yet.
+
 Readings: `drag` along the wind, `side` across it and level, `lift` across it and up, `cda`
 (drag over the dynamic pressure, m²), `moment.x`, `.y` and `.z` about the `about` point in N·m,
 `pressure` and `suction` (the extremes of the mean surface pressure, Pa), and for an assembly

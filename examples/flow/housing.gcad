@@ -1,0 +1,13 @@
+let side=90 r=41.5 depth=14 hub=10 strut=3
+rect side side
+frame: extrude depth both
+plane frame.end
+hole 2*r 0,0
+plane XY offset=-depth/2-0.5
+circle 2*hub
+motor: extrude 2
+plane XY offset=-depth/2+0.2
+rect 2*r+2 strut
+struts: extrude 1
+repeat struts count=2 angle=90
+material abs

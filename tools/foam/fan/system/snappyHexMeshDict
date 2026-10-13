@@ -1,0 +1,34 @@
+FoamFile { version 2.0; format ascii; class dictionary; object snappyHexMeshDict; }
+castellatedMesh true;
+snap true;
+addLayers false;
+geometry
+{
+    rotor.stl { type triSurfaceMesh; name rotor; }
+    rotating { type searchableCylinder; point1 (0 0 ZLOW); point2 (0 0 ZHIGH); radius RADIUS; }
+    wake { type searchableCylinder; point1 (0 0 WAKELOW); point2 (0 0 WAKEHIGH); radius WAKERADIUS; }
+}
+castellatedMeshControls
+{
+    maxLocalCells 4000000; maxGlobalCells 60000000; minRefinementCells 10; nCellsBetweenLevels 3;
+    maxLoadUnbalance 0.1;
+    features ();
+    refinementSurfaces
+    {
+        rotor { level (LOW HIGH); patchInfo { type wall; } }
+        rotating { level (NEAR NEAR); cellZone rotating; faceZone rotating; cellZoneInside inside; }
+    }
+    resolveFeatureAngle 30;
+    refinementRegions { rotating { mode inside; levels ((1E15 NEAR)); } wake { mode inside; levels ((1E15 WAKE)); } }
+    locationInMesh (INSIDE);
+    allowFreeStandingZoneFaces true;
+}
+snapControls { nSmoothPatch 3; tolerance 2.0; nSolveIter 30; nRelaxIter 5; nFeatureSnapIter 10; }
+addLayersControls { relativeSizes true; layers {} expansionRatio 1.2; finalLayerThickness 0.5; minThickness 0.1; }
+meshQualityControls
+{
+    maxNonOrtho 65; maxBoundarySkewness 20; maxInternalSkewness 4; maxConcave 80; minVol 1e-13;
+    minTetQuality 1e-15; minArea -1; minTwist 0.02; minDeterminant 0.001; minFaceWeight 0.05;
+    minVolRatio 0.01; minTriangleTwist -1; nSmoothScale 4; errorReduction 0.75;
+}
+mergeTolerance 1e-6;

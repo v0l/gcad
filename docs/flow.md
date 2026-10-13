@@ -234,30 +234,50 @@ A fan is a part on a `turn` joint, and the gsim spins it: `spin fan rpm=4000`. T
 moves through the lattice as solid cells, so the blades push the air, shed wakes and feel
 their own torque, with no fan curve supplied.
 
-- **Moving geometry.** The rotor is voxelized once in its own frame on a grid twice as fine
-  as the lattice. Each step a GPU pass over the cells its blades sweep turns each cell centre
-  back by the rotor's angle and samples that grid: those cells become walls of the rotor and
-  the rest air. Cells the blades leave are filled at equilibrium with the blade's own
-  velocity and the density of the air beside them.
-- **Wall velocity per body.** Bounce-back on a moving wall adds `6 w rho c.u`, with `u = omega
-  x r` at the link, from a table of each body's angular velocity and axis point; the
-  cavity's single lid speed stays as body 0. Momentum exchange takes the same term back off,
-  so the torque on the shaft is the moment of the link forces about the axis.
-- **Time step from the tip.** The tip speed sets the lattice speed (0.05 at most) when it is
-  above the wind, so a fan in still air has a step too.
-- **Open ends.** With no wind both ends of the box are pressure boundaries, so the fan draws
-  its own flow; with a `duct` the walls close it and the fan meets the duct's resistance.
-
-Readings: `fan.torque` (N·m about the joint axis), `fan.power` (W), `fan.thrust` (N along the
-axis), `flow` (m³/s through the outlet) and `pressure` rise across the fan.
+- **Moving geometry** (`src/flow/rotor.rs`). The rotor is voxelized once in its own frame on a
+  grid twice as fine as the lattice. Before each step a GPU pass over the cells its blades can
+  reach turns the eight sub-cell centres of each cell back by the rotor's angle and samples
+  that grid: a cell with at least four of them inside is a wall of the rotor, the rest air.
+  Cells the blades leave are filled at equilibrium with the blade's own velocity and the mean
+  density of the air beside them. The angles come from a uniform buffer with one slot per
+  step of a batch, so they are exact in f64 however long the run.
+- **Wall velocity per body.** Bounce-back on a moving wall adds `6 w c.u`, with `u = omega x
+  r` at the link's midpoint, from a table of each body's angular velocity and axis point; the
+  cavity's single lid speed stays as body 0. Momentum exchange takes the same term back off and
+  adds Wen's Galilean correction, and the torque is the moment of the link forces about the
+  axis (a link's moment about its cell centre is exact, since the force lies along the link).
+- **Forces summed every step.** A rotor's force read at one step is mostly noise from the
+  cells it has just covered and uncovered; a second force pass adds every step into a buffer,
+  read and cleared once a tick. Reading the force after the rotor had moved but before the
+  step that used its new cells read the test fan's torque 43% high, which is why the geometry
+  moves at the start of a step, not the end.
+- **Time step from the tip.** The tip speed sets the lattice speed when it is above the wind.
+- **Open air.** With no wind every face of the box is a pressure boundary. With the sides
+  periodic, as for wind, the fan pumped the whole box like an infinite row of fans with nothing
+  to stop them, and the flow kept growing until it diverged.
 
 Checks:
 
-1. Taylor-Couette: a cylinder turning inside a fixed one, axially periodic, against
-   `T = 4 pi mu L omega R1² R2² / (R2² - R1²)`. The rotor is round, so no cell flips: this
-   checks the wall velocity and the momentum exchange only.
-2. A square rod turning inside a fixed round wall at Re near 1, against the same rod held
-   still inside a wall turning the other way. In creeping flow the two are the same flow seen
-   from two frames and the torques match; this checks the flipping cells.
-3. A propeller in open air against OpenFOAM with a sliding (AMI) mesh, and a known small
-   propeller's thrust and torque coefficients.
+1. Taylor-Couette (`flow::taylor_couette_torque`): a cylinder 32 cells across turning inside
+   a fixed one 64 cells across, axially periodic, against `T = 4 pi mu omega R1² R2² / (R2² -
+   R1²)` with the radii taken from the cells' areas: 0.23% high. At 16 and 32 cells it was 1.7%.
+2. A square rod 48 cells across turning inside a fixed round wall at Re 0.5, against the same
+   rod held still inside the wall turning the other way
+   (`flow::turning_square_matches_the_turning_frame`). In creeping flow the two are one flow
+   seen from two frames, and the torques agree within 1.3% (2% for a rod 24 cells across), so
+   the cells changing hands cost little.
+3. The flat-bladed rotor of `examples/flow/fan.gcad` (80 mm, four 16 x 2 mm blades at 30
+   degrees, 3000 rpm) alone in still air (`examples/flow/rotor.gsim`), against OpenFOAM's
+   frozen rotor (`tools/foam/fan.sh`, MRF, k-omega SST, 1.57 million cells, mean of
+   iterations 1000 to 3000, which swing about 8%):
+
+| | torque | thrust | flow through the disc | time |
+|---|---|---|---|---|
+| lattice, 2 mm (6.9 M cells) | 0.854 mN·m | 0.0159 N | 0.0111 m³/s | 34 s |
+| lattice, 1.4 mm (20 M) | 0.904 | 0.0238 | 0.0121 | 173 s |
+| lattice, 1 mm (55 M) | 0.691 | 0.0268 | 0.0119 | 782 s |
+| OpenFOAM MRF, 1.57 M cells | 0.906 | 0.0317 | 0.0116 | 27 min on 40 cores |
+
+The flow agrees within 5% at every size. The thrust climbs toward OpenFOAM's as the cells
+shrink. The torque does not settle: at 30 degrees the blades meet the air near 18 degrees and
+are stalled, and both solvers model that separated flow, not resolve it.

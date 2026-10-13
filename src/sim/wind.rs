@@ -33,8 +33,20 @@ struct Part {
     skin: (Vec<Point3>, Vec<[usize; 3]>),
 }
 
+struct Spinning {
+    joint: String,
+    reach: f64,
+    middle: Point3,
+    through: Point3,
+    axis: Vector3,
+    omega: f64,
+    parts: Vec<usize>,
+}
+
 struct Setup {
     wind: Wind,
+    speed: f64,
+    spins: Vec<Spinning>,
     axes: [Vector3; 3],
     grid: Grid,
     across: f64,
@@ -67,7 +79,11 @@ impl Setup {
     }
 
     fn reynolds(&self, air: (f64, f64)) -> f64 {
-        self.wind.speed * self.across * 1.0e-3 / air.1
+        self.speed * self.across * 1.0e-3 / air.1
+    }
+
+    fn spun(&self, part: usize) -> Option<usize> {
+        self.spins.iter().position(|s| s.parts.contains(&part))
     }
 }
 
@@ -163,9 +179,59 @@ fn setup(spec: &Spec) -> Result<Setup> {
     Ok(setup)
 }
 
+fn spinning(spec: &Spec, names: &[String]) -> Result<Vec<Spinning>> {
+    let rig = spec.target()?.rig();
+    spec.spins
+        .iter()
+        .map(|spin| {
+            let Some(joint) = rig.joints.iter().find(|j| j.name == spin.joint) else {
+                bail!("no joint called `{}`", spin.joint);
+            };
+            let crate::model::JointKind::Turn { through, axis } = joint.kind else {
+                bail!("`{}` is not a `turn` joint", spin.joint);
+            };
+            let carried = crate::model::subtree(&rig.joints, &joint.child);
+            let parts: Vec<usize> = names
+                .iter()
+                .enumerate()
+                .filter(|(_, n)| {
+                    carried.iter().any(|c| {
+                        *n == c
+                            || n.strip_prefix(c.as_str())
+                                .is_some_and(|r| r.starts_with('.'))
+                    })
+                })
+                .map(|(k, _)| k)
+                .collect();
+            if parts.is_empty() {
+                bail!("`{}` carries nothing left in the flow", spin.joint);
+            }
+            Ok(Spinning {
+                joint: spin.joint.clone(),
+                reach: 0.0,
+                middle: through,
+                through,
+                axis: axis.normalize(),
+                omega: spin.rpm * std::f64::consts::TAU / 60.0,
+                parts,
+            })
+        })
+        .collect()
+}
+
 fn frame(spec: &Spec) -> Result<Setup> {
-    let Some(wind) = spec.wind.clone() else {
-        bail!("a flow simulation needs `wind speed toward=x,y,z`");
+    let names: Vec<String> = spec.named()?.into_iter().map(|(n, _)| n).collect();
+    let spins = spinning(spec, &names)?;
+    let wind = match (spec.wind.clone(), spins.first()) {
+        (Some(wind), _) => wind,
+        (None, Some(spin)) => Wind {
+            speed: 0.0,
+            toward: spin.axis,
+            about: spin.through,
+        },
+        (None, None) => {
+            bail!("a flow simulation needs `wind speed toward=x,y,z` or a part to `spin`")
+        }
     };
     let axes = axes(wind.toward);
     let mut parts = Vec::new();
@@ -181,8 +247,30 @@ fn frame(spec: &Spec) -> Result<Setup> {
     if parts.is_empty() {
         bail!("there is nothing left in the wind");
     }
+    let mut tip: f64 = 0.0;
+    let mut spins = spins;
+    for spin in &mut spins {
+        let (mut first, mut last) = (f64::INFINITY, f64::NEG_INFINITY);
+        for &k in &spin.parts {
+            for &p in &parts[k].points {
+                let v = p - spin.through;
+                let along = v.dot(spin.axis);
+                spin.reach = spin.reach.max((v - spin.axis * along).magnitude());
+                first = first.min(along);
+                last = last.max(along);
+            }
+        }
+        spin.middle = spin.through + spin.axis * (0.5 * (first + last));
+        tip = tip.max(spin.omega.abs() * spin.reach * 1.0e-3);
+    }
+    let speed = wind.speed.max(tip);
+    if speed <= 0.0 {
+        bail!("nothing moves the air");
+    }
     let mut setup = Setup {
         wind,
+        speed,
+        spins,
         axes,
         grid: Grid {
             origin: Point3::origin(),
@@ -264,13 +352,14 @@ pub fn cell(spec: &Spec) -> Result<f64> {
 }
 
 fn step_seconds(setup: &Setup) -> f64 {
-    LATTICE_SPEED * setup.grid.spacing * 1.0e-3 / setup.wind.speed
+    LATTICE_SPEED * setup.grid.spacing * 1.0e-3 / setup.speed
 }
 
 fn steps(setup: &Setup, spec: &Spec) -> (usize, usize, usize) {
     let pass = setup.pass();
     let through = (setup.grid.size[WIND] as f64 / LATTICE_SPEED) as usize;
-    let average = (spec.average.unwrap_or(40.0) * pass as f64) as usize;
+    let most = if setup.spins.is_empty() { 40.0 } else { 160.0 };
+    let average = (spec.average.unwrap_or(most) * pass as f64) as usize;
     (2 * pass, through, average.max(1))
 }
 
@@ -308,8 +397,19 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         half: spec.half,
         ..Domain::new(size)
     };
+    if !setup.spins.is_empty()
+        && spec
+            .thermal
+            .iter()
+            .any(|b| matches!(b, super::fem::thermal::Boundary::Flux { .. }))
+    {
+        bail!("`heat` with a part that spins is not supported yet");
+    }
     let mut unseen = Vec::new();
     for (k, part) in setup.parts.iter().enumerate() {
+        if setup.spun(k).is_some() {
+            continue;
+        }
         let points: Vec<Point3> = part.points.iter().map(|&p| setup.to_lattice(p)).collect();
         let placed = place_surface(
             &mut domain,
@@ -340,6 +440,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         }
     }
     let speed = LATTICE_SPEED;
+    let inflow = speed * setup.wind.speed / setup.speed;
     let mut seed = 0x2545_f491_4f6c_dd1du64;
     let mut noise = || {
         seed ^= seed << 13;
@@ -354,22 +455,74 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             if domain.flags[inlet] == WALL {
                 continue;
             }
-            domain.flags[inlet] = INLET;
             domain.flags[outlet] = OUTLET;
-            let velocity = [
-                0.02 * speed * noise(),
-                0.02 * speed * noise(),
-                speed * (1.0 + 0.02 * noise()),
-            ];
-            domain.inflow.push((inlet, domain.at(x, y, 1), velocity));
             domain.outflow.push((outlet, domain.at(x, y, last - 1)));
+            if inflow > 0.0 {
+                domain.flags[inlet] = INLET;
+                let velocity = [
+                    0.02 * inflow * noise(),
+                    0.02 * inflow * noise(),
+                    inflow * (1.0 + 0.02 * noise()),
+                ];
+                domain.inflow.push((inlet, domain.at(x, y, 1), velocity));
+            } else {
+                domain.flags[inlet] = OUTLET;
+                domain.outflow.push((inlet, domain.at(x, y, 1)));
+            }
         }
     }
-    let inlets: Vec<usize> = domain.inflow.iter().map(|i| i.0).collect();
+    if inflow == 0.0 && spec.duct.is_none() {
+        let [nx, ny, _] = size;
+        for z in 1..last {
+            for y in 0..ny {
+                for x in 0..nx {
+                    if x != 0 && y != 0 && x != nx - 1 && y != ny - 1 {
+                        continue;
+                    }
+                    let cell = domain.at(x, y, z);
+                    if domain.flags[cell] == WALL {
+                        continue;
+                    }
+                    let inward = |v: usize, n: usize| v.clamp(1, n - 2);
+                    domain.flags[cell] = OUTLET;
+                    domain
+                        .outflow
+                        .push((cell, domain.at(inward(x, nx), inward(y, ny), z)));
+                }
+            }
+        }
+    }
+    let inlets: Vec<usize> = if inflow > 0.0 {
+        domain.inflow.iter().map(|i| i.0).collect()
+    } else {
+        domain.outflow.iter().map(|o| o.0).collect()
+    };
     let sealed = domain.seal(&inlets);
     domain.cuts.clear();
+    let step = step_seconds(&setup);
+    for (k, part) in setup.parts.iter().enumerate() {
+        let Some(s) = setup.spun(k) else { continue };
+        let spin = &setup.spins[s];
+        let points: Vec<Point3> = part.points.iter().map(|&p| setup.to_lattice(p)).collect();
+        let axis = setup.to_lattice(Point3::from_vec(spin.axis)).to_vec();
+        let rotor = crate::flow::rotor::rotor(
+            &mut domain,
+            &setup.grid,
+            (&points, &part.triangles),
+            k as u16 + 1,
+            crate::flow::rotor::Axle {
+                centre: setup.to_lattice(spin.through),
+                axis,
+                omega: spin.omega * step,
+            },
+        );
+        if !rotor.solid.iter().any(|&s| s) {
+            unseen.push(part.name.clone());
+        }
+        domain.rotors.push(rotor);
+    }
     let dx = setup.grid.spacing * 1.0e-3;
-    let viscosity = air.1 * speed / (setup.wind.speed * dx);
+    let viscosity = air.1 * speed / (setup.speed * dx);
     let ambient = spec.ambient.unwrap_or(20.0);
     let heating = heating(
         spec,
@@ -380,8 +533,12 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         air,
     )?;
     let mut settings = Settings {
-        sponge: (0.5 * setup.across / setup.grid.spacing).min(40.0),
-        stream: [0.0, 0.0, speed],
+        sponge: if inflow > 0.0 {
+            (0.5 * setup.across / setup.grid.spacing).min(40.0)
+        } else {
+            0.0
+        },
+        stream: [0.0, 0.0, inflow],
         sponge_axis: WIND,
         smagorinsky: 0.14,
         bulk: 0.1,
@@ -396,9 +553,10 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let (ramp, settle, average) = steps(&setup, spec);
     for k in 1..=20 {
         settings.inflow = k as f64 / 20.0;
+        lattice.throttle(settings.inflow);
         lattice.run(&settings, ramp.div_ceil(20))?;
     }
-    let velocity_scale = setup.wind.speed / speed;
+    let velocity_scale = setup.speed / speed;
     let early = settle * 2 / 3;
     lattice.run(&settings, early)?;
     let every_settle = (setup.pass() / 20).clamp(1, 200);
@@ -427,6 +585,51 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     let batch = (BATCH_PASSES * setup.pass()).div_ceil(every).max(1);
     let links = lattice.links.clone();
     let mut sums = vec![[0.0f64; 4]; links.len()];
+    let dx = setup.grid.spacing * 1.0e-3;
+    let force_scale = air.0 * velocity_scale * velocity_scale * dx * dx;
+    let arms: Vec<Option<(usize, [f64; 3])>> = links
+        .iter()
+        .map(|link| {
+            let s = setup.spun(link[1] as usize - 1)?;
+            let spin = &setup.spins[s];
+            let lever = centre(&setup, link[0] as usize) - spin.through;
+            Some((
+                s,
+                [0, 1, 2].map(|d| lever.cross(setup.axes[d]).dot(spin.axis) * 1.0e-3),
+            ))
+        })
+        .collect();
+    let spin_torques = |values: &[[f32; 4]]| {
+        let mut torques = vec![0.0; setup.spins.len()];
+        for (arm, v) in arms.iter().zip(values) {
+            if let Some((s, arm)) = arm {
+                torques[*s] -= force_scale * (0..3).map(|d| arm[d] * v[d] as f64).sum::<f64>();
+            }
+        }
+        torques
+    };
+    let mut flows: Vec<f64> = Vec::new();
+    let discs: Vec<(usize, usize, Vec<bool>)> = setup
+        .spins
+        .iter()
+        .enumerate()
+        .filter(|(_, spin)| spin.axis.dot(setup.axes[WIND]).abs() > 0.999)
+        .map(|(k, spin)| {
+            let middle = setup.to_lattice(spin.middle);
+            let index = (((middle[WIND] - setup.grid.origin[WIND]) / setup.grid.spacing).round()
+                as usize)
+                .min(size[WIND] - 1);
+            let mask = (0..size[SIDE] * size[UP])
+                .map(|c| {
+                    let p = setup.grid.centre(c % size[SIDE], c / size[SIDE], index);
+                    let (a, b) = (p[SIDE] - middle[SIDE], p[UP] - middle[UP]);
+                    (a * a + b * b).sqrt() <= spin.reach
+                })
+                .collect();
+            (k, index, mask)
+        })
+        .collect();
+    let mut disc_flows: Vec<Vec<f64>> = vec![Vec::new(); discs.len()];
     let cut = |axis: usize| {
         (((setup.centre[axis] - setup.grid.origin[axis]) / setup.grid.spacing).round() as usize)
             .min(size[axis] - 1)
@@ -440,8 +643,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         })
         .collect();
     let frame_every = samples.div_ceil(FRAMES).max(1);
-    let top = 1.6 * setup.wind.speed;
-    let to_speed = setup.wind.speed / speed;
+    let top = 1.6 * setup.speed;
+    let to_speed = setup.speed / speed;
+    if !setup.spins.is_empty() {
+        lattice.sum_forces();
+    }
     let mut pending: Option<Ticked> = None;
     let mut drags: Vec<f64> = Vec::new();
     let mut temperatures: Vec<f64> = Vec::new();
@@ -462,6 +668,14 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                     snapshot: (framed && !seeds.is_empty()).then(|| lattice.request_snapshot()),
                     links: lattice.request_links(),
                     probes: lattice.request_probes(),
+                    outflow: spec
+                        .duct
+                        .is_some()
+                        .then(|| lattice.request_plane(WIND, size[WIND] - 2)),
+                    discs: discs
+                        .iter()
+                        .map(|d| lattice.request_plane(WIND, d.1))
+                        .collect(),
                     framed,
                 })
             })
@@ -514,7 +728,38 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             );
         }
         let values = lattice.take_links(ready.links)?;
-        drags.push(values.iter().map(|v| v[WIND] as f64).sum());
+        drags.push(match spin_torques(&values).first() {
+            Some(&torque) => torque,
+            None => values.iter().map(|v| v[WIND] as f64).sum(),
+        });
+        for ((series, disc), plane) in disc_flows.iter_mut().zip(&discs).zip(ready.discs) {
+            let (_, plane) = lattice.take_plane(plane)?;
+            let sign = setup.spins[disc.0].axis.dot(setup.axes[WIND]).signum();
+            series.push(
+                sign * plane
+                    .iter()
+                    .zip(&disc.2)
+                    .filter(|(v, inside)| **inside && v[3] > 0.0)
+                    .map(|(v, _)| v[2] as f64)
+                    .sum::<f64>()
+                    * velocity_scale
+                    * dx
+                    * dx,
+            );
+        }
+        if let Some(outflow) = ready.outflow {
+            let (_, plane) = lattice.take_plane(outflow)?;
+            flows.push(
+                plane
+                    .iter()
+                    .filter(|v| v[3] > 0.0)
+                    .map(|v| v[2] as f64)
+                    .sum::<f64>()
+                    * velocity_scale
+                    * dx
+                    * dx,
+            );
+        }
         for (sum, value) in sums.iter_mut().zip(values) {
             for d in 0..4 {
                 sum[d] += value[d] as f64;
@@ -533,6 +778,11 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             && (heating.is_none()
                 || standard_error(&temperatures, batch).is_some_and(|e| e <= TARGET_ERROR)
                     && settled(&temperatures))
+            && disc_flows.iter().chain([&flows]).all(|series| {
+                series.is_empty()
+                    || standard_error(series, batch).is_some_and(|e| e <= TARGET_ERROR)
+                        && settled(series)
+            })
         {
             converged = Some(error);
         }
@@ -564,7 +814,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
                     let n = a[4];
                     let m = [a[0] / n, a[1] / n, a[2] / n];
                     let spread = a[3] / n - (m[0] * m[0] + m[1] * m[1] + m[2] * m[2]);
-                    spread.max(0.0).sqrt() * velocity_scale / setup.wind.speed
+                    spread.max(0.0).sqrt() * velocity_scale / setup.speed
                 })
                 .fold(0.0, f64::max);
             stream.turbulence = (stream.turbulence * 1000.0).round() / 1000.0;
@@ -654,7 +904,6 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         )
         .collect::<Vec<_>>();
     let means: Vec<[f64; 4]> = sums.iter().map(|s| s.map(|v| v / samples as f64)).collect();
-    let force_scale = air.0 * velocity_scale * velocity_scale * dx * dx;
     let pressure_scale = air.0 * velocity_scale * velocity_scale / 3.0;
     let n = setup.parts.len();
     let mut forces = vec![Vector3::zero(); n];
@@ -675,13 +924,53 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         reading("drag", along(total, WIND), "N", "along the wind"),
         reading("side", along(total, SIDE), "N", "across the wind, level"),
         reading("lift", along(total, UP), "N", "across the wind, up"),
-        reading(
+    ];
+    if q > 0.0 {
+        readings.push(reading(
             "cda",
             along(total, WIND) / q,
             "m²",
             "drag over the dynamic pressure",
-        ),
-    ];
+        ));
+    }
+    let mean_values: Vec<[f32; 4]> = means.iter().map(|m| m.map(|v| v as f32)).collect();
+    for (spin, torque) in setup.spins.iter().zip(spin_torques(&mean_values)) {
+        let thrust: f64 = spin.parts.iter().map(|&k| forces[k].dot(spin.axis)).sum();
+        readings.push(reading(
+            &format!("{}.torque", spin.joint),
+            torque,
+            "N·m",
+            "to keep it turning, about the joint axis",
+        ));
+        readings.push(reading(
+            &format!("{}.power", spin.joint),
+            torque * spin.omega,
+            "W",
+            "the shaft power it takes",
+        ));
+        readings.push(reading(
+            &format!("{}.thrust", spin.joint),
+            thrust,
+            "N",
+            "the air's push on it along the joint axis",
+        ));
+    }
+    for (disc, series) in discs.iter().zip(&disc_flows) {
+        readings.push(reading(
+            &format!("{}.flow", setup.spins[disc.0].joint),
+            series.iter().sum::<f64>() / series.len().max(1) as f64,
+            "m³/s",
+            "through the disc its blades sweep, along the joint axis",
+        ));
+    }
+    if !flows.is_empty() {
+        readings.push(reading(
+            "flow",
+            flows.iter().sum::<f64>() / flows.len() as f64,
+            "m³/s",
+            "along the duct, through its far end",
+        ));
+    }
     let about = setup.wind.about;
     for (d, axis) in ["x", "y", "z"].iter().enumerate() {
         readings.push(reading(
@@ -860,13 +1149,25 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     }
     if let Some(error) = error {
         notes.push(format!(
-            "the mean drag is known to {:.1}% (standard error over batches of {BATCH_PASSES} passes){}",
+            "the mean {} is known to {:.1}% (standard error over batches of {BATCH_PASSES} passes){}",
+            match setup.spins.first() {
+                Some(spin) => format!("torque on {}", spin.joint),
+                None => "drag".to_string(),
+            },
             100.0 * error,
             if converged.is_some() {
                 format!(", so averaging stopped after {:.0} passes", (samples * every) as f64 / setup.pass() as f64)
             } else {
                 String::new()
             }
+        ));
+    }
+    for spin in &setup.spins {
+        notes.push(format!(
+            "{} turns at {} rpm, {} turns over the run; its cells are redrawn every step and the blades are a staircase of cells",
+            spin.joint,
+            crate::plot::label(spin.omega * 60.0 / std::f64::consts::TAU),
+            crate::plot::label((spin.omega * total_steps as f64 * step_seconds(&setup) / std::f64::consts::TAU * 10.0).round() / 10.0),
         ));
     }
     if sealed > 0 {
@@ -1080,7 +1381,7 @@ fn streamlines(
 
 fn disturbed(stream: &super::Stream, setup: &Setup) -> bool {
     let slowest = stream.speed.iter().copied().fold(f64::INFINITY, f64::min);
-    slowest < 0.85 * setup.wind.speed
+    slowest < 0.85 * setup.speed
 }
 
 #[derive(Default)]
@@ -1098,6 +1399,8 @@ struct Ticked {
     snapshot: Option<crate::flow::lattice::PendingSnapshot>,
     links: crate::flow::lattice::PendingLinks,
     probes: crate::flow::lattice::PendingProbes,
+    outflow: Option<crate::flow::lattice::PendingPlane>,
+    discs: Vec<crate::flow::lattice::PendingPlane>,
     framed: bool,
 }
 
