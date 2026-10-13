@@ -38,6 +38,8 @@ fn evaluate(path: &std::path::Path, vars: &[(String, f64)]) -> Program {
     }
 }
 
+type Locks = (SceneKey, Vec<f64>, Vec<Option<String>>);
+
 #[derive(Clone, PartialEq)]
 struct SceneKey {
     generation: u64,
@@ -54,7 +56,7 @@ struct Shown {
     joints: Vec<Joint>,
     rig: Rig,
     explode: Vec<(String, monstertruck::modeling::Vector3)>,
-    solids: Vec<(String, Solid)>,
+    solids: Arc<Vec<(String, Solid)>>,
     assembly: bool,
     built: Duration,
     field: Option<Arc<crate::sim::statics::FieldView>>,
@@ -255,6 +257,8 @@ pub struct App {
     focus: Option<Focus>,
     clashes: Option<Result<Vec<String>, ()>>,
     clash_job: Option<Receiver<Vec<String>>>,
+    locks: Option<Locks>,
+    lock_job: Option<Receiver<Locks>>,
     browser: Option<Picker>,
     frames: std::collections::VecDeque<Instant>,
     editing: bool,
@@ -806,6 +810,8 @@ impl App {
             focus: None,
             clashes: None,
             clash_job: None,
+            locks: None,
+            lock_job: None,
             browser: None,
             frames: std::collections::VecDeque::new(),
             editing: WEB,
@@ -928,6 +934,16 @@ impl App {
                     self.clashes = Some(Err(()));
                     self.clash_job = None;
                 }
+            }
+        }
+        if let Some(rx) = &self.lock_job {
+            match rx.try_recv() {
+                Ok(locks) => {
+                    self.locks = Some(locks);
+                    self.lock_job = None;
+                }
+                Err(TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(50)),
+                Err(TryRecvError::Disconnected) => self.lock_job = None,
             }
         }
         if let Some((rx, ..)) = &self.sim_job {
@@ -2022,6 +2038,31 @@ impl App {
             return;
         }
         let mut check = false;
+        let key = self.shown.as_ref().map(|s| s.key.clone());
+        let current = self
+            .locks
+            .as_ref()
+            .filter(|(k, values, _)| Some(k) == key.as_ref() && *values == self.joint_values);
+        if current.is_none()
+            && self.lock_job.is_none()
+            && let Some(key) = key
+        {
+            let (tx, rx) = channel();
+            let ctx = ui.ctx().clone();
+            let rig = rig.clone();
+            let values = self.joint_values.clone();
+            crate::host::spawn(move || {
+                let locks = locked_joints(&rig, &values);
+                let _ = tx.send((key, values, locks));
+                crate::host::wake(&ctx);
+            });
+            self.lock_job = Some(rx);
+        }
+        let locks: Vec<Option<String>> = self
+            .locks
+            .as_ref()
+            .map(|(_, _, locks)| locks.clone())
+            .unwrap_or_default();
         card(
             ui,
             None,
@@ -2034,22 +2075,8 @@ impl App {
                         continue;
                     }
                     let (low, high) = joint.range;
-                    let step = match joint.kind {
-                        JointKind::Turn { .. } => 0.5,
-                        _ => 0.05,
-                    };
                     let driver = rig.driver_of(&joint.name).map(|c| c.driver.clone());
-                    let nudged = |delta: f64| {
-                        let to = (self.joint_values[i] + delta).clamp(low, high);
-                        (to != self.joint_values[i])
-                            .then(|| rig.drive(&self.joint_values, i, to).err())
-                    };
-                    let stuck = match (nudged(step), nudged(-step)) {
-                        (Some(Some(why)), Some(Some(_)))
-                        | (Some(Some(why)), None)
-                        | (None, Some(Some(why))) => Some(why),
-                        _ => None,
-                    };
+                    let stuck = locks.get(i).cloned().flatten();
                     Line::new()
                         .legend(&joint.name)
                         .note(format!("{} on {}", joint.child, joint.parent))
@@ -2101,7 +2128,7 @@ impl App {
                 let bare: Vec<&Solid> = solids.iter().map(|(_, s)| s).collect();
                 let meshes: Vec<geometry::Meshed> = geometry::meshed_all(&bare)
                     .into_iter()
-                    .zip(&solids)
+                    .zip(solids.iter())
                     .map(|(mesh, (name, _))| match moved.get(name) {
                         Some(m) => mesh.transformed(*m),
                         None => mesh,
@@ -3286,7 +3313,7 @@ fn field_shown(view: &crate::sim::statics::FieldView, key: SceneKey) -> Shown {
         joints: Vec::new(),
         rig: Rig::default(),
         explode: Vec::new(),
-        solids: Vec::new(),
+        solids: Arc::default(),
         assembly: false,
         built: Duration::ZERO,
         field: Some(Arc::new(view.clone())),
@@ -3391,7 +3418,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey, vars: &[(String, f64)]) -> Op
         joints: model.joints.clone(),
         rig: model.rig(),
         explode: model.explode.clone(),
-        solids,
+        solids: Arc::new(solids),
         assembly: model.assembly,
         built: Duration::ZERO,
         field: None,
@@ -3507,6 +3534,37 @@ fn exploded(
         Some(by) => Matrix4::from_translation(by * scale) * moved,
         None => moved,
     }
+}
+
+fn locked_joints(rig: &Rig, values: &[f64]) -> Vec<Option<String>> {
+    rig.joints
+        .iter()
+        .enumerate()
+        .map(|(i, joint)| {
+            let (low, high) = joint.range;
+            if !joint.movable()
+                || low >= high
+                || i >= values.len()
+                || rig.driver_of(&joint.name).is_some()
+            {
+                return None;
+            }
+            let step = match joint.kind {
+                JointKind::Turn { .. } => 0.5,
+                _ => 0.05,
+            };
+            let nudged = |delta: f64| {
+                let to = (values[i] + delta).clamp(low, high);
+                (to != values[i]).then(|| rig.drive(values, i, to).err())
+            };
+            match (nudged(step), nudged(-step)) {
+                (Some(Some(why)), Some(Some(_)))
+                | (Some(Some(why)), None)
+                | (None, Some(Some(why))) => Some(why),
+                _ => None,
+            }
+        })
+        .collect()
 }
 
 #[cfg(test)]
