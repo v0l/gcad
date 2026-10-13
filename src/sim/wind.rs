@@ -420,7 +420,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     );
     let started = crate::host::Instant::now();
     let mut done = 0;
-    let chunk_of = (setup.pass() / 20).clamp(1, 200);
+    let chunk_of = 200;
     for k in 1..=20 {
         settings.inflow = k as f64 / 20.0;
         let mut left = ramp.div_ceil(20);
@@ -444,7 +444,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         done += chunk;
         settling.progress(done as f64, || rate(done, started));
     }
-    let every_settle = chunk_of;
+    let every_settle = (setup.pass() / 20).clamp(1, 200);
     let mut left = settle - early;
     while left > 0 {
         let chunk = left.min(every_settle);
