@@ -27,6 +27,9 @@ export and `bom` the `.gasm`, not a part file. A part file holds one part, or se
 bodies when they share sizes, like a box and the lid that fits it; the `.gasm` brings each in as
 `part.body`. Sketch and solid operations are errors in a `.gasm`, joints are errors in a
 `.gcad`.
+Split a big design into sub-assemblies: `part az drive.gasm` brings one in with its parts,
+joints and axes as `az.spindle`, `az.spin`, `az.wa`; `move az x,y,z` and `rotate az ...` place it
+whole, and a `.gsim` can simulate the sub-assembly's file on its own.
 
 ## Installing
 

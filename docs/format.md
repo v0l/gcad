@@ -289,10 +289,10 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 
 | operation | parameters | does |
 |---|---|---|
-| `part` | `name file.gcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.gasm` file brings in its parts and joints too. A `.step` file brings in each solid where the file places it, named after its product (`box`, `pin`, `pin_2`, ...), and the bill of materials counts repeats of one product together. Units and unreadable solids are handled as for `import`; a KiCad or agentee board export comes in whole, its components in place |
+| `part` | `name file.gcad` `body=` `variable=value ...` | runs a part file with those variables fixed and brings in its bodies; one body is called `name`, several are `name.body`; `body=` takes just that one. A `.gasm` file brings in its parts, joints and axes too, as a sub-assembly: `az.spindle`, `pose az.spin`, `about=az.wa`. A `.step` file brings in each solid where the file places it, named after its product (`box`, `pin`, `pin_2`, ...), and the bill of materials counts repeats of one product together. Units and unreadable solids are handled as for `import`; a KiCad or agentee board export comes in whole, its components in place |
 | `part` | `name kind:size` | brings in a standard part, see below |
-| `move` | `part x,y,z` | moves a part and everything jointed to it |
-| `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it |
+| `move` | `part x,y,z` | moves a part and everything jointed to it; given a sub-assembly's name (`az` for `part az drive.gasm`) or a multi-body part's, moves all of its parts and its axes |
+| `rotate` | `part angle` `axis=x\|y\|z\|name` `about=x,y,z` | turns a part and everything jointed to it, or a whole sub-assembly as for `move` |
 | `axis` | `name x,y,z x,y,z` | names a line for joints and `rotate` |
 | `joint` | `name child parent turn about=axis` or `slide along=x,y,z`, `min=` `max=` `at=` `drag=` | joins two parts; a `turn` joint spins the child about a datum `axis` by degrees, a `slide` joint moves it along a direction by millimetres; `at` poses it now; `drag` is the friction that resists it, in N·m (N on a slide): bearings and seals, which `sim torque` adds to the torque to drive it |
 | `pose` | `joint value` | moves a joint to a new value |

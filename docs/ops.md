@@ -221,7 +221,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | distance mate | supported | `distance b:rod.side a:rod.side 50` | `assembly::distance_between_axes` |
 | tangent mate | supported | `tangent rod:rod.side plate:plate.end` | `assembly::tangent_lays_a_rod_on_a_plate` |
 | mates hold parts together | supported | a screw mated to lid and box stops the hinge | `assembly::a_screw_locks_the_hinge` |
-| sub-assemblies | supported | `part kit boxed.gasm` keeps its joints and mates | `assembly::a_sub_assembly_keeps_its_mates` |
+| sub-assemblies | supported | `part kit boxed.gasm` keeps its joints, mates and axes; `move kit 50,0,0` moves it whole | `assembly::a_sub_assembly_keeps_its_mates`, `assembly::a_sub_assembly_moves_as_one` |
 | check holes line up | supported | `aligned lid:screws.side box:pilot.side tol=0.05` | `assembly::holes_line_up` |
 | turning joint | supported | `joint open box.lid box.main turn about=hinge at=-90` | `assembly::hinge_opens_the_lid` |
 | sliding joint | supported | `joint pull chest.drawer chest.main slide along=0,-1,0 max=30` | `assembly::slide_moves_a_drawer` |

@@ -609,13 +609,39 @@ impl Model {
     }
 
     fn move_subtree(&mut self, root: &str, transform: Matrix4) -> Result<Vec<String>> {
-        let moving = subtree(&self.joints, root);
+        self.move_group(&[root.to_string()], root, transform)
+    }
+
+    fn move_group(
+        &mut self,
+        roots: &[String],
+        group: &str,
+        transform: Matrix4,
+    ) -> Result<Vec<String>> {
+        let mut moving: Vec<String> = Vec::new();
+        for root in roots {
+            for body in subtree(&self.joints, root) {
+                if !moving.contains(&body) {
+                    moving.push(body);
+                }
+            }
+        }
         for body in &moving {
             self.move_body(body, transform)?;
         }
         for other in self.joints.iter_mut() {
             if moving.contains(&other.parent) {
                 *other = other.moved(transform);
+            }
+        }
+        let owned = |axis: &str| {
+            axis.starts_with(&format!("{group}."))
+                || moving.iter().any(|b| axis.starts_with(&format!("{b}.")))
+        };
+        for (name, (through, along)) in self.axes.iter_mut() {
+            if owned(name) {
+                *through = transform.transform_point(*through);
+                *along = transform.transform_vector(*along).normalize();
             }
         }
         Ok(moving)
@@ -794,6 +820,9 @@ impl Model {
                 });
             }
         }
+        for (axis, line) in &loaded.axes {
+            self.axes.insert(format!("{name}.{axis}"), *line);
+        }
         for couple in &loaded.couples {
             let ours = |joint: &str| {
                 loaded.joints.iter().any(|j| {
@@ -872,11 +901,26 @@ impl Model {
             .positional
             .first()
             .ok_or_else(|| anyhow!("name the part to move"))?;
-        if !self.body_names().contains(name) {
-            bail!("no part called `{name}`; parts are {:?}", self.body_names());
+        let names = self.body_names();
+        let roots: Vec<String> = if names.contains(name) {
+            vec![name.clone()]
+        } else {
+            let prefix = format!("{name}.");
+            names
+                .iter()
+                .filter(|n| n.starts_with(&prefix))
+                .cloned()
+                .collect()
+        };
+        if roots.is_empty() {
+            bail!("no part or sub-assembly called `{name}`; parts are {names:?}");
         }
-        let moved = self.move_subtree(name, transform)?;
-        Ok(format!("moved {}", moved.join(", ")))
+        let moved = self.move_group(&roots, name, transform)?;
+        Ok(if moved.len() > 12 {
+            format!("moved {} parts", moved.len())
+        } else {
+            format!("moved {}", moved.join(", "))
+        })
     }
 
     fn op_explode(&mut self, line: &Line) -> Result<String> {
@@ -1121,7 +1165,9 @@ impl Model {
         let ratio = args.optional_number("ratio", &self.scope)?.unwrap_or(1.0);
         let (efficiency, back) = self.couple_losses(&args)?;
         let lead = args.optional_number("lead", &self.scope)?;
-        let friction = args.optional_number("friction", &self.scope)?.unwrap_or(0.0);
+        let friction = args
+            .optional_number("friction", &self.scope)?
+            .unwrap_or(0.0);
         let mesh = self.couple_mesh(&args, lead.is_some(), ratio)?;
         let geometry = mesh.as_ref().map_or(String::new(), |mesh| {
             let teeth = mesh.teeth * ratio.abs();

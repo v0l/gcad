@@ -7,6 +7,9 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Sub-assemblies move as one: `move az 0,0,10` and `rotate az ...` take a sub-assembly's name
+  (or a multi-body part's) and move all its parts, and its axes come in as `az.axis` for joints
+  in the parent.
 - Remote simulations: `gcad sim x.gsim --remote` builds the model locally, sends the built
   bodies, materials and selected faces to a paid GPU worker at sims.gcad.sh and writes the
   result beside the spec. `gcad remote signup|login|account|runners|jobs|cancel` manage the

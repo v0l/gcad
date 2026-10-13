@@ -333,6 +333,39 @@ fn a_sub_assembly_keeps_its_mates() {
     assert!(error.contains("pull apart"), "{error}");
 }
 
+#[test]
+fn a_sub_assembly_moves_as_one() {
+    let parts = [
+        ("block.gcad", "rect 20 20\nb: extrude 10\n"),
+        ("pin.gcad", "circle 5\np: extrude 30\n"),
+        (
+            "drive.gasm",
+            "part base block.gcad\npart pin pin.gcad\naxis a 0,0,0 0,0,1\njoint spin pin base turn about=a\n",
+        ),
+    ];
+    let (model, _) = built(
+        "a_sub_assembly_moves_as_one",
+        "part az drive.gasm\nmove az 50,0,0\npart arm pin.gcad\nmove arm 10,0,0\njoint swing arm az.base turn about=az.a\npose swing 90\n",
+        &parts,
+    );
+    let base = extent(&model, "az.base");
+    assert!(
+        near(base.min().x, 40.0) && near(base.max().x, 60.0),
+        "{base:?}"
+    );
+    let pin = extent(&model, "az.pin");
+    assert!(near((pin.min().x + pin.max().x) / 2.0, 50.0), "{pin:?}");
+    let arm = extent(&model, "arm");
+    let centre = (
+        (arm.min().x + arm.max().x) / 2.0,
+        (arm.min().y + arm.max().y) / 2.0,
+    );
+    assert!(
+        near(centre.0, 50.0) && near(centre.1, -40.0),
+        "the arm swings about the moved axis: {centre:?}"
+    );
+}
+
 const SLAB: &str = "rect 100 100\nplate: extrude 10\n";
 const ROD: &str = "circle 5\nrod: extrude 40\n";
 
