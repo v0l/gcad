@@ -1,4 +1,5 @@
 pub mod fem;
+pub mod magnetic;
 mod heat;
 pub mod mesh;
 mod result;
