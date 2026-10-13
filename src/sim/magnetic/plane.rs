@@ -144,7 +144,7 @@ impl Builder {
 
 pub fn mesh(layout: &Layout) -> Result<Plane> {
     let size = layout.size;
-    if !(size > 0.0) || !(layout.outer > 0.0) {
+    if size.is_nan() || size <= 0.0 || layout.outer.is_nan() || layout.outer <= 0.0 {
         bail!("the slice needs a positive element size and air radius");
     }
     let reach = layout

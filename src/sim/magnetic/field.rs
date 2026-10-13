@@ -69,9 +69,9 @@ pub fn solve(plane: &Plane, shapes: &[Shape], step: i64) -> Result<Field> {
     let mut dof: Vec<Option<usize>> = vec![None; n];
     let copied: std::collections::HashSet<usize> = plane.copies.iter().map(|c| c.0).collect();
     let mut count = 0;
-    for i in 0..n {
+    for (i, slot) in dof.iter_mut().enumerate() {
         if !copied.contains(&i) {
-            dof[i] = Some(count);
+            *slot = Some(count);
             count += 1;
         }
     }
@@ -86,7 +86,7 @@ pub fn solve(plane: &Plane, shapes: &[Shape], step: i64) -> Result<Field> {
         .iter()
         .map(|&t| element(&points, t))
         .collect();
-    if elements.iter().any(|e| !(e.area > 0.0)) {
+    if elements.iter().any(|e| e.area.is_nan() || e.area <= 0.0) {
         bail!("the slice mesh has a flat triangle");
     }
     let section = areas(plane, shapes.len());
@@ -119,8 +119,8 @@ pub fn solve(plane: &Plane, shapes: &[Shape], step: i64) -> Result<Field> {
     let gradient = |e: &Element, a: &[f64]| -> [f64; 2] {
         let mut g = [0.0; 2];
         for (local, &v) in e.nodes.iter().enumerate() {
-            for d in 0..2 {
-                g[d] += a[v] * e.gradients[local][d];
+            for (sum, part) in g.iter_mut().zip(e.gradients[local]) {
+                *sum += a[v] * part;
             }
         }
         g
