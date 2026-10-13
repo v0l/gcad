@@ -263,6 +263,9 @@ pub struct App {
     sim_job: Option<SimJob>,
     sim_error: Option<String>,
     sim_every_part: bool,
+    sim_notes: bool,
+    activity: Arc<Mutex<SimProgress>>,
+    _listening: crate::progress::Listening,
 }
 
 const WEB: bool = cfg!(target_arch = "wasm32");
@@ -281,6 +284,23 @@ struct SimProgress {
 struct StageRow {
     report: crate::progress::Report,
     inside: Option<crate::progress::Report>,
+    seen: Instant,
+}
+
+impl StageRow {
+    fn elapsed(&self) -> Duration {
+        if self.report.finished {
+            self.report.elapsed
+        } else {
+            self.seen.elapsed()
+        }
+    }
+
+    fn remaining(&self) -> Option<Duration> {
+        let mut report = self.report.clone();
+        report.elapsed = self.elapsed();
+        report.remaining()
+    }
 }
 
 impl SimProgress {
@@ -311,6 +331,7 @@ impl SimProgress {
             None => self.rows.push(StageRow {
                 report: report.clone(),
                 inside: None,
+                seen: Instant::now() - report.elapsed,
             }),
         }
     }
@@ -328,7 +349,7 @@ impl SimProgress {
             stage_row(
                 ui,
                 &row.report.name(),
-                &crate::progress::duration(row.report.elapsed),
+                &crate::progress::duration(row.elapsed()),
                 OK,
             );
         }
@@ -337,7 +358,7 @@ impl SimProgress {
             let fraction = report.fraction();
             let right = match fraction {
                 Some(f) => format!("{:.0}%", f * 100.0),
-                None => crate::progress::duration(report.elapsed),
+                None => crate::progress::duration(row.elapsed()),
             };
             stage_row(ui, &report.name(), &right, TRACE);
             progress(
@@ -357,9 +378,9 @@ impl SimProgress {
                 }
                 None => report.summary(),
             };
-            let when = match report.remaining() {
+            let when = match row.remaining() {
                 Some(left) => format!("about {} left", crate::progress::duration(left)),
-                None => format!("{} so far", crate::progress::duration(report.elapsed)),
+                None => format!("{} so far", crate::progress::duration(row.elapsed())),
             };
             let text = match what {
                 Some(what) => format!("{when}; {what}"),
@@ -370,6 +391,7 @@ impl SimProgress {
                 .size(11.0)
                 .elided(ui)
                 .on_hover_text(text);
+            ui.ctx().request_repaint_after(Duration::from_millis(250));
         }
     }
 }
@@ -387,101 +409,231 @@ fn stage_row(ui: &mut Ui, name: &str, right: &str, mark: egui::Color32) {
     });
 }
 
-type Group<'a> = (&'a str, Vec<&'a crate::sim::Reading>);
+type Vector = (String, String, Vec<(String, String)>);
 
-fn tail(r: &crate::sim::Reading) -> String {
-    r.name.split_once('.').map_or("", |(_, t)| t).to_string()
+#[derive(Debug, PartialEq)]
+struct ReadingsLayout {
+    tiles: Vec<(String, String)>,
+    vectors: Vec<Vector>,
+    columns: Vec<String>,
+    rows: Vec<(String, Vec<Option<String>>)>,
+    total: usize,
 }
 
-fn reading_groups(readings: &[crate::sim::Reading]) -> (Vec<Group<'_>>, Vec<Group<'_>>) {
-    let mut groups: Vec<Group> = Vec::new();
-    for reading in readings {
-        if let Some((head, _)) = reading.name.split_once('.') {
+type Labelled<'a> = (String, Vec<(String, &'a crate::sim::Reading)>);
+
+fn layout_readings(readings: &[crate::sim::Reading], few: Option<usize>) -> ReadingsLayout {
+    use crate::sim::Reading;
+    let short = crate::sim::short;
+    let split = |r: &Reading| {
+        r.name
+            .rsplit_once('.')
+            .map(|(h, t)| (h.to_string(), t.to_string()))
+    };
+    let mut groups: Vec<Labelled> = Vec::new();
+    for r in readings {
+        if let Some((head, tail)) = split(r) {
             match groups.iter_mut().find(|(h, _)| *h == head) {
-                Some((_, list)) => list.push(reading),
-                None => groups.push((head, vec![reading])),
+                Some((_, list)) => list.push((tail, r)),
+                None => groups.push((head, vec![(tail, r)])),
             }
         }
     }
-    let vector = |list: &[&crate::sim::Reading]| {
+    let vector = |list: &[(String, &Reading)]| {
         list.iter()
-            .all(|r| matches!(tail(r).as_str(), "x" | "y" | "z"))
+            .all(|(t, _)| matches!(t.as_str(), "x" | "y" | "z"))
     };
-    let (vectors, mut parts): (Vec<Group>, Vec<Group>) =
-        groups.into_iter().partition(|(_, list)| vector(list));
-    parts.sort_by(|a, b| b.1[0].value.abs().total_cmp(&a.1[0].value.abs()));
-    (vectors, parts)
+    let mut tiles = Vec::new();
+    let with_unit = |r: &Reading| format!("{} {}", short(r.value), r.unit).trim().to_string();
+    for r in readings {
+        if split(r).is_none() && !groups.iter().any(|(h, list)| *h == r.name && !vector(list)) {
+            tiles.push((r.name.clone(), with_unit(r)));
+        }
+    }
+    let vectors = groups
+        .iter()
+        .filter(|(_, list)| vector(list))
+        .map(|(head, list)| {
+            let unit = list.first().map_or(String::new(), |(_, r)| r.unit.clone());
+            let values = list
+                .iter()
+                .map(|(tail, r)| (tail.clone(), short(r.value)))
+                .collect();
+            (head.clone(), unit, values)
+        })
+        .collect();
+    let mut parts: Vec<Labelled> = groups
+        .into_iter()
+        .filter(|(_, list)| !vector(list))
+        .map(|(head, mut list)| {
+            if let Some(bare) = readings.iter().find(|r| r.name == head) {
+                list.insert(0, ("value".to_string(), bare));
+            }
+            (head, list)
+        })
+        .collect();
+    let mut columns: Vec<String> = Vec::new();
+    for (_, list) in &parts {
+        for (tail, _) in list {
+            if !columns.contains(tail) {
+                columns.push(tail.clone());
+            }
+        }
+    }
+    let unit_of = |column: &str| {
+        let units: Vec<&str> = parts
+            .iter()
+            .flat_map(|(_, list)| list.iter().filter(|(t, _)| t == column))
+            .map(|(_, r)| r.unit.as_str())
+            .collect();
+        units
+            .first()
+            .filter(|u| units.iter().all(|v| v == *u))
+            .map(|u| u.to_string())
+    };
+    let units: Vec<Option<String>> = columns.iter().map(|c| unit_of(c)).collect();
+    let total = parts.len();
+    if let Some(few) = few.filter(|few| total > *few) {
+        let first = |list: &[(String, &Reading)]| {
+            list.iter()
+                .find(|(t, _)| *t == columns[0])
+                .map_or(0.0, |(_, r)| r.value.abs())
+        };
+        parts.sort_by(|a, b| first(&b.1).total_cmp(&first(&a.1)));
+        parts.truncate(few);
+    }
+    let rows = parts
+        .iter()
+        .map(|(head, list)| {
+            let cells = columns
+                .iter()
+                .zip(&units)
+                .map(|(column, unit)| {
+                    list.iter()
+                        .find(|(t, _)| t == column)
+                        .map(|(_, r)| match unit {
+                            Some(_) => short(r.value),
+                            None => with_unit(r),
+                        })
+                })
+                .collect();
+            (head.clone(), cells)
+        })
+        .collect();
+    let columns = columns
+        .iter()
+        .zip(&units)
+        .map(|(c, u)| match u {
+            Some(u) if !u.is_empty() => format!("{c} {u}"),
+            _ => c.clone(),
+        })
+        .collect();
+    ReadingsLayout {
+        tiles,
+        vectors,
+        columns,
+        rows,
+        total,
+    }
+}
+
+fn tile_grid(ui: &mut Ui, tiles: &[(String, String)]) {
+    const PER_ROW: usize = 3;
+    let width = ui.available_width() / PER_ROW as f32;
+    for row in tiles.chunks(PER_ROW) {
+        ui.horizontal_top(|ui| {
+            ui.spacing_mut().item_spacing.x = 0.0;
+            for (label, value) in row {
+                ui.allocate_ui_with_layout(
+                    egui::vec2(width, 0.0),
+                    egui::Layout::top_down(egui::Align::Min),
+                    |ui| {
+                        ui.set_width(width);
+                        ui.spacing_mut().item_spacing.y = 1.0;
+                        ui.add(egui::Label::new(legend(label)).truncate());
+                        ui.add(
+                            egui::Label::new(
+                                egui::RichText::new(value)
+                                    .font(egui_bench::theme::figure(14.0))
+                                    .color(VALUE),
+                            )
+                            .truncate(),
+                        );
+                    },
+                );
+            }
+        });
+        ui.add_space(4.0);
+    }
 }
 
 fn readings_list(ui: &mut Ui, readings: &[crate::sim::Reading], every_part: &mut bool) {
     const FEW: usize = 8;
-    let short = crate::sim::short;
-    let (vectors, parts) = reading_groups(readings);
-    let line = |ui: &mut Ui, r: &crate::sim::Reading| {
-        Line::new()
-            .legend(&r.name)
-            .value(short(r.value))
-            .note(&r.unit)
-            .size(11.0)
-            .show(ui);
-    };
-    let joined = |list: &[&crate::sim::Reading]| {
-        list.iter()
-            .map(|r| format!("{} {} {}", tail(r), short(r.value), r.unit))
-            .collect::<Vec<_>>()
-            .join(", ")
-    };
-    let row = |ui: &mut Ui, head: &str, text: String| {
-        Line::new()
-            .legend(head)
-            .note(&text)
-            .size(11.0)
-            .elided(ui)
-            .on_hover_text(text);
-    };
-    let collapse = parts.len() > FEW;
-    let mut shown_vectors: Vec<&str> = Vec::new();
-    for r in readings {
-        let head = r.name.split_once('.').map(|(h, _)| h);
-        match head {
-            None => line(ui, r),
-            Some(head) => {
-                if let Some((_, list)) = vectors.iter().find(|(h, _)| *h == head) {
-                    if !shown_vectors.contains(&head) {
-                        shown_vectors.push(head);
-                        row(ui, head, joined(list));
-                    }
-                } else if !collapse {
-                    line(ui, r);
-                }
+    let layout = layout_readings(readings, (!*every_part).then_some(FEW));
+    tile_grid(ui, &layout.tiles);
+    for (head, unit, values) in &layout.vectors {
+        ui.add_space(2.0);
+        ui.horizontal(|ui| {
+            ui.label(legend(format!("{head} {unit}")));
+            for (axis, value) in values {
+                ui.add_space(6.0);
+                ui.label(
+                    egui::RichText::new(axis)
+                        .font(egui_bench::theme::figure(11.0))
+                        .color(LEGEND),
+                );
+                ui.label(
+                    egui::RichText::new(value)
+                        .font(egui_bench::theme::figure(12.0))
+                        .color(VALUE),
+                );
             }
-        }
+        });
     }
-    if !collapse {
+    if layout.rows.is_empty() {
         return;
     }
-    let first = tail(parts[0].1[0]);
-    let order = &parts;
-    let count = order.len();
-    Line::new()
-        .legend(&format!("{count} parts"))
-        .note(if *every_part {
-            format!("by {first}")
-        } else {
-            format!("the {FEW} with the most {first}")
-        })
-        .size(11.0)
-        .show(ui);
-    for (head, list) in order.iter().take(if *every_part { count } else { FEW }) {
-        row(ui, head, joined(list));
+    ui.add_space(4.0);
+    if layout.total > FEW {
+        let what = layout.columns[0]
+            .split_whitespace()
+            .next()
+            .unwrap_or("")
+            .to_string();
+        Line::new()
+            .legend(&format!("{} parts", layout.total))
+            .note(if *every_part {
+                format!("by {what}")
+            } else {
+                format!("the {FEW} with the most {what}")
+            })
+            .size(11.0)
+            .show(ui);
     }
-    let label = if *every_part {
-        "fewer parts".to_string()
-    } else {
-        format!("all {count} parts")
-    };
-    if toggle(ui, &label, *every_part).clicked() {
-        *every_part = !*every_part;
+    let width = ui.available_width();
+    let first = (width * 0.34).max(90.0);
+    let rest = (width - first) / layout.columns.len().max(1) as f32;
+    let mut header: Vec<(&str, f32)> = vec![("", first)];
+    header.extend(layout.columns.iter().map(|c| (c.as_str(), rest)));
+    Table::new(&header, layout.rows.len()).show(ui, |i, p, row, at| {
+        let (head, cells) = &layout.rows[i];
+        cell(p, row, at(0), first, head, LEGEND);
+        for (k, value) in cells.iter().enumerate() {
+            if let Some(value) = value {
+                cell(p, row, at(k + 1), rest, value, VALUE);
+            }
+        }
+    });
+    if layout.total > FEW {
+        ui.add_space(4.0);
+        let label = if *every_part {
+            "fewer parts".to_string()
+        } else {
+            format!("all {} parts", layout.total)
+        };
+        if toggle(ui, &label, *every_part).clicked() {
+            *every_part = !*every_part;
+        }
     }
 }
 
@@ -573,6 +725,15 @@ impl App {
         vars: Vec<(String, f64)>,
     ) -> Self {
         egui_bench::install(&cc.egui_ctx);
+        let activity = Arc::new(Mutex::new(SimProgress::default()));
+        let listening = {
+            let into = activity.clone();
+            let painter = cc.egui_ctx.clone();
+            crate::progress::listen(move |report| {
+                into.lock().unwrap_or_else(|e| e.into_inner()).take(report);
+                painter.request_repaint();
+            })
+        };
         let mut app = App {
             path: None,
             vars,
@@ -615,6 +776,9 @@ impl App {
             cursor_row: None,
             sim_job: None,
             sim_every_part: false,
+            sim_notes: false,
+            activity,
+            _listening: listening,
             sim_error: None,
         };
         match path {
@@ -694,8 +858,17 @@ impl App {
         };
         let (tx, rx) = channel();
         let (ctx, vars) = (ctx.clone(), self.vars.clone());
+        self.activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rows
+            .clear();
         crate::host::spawn(move || {
-            let _ = tx.send(evaluate(&path, &vars));
+            let program = {
+                let _stage = crate::progress::stage("building the model", None, "");
+                evaluate(&path, &vars)
+            };
+            let _ = tx.send(program);
             crate::host::wake(&ctx);
         });
         self.loading = Some((rx, Instant::now()));
@@ -725,7 +898,7 @@ impl App {
                 Ok(result) => {
                     self.sim_error = result.err();
                     self.sim_job = None;
-                    self.reload(ctx);
+                    self.generation += 1;
                 }
                 Err(TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(500)),
                 Err(TryRecvError::Disconnected) => {
@@ -822,6 +995,8 @@ impl App {
         let ctx = ctx.clone();
         let vars = self.vars.clone();
         crate::host::spawn(move || {
+            let _stage =
+                crate::progress::stage_after("drawing the scene", None, "", Duration::from_secs(1));
             let snapshot = &program.snapshots[index];
             let started = Instant::now();
             if let Some(mut shown) = build_shown(snapshot, job_key, &vars) {
@@ -1202,7 +1377,18 @@ impl App {
                 if running.is_none()
                     && let Some(why) = &sim.stale
                 {
-                    note(ui, why, if sim.outcome.is_some() { WARN } else { LEGEND });
+                    let brief = why
+                        .split_once(" is stale (")
+                        .and_then(|(_, rest)| rest.rsplit_once(')'))
+                        .map(|(changed, _)| format!("stale: {changed}"))
+                        .unwrap_or_else(|| why.clone());
+                    let tint = if sim.outcome.is_some() { WARN } else { LEGEND };
+                    Line::new()
+                        .note(&brief)
+                        .tint(tint)
+                        .size(11.0)
+                        .elided(ui)
+                        .on_hover_text(why);
                 }
                 if !WEB {
                     match &running {
@@ -1239,26 +1425,22 @@ impl App {
                 };
                 readings_list(ui, &outcome.readings, &mut self.sim_every_part);
                 for (text, value, pass) in &outcome.checks {
-                    Line::new()
-                        .legend("expect")
-                        .value(text)
-                        .note(format!(
-                            "{} ({})",
-                            if *pass { "ok" } else { "FAILED" },
-                            short(*value)
-                        ))
-                        .size(11.0)
-                        .wrapped(ui);
+                    status(ui, *pass, &format!("{text}, reads {}", short(*value)));
                 }
                 for series in &outcome.series {
                     series_traces(ui, series);
                 }
-                for line in &outcome.notes {
-                    Line::new()
-                        .note(line)
-                        .size(11.0)
-                        .elided(ui)
-                        .on_hover_text(line);
+                if !outcome.notes.is_empty() {
+                    ui.add_space(4.0);
+                    let label = format!("notes ({})", outcome.notes.len());
+                    if toggle(ui, &label, self.sim_notes).clicked() {
+                        self.sim_notes = !self.sim_notes;
+                    }
+                    if self.sim_notes {
+                        for line in &outcome.notes {
+                            note(ui, line, LEGEND);
+                        }
+                    }
                 }
             },
         );
@@ -1275,21 +1457,27 @@ impl App {
         let vars = self.vars.clone();
         let (tx, rx) = channel();
         let ctx = ctx.clone();
-        let watched = Arc::new(Mutex::new(SimProgress::default()));
-        let into = watched.clone();
+        let built =
+            (self.dirty.is_none() && self.loading.is_none() && self.program.error.is_none())
+                .then(|| self.program.snapshots.last())
+                .flatten()
+                .filter(|snapshot| snapshot.result.is_ok())
+                .and_then(|snapshot| snapshot.model.sim.clone());
+        self.activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rows
+            .clear();
         crate::host::spawn(move || {
-            let painter = ctx.clone();
-            let listening = crate::progress::listen(move |report| {
-                into.lock().unwrap_or_else(|e| e.into_inner()).take(report);
-                painter.request_repaint();
-            });
-            let result = simulate_file(&path, &vars).map_err(|e| format!("{e:#}"));
-            drop(listening);
-            let _ = tx.send(result);
+            let result = match built {
+                Some(spec) => simulate_spec(&path, &vars, &spec),
+                None => simulate_file(&path, &vars),
+            };
+            let _ = tx.send(result.map_err(|e| format!("{e:#}")));
             crate::host::wake(&ctx);
         });
         self.sim_error = None;
-        self.sim_job = Some((rx, Instant::now(), watched));
+        self.sim_job = Some((rx, Instant::now(), self.activity.clone()));
     }
 
     fn measure_card(&mut self, ui: &mut Ui) {
@@ -2318,6 +2506,29 @@ impl App {
         )
     }
 
+    fn activity_panel(&self, ctx: &egui::Context, at: Pos2, pivot: egui::Align2) -> bool {
+        let activity = self.activity.lock().unwrap_or_else(|e| e.into_inner());
+        if activity.rows.is_empty() {
+            return false;
+        }
+        egui::Area::new(egui::Id::new("building progress"))
+            .fixed_pos(at)
+            .pivot(pivot)
+            .order(egui::Order::Foreground)
+            .show(ctx, |ui| {
+                egui::Frame::new()
+                    .fill(BACKGROUND.gamma_multiply(0.92))
+                    .stroke(egui::Stroke::new(1.0, ETCH))
+                    .corner_radius(3.0)
+                    .inner_margin(8.0)
+                    .show(ui, |ui| {
+                        ui.set_width(340.0);
+                        activity.show(ui);
+                    });
+            });
+        true
+    }
+
     fn viewport(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
         let resp = ui.allocate_rect(rect, Sense::click_and_drag());
@@ -2325,6 +2536,12 @@ impl App {
         let Some(shown) = &self.shown else {
             p.rect_filled(rect, 0.0, BACKGROUND);
             let status = crate::host::status();
+            if status.is_none()
+                && (self.loading.is_some() || self.building.is_some())
+                && self.activity_panel(ui.ctx(), rect.center(), egui::Align2::CENTER_CENTER)
+            {
+                return;
+            }
             let message = match (
                 &self.path,
                 self.loading.is_some() || self.building.is_some(),
@@ -2529,7 +2746,22 @@ impl App {
         );
         p.galley(corner, stats, Color32::from_gray(170));
         let status = crate::host::status();
-        if status.is_some() || self.loading.is_some() || self.building.is_some() {
+        let live = self
+            .activity
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .rows
+            .iter()
+            .any(|r| !r.report.finished);
+        let panel = status.is_none()
+            && self.sim_job.is_none()
+            && (self.loading.is_some() || self.building.is_some() && live)
+            && self.activity_panel(
+                ui.ctx(),
+                rect.left_top() + Vec2::new(10.0, 28.0),
+                egui::Align2::LEFT_TOP,
+            );
+        if !panel && (status.is_some() || self.loading.is_some() || self.building.is_some()) {
             p.text(
                 rect.left_top() + Vec2::new(10.0, 30.0),
                 egui::Align2::LEFT_TOP,
@@ -2952,6 +3184,14 @@ fn simulate_file(path: &std::path::Path, vars: &[(String, f64)]) -> anyhow::Resu
     let Some(spec) = run.model.sim.as_deref() else {
         anyhow::bail!("{} is not a simulation", path.display());
     };
+    simulate_spec(path, vars, spec)
+}
+
+fn simulate_spec(
+    path: &std::path::Path,
+    vars: &[(String, f64)],
+    spec: &crate::sim::Spec,
+) -> anyhow::Result<()> {
     let outcome = crate::sim::simulate(spec)?;
     let _stage = crate::progress::stage("writing the result", None, "");
     crate::sim::save(path, vars, &outcome)?;
@@ -3285,29 +3525,43 @@ mod tests {
     }
 
     #[test]
-    fn readings_group_into_vectors_and_parts_by_size() {
-        let reading = |name: &str, value: f64| crate::sim::Reading {
+    fn readings_lay_out_as_tiles_and_a_part_table() {
+        let reading = |name: &str, value: f64, unit: &str| crate::sim::Reading {
             name: name.into(),
             value,
-            unit: "N".into(),
+            unit: unit.into(),
             at: String::new(),
         };
         let readings = vec![
-            reading("drag", 10.0),
-            reading("moment.x", 1.0),
-            reading("moment.y", 2.0),
-            reading("moment.z", 3.0),
-            reading("mast.drag", 2.0),
-            reading("mast.lift", 0.5),
-            reading("boom.drag", -7.0),
+            reading("drag", 10.0, "N"),
+            reading("moment.x", 1.0, "N·m"),
+            reading("moment.y", 2.0, "N·m"),
+            reading("moment.z", 3.0, "N·m"),
+            reading("mast", 2.0, "N"),
+            reading("mast.moment", 0.5, "N·m"),
+            reading("boom.moment", 7.0, "N·m"),
+            reading("tip.stress", 4.0, "MPa"),
+            reading("clamp.main.moment", 1.0, "N·m"),
         ];
-        let (vectors, parts) = super::reading_groups(&readings);
-        assert_eq!(vectors.iter().map(|g| g.0).collect::<Vec<_>>(), ["moment"]);
+        let layout = super::layout_readings(&readings, None);
+        let tiles: Vec<&str> = layout.tiles.iter().map(|t| t.0.as_str()).collect();
+        assert_eq!(tiles, ["drag"]);
+        assert_eq!(layout.vectors.len(), 1);
         assert_eq!(
-            parts.iter().map(|g| g.0).collect::<Vec<_>>(),
-            ["boom", "mast"]
+            (layout.vectors[0].0.as_str(), layout.vectors[0].2.len()),
+            ("moment", 3)
         );
-        assert_eq!(parts[1].1.len(), 2);
+        assert_eq!(layout.columns, ["value N", "moment N·m", "stress MPa"]);
+        let heads: Vec<&str> = layout.rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(heads, ["mast", "boom", "tip", "clamp.main"]);
+        assert_eq!(
+            layout.rows[0].1,
+            [Some("2.000".to_string()), Some("0.5000".to_string()), None]
+        );
+        let few = super::layout_readings(&readings, Some(2));
+        assert_eq!(few.total, 4);
+        let heads: Vec<&str> = few.rows.iter().map(|r| r.0.as_str()).collect();
+        assert_eq!(heads, ["mast", "boom"]);
     }
 
     #[test]

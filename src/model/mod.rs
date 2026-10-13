@@ -714,7 +714,7 @@ pub fn snapshots_path(
     vars: &[(String, f64)],
 ) -> Result<(Vec<Line>, Vec<Snapshot>)> {
     let lines = read_lines(path)?;
-    let snapshots = snapshots_from(start_for(path, vars, 0), &lines);
+    let snapshots = snapshots_from(start_for(path, vars, 0), &lines, Some(path));
     Ok((lines, snapshots))
 }
 
@@ -730,15 +730,45 @@ pub fn run_snapshots_full(
     let mut model = start(dir);
     model.fixed = vars.iter().cloned().collect();
     model.scope = model.fixed.clone();
-    snapshots_from(model, lines)
+    snapshots_from(model, lines, None)
 }
 
-fn snapshots_from(mut model: Model, lines: &[Line]) -> Vec<Snapshot> {
+fn lines_stage(
+    model: &Model,
+    lines: &[Line],
+    path: Option<&std::path::Path>,
+) -> crate::progress::Stage {
+    let file = path
+        .and_then(|p| p.file_name())
+        .map(|n| n.to_string_lossy().into_owned());
+    match file.filter(|_| model.depth <= 1) {
+        Some(file) => crate::progress::stage_after(
+            format!("running `{file}`"),
+            Some(lines.len()),
+            "lines",
+            std::time::Duration::from_secs(1),
+        ),
+        None => crate::progress::Stage::silent(),
+    }
+}
+
+fn line_text(line: &Line) -> String {
+    let text: String = line.text.chars().take(60).collect();
+    format!("line {}: `{text}`", line.number)
+}
+
+fn snapshots_from(
+    mut model: Model,
+    lines: &[Line],
+    path: Option<&std::path::Path>,
+) -> Vec<Snapshot> {
     if model.assembly {
         model.prefetch(lines);
     }
     let mut snapshots = Vec::new();
-    for line in lines {
+    let running = lines_stage(&model, lines, path);
+    for (index, line) in lines.iter().enumerate() {
+        running.progress(index as f64, || line_text(line));
         let before = model.clone();
         let result = model.apply(line).map_err(|error| format!("{error:#}"));
         let failed = result.is_err();
@@ -777,24 +807,9 @@ fn run_model(mut model: Model, lines: &[Line], path: Option<&std::path::Path>) -
     }
     let mut steps = Vec::new();
     let mut took = Vec::new();
-    let file = path
-        .and_then(|p| p.file_name())
-        .map(|n| n.to_string_lossy().into_owned());
-    let running = if let Some(file) = file.filter(|_| model.depth <= 1) {
-        crate::progress::stage_after(
-            format!("running `{file}`"),
-            Some(lines.len()),
-            "lines",
-            std::time::Duration::from_secs(1),
-        )
-    } else {
-        crate::progress::Stage::silent()
-    };
+    let running = lines_stage(&model, lines, path);
     for (index, line) in lines.iter().enumerate() {
-        running.progress(index as f64, || {
-            let text: String = line.text.chars().take(60).collect();
-            format!("line {}: `{text}`", line.number)
-        });
+        running.progress(index as f64, || line_text(line));
         let before = model.clone();
         let clock = crate::host::Instant::now();
         let result = model.apply(line);

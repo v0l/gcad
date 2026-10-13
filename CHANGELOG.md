@@ -14,9 +14,11 @@ All notable changes to gcad are listed here. The format follows
   and one line of detail for the running stage; work inside a stage (part files, per-part
   meshing, interference) feeds that line instead of adding rows. The old result and its stale
   warning are hidden while it runs.
-- The simulation card groups per-part readings: whole-model readings first, x/y/z readings on
-  one line, then the 8 parts with the largest first reading, with a button for the rest. Notes
-  take one line each, in full on hover.
+- The simulation card lays readings out as figures three to a row, x/y/z readings on one line,
+  and per-part or per-probe readings as a table (the 8 largest, with a button for the rest); a
+  reading named after a part fills its `value` column. Checks show as ok/fail lines, notes fold
+  behind a button, and the stale warning is one line naming what changed.
+- Opening or rebuilding a file in the viewer shows the same progress panel over the viewport.
 - Viewer simulation card with readings, `expect` checks, notes, sweep traces and a run button.
 - Viewer draws a simulation's setup before it has a result: the mesh with loads and supports,
   or for flow the parts in their duct or air box, the wind and the heated faces.
@@ -33,6 +35,8 @@ All notable changes to gcad are listed here. The format follows
 - A boss glued onto a face, including twisted faces and over an edge; twisted extrudes with holes.
 
 ### Changed
+- The viewer's run button simulates the model it has already built instead of building the file
+  again, and after the run only redraws the scene to pick up the result instead of reloading.
 - Simulation meshes are only refined again when an element is flatter than half a degree
   (was 2 degrees). Elements between the two solve fine, and parts that never reached 2 degrees
   were meshed far finer than asked: the rotator's electronics box at `mesh 3` made 15.7 million
