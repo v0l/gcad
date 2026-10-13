@@ -1,9 +1,14 @@
+<img src="assets/icon.svg" width="64" alt="">
+
 # gcad
 
 Parametric CAD written like G-code: one operation per line, built for agents to write
 and check.
 It is pure Rust on the [monstertruck](https://github.com/v0l/monstertruck) B-rep
 kernel and exports STEP, STL, OBJ, 3MF and SVG drawings.
+
+Part of the [bench suite](https://github.com/v0l/bench-suite), a launcher that installs, updates
+and starts it alongside the other bench tools.
 
 ```
 let w=40 h=30 t=3
