@@ -222,8 +222,72 @@ The rotator head (`~/git/rotator/sims/wind.gsim`, 120 km/h side wind, no antenna
 
 The booms are 25 mm tubes; on their own the lattice reads Cd 1.89, 1.36 and 1.03 at 2.8, 5 and
 10 cells across, against about 0.98 from Hoerner, so the 5 mm run is still about 7 N high on
-the booms. OpenFOAM's RANS reads the same lone tube at Cd near 0.2: steady RANS cannot hold the
+the booms. OpenFOAM's RANS reads the same lone tube at Cd near 0.3 (0.332 below): steady RANS cannot hold the
 laminar separation of a round section at Re 55,000 and gives it post-crisis drag. Neither
 solver is right on this assembly, then; the lattice converges toward the measured cylinder
 drag as its cells shrink and the RANS model does not, so the head takes about 55 to 60 N in
 this wind, not 35.
+
+### Against FluidX3D and OpenFOAM
+
+Measured on 2026-10-13 on the RTX PRO 6000 (1.8 TB/s) and 48 CPU cores. FluidX3D (commit
+`dbf0bb5`, OpenCL) runs the same boxes, lattice speed and step counts through
+`tools/fluidx3d/run.sh CASE`, with its usual wind tunnel: equilibrium boundaries on every face
+(on the inlet and outlet only for the sphere), SRT with its Smagorinsky model, an impulsive
+start and staircase walls. OpenFOAM v2412 runs `tools/foam/` on 40 ranks.
+
+The kernel alone, a 256³ periodic box (`cargo test --release --test flow throughput --
+--ignored --nocapture`), in millions of cell updates a second:
+
+| | f32 | f16 storage |
+|---|---|---|
+| gcad | 8,891 | 13,970 |
+| FluidX3D | 8,913 | 17,607 |
+
+The 100 mm cube in 10 m/s air (`examples/flow/cube.gsim`), 4 mm cells, 176 x 176 x 251, 20,111
+steps; Hoerner gives Cd 1.05:
+
+| | Cd | wall time |
+|---|---|---|
+| gcad, f32 | 1.066 | 23 s |
+| gcad, f16 | 1.065 | 18 s |
+| FluidX3D, FP32 | 1.092 | 20 s |
+| FluidX3D, FP16S | 1.073 | 11 s |
+| OpenFOAM k-omega SST, 636 k cells | 1.085 | 203 s |
+
+The sphere at Re 50 (`sphere_drag_re50`), 15D x 8D x 8D with periodic sides; OpenFOAM reads
+1.606 in this box and Clift gives 1.574 in free stream:
+
+| | 20 cells across | 40 cells across |
+|---|---|---|
+| gcad, interpolated walls | 1.6265 (40 s) | 1.6150 (834 s) |
+| FluidX3D, FP32 | 1.6834 (33 s) | 1.6393 (543 s) |
+| FluidX3D, FP16S | 1.6896 (18 s) | 1.6557 (296 s) |
+| OpenFOAM `simpleFoam`, 313 k and 626 k cells | 1.6048 (20 s) | 1.6045 (42 s) |
+
+A steady laminar case is OpenFOAM's ground: it converges in about 260 iterations, where a
+lattice has to run the transient out. gcad's 40-cell run is slow because the test blows the
+wind along lattice x, the slow edge pass described above; `sim flow` blows along z.
+
+A 25 mm tube 500 mm long across a 33.3 m/s wind (Re 55,000, the rotator's booms), Hoerner
+about 0.98:
+
+| | 5 mm cells | 2.5 mm cells |
+|---|---|---|
+| gcad, f32 | 1.376 (29 s) | 1.022 (349 s) |
+| FluidX3D, FP32 | 0.871 (24 s) | 0.930 (357 s) |
+| FluidX3D, FP16S | 0.854 (14 s) | 0.947 (198 s) |
+| OpenFOAM k-omega SST, 768 k cells | 0.332 (285 s) | |
+
+At 5 mm the tube voxelizes to a 4 x 4 square of cells, a 20 mm square bar, in both codes. A
+square bar's Cd is near 2 on its own width (gcad's square cylinder reads 2.20 against Lyn's 2.1,
+above), about 1.3 on the tube's 25 mm once the free ends are allowed for, so gcad reads the
+shape it was given and FluidX3D reads it low. Placed 0.27 cells off that alignment along the
+wind, FluidX3D's tube is rounder and reads 0.828: at five cells across a round member's drag
+depends on where it lands on the grid. Both lattices are within 5% at ten cells. Steady RANS
+reads it a third of the measured drag.
+
+So the kernel is as fast as FluidX3D's in f32 and at 79% of it in f16, whole runs take about
+as long, and on these cases gcad is the closer of the two lattices. 5 mm cells over the whole
+rotator are near what the card holds; finer cells near the parts would need local grid
+refinement, which FluidX3D does not have either.

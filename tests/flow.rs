@@ -147,25 +147,35 @@ fn lid_driven_cavity_re1000() {
 #[ignore = "throughput on the GPU, run with --ignored --nocapture"]
 fn throughput() {
     let (_device, gpu) = device();
-    let size = [128, 128, 128];
-    let flags = vec![0u8; size.iter().product()];
-    let settings = Settings {
-        force: [1.0e-7, 0.0, 0.0],
-        ..Settings::laminar(0.01)
-    };
-    let mut lattice = Lattice::new(&gpu, &domain(size, flags.clone())).expect("lattice");
-    lattice.run(&settings, 20).expect("warms up");
-    let start = std::time::Instant::now();
-    let steps = 400;
-    lattice.run(&settings, steps).expect("runs");
-    lattice.finish().expect("finishes");
-    let seconds = start.elapsed().as_secs_f64();
+    let size = [256, 256, 256];
     let cells = size.iter().product::<usize>() as f64;
-    println!(
-        "{}: {:.0} million cell updates a second",
-        gpu.name,
-        cells * steps as f64 / seconds / 1.0e6
-    );
+    for half in [false, true] {
+        for collision in [Collision::Bgk, Collision::Regularized] {
+            let settings = Settings {
+                force: [1.0e-7, 0.0, 0.0],
+                collision,
+                ..Settings::laminar(0.01)
+            };
+            let domain = Domain {
+                half,
+                ..domain(size, vec![0u8; size.iter().product()])
+            };
+            let mut lattice = Lattice::new(&gpu, &domain).expect("lattice");
+            lattice.run(&settings, 20).expect("warms up");
+            lattice.finish().expect("finishes");
+            let start = std::time::Instant::now();
+            let steps = 1000;
+            lattice.run(&settings, steps).expect("runs");
+            lattice.finish().expect("finishes");
+            let seconds = start.elapsed().as_secs_f64();
+            println!(
+                "{}, {}, {collision:?}: {:.0} million cell updates a second",
+                gpu.name,
+                if half { "f16" } else { "f32" },
+                cells * steps as f64 / seconds / 1.0e6
+            );
+        }
+    }
 }
 
 fn schaefer_turek(
@@ -384,6 +394,7 @@ fn sphere_drag(gpu: &Gpu, d: f64) -> f64 {
 fn sphere_drag_re50() {
     let (_device, gpu) = device();
     let drag = sphere_drag(&gpu, 20.0);
+    eprintln!("sphere drag at 20 cells across {drag:.4}");
     assert!(
         (drag - 1.606).abs() / 1.606 < 0.025,
         "drag {drag} against OpenFOAM's 1.606 in the same box"
