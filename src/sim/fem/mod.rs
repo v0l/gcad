@@ -26,6 +26,18 @@ pub struct Tie {
     pub turn: [solve::Block; 6],
     pub normal: Option<Vector3>,
     pub friction: f64,
+    pub along: Option<Vector3>,
+    pub seat: Option<(usize, f64)>,
+    pub spring: Option<f64>,
+}
+
+pub struct Row {
+    pub housing: usize,
+    pub shaft: usize,
+    pub point: Point3,
+    pub axis: Vector3,
+    pub axial: bool,
+    pub stiffness: f64,
 }
 
 impl Tie {
@@ -79,6 +91,52 @@ pub fn product(a: &solve::Block, b: &solve::Block) -> solve::Block {
 
 pub fn transposed(a: &solve::Block) -> solve::Block {
     std::array::from_fn(|k| a[(k % 3) * 3 + k / 3])
+}
+
+fn thrust_tie(nodes: &[Point3], ring: &[(u32, f64)], row: &Row, seat: usize) -> Option<Tie> {
+    let across = if row.axis.x.abs() < 0.9 {
+        Vector3::unit_x()
+    } else {
+        Vector3::unit_y()
+    };
+    let e1 = (across - row.axis * across.dot(row.axis)).normalize();
+    let e2 = row.axis.cross(e1);
+    let pick = |side: f64| -> Option<[u32; 3]> {
+        let mut out = [0u32; 3];
+        for (k, slot) in out.iter_mut().enumerate() {
+            let angle = k as f64 * std::f64::consts::TAU / 3.0;
+            let toward = e1 * angle.cos() + e2 * angle.sin();
+            let (node, score) = ring
+                .iter()
+                .filter(|(_, s)| *s == side)
+                .map(|&(v, _)| {
+                    let offset = nodes[v as usize] - row.point;
+                    let radial = offset - row.axis * offset.dot(row.axis);
+                    (v, radial.normalize().dot(toward))
+                })
+                .max_by(|a, b| a.1.total_cmp(&b.1))?;
+            if score < 0.8 {
+                return None;
+            }
+            *slot = node;
+        }
+        Some(out)
+    };
+    let shaft = pick(1.0)?;
+    let housing = pick(-1.0)?;
+    Some(Tie {
+        slave: shaft[0],
+        masters: [
+            shaft[1], shaft[2], housing[0], housing[1], housing[2], housing[2],
+        ],
+        weights: [-1.0, -1.0, 1.0, 1.0, 1.0, 0.0],
+        turn: [[0.0; 9]; 6],
+        normal: None,
+        friction: 0.0,
+        along: Some(row.axis),
+        seat: Some((seat, 3.0)),
+        spring: Some(row.stiffness / 9.0),
+    })
 }
 
 fn turning(slave: Point3, points: [Point3; 6], weights: [f64; 6]) -> [solve::Block; 6] {
@@ -506,7 +564,8 @@ pub fn merge(
     parts: Vec<(String, Quadratic)>,
     gaps: &[f64],
     touching: &[(usize, usize, f64)],
-) -> Quadratic {
+    rows: &[Row],
+) -> anyhow::Result<Quadratic> {
     let mut out = Quadratic::empty();
     let mut skins: Vec<Vec<[u32; 6]>> = Vec::new();
     for (index, (name, part)) in parts.into_iter().enumerate() {
@@ -625,6 +684,10 @@ pub fn merge(
             let facing = &facings[slave];
             let pair = (master.min(slave), master.max(slave));
             let contact = touching.iter().find(|t| (t.0, t.1) == pair);
+            let row = rows
+                .iter()
+                .position(|r| (r.housing.min(r.shaft), r.housing.max(r.shaft)) == pair);
+            let half = 5.0 * gaps[master].max(gaps[slave]);
             let mut seen = std::collections::BTreeSet::new();
             let mut ties = Vec::new();
             for f in &skins[slave] {
@@ -666,6 +729,22 @@ pub fn merge(
                         })
                         .min_by(|a, b| a.0.total_cmp(&b.0));
                     if let Some((_, t, l)) = best {
+                        let (along, seat) = match row {
+                            Some(i) => {
+                                let r = &rows[i];
+                                let offset = p - r.point;
+                                let height = offset.dot(r.axis);
+                                let radial = offset - r.axis * height;
+                                if height.abs() > half || radial.magnitude() < 1.0e-9 {
+                                    continue;
+                                }
+                                (
+                                    Some(radial.normalize()),
+                                    Some((i, if slave == r.shaft { 1.0 } else { -1.0 })),
+                                )
+                            }
+                            None => (None, None),
+                        };
                         let shape = triangle_shape(l);
                         let m = skins[master][t];
                         let [a, b, c] = [m[0], m[1], m[2]].map(|n| nodes[n as usize]);
@@ -676,6 +755,9 @@ pub fn merge(
                             turn: turning(p, m.map(|n| nodes[n as usize]), shape),
                             normal: contact.map(|_| (b - a).cross(c - a).normalize()),
                             friction: contact.map_or(0.0, |t| t.2),
+                            along,
+                            seat,
+                            spring: None,
                         });
                     }
                 }
@@ -684,10 +766,42 @@ pub fn merge(
         })
         .collect();
     for (master, slave, ties) in found {
-        if !ties.is_empty() && master < slave {
+        if !ties.is_empty() && master < slave && ties[0].seat.is_none() {
             out.bonds.push((master, slave, ties.len()));
         }
         out.ties.extend(ties);
     }
-    out
+    for (i, row) in rows.iter().enumerate() {
+        let ring: Vec<(u32, f64)> = out
+            .ties
+            .iter()
+            .filter_map(|t| t.seat.filter(|s| s.0 == i).map(|s| (t.slave, s.1)))
+            .collect();
+        if ring.is_empty() {
+            anyhow::bail!(
+                "`{}` and `{}` do not touch at the ball row; the shaft must sit in the bore there",
+                out.bodies[row.housing],
+                out.bodies[row.shaft]
+            );
+        }
+        let count = ring.len();
+        for tie in out
+            .ties
+            .iter_mut()
+            .filter(|t| t.seat.is_some_and(|s| s.0 == i))
+        {
+            tie.spring = Some(2.0 * row.stiffness / count as f64);
+        }
+        if row.axial {
+            let thrust = thrust_tie(&out.nodes, &ring, row, i).ok_or_else(|| {
+                anyhow::anyhow!(
+                    "`{}` and `{}` touch at the ball row on too few points to carry thrust; try a finer `mesh`",
+                    out.bodies[row.housing],
+                    out.bodies[row.shaft]
+                )
+            })?;
+            out.ties.push(thrust);
+        }
+    }
+    Ok(out)
 }

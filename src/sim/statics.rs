@@ -283,7 +283,38 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
                 _ => bail!("`contact {a} {b}` names a part the simulation does not have"),
             })
             .collect::<Result<Vec<_>>>()?;
-        super::fem::merge(meshes, &gaps, &touching)
+        let rows = spec
+            .seats
+            .iter()
+            .map(|seat| match (index(&seat.housing), index(&seat.shaft)) {
+                (Some(housing), Some(shaft)) => {
+                    if touching
+                        .iter()
+                        .any(|t| (t.0, t.1) == (housing.min(shaft), housing.max(shaft)))
+                    {
+                        bail!(
+                            "`{}` and `{}` are in contact and in a bearing; give them one",
+                            seat.housing,
+                            seat.shaft
+                        );
+                    }
+                    Ok(super::fem::Row {
+                        housing,
+                        shaft,
+                        point: seat.point,
+                        axis: seat.axis,
+                        axial: seat.axial,
+                        stiffness: seat.stiffness,
+                    })
+                }
+                _ => bail!(
+                    "`bearing` joins `{}` and `{}`, a part the simulation does not have",
+                    seat.housing,
+                    seat.shaft
+                ),
+            })
+            .collect::<Result<Vec<_>>>()?;
+        super::fem::merge(meshes, &gaps, &touching, &rows)?
     };
     let mut mesh = mesh;
     let everything: Vec<String> = model.named_solids().into_iter().map(|(n, _)| n).collect();
@@ -307,6 +338,64 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
         parts,
         original,
     })
+}
+
+fn seat_readings(
+    spec: &Spec,
+    mesh: &Quadratic,
+    materials: &[(f64, f64)],
+    displacement: &[Vector3],
+) -> Vec<Reading> {
+    let penalty = super::fem::elastic::contact_penalty(mesh, materials);
+    let u: Vec<f64> = displacement.iter().flat_map(|d| [d.x, d.y, d.z]).collect();
+    let mut forces = vec![Vector3::zero(); spec.seats.len()];
+    for tie in &mesh.ties {
+        let (Some(n), Some((i, share))) = (tie.along, tie.seat) else {
+            continue;
+        };
+        forces[i] += n * (tie.spring.unwrap_or(penalty) * tie.gap(&u).dot(n) * share);
+    }
+    let mut readings = Vec::new();
+    for (seat, force) in spec.seats.iter().zip(forces) {
+        let axial = force.dot(seat.axis);
+        let radial = (force - seat.axis * axial).magnitude();
+        let axial = axial.abs();
+        readings.push(Reading {
+            name: seat.label.clone(),
+            value: radial,
+            unit: "N".into(),
+            at: format!(
+                "radial load on the bearing, `{}` in `{}`; total {},{},{}",
+                seat.shaft,
+                seat.housing,
+                short(force.x),
+                short(force.y),
+                short(force.z)
+            ),
+        });
+        if seat.axial {
+            readings.push(Reading {
+                name: format!("{}.axial", seat.label),
+                value: axial,
+                unit: "N".into(),
+                at: "thrust along the bearing's axis".into(),
+            });
+        }
+        if let Some(rating) = seat.rating {
+            let equivalent = radial.max(0.6 * radial + 0.5 * axial);
+            readings.push(Reading {
+                name: format!("{}.safety", seat.label),
+                value: rating / equivalent.max(1.0e-9),
+                unit: String::new(),
+                at: format!(
+                    "static rating C0 {} N over the equivalent load {} N",
+                    short(rating),
+                    short(equivalent)
+                ),
+            });
+        }
+    }
+    readings
 }
 
 pub fn place_probe(
@@ -557,6 +646,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             });
         }
     }
+    readings.extend(seat_readings(spec, mesh, &materials, &answer.displacement));
     for (name, point) in &spec.probes {
         let (found, note) = place_probe(mesh, name, *point)?;
         readings.push(Reading {

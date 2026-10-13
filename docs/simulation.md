@@ -371,6 +371,18 @@ the arrows and lists the same lines under the plot, and `gcad sim` notes each ap
 stiffness; subspace iteration on K^-1 (-K_G) finds the largest positive eigenvalues, whose
 inverses are the load factors. A clamped column matches Euler's load within 0.05%.
 
+`bearing housing:bore shaft`: the ties between the two parts are kept only within half the
+coarser part's element size of the ball row and hold only the radial gap, each with an equal
+share of the bearing's stiffness (twice the stiffness over the number of ties, since a ring of
+radial springs is half as stiff in any one direction as their sum). With the bond penalty
+instead, a band 4 mm long clamped the shaft like a pin and took 21 N·m of the moment on the
+lever check below. With 1e5 N/mm the band's tilt stiffness is under 1% of a Ø20 shaft's over
+160 mm. Thrust goes through one tie joining the mean axial movement of three shaft nodes at
+120 degrees to three housing nodes at 120 degrees, so it acts on the axis and adds no tilt
+stiffness; one node off the axis put 3 N·m of couple on a 300 N thrust at 10 mm. A Ø20 shaft
+in two housings 160 mm apart with 1000 N on a 100 mm overhang reads 623 and 1623 N at mesh 4
+(lever rule 625 and 1625) and 623.8 and 1623.8 N at mesh 2.5.
+
 `contact a b`: the tie pairs between those parts become normal-only penalty springs along the
 master face's normal, switched on where they press and off where they would pull, re-solving
 until the set settles. Checked with two blocks heated (they press, as if bonded) and cooled

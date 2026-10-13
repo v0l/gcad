@@ -7,6 +7,9 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- `bearing housing:bore shaft` in a static simulation joins two parts on a ball bearing: radial
+  force at the ball row, free to turn and tilt, thrust with `axial`, stiffness from
+  `stiffness=`, and the load against the static rating with `C0=`.
 - Gear drives in `sim torque`: `couple ... module= face= teeth= pressure= gear= pinion=` reads
   each mesh's efficiency, torque, tangential, radial and axial forces, Lewis bending and Hertz
   contact stress and bending safety; `speed joint rpm` adds each joint's power, each mesh's

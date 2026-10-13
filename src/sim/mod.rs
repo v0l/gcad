@@ -103,6 +103,7 @@ pub struct Spec {
     pub modes: Option<usize>,
     pub warming: Option<Warm>,
     pub contacts: Vec<(String, String, f64)>,
+    pub seats: Vec<Seat>,
     pub converge: Option<f64>,
     pub leave: Vec<String>,
     pub wind: Option<wind::Wind>,
@@ -112,6 +113,18 @@ pub struct Spec {
     pub ambient: Option<f64>,
     pub duct: Option<[f64; 2]>,
     pub wind_load: Option<PathBuf>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Seat {
+    pub label: String,
+    pub housing: String,
+    pub shaft: String,
+    pub point: Point3,
+    pub axis: Vector3,
+    pub axial: bool,
+    pub rating: Option<f64>,
+    pub stiffness: f64,
 }
 
 #[derive(Clone, Debug)]

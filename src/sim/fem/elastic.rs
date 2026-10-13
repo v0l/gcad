@@ -236,14 +236,17 @@ fn assemble_with(mesh: &Quadratic, materials: &[(f64, f64)], all: bool) -> Resul
         let stiffest = materials.iter().map(|m| m.0).fold(0.0, f64::max);
         let penalty = stiffest * spacing(mesh) * TIE;
         for tie in mesh.ties.iter().filter(|t| all || t.normal.is_none()) {
-            add_tie(&mut blocks, tie, penalty, &IDENTITY);
+            let middle = tie
+                .along
+                .map_or(IDENTITY, |n| std::array::from_fn(|k| n[k / 3] * n[k % 3]));
+            add_tie(&mut blocks, tie, tie.spring.unwrap_or(penalty), &middle);
         }
     }
     stage.set(mesh.tets.len() as f64);
     Ok(blocks)
 }
 
-fn contact_penalty(mesh: &Quadratic, materials: &[(f64, f64)]) -> f64 {
+pub fn contact_penalty(mesh: &Quadratic, materials: &[(f64, f64)]) -> f64 {
     materials.iter().map(|m| m.0).fold(0.0, f64::max) * spacing(mesh) * TIE
 }
 

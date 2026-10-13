@@ -1425,6 +1425,74 @@ fn bearings_carry_force_and_no_moment() {
     assert!(reading(&pinned, "left.moment") > 10.0, "{}", pinned.table());
 }
 
+const HOUSING: &str = "rect 40 40\nh: extrude 20\nplane h.end\nbore: hole 20.04 0,0\nmaterial steel\n";
+
+const SPINDLE: &str =
+    "circle 20\ns: extrude 300\nplane s.end\nrect 14 14\nsq: extrude 10\nmaterial steel\n";
+
+fn shaft_in_housings(name: &str, lines: &str) -> Outcome {
+    simulated(
+        name,
+        &[
+            ("housing.gcad", HOUSING),
+            ("shaft.gcad", SPINDLE),
+            (
+                "pair.gasm",
+                "part a housing.gcad\nmove a 0,0,40\npart b housing.gcad\nmove b 0,0,200\npart s shaft.gcad\n",
+            ),
+        ],
+        &format!(
+            "sim static\npart pair.gasm\nfix a:h.start\nfix b:h.start\nkey: slide s:>X\n{lines}\nmesh 4"
+        ),
+    )
+}
+
+#[test]
+fn bearing_between_parts_carries_no_moment() {
+    let outcome = shaft_in_housings(
+        "bearing_between_parts_carries_no_moment",
+        "bearing a:bore.side s axial C0=2900\nbearing b:bore.side s\nload s:sq.end force=0,-1000,0",
+    );
+    close(reading(&outcome, "a"), 1000.0 * 100.0 / 160.0, 0.01);
+    close(reading(&outcome, "b"), 1000.0 * 260.0 / 160.0, 0.01);
+    close(reading(&outcome, "a.safety"), 2900.0 / 625.0, 0.01);
+    assert!(outcome.reading("b.safety").is_none());
+}
+
+#[test]
+fn bearing_between_parts_takes_thrust() {
+    let outcome = shaft_in_housings(
+        "bearing_between_parts_takes_thrust",
+        "bearing a:bore.side s axial C0=2900\nbearing b:bore.side s\nload s:sq.end force=0,0,-300",
+    );
+    close(reading(&outcome, "a.axial"), 300.0, 0.005);
+    assert!(outcome.reading("b.axial").is_none());
+    assert!(reading(&outcome, "b") < 3.0, "{}", outcome.table());
+    close(reading(&outcome, "a.safety"), 2900.0 / 150.0, 0.02);
+}
+
+#[test]
+fn bearing_row_must_touch_the_shaft() {
+    let path = written(
+        "bearing_row_must_touch_the_shaft",
+        &[
+            ("housing.gcad", HOUSING),
+            ("shaft.gcad", SPINDLE),
+            (
+                "pair.gasm",
+                "part a housing.gcad\nmove a 0,0,40\npart b housing.gcad\nmove b 0,0,200\npart s shaft.gcad\n",
+            ),
+        ],
+        "sim static\npart pair.gasm\nfix a:h.start\nfix b:h.start\nkey: slide s:>X\nbearing a:bore.side s axial at=0,0,130\nbearing b:bore.side s\nload s:sq.end force=0,-1000,0\nmesh 4",
+    );
+    let error = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"))
+        .expect_err("no ties at the row");
+    assert!(
+        format!("{error:#}").contains("do not touch at the ball row"),
+        "{error:#}"
+    );
+}
+
 #[test]
 fn bearings_need_one_held_along_the_axis() {
     let path = written(

@@ -307,6 +307,7 @@ The plan for the rest is in `docs/simulation.md`.
 | sliding supports and pressure | supported | `slide <X`, `pressure h.side 10` | `simulation::bar_in_tension`, `simulation::thick_cylinder_under_pressure` |
 | pins and torques | supported | `hinge: pin h.side`, `torque rod.end 10` | `simulation::shaft_in_torsion`, `simulation::torque_about_a_named_axis`, `simulation::pinned_link` |
 | bearings | supported | `left: bearing seat.side axial`, `right: bearing seat2.side` | `simulation::bearings_carry_force_and_no_moment`, `simulation::bearings_need_one_held_along_the_axis` |
+| bearings between parts | supported | `bearing kfl:bore.side spindle axial C0=2900` | `simulation::bearing_between_parts_carries_no_moment`, `simulation::bearing_between_parts_takes_thrust`, `simulation::bearing_row_must_touch_the_shaft` |
 | leaving parts out | supported | `leave ctl* *screw*` | `simulation::leave_parts_out` |
 | mesh convergence check | supported | `converge`, `converge within=2` | `simulation::mesh_convergence_check` |
 | probes | supported | `top: probe 100,0,10`; a point on a curved face just outside the mesh reads on its surface | `simulation::cantilever_stress`, `simulation::thick_cylinder_under_pressure`, `simulation::probe_on_a_curved_face_snaps_to_the_mesh` |
