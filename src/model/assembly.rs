@@ -573,7 +573,7 @@ impl Model {
     }
 
     fn move_body(&mut self, name: &str, transform: Matrix4) -> Result<()> {
-        let moved = |solid: &Solid| super::solids::oriented(builder::transformed(solid, transform));
+        let moved = |solid: &Solid| super::solids::placed(solid, transform);
         if name == self.current_body() && self.solid.is_some() {
             let solid = self
                 .solid

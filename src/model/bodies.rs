@@ -24,7 +24,7 @@ fn reflection(frame: &Frame) -> Matrix4 {
 }
 
 fn moved(solid: &Solid, transform: Matrix4) -> Solid {
-    oriented(builder::transformed(solid, transform))
+    super::solids::placed(solid, transform)
 }
 
 pub(crate) fn moved_surface(surface: &Surface, transform: Matrix4) -> Surface {
@@ -1199,7 +1199,7 @@ fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSoli
             let placed = if matrix == Matrix4::identity() {
                 solid
             } else {
-                oriented(builder::transformed(&solid, matrix))
+                super::solids::placed(&solid, matrix)
             };
             out.push(StepSolid {
                 name: name.clone(),

@@ -11,7 +11,7 @@ impl Model {
             bail!("there is already a part called `{name}`");
         }
         let solid = self.named_body(part)?;
-        let moved = super::solids::oriented(builder::transformed(&solid, transform));
+        let moved = super::solids::placed(&solid, transform);
         self.bodies.push((name.to_string(), moved));
         fn copy<T: Clone>(map: &mut std::collections::HashMap<String, T>, from: &str, to: &str) {
             if let Some(value) = map.get(from).cloned() {

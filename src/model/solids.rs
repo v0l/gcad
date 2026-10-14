@@ -305,6 +305,15 @@ pub(crate) fn rational(solid: Solid, span: f64) -> Solid {
     copy
 }
 
+pub(crate) fn placed(solid: &Solid, transform: Matrix4) -> Solid {
+    let moved = builder::transformed(solid, transform);
+    if transform.determinant() < 0.0 {
+        oriented(moved)
+    } else {
+        moved
+    }
+}
+
 pub(crate) fn oriented(mut solid: Solid) -> Solid {
     if geometry::volume(&solid) < 0.0 {
         solid.not();
