@@ -105,6 +105,9 @@ fn mesh_fresh(solid: &Solid, size: f64, stage: &crate::progress::Stage) -> Resul
                     best = Some((mesh, tried, worst));
                 }
             }
+            Err(error) if error.downcast_ref::<sims_tet::Unrecoverable>().is_some() => {
+                return Err(error);
+            }
             Err(error) => last = Some(error),
         }
         tried *= 0.6;
