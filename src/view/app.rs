@@ -2,7 +2,7 @@ use super::scene::{self, Highlight, Ink, Scene, V3};
 use crate::geometry;
 use crate::host::Instant;
 use crate::model::{
-    Joint, JointKind, Rig, Snapshot, explode_offsets, label_of, posed, snapshots_path,
+    Joint, JointKind, Rig, Snapshot, explode_offsets, label_of, posed, snapshots_path_kept,
 };
 use crate::parse::Line as SourceLine;
 use crate::select;
@@ -25,7 +25,7 @@ struct Program {
 }
 
 fn evaluate(path: &std::path::Path, vars: &[(String, f64)]) -> Program {
-    match snapshots_path(path, vars) {
+    match snapshots_path_kept(path, vars) {
         Ok((lines, snapshots)) => Program {
             snapshots,
             lines,
@@ -1057,6 +1057,7 @@ impl App {
                 let _ = tx.send(shown);
             }
             crate::host::wake(&ctx);
+            crate::host::release_memory();
         });
         self.building = Some((key, rx));
     }

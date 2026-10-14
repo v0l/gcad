@@ -1047,3 +1047,23 @@ fn bearings_dowels_and_standoffs() {
     let bore = gcad::geometry::bounds(&model.named_body("b").expect("bearing"));
     assert!((bore.max().x - 11.0).abs() < 1.0e-6 && (bore.max().z - 7.0).abs() < 1.0e-6);
 }
+
+#[test]
+fn kept_parts_follow_their_files() {
+    let path = files(
+        "kept_parts_follow_their_files",
+        "part a block.gcad\n",
+        &[("block.gcad", "rect 10 10\nextrude 10\n")],
+    );
+    let volume = |path: &std::path::Path| {
+        let (_, snapshots) = gcad::model::snapshots_path_kept(path, &[]).expect("builds");
+        let model = &snapshots.last().expect("a line").model;
+        gcad::geometry::volume(&model.named_body("a").expect("part a"))
+    };
+    assert!((volume(&path) - 1000.0).abs() < 1.0);
+    std::fs::write(&path, "part a block.gcad\nmove a 5,0,0\n").expect("assembly");
+    assert!((volume(&path) - 1000.0).abs() < 1.0);
+    std::thread::sleep(std::time::Duration::from_millis(20));
+    std::fs::write(path.with_file_name("block.gcad"), "rect 10 10\nextrude 20\n").expect("part");
+    assert!((volume(&path) - 2000.0).abs() < 1.0);
+}

@@ -27,11 +27,47 @@ mod files {
     use std::io;
     use std::path::{Path, PathBuf};
 
+    type Stamp = Option<(std::time::SystemTime, u64)>;
+
+    static SEEN: std::sync::Mutex<std::collections::BTreeMap<PathBuf, Stamp>> =
+        std::sync::Mutex::new(std::collections::BTreeMap::new());
+
+    fn stamp(path: &Path) -> Stamp {
+        let meta = std::fs::metadata(path).ok()?;
+        Some((meta.modified().ok()?, meta.len()))
+    }
+
+    fn seen() -> std::sync::MutexGuard<'static, std::collections::BTreeMap<PathBuf, Stamp>> {
+        SEEN.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn note(path: &Path) {
+        seen().insert(path.to_path_buf(), stamp(path));
+    }
+
+    pub fn unchanged_except(path: &Path) -> bool {
+        let Ok(skip) = std::fs::canonicalize(path) else {
+            return false;
+        };
+        let seen = seen();
+        let same = |file: &Path| std::fs::canonicalize(file).is_ok_and(|f| f == skip);
+        !seen.is_empty()
+            && seen
+                .iter()
+                .all(|(file, was)| same(file) || stamp(file) == *was)
+    }
+
+    pub fn forget_reads() {
+        seen().clear();
+    }
+
     pub fn read(path: &Path) -> io::Result<Vec<u8>> {
+        note(path);
         std::fs::read(path)
     }
 
     pub fn is_file(path: &Path) -> bool {
+        note(path);
         path.is_file()
     }
 
@@ -106,6 +142,12 @@ mod files {
     pub fn is_file(path: &Path) -> bool {
         hold(&FILES).contains_key(&key(path))
     }
+
+    pub fn unchanged_except(_path: &Path) -> bool {
+        false
+    }
+
+    pub fn forget_reads() {}
 
     pub fn is_dir(path: &Path) -> bool {
         let dir = key(path);
@@ -274,6 +316,19 @@ pub fn spawn(job: impl FnOnce() + Send + 'static) {
 pub fn spawn(job: impl FnOnce() + Send + 'static) {
     rayon::spawn(job);
 }
+
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+pub fn release_memory() {
+    unsafe extern "C" {
+        fn malloc_trim(pad: usize) -> i32;
+    }
+    unsafe {
+        malloc_trim(0);
+    }
+}
+
+#[cfg(not(all(target_os = "linux", target_env = "gnu")))]
+pub fn release_memory() {}
 
 pub fn wake(ctx: &egui::Context) {
     if cfg!(not(target_arch = "wasm32")) {

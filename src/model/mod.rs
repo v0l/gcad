@@ -177,7 +177,32 @@ struct CacheEntries {
     cylinders: HashMap<String, Vec<mate::Cylinder>>,
 }
 
+pub(crate) const INLINE_KEY: &str = "inline|";
+
+static KEPT: std::sync::Mutex<Option<Cache>> = std::sync::Mutex::new(None);
+
 impl Cache {
+    fn kept_for(top: &std::path::Path) -> Cache {
+        let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+        let reusable = kept.take().filter(|_| crate::host::unchanged_except(top));
+        if reusable.is_none() {
+            crate::host::forget_reads();
+        }
+        let cache = match reusable {
+            Some(old) => {
+                let entries = old.0.lock().map(|mut e| std::mem::take(&mut *e));
+                let mut entries = entries.unwrap_or_default();
+                entries
+                    .cylinders
+                    .retain(|key, _| !key.starts_with(INLINE_KEY));
+                Cache(std::sync::Arc::new(std::sync::Mutex::new(entries)))
+            }
+            None => Cache::default(),
+        };
+        *kept = Some(cache.clone());
+        cache
+    }
+
     pub(crate) fn part(
         &self,
         key: String,
@@ -695,7 +720,10 @@ pub(crate) fn load_model(
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{}:{}: {error:#}", path.display(), line.number);
     }
-    Ok(run.model)
+    Ok(Model {
+        cache: Cache::default(),
+        ..run.model
+    })
 }
 
 fn standard_model(spec: &str) -> Result<Model> {
@@ -750,6 +778,17 @@ pub fn snapshots_path(
 ) -> Result<(Vec<Line>, Vec<Snapshot>)> {
     let lines = read_lines(path)?;
     let snapshots = snapshots_from(start_for(path, vars, 0), &lines, Some(path));
+    Ok((lines, snapshots))
+}
+
+pub fn snapshots_path_kept(
+    path: &std::path::Path,
+    vars: &[(String, f64)],
+) -> Result<(Vec<Line>, Vec<Snapshot>)> {
+    let mut start = start_for(path, vars, 0);
+    start.cache = Cache::kept_for(path);
+    let lines = read_lines(path)?;
+    let snapshots = snapshots_from(start, &lines, Some(path));
     Ok((lines, snapshots))
 }
 

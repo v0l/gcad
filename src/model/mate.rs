@@ -345,7 +345,10 @@ impl Model {
         let placed = self.placements.get(part).copied();
         match self.sources.get(part) {
             Some(source) => format!("{source:?}|{selector}|{placed:?}|{faces:?}"),
-            None => format!("{part}|{selector}|{placed:?}|{faces:?}"),
+            None => format!(
+                "{}{part}|{selector}|{placed:?}|{faces:?}",
+                super::INLINE_KEY
+            ),
         }
     }
 
