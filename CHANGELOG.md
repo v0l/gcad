@@ -71,8 +71,9 @@ All notable changes to gcad are listed here. The format follows
 - Simulation meshes have far fewer flat elements: points on the surface slide along their face
   or edge to raise the worst element, and shedding flat elements no longer folds the surface.
   The worst element across the example parts went from 0.27 to 5.2 degrees.
-- Booleans and part loading are faster: the truck example checks in about 4 s (was 23 s) and its
-  wheel part builds in 1 s (was 2.5 s). The viewer keeps loaded parts between rebuilds, so saving
+- Booleans and part loading are faster: the truck example checks in under 4 s (was 23 s) on half
+  the CPU, and its wheel part builds in 1 s (was 2.5 s). Faces of a boolean operand far from the
+  other one are meshed coarsely. The viewer keeps loaded parts between rebuilds, so saving
   an assembly rebuilds only what changed.
 - Simulations give the same answer every run; the solver's dot products no longer depend on how
   threads split the work.
