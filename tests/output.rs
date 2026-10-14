@@ -573,3 +573,57 @@ fn flat_pattern_dxf() {
             .contains("flat pattern")
     );
 }
+
+fn drawing_files(name: &str, sheet: &str) -> std::path::PathBuf {
+    let dir = std::path::PathBuf::from(scratch(name));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("wall.gcad"),
+        "member bar 44x150 0,0,0 2400,0,0\nmember bar 44x150 22,0,22 22,0,1200 up=0,1,0\nmember bar 44x150 622,0,22 622,0,1200 up=0,1,0\nmember bar 44x150 1222,0,22 1222,0,1200 up=0,1,0\nbody slab\ncolor #a0a0a0\nplane XY offset=-150\nrect 2400 600 at=1200,0\nextrude 150\n",
+    )
+    .expect("part");
+    let path = dir.join("wall.gdwg");
+    std::fs::write(&path, sheet).expect("drawing");
+    path
+}
+
+#[test]
+fn drawing_sheets() {
+    let path = drawing_files(
+        "drawing_sheets",
+        "part wall.gcad\ntitle \"Test wall\"\nsheet \"Frame\" size=A3 scale=1:20\nview profile=\"bar 44x150\" lengths=1 from=-y label=\"frame\"\ndims profile=\"bar 44x150\" along=h across=1\nlevel 0 \"slab\"\ncallout 622,0,600 \"stud\" to=20,10\nsection slab from=+x at=1200 scale=1:10\nnote \"one|two\"\ncutlist summary=1\ncutlist\n",
+    );
+    let drawing = gcad::drafting::run(&path, &[]).expect("runs");
+    assert!(
+        drawing.failed().is_none(),
+        "{:?}",
+        drawing.failed().map(|(l, e)| format!("{}: {e:#}", l.text))
+    );
+    assert_eq!(drawing.sheets.len(), 1);
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    for words in [
+        ">600<",
+        ">+0 slab<",
+        ">stud<",
+        ">1178<",
+        ">Test wall<",
+        ">1 of 1<",
+        ">44x150<",
+    ] {
+        assert!(svg.contains(words), "the sheet lacks {words}");
+    }
+    let pdf = gcad::drafting::pdf(&drawing.sheets);
+    assert!(pdf.starts_with(b"%PDF-1.4"));
+    assert!(String::from_utf8_lossy(&pdf).contains("/Count 1"));
+}
+
+#[test]
+fn drawing_view_that_does_not_fit() {
+    let path = drawing_files(
+        "drawing_too_big",
+        "part wall.gcad\nsheet \"Frame\" size=A4 scale=1:1\nview from=-y\n",
+    );
+    let drawing = gcad::drafting::run(&path, &[]).expect("runs");
+    let (_, error) = drawing.failed().expect("the view is too big");
+    assert!(format!("{error:#}").contains("does not fit"), "{error:#}");
+}

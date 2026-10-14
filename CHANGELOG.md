@@ -7,6 +7,9 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- `.gdwg` drawing files: sheets with title blocks, views, sections and detail crops of named
+  parts, dimension chains and setting-out, levels, callouts, notes and member cut lists,
+  exported as a multi-page PDF or SVG sheets.
 - `color ... opacity=` on a body or an assembly part: the viewer draws it see-through, so
   glass can be glass.
 - Sheet metal from a flat blank: `tab` takes any outline with holes, `bend a,b c,d angle=` folds
