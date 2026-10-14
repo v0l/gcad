@@ -674,6 +674,12 @@ across that plane, looking at the cut, with the cut faces hatched.
 
 `check` stops at the first failing line and prints its number and why. After every
 line that changes the solid it prints the face count, volume and bounding box.
+Every part file an assembly brings in is kept built in `~/.cache/gcad/parts` (or
+`$XDG_CACHE_HOME/gcad/parts`), up to 1 GB, and read back the next time the same file
+is used with the same variables, as long as no file it read has changed (the part file,
+its includes, imports and material libraries) and gcad is the same build. Set
+`GCAD_NO_PART_CACHE=1` to build every part from scratch.
+
 `view` opens a window that rebuilds on every save. The left column is the file,
 one row per line, green when it ran, red where it failed. Clicking a row (or up and
 down) shows the solid as it was after that line, with the faces that line made in

@@ -26,6 +26,7 @@ mod skin;
 mod solids;
 mod standard;
 mod step_raw;
+mod stored;
 mod thread;
 mod weld;
 mod wrap;
@@ -916,22 +917,33 @@ pub(crate) fn load_model(
     if let Some(spec) = path.to_str().filter(|text| standard::is_standard(text)) {
         return standard_model(spec);
     }
-    if path
-        .extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("step") || e.eq_ignore_ascii_case("stp"))
-    {
-        return bodies::step_model(path);
+    let lasting = !is_assembly(path) && !crate::sim::is_sim(path);
+    if lasting && let Some(model) = stored::fetch(path, vars) {
+        return Ok(model);
     }
-    let mut start = start_for(path, vars, depth);
-    start.cache = cache.clone();
-    let run = run_model(start, &read_lines(path)?, Some(path));
-    if let Some((line, Err(error))) = run.steps.last() {
-        bail!("{}:{}: {error:#}", path.display(), line.number);
+    let (built, reads) = crate::host::recording(|| {
+        if path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("step") || e.eq_ignore_ascii_case("stp"))
+        {
+            return bodies::step_model(path);
+        }
+        let mut start = start_for(path, vars, depth);
+        start.cache = cache.clone();
+        let run = run_model(start, &read_lines(path)?, Some(path));
+        if let Some((line, Err(error))) = run.steps.last() {
+            bail!("{}:{}: {error:#}", path.display(), line.number);
+        }
+        Ok(Model {
+            cache: Cache::default(),
+            ..run.model
+        })
+    });
+    let model = built?;
+    if lasting && !crate::host::superseded() {
+        stored::put(path, vars, &model, &reads);
     }
-    Ok(Model {
-        cache: Cache::default(),
-        ..run.model
-    })
+    Ok(model)
 }
 
 fn standard_model(spec: &str) -> Result<Model> {
@@ -988,6 +1000,8 @@ pub fn snapshots_path(
     let snapshots = snapshots_from(start_for(path, vars, 0), &lines, Some(path));
     Ok((lines, snapshots))
 }
+
+pub use stored::{default_dir as default_part_store, store_parts_in};
 
 pub struct KeptRun {
     pub lines: Vec<Line>,

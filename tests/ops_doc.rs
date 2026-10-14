@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-const CATEGORIES: [&str; 11] = [
+const CATEGORIES: [&str; 12] = [
     "sketch",
     "workplane",
     "features",
@@ -12,6 +12,7 @@ const CATEGORIES: [&str; 11] = [
     "inspect",
     "simulation",
     "progress",
+    "stored",
 ];
 
 fn root() -> &'static str {

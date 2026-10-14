@@ -150,6 +150,7 @@ fn check_sends_separate_parts_to_an_assembly() {
         let path = scratch(name);
         std::fs::write(&path, source).expect("written");
         let output = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+            .env("GCAD_NO_PART_CACHE", "1")
             .args(["check", &path])
             .output()
             .expect("gcad runs");

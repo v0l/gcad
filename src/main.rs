@@ -397,6 +397,7 @@ fn query(file: &str, selector: &str, until: Option<usize>, vars: &[(String, f64)
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+    gcad::model::store_parts_in(gcad::model::default_part_store());
     let vars = cli.set;
     let command = cli.command.unwrap_or(Command::View {
         file: cli.file,
