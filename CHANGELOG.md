@@ -6,6 +6,8 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-14
+
 ### Added
 - A standard material library of about 210 metals, plastics, 3D printing materials, rubbers,
   timbers, boards, construction materials, stone, ground, insulation, glass and composites.
@@ -265,7 +267,8 @@ First release.
   and joint sliders.
 - Release builds, install script and agent skill.
 
-[Unreleased]: https://github.com/v0l/gcad/compare/v0.3.1...HEAD
+[Unreleased]: https://github.com/v0l/gcad/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/v0l/gcad/compare/v0.3.1...v0.4.0
 [0.3.1]: https://github.com/v0l/gcad/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/v0l/gcad/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/v0l/gcad/compare/v0.1.0...v0.2.0
