@@ -2026,7 +2026,7 @@ pub fn setup_view(spec: &Spec) -> Result<FieldView> {
     })
 }
 
-fn creases(points: &[Point3], triangles: &[[usize; 3]]) -> Vec<[usize; 2]> {
+pub(super) fn creases(points: &[Point3], triangles: &[[usize; 3]]) -> Vec<[usize; 2]> {
     let normal = |t: &[usize; 3]| {
         (points[t[1]] - points[t[0]])
             .cross(points[t[2]] - points[t[0]])

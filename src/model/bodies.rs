@@ -1284,6 +1284,12 @@ pub const MATERIALS: &[Stock] = &[
     stock("acrylic", 1.18, [3.2, 0.37, 65.0, 0.19, 75.0], false),
     stock("resin", 1.2, [2.2, 0.35, 50.0, 0.2, 80.0], false),
     stock("wood", 0.6, [10.0, 0.3, 40.0, 0.12, 5.0], false),
+    stock("concrete", 2.4, [30.0, 0.2, 30.0, 2.0, 10.0], false),
+    stock("brick", 1.8, [10.0, 0.2, 10.0, 0.81, 6.0], false),
+    stock("glass", 2.5, [70.0, 0.22, 40.0, 1.0, 9.0], false),
+    stock("gypsum", 0.9, [2.0, 0.25, 3.0, 0.25, 14.0], false),
+    stock("eps", 0.02, [0.005, 0.1, 0.1, 0.036, 70.0], false),
+    stock("wool", 0.04, [0.0005, 0.1, 0.02, 0.04, 3.0], false),
 ];
 
 pub fn stock_of(name: &str) -> Option<&'static Stock> {

@@ -67,6 +67,12 @@ pub const SIM_OPERATIONS: &[&str] = &[
     "magnet",
     "iron",
     "coil",
+    "release",
+    "buckling",
+    "combine",
+    "absorb",
+    "speaker",
+    "rays",
     "materials",
 ];
 
@@ -378,8 +384,15 @@ impl Model {
                     args.optional_number("within", &self.scope)?.unwrap_or(5.0),
                     "`within`",
                 )?;
-                if self.spec().kind == Some(crate::sim::Kind::Torque) {
-                    bail!("`converge` checks a mesh, and a torque simulation has none");
+                if matches!(
+                    self.spec().kind,
+                    Some(
+                        crate::sim::Kind::Torque
+                            | crate::sim::Kind::Acoustics
+                            | crate::sim::Kind::Frame
+                    )
+                ) {
+                    bail!("`converge` checks a mesh, and this simulation has none");
                 }
                 self.spec().converge = Some(within);
                 Ok(format!(
@@ -433,7 +446,12 @@ impl Model {
                 ))
             }
             "air" => {
-                let args = Args::new(line, &[], &["density", "viscosity", "temperature"], false)?;
+                let args = Args::new(
+                    line,
+                    &[],
+                    &["density", "viscosity", "temperature", "humidity"],
+                    false,
+                )?;
                 let (density, viscosity) = crate::sim::wind::AIR;
                 let density = positive(
                     args.optional_number("density", &self.scope)?
@@ -448,6 +466,12 @@ impl Model {
                 self.spec().air = Some((density, viscosity));
                 let ambient = args.optional_number("temperature", &self.scope)?;
                 self.spec().ambient = ambient;
+                if let Some(humidity) = args.optional_number("humidity", &self.scope)? {
+                    if !(0.0..=100.0).contains(&humidity) {
+                        bail!("`humidity` is a percentage from 0 to 100");
+                    }
+                    self.spec().humidity = Some(humidity);
+                }
                 Ok(match ambient {
                     Some(t) => format!("{density} kg/m³, {viscosity} m²/s, {t} °C"),
                     None => format!("{density} kg/m³, {viscosity} m²/s"),
@@ -462,6 +486,8 @@ impl Model {
                 ))
             }
             "spin" => self.op_spin(line),
+            "absorb" | "speaker" | "rays" => self.op_acoustics(line),
+            "release" | "buckling" | "combine" => self.op_frame(line),
             "turn" | "length" | "slice" | "magnet" | "iron" | "coil" => self.op_magnetic(line),
             "duct" => {
                 let args = Args::new(line, &["width", "height"], &[], false)?;
@@ -773,6 +799,138 @@ impl Model {
             Push::Pressure(p) => format!("{p} MPa on {n} face(s)"),
             Push::Torque { .. } => String::new(),
         })
+    }
+
+    fn op_frame(&mut self, line: &Line) -> Result<String> {
+        if self.spec().kind != Some(Kind::Frame) {
+            bail!("`{}` belongs in a frame simulation", line.op);
+        }
+        let scope = self.scope.clone();
+        match line.op.as_str() {
+            "release" => {
+                let args = Args::new(line, &["faces"], &[], false)?;
+                let faces = self.target_faces(args.text("faces")?)?;
+                let n = faces.len();
+                self.spec().releases.push(faces);
+                Ok(format!(
+                    "{n} member end(s) pinned: they carry force and no moment"
+                ))
+            }
+            "buckling" => {
+                let args = Args::new(line, &["count"], &[], false)?;
+                let count = args.number("count", &scope)?;
+                if !(1.0..=20.0).contains(&count) || count.fract() != 0.0 {
+                    bail!("`buckling` takes a whole number from 1 to 20");
+                }
+                self.spec().buckling = Some(count as usize);
+                Ok(format!(
+                    "the lowest {count} buckling load factors; they read as `buckling1`, `buckling2`, ..."
+                ))
+            }
+            _ => {
+                let args = Args::new(line, &["name"], &[], true)?;
+                let name = args.text("name")?.to_string();
+                if args.rest.is_empty() {
+                    bail!("write `combine {name} dead:1.35 live:1.5`, a load and its factor each");
+                }
+                let terms = args
+                    .rest
+                    .iter()
+                    .map(|word| {
+                        let (case, factor) = word
+                            .split_once(':')
+                            .ok_or_else(|| anyhow!("`{word}` needs a factor, like `{word}:1.5`"))?;
+                        Ok((case.to_string(), crate::parse::eval(factor, &scope)?))
+                    })
+                    .collect::<Result<Vec<_>>>()?;
+                let spec = self.spec();
+                if spec.combinations.iter().any(|c| c.name == name) {
+                    bail!("there is already a combination called `{name}`");
+                }
+                let count = terms.len();
+                spec.combinations.push(crate::sim::frame::Combination {
+                    name: name.clone(),
+                    terms,
+                });
+                Ok(format!(
+                    "{count} load(s) added up; the results read as `{name}.stress`, `{name}.displacement`"
+                ))
+            }
+        }
+    }
+
+    fn op_acoustics(&mut self, line: &Line) -> Result<String> {
+        use crate::sim::acoustics::{Absorb, stock, stock_names};
+        if self.spec().kind != Some(Kind::Acoustics) {
+            bail!("`{}` belongs in an acoustics simulation", line.op);
+        }
+        let scope = self.scope.clone();
+        match line.op.as_str() {
+            "speaker" => {
+                let args = Args::new(line, &["at"], &[], false)?;
+                let at = point3(args.text("at")?, &scope)?;
+                self.spec().speaker = Some(at);
+                Ok(format!("sound from {},{},{}", at.x, at.y, at.z))
+            }
+            "rays" => {
+                let args = Args::new(line, &["count"], &[], false)?;
+                let count = args.number("count", &scope)?;
+                if !(100.0..=10_000_000.0).contains(&count) || count.fract() != 0.0 {
+                    bail!("`rays` takes a whole number from 100 to 10000000");
+                }
+                self.spec().rays = Some(count as usize);
+                Ok(format!("{count} rays"))
+            }
+            _ => {
+                let args = Args::new(line, &["faces", "absorption"], &["scattering"], false)?;
+                let selector = args.text("faces")?;
+                let text = args.text("absorption")?;
+                let coefficients = match stock(text) {
+                    Some(known) => known,
+                    None => {
+                        let numbers = crate::parse::split_top_level(text, ',')
+                            .iter()
+                            .map(|n| crate::parse::eval(n, &scope))
+                            .collect::<Result<Vec<f64>>>()
+                            .map_err(|_| {
+                                anyhow!(
+                                    "`{text}` is not a material or coefficients; materials are {}",
+                                    stock_names()
+                                )
+                            })?;
+                        match numbers.as_slice() {
+                            [one] => [*one; 7],
+                            many if many.len() == 7 => many.try_into().expect("seven"),
+                            _ => bail!(
+                                "give one absorption coefficient or seven, for 125 Hz to 8 kHz, not {}",
+                                numbers.len()
+                            ),
+                        }
+                    }
+                };
+                if coefficients.iter().any(|a| !(0.0..=1.0).contains(a)) {
+                    bail!("an absorption coefficient is from 0 to 1");
+                }
+                let scattering = args.optional_number("scattering", &scope)?;
+                if scattering.is_some_and(|s| !(0.0..=1.0).contains(&s)) {
+                    bail!("`scattering` is from 0, mirror-like, to 1, fully diffuse");
+                }
+                let faces = self.target_faces(selector)?;
+                let n = faces.len();
+                let label = line.label.clone().unwrap_or_else(|| selector.to_string());
+                self.spec().absorb.push(Absorb {
+                    label,
+                    faces,
+                    coefficients,
+                    scattering,
+                });
+                Ok(format!(
+                    "{n} face(s) absorb {:.0}% at 500 Hz and {:.0}% at 2 kHz",
+                    coefficients[2] * 100.0,
+                    coefficients[4] * 100.0
+                ))
+            }
+        }
     }
 
     fn op_sim(&mut self, line: &Line) -> Result<String> {

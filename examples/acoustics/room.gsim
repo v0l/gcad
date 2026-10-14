@@ -1,0 +1,10 @@
+sim acoustics
+part room.gcad
+absorb all plaster
+absorb -Z carpet
+absorb +Z ceiling-tile
+speaker 2100,3300,1700
+front: probe 4000,3300,1200
+back: probe 7400,2200,1200
+rays 20000
+expect front.T30<1.2 back.STI>0.4

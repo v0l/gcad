@@ -1,0 +1,7 @@
+sim conduction
+part wall.gasm
+inside: convect concrete:<Z h=7.69 ambient=20
+outside: convect insulation:>Z h=25 ambient=-5
+outside: convect tie:>Z h=25 ambient=-5
+core: probe 300,300,100
+mesh 4

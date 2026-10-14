@@ -125,7 +125,7 @@ version = "1.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "40c48f72fd53cd289104fc64099abca73db4166ad86ea0b4341abe65af83dadc"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -136,7 +136,7 @@ checksum = "291e6a250ff86cd4a820112fb8898808a366d8f9f58ce16d1f538353ad55747d"
 dependencies = [
  "anstyle",
  "once_cell_polyfill",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -1134,7 +1134,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "39cab71617ae0d63f51a36d69f866391735b51691dbda63cf6f96d042b63efeb"
 dependencies = [
  "libc",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -1404,12 +1404,15 @@ dependencies = [
  "serde",
  "serde_json",
  "sha2",
+ "sims-acoustics",
  "sims-fem",
  "sims-field",
  "sims-flow",
+ "sims-frame",
  "sims-magnetic",
  "sims-progress",
  "sims-tet",
+ "sims-thermal",
  "spade",
  "toml",
  "ttf-parser",
@@ -2834,7 +2837,7 @@ version = "0.50.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7957b9740744892f114936ab4a57b3f487491bbeafaf8083688b16841a4240e5"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -3931,7 +3934,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys 0.12.1",
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]
@@ -4115,9 +4118,19 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 
 [[package]]
+name = "sims-acoustics"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
+dependencies = [
+ "rayon",
+ "sims-field",
+ "sims-progress",
+]
+
+[[package]]
 name = "sims-fem"
-version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4132,8 +4145,8 @@ dependencies = [
 
 [[package]]
 name = "sims-field"
-version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
 dependencies = [
  "bytemuck",
  "pollster",
@@ -4144,8 +4157,8 @@ dependencies = [
 
 [[package]]
 name = "sims-flow"
-version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4158,9 +4171,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "sims-frame"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
+dependencies = [
+ "faer",
+ "sims-progress",
+]
+
+[[package]]
 name = "sims-magnetic"
-version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
 dependencies = [
  "anyhow",
  "sims-fem",
@@ -4170,16 +4192,16 @@ dependencies = [
 
 [[package]]
 name = "sims-progress"
-version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
 dependencies = [
  "web-time",
 ]
 
 [[package]]
 name = "sims-tet"
-version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
 dependencies = [
  "anyhow",
  "cgmath",
@@ -4187,6 +4209,18 @@ dependencies = [
  "robust",
  "sims-field",
  "sims-progress",
+]
+
+[[package]]
+name = "sims-thermal"
+version = "0.4.0"
+source = "git+https://github.com/v0l/sims?rev=26a3128ed86990867088beb485d345f3cb43625c#26a3128ed86990867088beb485d345f3cb43625c"
+dependencies = [
+ "bytemuck",
+ "faer",
+ "sims-field",
+ "sims-progress",
+ "wgpu",
 ]
 
 [[package]]
@@ -4342,7 +4376,7 @@ dependencies = [
  "cfg-if",
  "libc",
  "psm",
- "windows-sys 0.61.2",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -5278,7 +5312,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.61.2",
+ "windows-sys 0.52.0",
 ]
 
 [[package]]

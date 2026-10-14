@@ -1,0 +1,4 @@
+plane XY offset=150
+circle 16 at=300,300
+pin: extrude 150
+material steel

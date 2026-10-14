@@ -1,0 +1,11 @@
+sim frame
+part portal.gasm
+gravity 0,0,-9.81
+base: fix left:<Z
+base: fix right:<Z
+live: load girder:+Z force=0,0,-60000
+wind: load left:<X force=10000,0,0
+combine uls weight:1.35 live:1.5 wind:1.5
+modes 3
+buckling 2
+mid: probe 3000,0,3650

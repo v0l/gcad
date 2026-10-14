@@ -1,0 +1,4 @@
+plane XY offset=200
+rect 600 600 at=300,300
+board: extrude 100
+material eps
