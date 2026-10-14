@@ -769,34 +769,35 @@ impl Model {
         let sink_a = (t / 2.0) / (back.0 * inward.0 + back.1 * inward.1);
         let sink_b = (t / 2.0) / (-(back.0 * far_inward.0 + back.1 * far_inward.1));
         let reach = t * 1.5;
-        let middle = add(centre, mul(bisector, r + t / 2.0));
-        let rib = [add(a, mul(back, sink_a)), sub(b, mul(back, sink_b)), middle];
+        let rib_at = |depth: f64| {
+            [
+                add(a, mul(back, sink_a)),
+                sub(b, mul(back, sink_b)),
+                add(centre, mul(bisector, r + depth * t)),
+            ]
+        };
         let groove_at = |deeper: f64| {
             let shift = mul(bisector, (t - deeper) / (theta / 2.0).cos());
-            let (ga, gb, q) = (add(a, shift), add(b, shift), add(corner, shift));
+            let (ga, gb) = (add(a, shift), add(b, shift));
             [
                 add(ga, mul(back, reach)),
                 sub(gb, mul(back, reach)),
-                add(q, mul(bisector, 2.0 * t + deeper)),
+                add(centre, mul(bisector, r + 1.5 * t - deeper)),
             ]
         };
         let groove = groove_at(0.0);
-        let clearance = t * 1.0e-2;
-        let inner = groove_at(clearance);
-        let along3 = top.x * fold.along.0 + top.y * fold.along.1;
         let n3 = top.normal;
         let point = |p: P2, at: f64| {
             let flat = add(mul(fold.out, p.0), mul(fold.along, at));
             top.at(flat.0, flat.1) + n3 * p.1
         };
-        let prism = |shape: &[P2], at: f64, width: f64| -> Result<Solid> {
-            let points: Vec<Point3> = shape.iter().map(|&p| point(p, at - width / 2.0)).collect();
-            let face: Face = profile::attach_plane_normalized(vec![welded_wire(&points)])
-                .map_err(|e| anyhow!("dart face: {e}"))?;
-            Ok(super::solids::oriented(builder::extrude(
-                &face,
-                along3 * width,
-            )))
+        let tent = |shape: &[P2; 3], at: f64, half: f64| -> Result<Solid> {
+            tetra([
+                point(shape[0], at),
+                point(shape[1], at),
+                point(shape[2], at - half),
+                point(shape[2], at + half),
+            ])
         };
         for &at in &dart.at {
             let zone = sheet
@@ -804,11 +805,12 @@ impl Model {
                 .iter()
                 .find(|z| z.fold == dart.fold && at >= z.width.0 && at <= z.width.1)
                 .ok_or_else(|| anyhow!("the dart at {at} is off its bend"))?;
-            let groove =
-                super::solids::placed(&prism(&groove, at, dart.width - 2.0 * t)?, zone.motion);
+            let half = dart.width / 2.0;
+            let clearance = t * 1.0e-2;
+            let groove = super::solids::placed(&tent(&groove, at, half)?, zone.motion);
             let shell = monstertruck::solid::difference_normalized(
-                &prism(&rib, at, dart.width)?,
-                &prism(&inner, at, dart.width - 2.0 * (t + clearance))?,
+                &tent(&rib_at(0.5), at, half)?,
+                &tent(&groove_at(clearance), at, half - clearance)?,
             )
             .map_err(|e| anyhow!("could not shape the dart at {at}: {e}"))?;
             let shell = super::solids::placed(&shell, zone.motion);
@@ -1236,6 +1238,44 @@ fn bend_prism(sheet: &Sheet, fold: &Fold, top: Frame, width: (f64, f64)) -> Resu
         &face,
         along3 * (width.1 - width.0),
     )))
+}
+
+fn tetra(points: [Point3; 4]) -> Result<Solid> {
+    let vertices: Vec<Vertex> = points.iter().map(|p| Vertex::new(*p)).collect();
+    let pairs = [(0, 1), (0, 2), (0, 3), (1, 2), (1, 3), (2, 3)];
+    let lines: Vec<Edge> = pairs
+        .iter()
+        .map(|&(i, j)| builder::line(&vertices[i], &vertices[j]))
+        .collect();
+    let edge = |i: usize, j: usize| {
+        let k = pairs
+            .iter()
+            .position(|&pair| pair == (i.min(j), i.max(j)))
+            .expect("tetra edge");
+        if i < j {
+            lines[k].clone()
+        } else {
+            lines[k].inverse()
+        }
+    };
+    let middle = Point3::from_vec(points.iter().map(|p| p.to_vec()).sum::<Vector3>() / 4.0);
+    let mut faces = Vec::new();
+    for [a, b, c] in [[0, 1, 2], [0, 3, 1], [0, 2, 3], [1, 3, 2]] {
+        let wire: Wire = vec![edge(a, b), edge(b, c), edge(c, a)].into();
+        let mut face: Face =
+            profile::attach_plane_normalized(vec![wire]).map_err(|e| anyhow!("dart face: {e}"))?;
+        let outward =
+            (points[a] + (points[b] - points[a]) / 3.0 + (points[c] - points[a]) / 3.0) - middle;
+        if let Surface::Plane(plane) = face.oriented_surface()
+            && plane.normal().dot(outward) < 0.0
+        {
+            face.invert();
+        }
+        faces.push(face);
+    }
+    Ok(super::solids::oriented(Solid::new_unchecked(vec![
+        faces.into(),
+    ])))
 }
 
 fn geometry_reach(solid: &Solid) -> f64 {

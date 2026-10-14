@@ -889,10 +889,14 @@ fn sheet_blank_with_any_outline() {
 #[test]
 fn sheet_darts_stiffen_a_bend() {
     let base = format!("{BLANK}fold: bend 10,-1 10,1 angle=90\n");
-    let plain = volume(&build(&base));
-    let darted = volume(&build(&format!("{base}dart fold -4 4 l=6 w=4")));
-    let one = (darted - plain) / 2.0;
-    assert!(one > 0.0 && one < 6.0 * 6.0 / 2.0 * 4.0, "{one}");
+    let plain = build(&base);
+    let darted = build(&format!("{base}dart fold -4 4 l=8 w=4"));
+    let faces = |model: &gcad::model::Model| {
+        gcad::select::faces(model.solid.as_ref().expect("solid")).len()
+    };
+    assert!(faces(&darted) > faces(&plain) + 8);
+    let change = (volume(&darted) - volume(&plain)) / volume(&plain);
+    assert!(change.abs() < 1.0e-2, "{change}");
     assert!(failure(&format!("{base}dart fold 0 w=2")).contains("wider"));
     assert!(failure(&format!("{base}dart fold 9 w=4")).contains("runs off"));
     assert!(failure(&format!("{base}dart nothing")).contains("not a bend"));
