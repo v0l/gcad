@@ -828,6 +828,76 @@ fn sheet_unfolds() {
     assert!(said.contains("1 cut(s) or hole(s)"), "{said}");
 }
 
+const BLANK: &str = "sheet 1 r=1\nrect 60 20\nbase: tab\n";
+
+#[test]
+fn sheet_bends_a_flat_blank() {
+    let ba = allowance(90.0, 1.0, 1.0, 0.44);
+    let text = format!("{BLANK}plane base.end\nh: hole 4 24,0\nfold: bend 10,-1 10,1 angle=90");
+    let model = build(&text);
+    let near = 10.0 - ba / 2.0 + 30.0;
+    let far = 30.0 - (10.0 + ba / 2.0);
+    let hole = PI * 4.0;
+    assert_volume(
+        &model,
+        (near + far) * 20.0 - hole + bend(90.0, 1.0, 1.0, 20.0),
+        1.0e-4,
+    );
+    let edge = 10.0 - ba / 2.0 + 2.0;
+    assert_bounds(&model, [-30.0, -10.0, 0.0], [edge, 10.0, 2.0 + far]);
+    let solid = model.solid.as_ref().expect("solid");
+    let faces = gcad::select::select_faces("h.side", solid, &model.groups, model.tolerance())
+        .expect("selects");
+    assert!(!faces.is_empty());
+    let moved = gcad::select::faces(solid);
+    assert!(faces.iter().all(|&i| {
+        moved[i]
+            .vertex_iter()
+            .all(|v| v.point().x > edge - 1.0 - 1.0e-6 && v.point().z > 2.0)
+    }));
+    let flat = build(&format!("{text}\nunfold"));
+    assert_volume(&flat, 1200.0 - hole, 1.0e-4);
+    assert_bounds(&flat, [-30.0, -10.0, 0.0], [30.0, 10.0, 1.0]);
+    let down = build(&format!("{BLANK}bend -10,-1 -10,1 angle=-90"));
+    assert_bounds(
+        &down,
+        [-10.0 + ba / 2.0 - 2.0, -10.0, -1.0 - (20.0 - ba / 2.0)],
+        [30.0, 10.0, 1.0],
+    );
+    assert!(failure(&format!("{BLANK}bend 0,-1 0,1")).contains("origin"));
+    assert!(
+        failure(&format!(
+            "{BLANK}plane base.end\nhole 2 10,0\nbend 10,-1 10,1"
+        ))
+        .contains("straight edges")
+    );
+    assert!(failure(&format!("{BLANK}flange base.end&>X 5\nbend 10,-1 10,1")).contains("both"));
+}
+
+#[test]
+fn sheet_blank_with_any_outline() {
+    let text =
+        "sheet 1 r=1\nslot 60 20\ncircle 6 at=20,0\nbase: tab\nfold: bend -10,-1 -10,1 angle=-90";
+    let flat = build(&format!("{text}\nunfold"));
+    assert_volume(&flat, 800.0 + PI * 100.0 - PI * 9.0, 1.0e-4);
+    let dxf = gcad::model::flat_dxf(flat.sheet.as_ref().expect("sheet"), flat.solid.as_ref());
+    assert!(dxf.matches("OUTLINE").count() > 40, "{dxf}");
+    assert_eq!(dxf.matches("\nBEND\n").count(), 1);
+    assert!(failure(&format!("{text}\nflange base.end&>X 5")).contains("`bend`"));
+}
+
+#[test]
+fn sheet_darts_stiffen_a_bend() {
+    let base = format!("{BLANK}fold: bend 10,-1 10,1 angle=90\n");
+    let plain = volume(&build(&base));
+    let darted = volume(&build(&format!("{base}dart fold -4 4 l=6 w=4")));
+    let one = (darted - plain) / 2.0;
+    assert!(one > 0.0 && one < 6.0 * 6.0 / 2.0 * 4.0, "{one}");
+    assert!(failure(&format!("{base}dart fold 0 w=2")).contains("wider"));
+    assert!(failure(&format!("{base}dart fold 9 w=4")).contains("runs off"));
+    assert!(failure(&format!("{base}dart nothing")).contains("not a bend"));
+}
+
 #[test]
 fn sheet_flange_inset_and_hem() {
     let model = build(&format!(

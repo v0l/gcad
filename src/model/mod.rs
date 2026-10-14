@@ -640,6 +640,8 @@ impl Model {
             "sheet" => self.op_sheet(line),
             "tab" => self.op_tab(line),
             "flange" => self.op_flange(line),
+            "bend" => self.op_bend(line),
+            "dart" => self.op_dart(line),
             "unfold" => self.op_unfold(line),
             "member" => self.op_member(line),
             "thread" => self.op_thread(line),

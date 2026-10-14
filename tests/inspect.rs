@@ -80,7 +80,7 @@ fn groups_survive_later_cuts() {
 #[test]
 fn errors() {
     assert!(failure("rect 10 10\nextrude 1\nfillet 1 nope.end").contains("known groups"));
-    assert!(failure("bend 3").contains("unknown operation"));
+    assert!(failure("wiggle 3").contains("unknown operation"));
     assert!(failure("rect w 10").contains("let w"));
     assert!(failure("rect 10 10\nplane XZ").contains("extrude or cut it"));
     assert!(failure("rect 10 10 r=5").contains("under half"));

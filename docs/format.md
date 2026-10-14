@@ -150,9 +150,30 @@ Sheet metal:
 | operation | parameters | does |
 |---|---|---|
 | `sheet` | `t` `r=` `k=` | makes this part sheet metal `t` thick, bent to an inside radius `r` (`t` unless given) with K-factor `k` (0.44 unless given), so a bend of `a` degrees takes `a*pi/180*(r+k*t)` of flat sheet |
-| `tab` | | turns the sketch, one rect without rounded corners or one poly, into the flat base plate, `t` thick on the workplane. Groups as for `extrude`: `start`, `end`, `side` |
+| `tab` | | turns the sketch into the flat base plate, `t` thick on the workplane. `flange` needs it drawn as one rect without rounded corners or one poly; a blank folded with `bend` can be any outline with holes in it, like a laser-cut part. Groups as for `extrude`: `start`, `end`, `side` |
 | `flange` | `edges l` `angle=` `inset=` | bends a flange off each straight outside edge of a plate's top or bottom face: it rises on the side of the face the edge is on, turns `angle` degrees (90 unless given, up to 180 for a hem) about an inside radius `r`, and runs on flat for `l`. `inset=d` stops it `d` short of both ends of the edge, `inset=a,b` short of the start and end, going round the plate counterclockwise seen from its top; one edge can take several inset flanges that do not overlap. A 90 degree flange off the top reaches `t+r+l` above the plate's bottom. Groups: `face` (the side that carries on from the face the edge was on), `back`, `end` (the free end), `side`, `bend` |
-| `unfold` | | replaces the part with its flat pattern, on the base plate's workplane, with the holes and through cuts made in the plates |
+| `bend` | `a,b c,d` `angle=` | folds the flat blank along the line through two points on the tab's workplane, by `angle` degrees (90 unless given, up to 180): positive folds toward the tab's `end` face, negative away. The side of the line with the sketch origin stays put, so the origin goes on the part that does not move. The blank must cross the line on straight edges square to it, with no holes in the strip that bends; bends must not cross. Labels made on the blank, holes and cuts included, carry over to the folded part. Groups: `bend` (the curved faces) |
+| `dart` | `bend at ...` `l=` `w=` | presses a stiffening dart into the bend named `bend` at each position `at` along its line (0 unless given), measured on the tab's workplane like the bend's points: a rib `w` wide (`2*t+4` unless given) inside the bend whose legs run `l` along each side (`3*(t+r)` unless given), with a groove `w-2*t` wide pressed in from outside so its walls stay `t` thick. Keep darts clear of holes. Bends up to 120 degrees |
+| `unfold` | | replaces the part with its flat pattern, on the base plate's workplane, with the holes and through cuts made in the plates. A `bend` part unfolds to its blank |
+
+A part is flanged or bent from a blank, not both. Draw a laser-cut part as its blank and fold
+it: the flat pattern is the blank itself, holes and cuts made after the first `bend` are not in
+it, and `unfold` counts them.
+
+```
+sheet 3 r=3
+plane XY offset=95
+slot 350 50 at=35,0
+circle 12 at=-140,0
+circle 12 at=210,0
+blank: tab
+plane blank.end
+hole 6.5 -10,15.7 -10,-15.7 80,15.7 80,-15.7
+left: bend -19.9,-1 -19.9,1 angle=-90
+right: bend 90.9,-1 90.9,1 angle=-90
+dart left -7 7 l=20 w=8
+dart right -7 7 l=20 w=8
+```
 
 Flanges on edges that meet at a corner leave the corner open by `r+t`. Make holes and cuts in the plates, through the sheet, for them to
 show in the flat pattern; `unfold` counts the ones it could not place. Its flat pattern is

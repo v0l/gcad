@@ -189,6 +189,13 @@ the new flange should rise from (`>X&walls.end`, `walls.face&walls.end`), since 
 sides of an edge fails. Put holes and through cuts in the plates so they reach the flat
 pattern, then `gcad export part.gcad flat.dxf`, or end the file with `unfold` to see it.
 
+A laser-cut and bent part is drawn flat first: sketch the whole blank (any outline, `slot` for
+round ends, holes as circles), `blank: tab`, cut the holes and keyways while it is flat, then
+`left: bend a,b c,d angle=-90` along each bend line in the tab's workplane. The side with the
+sketch origin stays put; labels made on the blank carry over, and the blank is the flat
+pattern. The blank must cross each bend on straight edges with no holes in the bending strip.
+`dart left -7 7 l=20 w=8` presses stiffening darts into a bend; keep them clear of holes.
+
 ## Weldments
 
 `member tube 40x40x3 0,0,0 500,0,0 500,300,0 0,300,0 closed` lays a mitred frame of square

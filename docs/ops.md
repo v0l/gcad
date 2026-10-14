@@ -151,6 +151,9 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | shorter flange and hem | supported | `flange e 10 inset=5`, `inset=2,8`, `angle=180` | `features::sheet_flange_inset_and_hem` |
 | flange on a flange | supported | `flange >X&walls.end 5` | `features::sheet_flange_on_a_flange` |
 | flat pattern | supported | `unfold`, holes and through cuts carried over | `features::sheet_unfolds` |
+| bend a flat blank | supported | `bend a,b c,d angle=-90`, labels carried over, unfolds to the blank | `features::sheet_bends_a_flat_blank` |
+| blank of any outline | supported | `slot` or arcs and holes, then `tab`, `bend`; DXF from the blank | `features::sheet_blank_with_any_outline` |
+| pressed darts | supported | `dart fold -7 7 l=20 w=8` | `features::sheet_darts_stiffen_a_bend` |
 | flat pattern DXF | supported | `gcad export part.gcad flat.dxf` | `output::flat_pattern_dxf` |
 
 ## Weldments
@@ -194,7 +197,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | move | supported | `move 10,0,0` | `bodies::translate` |
 | rotate | supported | `rotate 90 axis=z` | `bodies::rotate` |
 | scale | supported | `scale 2` | `bodies::scale` |
-| split | supported | `split XY offset=5 keep=below` | `bodies::split` |
+| split | supported | `split XY offset=5 keep=below` | `bodies::split`, `bodies::split_either_side` |
 | separate bodies | supported | `body second` | `bodies::separate_bodies` |
 | booleans between bodies | supported | `combine main b mode=cut` | `bodies::combine_bodies` |
 | point separate bodies at an assembly | supported | `gcad check` on a `.gcad` left with two bodies | `bodies::check_sends_separate_parts_to_an_assembly` |

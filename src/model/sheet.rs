@@ -23,6 +23,32 @@ pub struct Bend {
     pub line: (P2, P2),
 }
 
+#[derive(Clone, Debug)]
+pub struct Fold {
+    pub label: String,
+    pub point: P2,
+    pub along: P2,
+    pub out: P2,
+    pub at: f64,
+    pub angle: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct Dart {
+    pub label: String,
+    pub fold: usize,
+    pub at: Vec<f64>,
+    pub leg: f64,
+    pub width: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct PlacedZone {
+    pub fold: usize,
+    pub width: (f64, f64),
+    pub motion: Matrix4,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Sheet {
     pub thickness: f64,
@@ -34,6 +60,13 @@ pub struct Sheet {
     pub cutouts: Vec<Profile>,
     pub missed: usize,
     pub unfolded: bool,
+    pub curved: bool,
+    pub blank: Option<Solid>,
+    pub folds: Vec<Fold>,
+    pub flat_groups: Vec<select::GroupEntry>,
+    pub derived: usize,
+    pub darts: Vec<Dart>,
+    pub zones: Vec<PlacedZone>,
 }
 
 fn sub(a: P2, b: P2) -> P2 {
@@ -193,13 +226,15 @@ impl Model {
             bail!("`tab` starts a sheet metal part, so it must come before any other solid");
         }
         let (frame, profiles) = self.take_sketch("tab")?;
-        let [profile] = profiles.as_slice() else {
-            bail!("`tab` takes one outline, drawn with rect or poly");
+        let straight = match profiles.as_slice() {
+            [profile] => profile
+                .as_path()
+                .filter(|(_, segments)| segments.iter().all(|s| matches!(s, Segment::Line(_)))),
+            _ => None,
         };
-        let (start, segments) = profile
-            .as_path()
-            .filter(|(_, segments)| segments.iter().all(|s| matches!(s, Segment::Line(_))))
-            .ok_or_else(|| anyhow!("`tab` takes a rect without rounded corners or a poly"))?;
+        let Some((start, segments)) = straight else {
+            return self.curved_tab(line, frame, profiles, thickness);
+        };
         let mut outline: Vec<P2> = std::iter::once(start)
             .chain(segments.iter().map(Segment::end))
             .collect();
@@ -230,6 +265,559 @@ impl Model {
             to_flat: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
         });
         self.describe_solid()
+    }
+
+    fn curved_tab(
+        &mut self,
+        line: &Line,
+        frame: Frame,
+        profiles: Vec<Profile>,
+        thickness: f64,
+    ) -> Result<String> {
+        self.sketch = profiles;
+        let label = label_of(line);
+        self.frame = Some(frame);
+        let made = self.apply(&crate::parse::parse_line(
+            line.number,
+            &format!("{label}: extrude {thickness}"),
+        )?);
+        self.frame = Some(frame);
+        made?;
+        let sheet = self.sheet_mut("tab")?;
+        sheet.curved = true;
+        sheet.plates.push(Plate {
+            frame: frame.offset(thickness),
+            outline: Vec::new(),
+            to_flat: [1.0, 0.0, 0.0, 1.0, 0.0, 0.0],
+            used: Vec::new(),
+        });
+        self.describe_solid()
+    }
+
+    pub(crate) fn op_bend(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["from", "to"], &["angle"], false)?;
+        let from = crate::parse::eval_point(args.text("from")?, &self.scope)?;
+        let to = crate::parse::eval_point(args.text("to")?, &self.scope)?;
+        let angle = args.optional_number("angle", &self.scope)?.unwrap_or(90.0);
+        if angle == 0.0 || angle.abs() > 180.0 {
+            bail!("a bend turns more than 0 and up to 180 degrees either way, got {angle}");
+        }
+        let tolerance = self.tolerance() * 100.0;
+        let sheet = self.sheet_mut("bend")?;
+        if sheet.plates.is_empty() {
+            bail!("`bend` folds the flat plate a `tab` makes; draw the blank and `tab` it first");
+        }
+        if sheet.unfolded {
+            bail!("the sheet is unfolded; bend it before `unfold`");
+        }
+        if !sheet.bends.is_empty() && sheet.folds.is_empty() {
+            bail!(
+                "this sheet already has flanges; a part is either flanged or bent from a flat blank, not both"
+            );
+        }
+        if angle.abs() == 180.0 && sheet.radius == 0.0 {
+            bail!("a 180 degree bend needs a bend radius above 0 to leave room between its sides");
+        }
+        let run = sub(to, from);
+        let len = length(run);
+        if len < tolerance {
+            bail!("the two points of a bend line are the same point");
+        }
+        let along = mul(run, 1.0 / len);
+        let mut out = (-along.1, along.0);
+        let mut at = out.0 * from.0 + out.1 * from.1;
+        if at.abs() < tolerance {
+            bail!(
+                "the bend line passes through the sketch origin; the side with the origin stays put, so draw the blank with its origin on the part that does not move"
+            );
+        }
+        if at < 0.0 {
+            out = mul(out, -1.0);
+            at = -at;
+        }
+        if sheet.blank.is_none() {
+            let (solid, groups) = (self.solid.clone(), self.groups.0.clone());
+            let sheet = self.sheet_mut("bend")?;
+            sheet.derived = groups.len();
+            sheet.blank = solid;
+            sheet.flat_groups = groups;
+        }
+        let sheet = self.sheet_mut("bend")?;
+        sheet.folds.push(Fold {
+            label: label_of(line),
+            point: from,
+            along,
+            out,
+            at,
+            angle,
+        });
+        if let Err(error) = self.refold() {
+            if let Some(sheet) = self.sheet.as_mut() {
+                sheet.folds.pop();
+            }
+            return Err(error);
+        }
+        let sheet = self.sheet.as_ref().ok_or_else(|| anyhow!("no sheet"))?;
+        Ok(format!(
+            "{} {:.6} degrees, bend allowance {:.3}; {}",
+            if angle > 0.0 { "up" } else { "down" },
+            angle.abs(),
+            sheet.allowance(angle),
+            self.describe_solid()?
+        ))
+    }
+
+    fn refold(&mut self) -> Result<()> {
+        let tolerance = self.tolerance() * 100.0;
+        let sheet = self.sheet.clone().ok_or_else(|| anyhow!("no sheet"))?;
+        let blank = sheet
+            .blank
+            .clone()
+            .ok_or_else(|| anyhow!("no flat blank"))?;
+        let (t, r) = (sheet.thickness, sheet.radius);
+        let top = sheet.plates[0].frame;
+        let n3 = top.normal;
+        let lift3 = |q: P2| top.at(q.0, q.1);
+        let in3 = |v: P2| top.x * v.0 + top.y * v.1;
+        struct Piece {
+            solid: Solid,
+            crossed: Vec<usize>,
+        }
+        let span = |solid: &Solid, fold: &Fold| {
+            let mut range = (f64::INFINITY, f64::NEG_INFINITY);
+            for face in select::faces(solid) {
+                for edge in face.edge_iter() {
+                    for point in crate::geometry::curve_samples(&edge.curve()) {
+                        let (u, v) = top.local(point);
+                        let s = u * fold.out.0 + v * fold.out.1;
+                        range = (range.0.min(s), range.1.max(s));
+                    }
+                }
+            }
+            range
+        };
+        let reach = geometry_reach(&blank) + 1.0;
+        let slab = |fold: &Fold, lo: f64, hi: f64| -> Result<Solid> {
+            let (lo, hi) = (lo.max(-reach), hi.min(reach));
+            let x = in3(fold.out);
+            let frame = Frame {
+                origin: top.offset(-t - 1.0).origin,
+                x,
+                y: n3.cross(x),
+                normal: n3,
+            };
+            let block = Profile::Rect {
+                center: ((lo + hi) / 2.0, 0.0),
+                width: hi - lo,
+                height: 2.0 * reach,
+                radius: 0.0,
+            };
+            let shapes = super::solids::loops(&frame, std::slice::from_ref(&block))?;
+            super::solids::prism(
+                &frame,
+                &shapes,
+                &[0],
+                std::slice::from_ref(&block),
+                n3 * (t + 2.0),
+                (0.0, 0.0),
+            )
+        };
+        let remove = |solid: &Solid, fold: &Fold, from: f64, to: f64| -> Result<Solid> {
+            let tool = super::solids::clear_flush(&slab(fold, from, to)?, solid);
+            monstertruck::solid::difference_normalized(solid, &tool)
+                .map(|cut| super::fuse::fuse_coplanar(&super::exact::exact_edges(&cut)))
+                .map_err(|e| anyhow!("could not split the blank at `{}`: {e}", fold.label))
+        };
+        let across = |solid: &Solid, fold: &Fold, at: f64| {
+            let mut width = (f64::INFINITY, f64::NEG_INFINITY);
+            for face in select::faces(solid) {
+                for edge in face.edge_iter() {
+                    for point in crate::geometry::curve_samples(&edge.curve()) {
+                        let (u, v) = top.local(point);
+                        if (u * fold.out.0 + v * fold.out.1 - at).abs() < tolerance {
+                            let a = u * fold.along.0 + v * fold.along.1;
+                            width = (width.0.min(a), width.1.max(a));
+                        }
+                    }
+                }
+            }
+            width
+        };
+        struct Zone {
+            fold: usize,
+            width: (f64, f64),
+            crossed: Vec<usize>,
+        }
+        let mut pieces = vec![Piece {
+            solid: blank.clone(),
+            crossed: Vec::new(),
+        }];
+        let mut zones: Vec<Zone> = Vec::new();
+        for (i, fold) in sheet.folds.iter().enumerate() {
+            let half = sheet.allowance(fold.angle) / 2.0;
+            let (near, far) = (fold.at - half, fold.at + half);
+            for zone in zones.iter_mut() {
+                let other = &sheet.folds[zone.fold];
+                let oh = sheet.allowance(other.angle) / 2.0;
+                let corners = [
+                    (other.at - oh, zone.width.0),
+                    (other.at - oh, zone.width.1),
+                    (other.at + oh, zone.width.0),
+                    (other.at + oh, zone.width.1),
+                ];
+                let s: Vec<f64> = corners
+                    .iter()
+                    .map(|&(o, a)| {
+                        let p = add(mul(other.out, o), mul(other.along, a));
+                        p.0 * fold.out.0 + p.1 * fold.out.1
+                    })
+                    .collect();
+                if s.iter().all(|&x| x >= far - tolerance) {
+                    zone.crossed.push(i);
+                } else if !s.iter().all(|&x| x <= near + tolerance) {
+                    bail!(
+                        "`{}` and `{}` cross on the plate; bends must not meet inside the blank",
+                        other.label,
+                        fold.label
+                    );
+                }
+            }
+            let mut next = Vec::new();
+            for mut piece in pieces {
+                let (lo, hi) = span(&piece.solid, fold);
+                if hi <= near + tolerance {
+                    next.push(piece);
+                    continue;
+                }
+                if lo >= far - tolerance {
+                    piece.crossed.push(i);
+                    next.push(piece);
+                    continue;
+                }
+                if lo > near - tolerance || hi < far + tolerance {
+                    bail!(
+                        "the blank must run right across the strip that bends at `{}`, and it stops inside it",
+                        fold.label
+                    );
+                }
+                let before = remove(&piece.solid, fold, near, f64::INFINITY)?;
+                let after = remove(&piece.solid, fold, f64::NEG_INFINITY, far)?;
+                let width = across(&before, fold, near);
+                let width_after = across(&after, fold, far);
+                let ba = 2.0 * half;
+                let strip = (width.1 - width.0) * ba * t;
+                let left = crate::geometry::volume(&piece.solid).abs()
+                    - crate::geometry::volume(&before).abs()
+                    - crate::geometry::volume(&after).abs();
+                if width.1 <= width.0
+                    || (width.0 - width_after.0).abs() > tolerance
+                    || (width.1 - width_after.1).abs() > tolerance
+                    || (left - strip).abs() > 1.0e-2 * strip.max(1.0)
+                {
+                    bail!(
+                        "the blank must cross a bend on straight edges square to the bend line, with no holes in the {ba:.3} wide strip that bends; at `{}` it does not",
+                        fold.label
+                    );
+                }
+                zones.push(Zone {
+                    fold: i,
+                    width,
+                    crossed: piece.crossed.clone(),
+                });
+                next.push(Piece {
+                    solid: before,
+                    crossed: piece.crossed.clone(),
+                });
+                let mut crossed = piece.crossed.clone();
+                crossed.push(i);
+                next.push(Piece {
+                    solid: after,
+                    crossed,
+                });
+            }
+            pieces = next;
+        }
+        let turn = |fold: &Fold| {
+            let side = fold.angle.signum();
+            let half = sheet.allowance(fold.angle) / 2.0;
+            let o3 = in3(fold.out);
+            let axis = o3.cross(n3 * side);
+            let foot = lift3(mul(fold.out, fold.at - half));
+            let centre = foot + n3 * if side > 0.0 { r } else { -(t + r) };
+            (centre, axis, o3)
+        };
+        let carry = |fold: &Fold| {
+            let (centre, axis, o3) = turn(fold);
+            Matrix4::from_translation(centre.to_vec())
+                * Matrix4::from_axis_angle(axis, Deg(fold.angle.abs()))
+                * Matrix4::from_translation(-centre.to_vec())
+                * Matrix4::from_translation(-o3 * sheet.allowance(fold.angle))
+        };
+        let motion = |crossed: &[usize]| {
+            let mut order = crossed.to_vec();
+            order.sort_by(|&a, &b| sheet.folds[a].at.total_cmp(&sheet.folds[b].at));
+            order
+                .iter()
+                .fold(Matrix4::identity(), |m, &i| m * carry(&sheet.folds[i]))
+        };
+        let mut placed: Vec<Solid> = Vec::new();
+        let mut moves: Vec<(Solid, Matrix4)> = Vec::new();
+        let mut bends = Vec::new();
+        let mut bend_faces: Vec<(String, Vec<Surface>)> = Vec::new();
+        for piece in &pieces {
+            let m = motion(&piece.crossed);
+            placed.push(super::solids::placed(&piece.solid, m));
+            moves.push((piece.solid.clone(), m));
+        }
+        let mut placed_zones = Vec::new();
+        for zone in &zones {
+            let fold = &sheet.folds[zone.fold];
+            let m = motion(&zone.crossed);
+            placed_zones.push(PlacedZone {
+                fold: zone.fold,
+                width: zone.width,
+                motion: m,
+            });
+            let width = zone.width;
+            let swept = bend_prism(&sheet, fold, top, width)?;
+            let swept = super::solids::placed(&swept, m);
+            bend_faces.push((
+                fold.label.clone(),
+                select::faces(&swept)
+                    .iter()
+                    .map(|f| f.oriented_surface())
+                    .filter(|s| !matches!(s, Surface::Plane(_)))
+                    .collect(),
+            ));
+            placed.push(swept);
+            let point = |a: f64| add(mul(fold.out, fold.at), mul(fold.along, a));
+            bends.push(Bend {
+                angle: fold.angle,
+                width: width.1 - width.0,
+                line: (point(width.0), point(width.1)),
+            });
+        }
+        let mut rest = placed;
+        let mut solid = rest.remove(0);
+        while !rest.is_empty() {
+            let reach = crate::geometry::bounds(&solid);
+            let touching = |other: &Solid| {
+                let b = crate::geometry::bounds(other);
+                (0..3).all(|k| {
+                    b.min()[k] <= reach.max()[k] + tolerance
+                        && reach.min()[k] <= b.max()[k] + tolerance
+                })
+            };
+            let joined = (0..rest.len())
+                .filter(|&k| touching(&rest[k]))
+                .find_map(|k| {
+                    super::weld::weld_union(&solid, &rest[k])
+                        .or_else(|| monstertruck::solid::or_normalized(&solid, &rest[k]).ok())
+                        .map(|joined| (k, joined))
+                });
+            let Some((k, joined)) = joined else {
+                bail!("could not join the bent plate back together");
+            };
+            rest.remove(k);
+            solid = joined;
+        }
+        self.solid = Some(super::fuse::fuse_coplanar(&solid));
+        let mut groups: Vec<select::GroupEntry> = Vec::new();
+        for entry in &sheet.flat_groups {
+            for (piece, m) in &moves {
+                let carries = select::faces(piece)
+                    .iter()
+                    .any(|face| select::face_on(face, &entry.surface, tolerance / 100.0));
+                if carries {
+                    groups.push(select::GroupEntry {
+                        surface: super::bodies::moved_surface(&entry.surface, *m),
+                        ..entry.clone()
+                    });
+                }
+            }
+        }
+        for (label, surfaces) in bend_faces {
+            for surface in surfaces {
+                groups.push(select::GroupEntry {
+                    label: label.clone(),
+                    group: "bend".to_string(),
+                    surface,
+                });
+            }
+        }
+        let tail = self.groups.0[sheet.derived.min(self.groups.0.len())..].to_vec();
+        let derived = groups.len();
+        groups.extend(tail);
+        self.groups.0 = groups;
+        let sheet = self.sheet.as_mut().ok_or_else(|| anyhow!("no sheet"))?;
+        sheet.derived = derived;
+        sheet.bends = bends;
+        sheet.zones = placed_zones;
+        let darts = sheet.darts.clone();
+        for dart in &darts {
+            self.press_dart(dart)?;
+        }
+        Ok(())
+    }
+
+    pub(crate) fn op_dart(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["bend"], &["l", "w"], true)?;
+        let name = args.text("bend")?;
+        let sheet = self.sheet_mut("dart")?.clone();
+        let fold = sheet
+            .folds
+            .iter()
+            .position(|f| f.label == name)
+            .ok_or_else(|| {
+                anyhow!(
+                    "`{name}` is not a bend of this sheet; name the `bend` line to press darts into"
+                )
+            })?;
+        if sheet.unfolded {
+            bail!("the sheet is unfolded; press darts before `unfold`");
+        }
+        let (t, r) = (sheet.thickness, sheet.radius);
+        let leg = match args.optional_number("l", &self.scope)? {
+            Some(l) => positive(l, "l")?,
+            None => 3.0 * (t + r),
+        };
+        let width = match args.optional_number("w", &self.scope)? {
+            Some(w) => positive(w, "w")?,
+            None => 2.0 * t + 4.0,
+        };
+        if width <= 2.0 * t {
+            bail!(
+                "a dart is wider than twice the sheet, {:.3}, to leave a groove between its walls",
+                2.0 * t
+            );
+        }
+        if sheet.folds[fold].angle.abs() > 120.0 {
+            bail!("darts stiffen bends up to 120 degrees");
+        }
+        let at: Vec<f64> = if args.rest.is_empty() {
+            vec![0.0]
+        } else {
+            args.rest
+                .iter()
+                .map(|text| crate::parse::eval(text, &self.scope))
+                .collect::<Result<_>>()?
+        };
+        for &a in &at {
+            let inside = sheet.zones.iter().any(|z| {
+                z.fold == fold
+                    && a - width / 2.0 >= z.width.0 - 1.0e-9
+                    && a + width / 2.0 <= z.width.1 + 1.0e-9
+            });
+            if !inside {
+                bail!("a {width:.3} wide dart at {a} runs off the `{name}` bend");
+            }
+        }
+        let label = label_of(line);
+        let sheet = self.sheet_mut("dart")?;
+        sheet.darts.push(Dart {
+            label,
+            fold,
+            at: at.clone(),
+            leg,
+            width,
+        });
+        if let Err(error) = self.refold() {
+            if let Some(sheet) = self.sheet.as_mut() {
+                sheet.darts.pop();
+            }
+            self.refold()?;
+            return Err(error);
+        }
+        Ok(format!(
+            "{} dart(s) {leg:.3} along each side, {width:.3} wide; {}",
+            at.len(),
+            self.describe_solid()?
+        ))
+    }
+
+    fn press_dart(&mut self, dart: &Dart) -> Result<()> {
+        let sheet = self.sheet.clone().ok_or_else(|| anyhow!("no sheet"))?;
+        let fold = &sheet.folds[dart.fold];
+        let (t, r) = (sheet.thickness, sheet.radius);
+        let top = sheet.plates[0].frame;
+        let side = fold.angle.signum();
+        let theta = fold.angle.abs().to_radians();
+        let phi = side * theta;
+        let rotate = |v: P2| {
+            (
+                v.0 * phi.cos() - v.1 * phi.sin(),
+                v.0 * phi.sin() + v.1 * phi.cos(),
+            )
+        };
+        let s0 = fold.at - sheet.allowance(fold.angle) / 2.0;
+        let h_in = if side > 0.0 { 0.0 } else { -t };
+        let centre = (s0, h_in + side * r);
+        let corner = (s0 + r * (theta / 2.0).tan(), h_in);
+        let bisector = {
+            let d = sub(corner, centre);
+            mul(d, 1.0 / length(d))
+        };
+        let far = rotate((1.0, 0.0));
+        let a = sub(corner, (dart.leg, 0.0));
+        let b = add(corner, mul(far, dart.leg));
+        let back = {
+            let d = sub(a, b);
+            mul(d, 1.0 / length(d))
+        };
+        let inward = (0.0, -side);
+        let far_inward = rotate(inward);
+        let sink_a = (t / 2.0) / (back.0 * inward.0 + back.1 * inward.1);
+        let sink_b = (t / 2.0) / (-(back.0 * far_inward.0 + back.1 * far_inward.1));
+        let reach = t * 1.5;
+        let middle = add(centre, mul(bisector, r + t / 2.0));
+        let rib = [add(a, mul(back, sink_a)), sub(b, mul(back, sink_b)), middle];
+        let groove_at = |deeper: f64| {
+            let shift = mul(bisector, (t - deeper) / (theta / 2.0).cos());
+            let (ga, gb, q) = (add(a, shift), add(b, shift), add(corner, shift));
+            [
+                add(ga, mul(back, reach)),
+                sub(gb, mul(back, reach)),
+                add(q, mul(bisector, 2.0 * t + deeper)),
+            ]
+        };
+        let groove = groove_at(0.0);
+        let clearance = t * 1.0e-2;
+        let inner = groove_at(clearance);
+        let along3 = top.x * fold.along.0 + top.y * fold.along.1;
+        let n3 = top.normal;
+        let point = |p: P2, at: f64| {
+            let flat = add(mul(fold.out, p.0), mul(fold.along, at));
+            top.at(flat.0, flat.1) + n3 * p.1
+        };
+        let prism = |shape: &[P2], at: f64, width: f64| -> Result<Solid> {
+            let points: Vec<Point3> = shape.iter().map(|&p| point(p, at - width / 2.0)).collect();
+            let face: Face = profile::attach_plane_normalized(vec![welded_wire(&points)])
+                .map_err(|e| anyhow!("dart face: {e}"))?;
+            Ok(super::solids::oriented(builder::extrude(
+                &face,
+                along3 * width,
+            )))
+        };
+        for &at in &dart.at {
+            let zone = sheet
+                .zones
+                .iter()
+                .find(|z| z.fold == dart.fold && at >= z.width.0 && at <= z.width.1)
+                .ok_or_else(|| anyhow!("the dart at {at} is off its bend"))?;
+            let groove =
+                super::solids::placed(&prism(&groove, at, dart.width - 2.0 * t)?, zone.motion);
+            let shell = monstertruck::solid::difference_normalized(
+                &prism(&rib, at, dart.width)?,
+                &prism(&inner, at, dart.width - 2.0 * (t + clearance))?,
+            )
+            .map_err(|e| anyhow!("could not shape the dart at {at}: {e}"))?;
+            let shell = super::solids::placed(&shell, zone.motion);
+            self.merge(&dart.label, groove, Combine::Remove)
+                .map_err(|e| anyhow!("could not press the dart at {at}: {e}"))?;
+            self.merge(&dart.label, shell, Combine::Add)
+                .map_err(|e| anyhow!("could not press the dart at {at}: {e}"))?;
+        }
+        Ok(())
     }
 
     fn sheet_edge(&self, a: Point3, b: Point3) -> Result<(usize, usize, bool)> {
@@ -280,6 +868,11 @@ impl Model {
         let sheet = self.sheet_mut("flange")?.clone();
         if sheet.plates.is_empty() {
             bail!("`flange` needs a `tab` to bend from");
+        }
+        if sheet.curved || !sheet.folds.is_empty() {
+            bail!(
+                "`flange` works on a tab drawn with rect or poly and not yet bent; fold this blank with `bend`"
+            );
         }
         if sheet.unfolded {
             bail!("the sheet is unfolded; flange it before `unfold`");
@@ -448,6 +1041,13 @@ impl Model {
         if sheet.plates.is_empty() || sheet.unfolded {
             return;
         }
+        if !sheet.folds.is_empty() {
+            sheet.missed += profiles.len();
+            return;
+        }
+        if sheet.curved {
+            return;
+        }
         for profile in profiles {
             let samples: Vec<Point3> = profile
                 .wires(frame)
@@ -499,6 +1099,7 @@ impl Model {
         if let Some(sheet) = self.sheet.as_mut()
             && !sheet.plates.is_empty()
             && !sheet.unfolded
+            && (!sheet.folds.is_empty() || !sheet.curved)
         {
             sheet.missed += 1;
         }
@@ -512,6 +1113,9 @@ impl Model {
         }
         if sheet.unfolded {
             bail!("the sheet is already unfolded");
+        }
+        if sheet.curved || sheet.blank.is_some() {
+            return self.unfold_blank(&sheet);
         }
         let base = &sheet.plates[0];
         let floor = base.frame.offset(-sheet.thickness);
@@ -554,6 +1158,113 @@ impl Model {
     }
 }
 
+impl Model {
+    fn unfold_blank(&mut self, sheet: &Sheet) -> Result<String> {
+        if let Some(blank) = sheet.blank.clone() {
+            self.solid = Some(blank);
+            let tail = self.groups.0[sheet.derived.min(self.groups.0.len())..].to_vec();
+            self.groups.0 = sheet.flat_groups.clone();
+            self.groups.0.extend(tail);
+        }
+        let solid = self.active("unfold")?.clone();
+        let bounds = crate::geometry::bounds(&solid);
+        let mut size = [
+            bounds.max().x - bounds.min().x,
+            bounds.max().y - bounds.min().y,
+            bounds.max().z - bounds.min().z,
+        ];
+        size.sort_by(f64::total_cmp);
+        let missed = sheet.missed;
+        let sheet = self.sheet_mut("unfold")?;
+        sheet.unfolded = true;
+        let note = match missed {
+            0 => String::new(),
+            n => format!("; {n} cut(s) or hole(s) made after bending are not in the flat pattern"),
+        };
+        Ok(format!(
+            "flat {:.3} x {:.3}; {}{note}",
+            size[2],
+            size[1],
+            self.describe_solid()?
+        ))
+    }
+}
+
+fn bend_prism(sheet: &Sheet, fold: &Fold, top: Frame, width: (f64, f64)) -> Result<Solid> {
+    let (t, r) = (sheet.thickness, sheet.radius);
+    let side = fold.angle.signum();
+    let phi = side * fold.angle.abs().to_radians();
+    let rotate = |v: P2, by: f64| {
+        (
+            v.0 * by.cos() - v.1 * by.sin(),
+            v.0 * by.sin() + v.1 * by.cos(),
+        )
+    };
+    let s0 = fold.at - sheet.allowance(fold.angle) / 2.0;
+    let h_in = if side > 0.0 { 0.0 } else { -t };
+    let centre = (s0, h_in + side * r);
+    let u0 = (0.0, -side);
+    let (u1, um) = (rotate(u0, phi), rotate(u0, phi / 2.0));
+    let n3 = top.normal;
+    let along3 = top.x * fold.along.0 + top.y * fold.along.1;
+    let point = |p: P2| {
+        let flat = add(mul(fold.out, p.0), mul(fold.along, width.0));
+        top.at(flat.0, flat.1) + n3 * p.1
+    };
+    let at = |radius: f64, u: P2| point(add(centre, mul(u, radius)));
+    let outer = r + t;
+    let o0 = Vertex::new(at(outer, u0));
+    let o1 = Vertex::new(at(outer, u1));
+    let mut edges = Vec::new();
+    if r > 0.0 {
+        let i0 = Vertex::new(at(r, u0));
+        let i1 = Vertex::new(at(r, u1));
+        edges.push(builder::line(&i0, &o0));
+        edges.push(builder::circle_arc(&o0, &o1, at(outer, um)));
+        edges.push(builder::line(&o1, &i1));
+        edges.push(builder::circle_arc(&i1, &i0, at(r, um)));
+    } else {
+        let c = Vertex::new(point(centre));
+        edges.push(builder::line(&c, &o0));
+        edges.push(builder::circle_arc(&o0, &o1, at(outer, um)));
+        edges.push(builder::line(&o1, &c));
+    }
+    let wire: Wire = edges.into_iter().collect();
+    let face: Face =
+        profile::attach_plane_normalized(vec![wire]).map_err(|e| anyhow!("bend section: {e}"))?;
+    Ok(super::solids::oriented(builder::extrude(
+        &face,
+        along3 * (width.1 - width.0),
+    )))
+}
+
+fn geometry_reach(solid: &Solid) -> f64 {
+    crate::geometry::bounds(solid).diameter()
+}
+
+fn blank_lines(sheet: &Sheet, solid: &Solid) -> Vec<(P2, P2)> {
+    let top = sheet.plates[0].frame;
+    let mut lines = Vec::new();
+    for face in select::faces(solid) {
+        let Surface::Plane(plane) = face.oriented_surface() else {
+            continue;
+        };
+        if plane.normal().dot(top.normal) < 1.0 - 1.0e-9
+            || (plane.origin() - top.origin).dot(top.normal).abs() > 1.0e-6
+        {
+            continue;
+        }
+        for edge in face.edge_iter() {
+            let points: Vec<P2> = crate::geometry::curve_samples(&edge.curve())
+                .into_iter()
+                .map(|p| top.local(p))
+                .collect();
+            lines.extend(points.windows(2).map(|pair| (pair[0], pair[1])));
+        }
+    }
+    lines
+}
+
 fn sheet_points(model: &Model) -> Vec<Point3> {
     let Some(sheet) = model.sheet.as_ref() else {
         return Vec::new();
@@ -562,7 +1273,7 @@ fn sheet_points(model: &Model) -> Vec<Point3> {
     sheet.flat.iter().map(|&(u, v)| base.at(u, v)).collect()
 }
 
-pub fn flat_dxf(sheet: &Sheet) -> String {
+pub fn flat_dxf(sheet: &Sheet, solid: Option<&Solid>) -> String {
     let mut out = String::from("0\nSECTION\n2\nENTITIES\n");
     let line = |out: &mut String, layer: &str, a: P2, b: P2| {
         out.push_str(&format!(
@@ -570,6 +1281,20 @@ pub fn flat_dxf(sheet: &Sheet) -> String {
             a.0, a.1, b.0, b.1
         ));
     };
+    let blank = sheet
+        .blank
+        .as_ref()
+        .or(solid.filter(|_| sheet.curved && sheet.folds.is_empty()));
+    if let Some(blank) = blank {
+        for (a, b) in blank_lines(sheet, blank) {
+            line(&mut out, "OUTLINE", a, b);
+        }
+        for bend in &sheet.bends {
+            line(&mut out, "BEND", bend.line.0, bend.line.1);
+        }
+        out.push_str("0\nENDSEC\n0\nEOF\n");
+        return out;
+    }
     let n = sheet.flat.len();
     for i in 0..n {
         line(&mut out, "OUTLINE", sheet.flat[i], sheet.flat[(i + 1) % n]);

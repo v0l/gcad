@@ -9,6 +9,9 @@ All notable changes to gcad are listed here. The format follows
 ### Added
 - `color ... opacity=` on a body or an assembly part: the viewer draws it see-through, so
   glass can be glass.
+- Sheet metal from a flat blank: `tab` takes any outline with holes, `bend a,b c,d angle=` folds
+  it along a line, keeping every label made on the blank, and `unfold` and the DXF give back the
+  blank. `dart bend at ... l= w=` presses stiffening darts into a bend.
 - `measure box`, `measure clearance a b` and `measure space at=x,y,z` in parts and assemblies:
   bounding boxes, the nearest gap between two bodies, and the free box inside a case with what
   bounds each side. `gcad measure file ...` runs one without adding it to the file.
@@ -100,6 +103,8 @@ All notable changes to gcad are listed here. The format follows
 ### Fixed
 - After opening another file the viewer stopped following the old file's parts; it used to rebuild
   the new file whenever one of them changed.
+- `split` failed on many solids, a plate split on `YZ` among them; it now cuts the other side
+  away, and its `cut` group names the new face.
 - Assemblies that hold each other stop at 16 levels with an error instead of crashing.
 - The wind setup's air box is drawn in the wind colour and labelled with its size; it was a
   black line on the dark background. Viewer labels stay inside the view.

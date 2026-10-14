@@ -403,7 +403,7 @@ impl Model {
         };
         let solid = self.active("split")?;
         let bounds = geometry::bounds(solid);
-        let size = bounds.diameter() * 4.0;
+        let size = bounds.diameter() * 1.5 + 1.0;
         let (u, v) = frame.local(bounds.center());
         let block = Profile::Rect {
             center: (u, v),
@@ -417,7 +417,7 @@ impl Model {
             &shapes,
             &[0],
             std::slice::from_ref(&block),
-            frame.normal * (side * size),
+            frame.normal * (-side * size),
             (0.0, 0.0),
         )?;
         let label = label_of(line);
@@ -426,11 +426,11 @@ impl Model {
             frame.origin + frame.x,
             frame.origin + frame.y,
         ));
-        if side < 0.0 {
+        if side > 0.0 {
             cut_face.invert();
         }
         self.groups.record(&label, "cut", cut_face);
-        self.merge(&label, tool, Combine::Common)?;
+        self.merge(&label, tool, Combine::Remove)?;
         self.describe_solid()
     }
 

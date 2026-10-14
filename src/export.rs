@@ -210,7 +210,7 @@ pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &
             .ok_or_else(|| {
                 anyhow::anyhow!("a .dxf export is the flat pattern of a sheet metal part; start the part with `sheet` and `tab`")
             })?;
-        std::fs::write(path, crate::model::flat_dxf(sheet))?;
+        std::fs::write(path, crate::model::flat_dxf(sheet, model.solid.as_ref()))?;
         return Ok(());
     }
     if step.ends_with(".svg") {

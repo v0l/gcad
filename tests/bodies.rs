@@ -86,6 +86,26 @@ fn split() {
 }
 
 #[test]
+fn split_either_side() {
+    for (keep, kept, x) in [("above", 350.0, 3.0), ("below", 650.0, 3.0)] {
+        let model = build(&format!(
+            "rect 20 10\nextrude 5\ns: split on=YZ offset=3 keep={keep}"
+        ));
+        assert_volume(&model, kept, 1.0e-6);
+        let solid = model.solid.as_ref().expect("solid");
+        let faces = gcad::select::select_faces("s.cut", solid, &model.groups, model.tolerance())
+            .expect("selects");
+        let all = gcad::select::faces(solid);
+        assert_eq!(faces.len(), 1, "{keep}");
+        assert!(
+            all[faces[0]]
+                .vertex_iter()
+                .all(|v| (v.point().x - x).abs() < 1.0e-9)
+        );
+    }
+}
+
+#[test]
 fn separate_bodies() {
     let model = build("rect 10 10\nextrude 10\nbody second\nrect 10 10 at=50,0\nextrude 10");
     assert_volume(&model, 2000.0, 1.0e-6);
