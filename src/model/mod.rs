@@ -180,36 +180,163 @@ struct Shared {
 
 #[derive(Default)]
 struct CacheEntries {
-    parts: HashMap<String, std::sync::Arc<Model>>,
+    parts: HashMap<String, Entry>,
     cylinders: HashMap<String, Vec<mate::Cylinder>>,
     pending: std::collections::HashSet<String>,
+    clock: u64,
+}
+
+struct Entry {
+    model: std::sync::Arc<Model>,
+    reads: crate::host::Reads,
+    uses: Vec<String>,
+    used: u64,
+}
+
+pub(crate) struct Traced {
+    model: Result<Model>,
+    reads: crate::host::Reads,
+    uses: Vec<String>,
+}
+
+thread_local! {
+    static USES: std::cell::RefCell<Vec<Vec<String>>> = const { std::cell::RefCell::new(Vec::new()) };
+}
+
+pub(crate) fn traced(load: impl FnOnce() -> Result<Model>) -> Traced {
+    USES.with(|stack| stack.borrow_mut().push(Vec::new()));
+    let (model, reads) = crate::host::recording(load);
+    let uses = USES.with(|stack| stack.borrow_mut().pop().unwrap_or_default());
+    Traced { model, reads, uses }
+}
+
+fn note_use(key: &str) {
+    USES.with(|stack| {
+        if let Some(top) = stack.borrow_mut().last_mut()
+            && !top.iter().any(|k| k == key)
+        {
+            top.push(key.to_string());
+        }
+    });
 }
 
 pub(crate) const INLINE_KEY: &str = "inline|";
 
+pub(crate) struct Settling<'a> {
+    cache: &'a Cache,
+    key: &'a str,
+    done: bool,
+}
+
+impl<'a> Settling<'a> {
+    pub(crate) fn new(cache: &'a Cache, key: &'a str) -> Self {
+        Settling {
+            cache,
+            key,
+            done: false,
+        }
+    }
+
+    pub(crate) fn settle(mut self, traced: Traced) {
+        self.done = true;
+        self.cache.settle(self.key, Some(traced));
+    }
+}
+
+impl Drop for Settling<'_> {
+    fn drop(&mut self) {
+        if !self.done {
+            self.cache.settle(self.key, None);
+        }
+    }
+}
+
+const KEPT_PARTS: usize = 256;
+
 static KEPT: std::sync::Mutex<Option<Cache>> = std::sync::Mutex::new(None);
 
-impl Cache {
-    fn kept_for(top: &std::path::Path) -> Cache {
-        let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
-        let reusable = kept.take().filter(|_| crate::host::unchanged_except(top));
-        if reusable.is_none() {
-            crate::host::forget_reads();
+impl CacheEntries {
+    fn stale(&self, key: &str, memo: &mut HashMap<String, bool>) -> bool {
+        if let Some(known) = memo.get(key) {
+            return *known;
         }
-        let cache = match reusable {
-            Some(old) => {
-                let mut entries = std::mem::take(&mut *old.lock());
-                entries
-                    .cylinders
-                    .retain(|key, _| !key.starts_with(INLINE_KEY));
-                entries.pending.clear();
-                Cache(std::sync::Arc::new(Shared {
-                    entries: std::sync::Mutex::new(entries),
-                    settled: std::sync::Condvar::new(),
-                }))
+        memo.insert(key.to_string(), true);
+        let stale = match self.parts.get(key) {
+            None => true,
+            Some(entry) => {
+                !entry.reads.unchanged() || entry.uses.iter().any(|used| self.stale(used, memo))
             }
-            None => Cache::default(),
         };
+        memo.insert(key.to_string(), stale);
+        stale
+    }
+
+    fn refresh(&mut self) {
+        let mut memo = HashMap::default();
+        let mut by_age: Vec<(u64, &String)> = self
+            .parts
+            .iter()
+            .map(|(key, entry)| (entry.used, key))
+            .collect();
+        by_age.sort();
+        let idle = by_age.len().saturating_sub(KEPT_PARTS);
+        let stale: Vec<String> = by_age[..idle]
+            .iter()
+            .map(|(_, key)| (*key).clone())
+            .chain(
+                self.parts
+                    .keys()
+                    .filter(|key| self.stale(key, &mut memo))
+                    .cloned()
+                    .collect::<Vec<_>>(),
+            )
+            .collect();
+        let changed: Vec<String> = stale
+            .iter()
+            .filter_map(|key| self.parts.get(key))
+            .flat_map(|entry| {
+                entry
+                    .reads
+                    .files()
+                    .map(|f| format!("{f:?}"))
+                    .collect::<Vec<_>>()
+            })
+            .collect();
+        for key in &stale {
+            self.parts.remove(key);
+        }
+        self.cylinders.retain(|key, _| {
+            !key.starts_with(INLINE_KEY) && !changed.iter().any(|file| key.contains(file.as_str()))
+        });
+    }
+
+    fn found(&mut self, key: &str) -> Option<std::sync::Arc<Model>> {
+        self.clock += 1;
+        let clock = self.clock;
+        let entry = self.parts.get_mut(key)?;
+        entry.used = clock;
+        Some(entry.model.clone())
+    }
+
+    fn insert(&mut self, key: String, traced: Traced) -> Result<std::sync::Arc<Model>> {
+        let model = std::sync::Arc::new(traced.model?);
+        let entry = Entry {
+            model: model.clone(),
+            reads: traced.reads,
+            uses: traced.uses,
+            used: self.clock,
+        };
+        self.clock += 1;
+        self.parts.insert(key, entry);
+        Ok(model)
+    }
+}
+
+impl Cache {
+    fn kept() -> Cache {
+        let mut kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+        let cache = kept.take().unwrap_or_default();
+        cache.lock().refresh();
         *kept = Some(cache.clone());
         cache
     }
@@ -223,6 +350,7 @@ impl Cache {
         key: String,
         load: impl FnOnce() -> Result<Model>,
     ) -> Result<std::sync::Arc<Model>> {
+        note_use(&key);
         let mut entries = self.lock();
         while !entries.parts.contains_key(&key) && entries.pending.contains(&key) {
             entries = self
@@ -231,27 +359,24 @@ impl Cache {
                 .wait(entries)
                 .unwrap_or_else(|e| e.into_inner());
         }
-        if let Some(found) = entries.parts.get(&key) {
-            return Ok(found.clone());
+        if let Some(found) = entries.found(&key) {
+            return Ok(found);
         }
         drop(entries);
-        let loaded = std::sync::Arc::new(load()?);
-        self.lock().parts.insert(key, loaded.clone());
-        Ok(loaded)
+        let traced = traced(load);
+        self.lock().insert(key, traced)
     }
 
     pub(crate) fn claim(&self, key: &str) -> bool {
         let mut entries = self.lock();
-        !entries.parts.contains_key(key) && entries.pending.insert(key.to_string())
+        entries.found(key).is_none() && entries.pending.insert(key.to_string())
     }
 
-    pub(crate) fn settle(&self, key: &str, loaded: Option<Model>) {
+    fn settle(&self, key: &str, traced: Option<Traced>) {
         let mut entries = self.lock();
         entries.pending.remove(key);
-        if let Some(model) = loaded {
-            entries
-                .parts
-                .insert(key.to_string(), std::sync::Arc::new(model));
+        if let Some(traced) = traced {
+            let _ = entries.insert(key.to_string(), traced);
         }
         drop(entries);
         self.0.settled.notify_all();
@@ -818,7 +943,7 @@ pub fn snapshots_path_kept(
     vars: &[(String, f64)],
 ) -> Result<(Vec<Line>, Vec<Snapshot>)> {
     let mut start = start_for(path, vars, 0);
-    start.cache = Cache::kept_for(path);
+    start.cache = Cache::kept();
     let lines = read_lines(path)?;
     let snapshots = snapshots_from(start, &lines, Some(path));
     Ok((lines, snapshots))

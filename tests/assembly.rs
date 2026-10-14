@@ -1110,6 +1110,58 @@ fn bearings_dowels_and_standoffs() {
 }
 
 #[test]
+fn kept_parts_rebuild_only_what_changed() {
+    let path = files(
+        "kept_parts_rebuild_only_what_changed",
+        "part s sub.gasm\npart c block.gcad w=30\n",
+        &[
+            ("block.gcad", "let w=10\nrect w 10\nextrude 10\n"),
+            ("other.gcad", "rect 10 10\nextrude 10\n"),
+            ("sub.gasm", "part a block.gcad\npart b other.gcad\n"),
+        ],
+    );
+    let build = || {
+        let (_, snapshots) = gcad::model::snapshots_path_kept(&path, &[]).expect("builds");
+        snapshots.last().expect("a line").model.clone()
+    };
+    let faces = |model: &Model, name: &str| -> Vec<_> {
+        model
+            .named_body(name)
+            .expect("part")
+            .boundaries()
+            .iter()
+            .flat_map(|shell| shell.face_iter().map(|face| face.id()).collect::<Vec<_>>())
+            .collect()
+    };
+    let edit = |name: &str, text: &str| {
+        std::thread::sleep(std::time::Duration::from_millis(20));
+        std::fs::write(path.with_file_name(name), text).expect("edit");
+    };
+    let first = build();
+    edit("other.gcad", "rect 10 10\nextrude 25\n");
+    let second = build();
+    assert_eq!(faces(&first, "s.a"), faces(&second, "s.a"));
+    assert_eq!(faces(&first, "c"), faces(&second, "c"));
+    assert_ne!(faces(&first, "s.b"), faces(&second, "s.b"));
+    let tall = gcad::geometry::volume(&second.named_body("s.b").expect("s.b"));
+    assert!((tall - 2500.0).abs() < 1.0, "{tall}");
+    edit(
+        "sub.gasm",
+        "part a block.gcad\npart b other.gcad\nlet unused=1\n",
+    );
+    let third = build();
+    assert_eq!(faces(&second, "s.a"), faces(&third, "s.a"));
+    assert_eq!(faces(&second, "s.b"), faces(&third, "s.b"));
+    edit("block.gcad", "let w=10\nrect w 20\nextrude 10\n");
+    let fourth = build();
+    assert_ne!(faces(&third, "s.a"), faces(&fourth, "s.a"));
+    assert_ne!(faces(&third, "c"), faces(&fourth, "c"));
+    assert_eq!(faces(&third, "s.b"), faces(&fourth, "s.b"));
+    let wide = gcad::geometry::volume(&fourth.named_body("c").expect("c"));
+    assert!((wide - 6000.0).abs() < 1.0, "{wide}");
+}
+
+#[test]
 fn kept_parts_follow_their_files() {
     let path = files(
         "kept_parts_follow_their_files",
@@ -1125,6 +1177,10 @@ fn kept_parts_follow_their_files() {
     std::fs::write(&path, "part a block.gcad\nmove a 5,0,0\n").expect("assembly");
     assert!((volume(&path) - 1000.0).abs() < 1.0);
     std::thread::sleep(std::time::Duration::from_millis(20));
-    std::fs::write(path.with_file_name("block.gcad"), "rect 10 10\nextrude 20\n").expect("part");
+    std::fs::write(
+        path.with_file_name("block.gcad"),
+        "rect 10 10\nextrude 20\n",
+    )
+    .expect("part");
     assert!((volume(&path) - 2000.0).abs() < 1.0);
 }

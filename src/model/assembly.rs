@@ -773,8 +773,9 @@ impl Model {
             .collect();
         let building = crate::progress::stage("building parts", Some(fresh.len()), "files");
         crate::host::each(fresh, |((key, path, vars), depth)| {
-            let loaded = super::load_model(&path, &vars, depth, cache).ok();
-            cache.settle(&key, loaded);
+            let settling = super::Settling::new(cache, &key);
+            let loaded = super::traced(|| super::load_model(&path, &vars, depth, cache));
+            settling.settle(loaded);
             building.advance(1.0);
             building.detail(|| {
                 let name = path.file_name().map(|n| n.to_string_lossy().into_owned());

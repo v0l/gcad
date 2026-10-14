@@ -29,36 +29,41 @@ mod files {
 
     type Stamp = Option<(std::time::SystemTime, u64)>;
 
-    static SEEN: std::sync::Mutex<std::collections::BTreeMap<PathBuf, Stamp>> =
-        std::sync::Mutex::new(std::collections::BTreeMap::new());
+    #[derive(Clone, Default)]
+    pub struct Reads(std::collections::BTreeMap<PathBuf, Stamp>);
+
+    impl Reads {
+        pub fn unchanged(&self) -> bool {
+            self.0.iter().all(|(file, was)| stamp(file) == *was)
+        }
+
+        pub fn files(&self) -> impl Iterator<Item = &Path> {
+            self.0.keys().map(PathBuf::as_path)
+        }
+    }
+
+    thread_local! {
+        static RECORDING: std::cell::RefCell<Vec<Reads>> = const { std::cell::RefCell::new(Vec::new()) };
+    }
+
+    pub fn recording<R>(work: impl FnOnce() -> R) -> (R, Reads) {
+        RECORDING.with(|stack| stack.borrow_mut().push(Reads::default()));
+        let result = work();
+        let reads = RECORDING.with(|stack| stack.borrow_mut().pop().unwrap_or_default());
+        (result, reads)
+    }
 
     fn stamp(path: &Path) -> Stamp {
         let meta = std::fs::metadata(path).ok()?;
         Some((meta.modified().ok()?, meta.len()))
     }
 
-    fn seen() -> std::sync::MutexGuard<'static, std::collections::BTreeMap<PathBuf, Stamp>> {
-        SEEN.lock().unwrap_or_else(|e| e.into_inner())
-    }
-
     fn note(path: &Path) {
-        seen().insert(path.to_path_buf(), stamp(path));
-    }
-
-    pub fn unchanged_except(path: &Path) -> bool {
-        let Ok(skip) = std::fs::canonicalize(path) else {
-            return false;
-        };
-        let seen = seen();
-        let same = |file: &Path| std::fs::canonicalize(file).is_ok_and(|f| f == skip);
-        !seen.is_empty()
-            && seen
-                .iter()
-                .all(|(file, was)| same(file) || stamp(file) == *was)
-    }
-
-    pub fn forget_reads() {
-        seen().clear();
+        RECORDING.with(|stack| {
+            if let Some(top) = stack.borrow_mut().last_mut() {
+                top.0.insert(path.to_path_buf(), stamp(path));
+            }
+        });
     }
 
     pub fn read(path: &Path) -> io::Result<Vec<u8>> {
@@ -171,11 +176,22 @@ mod files {
         hold(&FILES).contains_key(&key(path))
     }
 
-    pub fn unchanged_except(_path: &Path) -> bool {
-        false
+    #[derive(Clone, Default)]
+    pub struct Reads;
+
+    impl Reads {
+        pub fn unchanged(&self) -> bool {
+            false
+        }
+
+        pub fn files(&self) -> impl Iterator<Item = &Path> {
+            std::iter::empty()
+        }
     }
 
-    pub fn forget_reads() {}
+    pub fn recording<R>(work: impl FnOnce() -> R) -> (R, Reads) {
+        (work(), Reads)
+    }
 
     pub fn is_dir(path: &Path) -> bool {
         let dir = key(path);

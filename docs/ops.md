@@ -211,7 +211,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| bring in a part file | supported | `part box box.gcad body=lid` | `assembly::parts_from_files`, `assembly::kept_parts_follow_their_files` |
+| bring in a part file | supported | `part box box.gcad body=lid` | `assembly::parts_from_files`, `assembly::kept_parts_follow_their_files`, `assembly::kept_parts_rebuild_only_what_changed` |
 | set a part's variables | supported | `part plate plate.gcad w=size` | `assembly::part_variables` |
 | geometry stays in part files | supported | `rect` in a `.gasm` fails | `assembly::geometry_stays_in_parts`, `assembly::part_errors_name_the_file` |
 | concentric mate | supported | `concentric pin:pin.side plate:hole.side near=x,y,z` | `assembly::concentric_pin_in_a_hole`, `assembly::concentric_picks_the_hole_near_a_point`, `assembly::concentric_far_from_the_origin` |
