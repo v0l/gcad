@@ -252,7 +252,11 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
     }
     use rayon::prelude::*;
     let meshing = crate::progress::stage("meshing", Some(named.len()), "parts");
-    let meshed: Vec<(String, Quadratic, f64)> = named
+    type Faces = (
+        Vec<super::tet::Exact>,
+        super::tet::HashMap<u32, Vec<(usize, Vector2)>>,
+    );
+    let meshed: Vec<(String, Quadratic, f64, Faces)> = named
         .par_iter()
         .map(|(name, solid)| {
             let (tets, used) = super::mesh::mesh_named(name, solid, size)
@@ -265,11 +269,13 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
                     crate::plot::label(used)
                 )
             });
-            Ok((name.clone(), Quadratic::from(&tets), used))
+            let quadratic = Quadratic::from(&tets);
+            Ok((name.clone(), quadratic, used, (tets.surfaces, tets.uvs)))
         })
         .collect::<Result<_>>()?;
     let gaps: Vec<f64> = meshed.iter().map(|m| m.2 * 0.1).collect();
-    let meshes: Vec<(String, Quadratic)> = meshed.into_iter().map(|(n, q, _)| (n, q)).collect();
+    let (meshes, faces): (Vec<(String, Quadratic)>, Vec<Faces>) =
+        meshed.into_iter().map(|(n, q, _, f)| ((n, q), f)).unzip();
     let mesh = if meshes.len() == 1 {
         meshes
             .into_iter()
@@ -320,7 +326,18 @@ pub fn prepare(spec: &Spec) -> Result<Prepared> {
                 ),
             })
             .collect::<Result<Vec<_>>>()?;
-        super::fem::merge(meshes, &gaps, &touching, &rows)?
+        let on_surface = |part: usize, face: usize, corner: u32, p: Point3| {
+            use super::tet::Surface;
+            let (surfaces, uvs) = &faces[part];
+            let surface = surfaces.get(face)?;
+            let hint = uvs
+                .get(&corner)
+                .and_then(|list| list.iter().find(|(f, _)| *f == face))
+                .map(|(_, uv)| *uv);
+            let uv = surface.nearest(p, hint)?;
+            Some((surface.at(uv)? - p).magnitude())
+        };
+        super::fem::merge(meshes, &gaps, &touching, &rows, &on_surface)?
     };
     let mut mesh = mesh;
     let everything: Vec<String> = model.named_solids().into_iter().map(|(n, _)| n).collect();

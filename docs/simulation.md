@@ -435,9 +435,11 @@ bending effective mass (61%).
 
 Bonded assemblies (phase 6, built): each body is meshed on its own and the meshes are merged.
 Every surface node of one body that lies within a tenth of the mesh size of another body's
-surface is tied to the point under it by a penalty spring (10 times the stiffest material over
-the element size), in both directions, which keeps interface stresses within a few percent
-on a matching pair. Checked on a bonded stack in tension, a two-material wall in series and a
+surface, and within a two-hundredth of it of that face's exact CAD surface, is tied to the
+point under it by a penalty spring (10 times the stiffest material over the element size), in
+both directions, which keeps interface stresses within a few percent on a matching pair. The
+first distance finds the faceted faces near each other; the second keeps a cover 0.5 mm clear
+of a gear from bonding to it at 6 mm elements. Contacts and bearing rows skip the second test. Checked on a bonded stack in tension, a two-material wall in series and a
 stacked block whose first mode matches the solid one.
 
 `pin` holds the radial and axial directions of a round face's nodes, so the face cannot tilt:
