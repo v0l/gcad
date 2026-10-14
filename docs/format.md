@@ -436,6 +436,51 @@ each item in the iso view.
 reaches the assembly's own variables. The viewer rebuilds when any part file next to
 the assembly is saved.
 
+## Drawings
+
+A `.gdwg` file lays out construction or workshop drawings of a part or assembly on sheets,
+one operation per line, with `let` and `if` as usual. `gcad check x.gdwg` runs it and says
+what each line drew; `gcad export x.gdwg x.pdf` writes every sheet as a page of one PDF, and
+`x.svg` writes `x-1.svg`, `x-2.svg` and so on (or `x.svg` for a single sheet).
+
+```
+part ../shed.gasm
+title "Office shed"
+sheet "Back wall framing" size=A3 scale=1:25
+view back_* profile="bar 44x150,bar 150x44" lengths=1 from=+y label="back wall from outside"
+dims back_* profile="bar 44x150" along=h ends=1 style=ordinate
+dim 9,3860,150 9,3860,2600 offset=8
+cutlist back_* profile="bar*" summary=1 place=32,40
+section !pv.* from=+x at=2500 window=-650,2150,350,3050 scale=1:10 label="eaves"
+callout 2500,-300,2900 "EPDM on 11 OSB" to=-40,10
+level 3000 "top"
+note "first line|second line" place=230,40
+```
+
+| operation | parameters | does |
+|---|---|---|
+| `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` to draw, run with those variables |
+| `title` | `"text"` | the title in every sheet's title block |
+| `sheet` | `"name"` `size=A0..A4` `scale=1:N` | starts a landscape sheet with a border and a title block (name, scale, sheet n of N, date) |
+| `view` | `parts ...` `from=` `profile=` `also=` `scale=` `window=` `place=` `lengths=1` `label=` | draws the parts as seen from `-y`, `+y`, `-x`, `+x`, `+z` or `-z` (front, back, left, right, top, bottom), filled in their colours with their edges, nearer parts over farther ones |
+| `section` | the `view` parameters and `at=` | cuts the parts with the plane square to `from` at that coordinate and fills each cut in the part's colour |
+| `dims` | `parts ...` `profile=` `along=h\|v` `of=centres\|edges\|ends` `ends=1` `across=1` `row=` `style=chain\|running\|ordinate` `total=1` | dimensions the last view: a chain between the centres (or edges) of the parts along the sheet's horizontal or vertical, `ends=1` adds the outer ends of the group, `across=1` keeps only parts that run across the dimension (studs, not plates), `ordinate` writes setting-out distances from the first mark, `row` moves the line further out |
+| `dim` | `x,y,z x,y,z` `offset=` `text=` | one dimension between two model points in the last view, horizontal or vertical on the sheet |
+| `level` | `height "name"` | a level mark at that height beside the last elevation or section |
+| `callout` | `x,y,z "text"` `to=dx,dy` | a leader from a model point in the last view to text `dx`, `dy` mm away on the sheet |
+| `note` | `"text"` `size=` `place=` | text, `|` starting a new line |
+| `cutlist` | `parts ...` `profile=` `summary=1` `place=` | a table of the weldment members among the parts, by section and length, or with `summary=1` by section with the piece count, total length and longest piece |
+
+Parts are named as in `gcad bom` (`back_1.osb`, `roof.L12`); `*` matches any run of
+characters, a pattern starting with `!` leaves parts out, and no pattern means every part.
+`profile=` keeps only members whose section matches (`bar 44x150`, `bar*`), and `also=`
+adds parts back after that filter, such as a steel beam drawn with the timber. `window=u0,v0,u1,v1`
+crops a view to a box in model millimetres, measured along the sheet's horizontal and vertical
+for that view; with `scale=1:10` it makes a detail. Views and tables are placed left to right
+in rows unless `place=x,y` puts their lower left corner that many mm from the sheet's lower
+left; a view that would run off the sheet or into the title block is an error naming its size.
+`lengths=1` writes each member's length along it, which is the cut list for raked studs.
+
 ## Simulations
 
 A `.gsim` file describes one simulation of a part or assembly, one operation per line

@@ -298,6 +298,15 @@ needs the flow's result to be fresh. `gcad render wind.gsim flow.png --flow` dra
 slices through the parts, and `--lines` the streamlines round them in 3D. Only `leave` parts inside a closed box: a gland or screw left out is
 a hole the wind blows into.
 
+## Drawings
+
+Construction or workshop drawings are a `.gdwg` file beside the assembly: `sheet` pages at a
+scale, `view` and `section` of named parts (with `window=` crops for details), `dims` chains
+or `style=ordinate` setting-out, `level`, `callout`, `note` and a member `cutlist`. Check it
+with `gcad check x.gdwg` (a view that does not fit says so) and write it with
+`gcad export x.gdwg x.pdf`. Pick members by section with `profile="bar 44x150"`; read the
+PDF back with `pdftoppm -png` to look at it.
+
 ## Output
 
 ```sh

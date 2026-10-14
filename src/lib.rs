@@ -1,4 +1,5 @@
 pub mod bom;
+pub mod drafting;
 pub mod drawing;
 pub mod export;
 pub mod flow;

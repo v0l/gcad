@@ -90,7 +90,12 @@ pub(crate) fn section_loops(solid: &Solid, normal: Vector3, at: f64) -> Vec<Vec<
     )
 }
 
-fn section_of(mesh: &PolygonMesh, solid: &Solid, normal: Vector3, at: f64) -> Vec<Vec<Point3>> {
+pub(crate) fn section_of(
+    mesh: &PolygonMesh,
+    solid: &Solid,
+    normal: Vector3,
+    at: f64,
+) -> Vec<Vec<Point3>> {
     let positions = mesh.positions();
     let scale = geometry::bounds(solid).diameter().max(1.0);
     let at = at + scale * 1.0e-9;
@@ -200,7 +205,7 @@ impl View {
     }
 }
 
-fn polylines(solid: &Solid) -> Vec<Vec<Point3>> {
+pub(crate) fn polylines(solid: &Solid) -> Vec<Vec<Point3>> {
     solid
         .boundaries()
         .iter()
@@ -216,7 +221,7 @@ fn polylines(solid: &Solid) -> Vec<Vec<Point3>> {
         .collect()
 }
 
-fn silhouettes(mesh: &PolygonMesh, solid: &Solid, toward: Vector3) -> Vec<Vec<Point3>> {
+pub(crate) fn silhouettes(mesh: &PolygonMesh, solid: &Solid, toward: Vector3) -> Vec<Vec<Point3>> {
     let positions = mesh.positions();
     let scale = geometry::bounds(solid).diameter().max(1.0) * 1.0e-9;
     let key = |p: Point3| [p.x, p.y, p.z].map(|c| (c / scale).round() as i64);

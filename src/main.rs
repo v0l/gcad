@@ -60,7 +60,7 @@ enum Command {
         #[arg(long)]
         line: Option<usize>,
     },
-    /// Write the solid as .step, .stl, .obj, .3mf or an .svg drawing
+    /// Write the solid as .step, .stl, .obj, .3mf or an .svg drawing, or a .gdwg drawing file as .pdf or .svg sheets
     Export {
         file: String,
         output: String,
@@ -211,6 +211,27 @@ fn finished(run: &Run) -> Result<()> {
     if run.model.solids().is_empty() {
         bail!("the file builds no solid");
     }
+    Ok(())
+}
+
+fn check_drawing(file: &str, vars: &[(String, f64)]) -> Result<()> {
+    let drawing = gcad::drafting::run(std::path::Path::new(file), vars)?;
+    let width = drawing
+        .steps
+        .iter()
+        .map(|(line, _)| line.text.len())
+        .max()
+        .unwrap_or(0);
+    for (line, result) in &drawing.steps {
+        match result {
+            Ok(text) => println!("{:4} {:width$}  ok  {text}", line.number, line.text),
+            Err(error) => println!("{:4} {:width$}  ERROR  {error:#}", line.number, line.text),
+        }
+    }
+    if let Some((line, error)) = drawing.failed() {
+        bail!("stopped at line {}: {error:#}", line.number);
+    }
+    println!("{} sheets", drawing.sheets.len());
     Ok(())
 }
 
@@ -411,6 +432,11 @@ fn main() -> Result<()> {
         line: None,
     });
     match command {
+        Command::Check { file, time: _ }
+            if gcad::drafting::is_drawing(std::path::Path::new(&file)) =>
+        {
+            check_drawing(&file, &vars)
+        }
         Command::Check { file, time } => check(&file, &vars, time),
         Command::Measure { file, what } => measure(&file, &what.join(" "), &vars),
         Command::Docs => {
@@ -427,6 +453,16 @@ fn main() -> Result<()> {
             output,
             section,
         } => {
+            if gcad::drafting::is_drawing(std::path::Path::new(&file)) {
+                let drawing = gcad::drafting::run(std::path::Path::new(&file), &vars)?;
+                if let Some((line, error)) = drawing.failed() {
+                    bail!("line {}: {}: {error:#}", line.number, line.text);
+                }
+                for written in gcad::drafting::write(&drawing, &output)? {
+                    println!("wrote {written}");
+                }
+                return Ok(());
+            }
             let run = load(&file, None, &vars)?;
             finished(&run)?;
             if let Some(section) = section {
