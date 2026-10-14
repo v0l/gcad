@@ -38,6 +38,7 @@ pub type Lines = viewer3d::Lines<Ink>;
 pub struct Part {
     pub name: String,
     pub colour: V3,
+    pub opacity: f32,
     pub volume: f64,
     pub current: bool,
     pub source: Option<String>,
@@ -461,6 +462,7 @@ pub fn build(
                 let part = Part {
                     name: name.clone(),
                     colour,
+                    opacity: model.opacities.get(name).map_or(1.0, |o| *o as f32),
                     volume,
                     current: is_current,
                     source: model.sources.get(name).map(describe_source),
@@ -599,6 +601,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         } else {
             crate::plot::heat(1.0).map(|v| v as f32)
         },
+        opacity: 1.0,
         volume: 0.0,
         current: true,
         source: None,
@@ -636,6 +639,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
                 crate::plot::label(fastest.round())
             ),
             colour: crate::plot::heat(0.8).map(|v| v as f32),
+            opacity: 1.0,
             volume: 0.0,
             current: false,
             source: None,
@@ -674,6 +678,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
                     if moment { "moment" } else { "mean" }
                 ),
                 colour: crate::plot::heat(0.5).map(|v| v as f32),
+                opacity: 1.0,
                 volume: 0.0,
                 current: false,
                 source: None,

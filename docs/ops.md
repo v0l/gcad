@@ -258,6 +258,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | section view | supported | `gcad export part.gcad part.svg --section y=0` | `output::drawing_dimensions_and_section` |
 | STL import | supported | `import part.stl` | `output::stl_import` |
 | STEP colours | supported | `color red` | `output::step_colours` |
+| see-through bodies in the viewer | supported | `color #9cc7d9 opacity=0.3`, `color glass red opacity=0.5` | `assembly::see_through_parts` |
 | STEP assembly structure | supported | `gcad export top.gasm top.step` | `output::step_assembly`, `output::step_assembly_opens_in_opencascade` |
 
 

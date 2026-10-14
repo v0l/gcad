@@ -1300,7 +1300,11 @@ impl App {
                 Look {
                     placement: flat(m),
                     opacity: flow.unwrap_or_else(|| match self.mode(&part.name) {
-                        Mode::Solid => self.opacities.get(&part.name).copied().unwrap_or(1.0),
+                        Mode::Solid => self
+                            .opacities
+                            .get(&part.name)
+                            .copied()
+                            .unwrap_or(part.opacity),
                         Mode::Ghost => self.opacity,
                         Mode::Hidden => 0.0,
                     }),
@@ -2196,7 +2200,11 @@ impl App {
                             };
                             self.set_mode(&part.name, next);
                         }
-                        let mut opacity = self.opacities.get(&part.name).copied().unwrap_or(1.0);
+                        let mut opacity = self
+                            .opacities
+                            .get(&part.name)
+                            .copied()
+                            .unwrap_or(part.opacity);
                         ui.spacing_mut().slider_width = 56.0;
                         if ui
                             .add(egui::Slider::new(&mut opacity, 0.05..=1.0).show_value(false))

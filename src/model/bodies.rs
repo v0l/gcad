@@ -2,7 +2,7 @@ use super::args::{Args, axis, label_of, point3, positive};
 use super::solids::{loops, oriented, prism};
 use super::{Combine, Model};
 use crate::geometry::{self, Frame, Profile};
-use crate::parse::Line;
+use crate::parse::{Line, Scope};
 use crate::select::{self, GroupEntry};
 use anyhow::{Context, Result, anyhow, bail};
 use monstertruck::modeling::*;
@@ -435,13 +435,18 @@ impl Model {
     }
 
     pub(crate) fn op_color(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["colour"], &[], false)?;
+        let args = Args::new(line, &["colour"], &["opacity"], false)?;
         let colour = self.colour_of(args.text("colour")?)?;
+        let opacity = opacity_of(&args, &self.scope)?;
         let name = self.body_name();
         self.colours.insert(name.clone(), colour);
+        self.opacities.insert(name.clone(), opacity);
         Ok(format!(
-            "body `{name}` is {:.2},{:.2},{:.2}",
-            colour[0], colour[1], colour[2]
+            "body `{name}` is {:.2},{:.2},{:.2}{}",
+            colour[0],
+            colour[1],
+            colour[2],
+            see_through(opacity)
         ))
     }
 
@@ -1296,5 +1301,21 @@ impl Stock {
             expansion: Some(self.expansion),
             printed: self.printed,
         }
+    }
+}
+
+pub(crate) fn opacity_of(args: &Args, scope: &Scope) -> Result<f64> {
+    let opacity = args.optional_number("opacity", scope)?.unwrap_or(1.0);
+    if !(opacity > 0.0 && opacity <= 1.0) {
+        bail!("opacity must be above 0 and at most 1, got {opacity}");
+    }
+    Ok(opacity)
+}
+
+pub(crate) fn see_through(opacity: f64) -> String {
+    if opacity < 1.0 {
+        format!(", {:.0}% opaque", opacity * 100.0)
+    } else {
+        String::new()
     }
 }

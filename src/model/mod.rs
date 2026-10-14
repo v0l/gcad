@@ -101,6 +101,7 @@ pub struct Model {
     pub construction: Vec<(Frame, Profile)>,
     pub axes: HashMap<String, (Point3, Vector3)>,
     pub colours: HashMap<String, [f64; 3]>,
+    pub opacities: HashMap<String, f64>,
     pub materials: HashMap<String, bodies::Material>,
     pub library: HashMap<String, materials::Entry>,
     pub library_loaded: bool,

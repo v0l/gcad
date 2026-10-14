@@ -7,6 +7,8 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- `color ... opacity=` on a body or an assembly part: the viewer draws it see-through, so
+  glass can be glass.
 - `measure box`, `measure clearance a b` and `measure space at=x,y,z` in parts and assemblies:
   bounding boxes, the nearest gap between two bodies, and the free box inside a case with what
   bounds each side. `gcad measure file ...` runs one without adding it to the file.

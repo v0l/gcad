@@ -20,6 +20,7 @@ struct Stored {
     bodies: Vec<(String, Body)>,
     groups: Vec<(String, String, Surface)>,
     colours: Vec<(String, [f64; 3])>,
+    opacities: Vec<(String, f64)>,
     materials: Vec<(String, Material)>,
     sources: Vec<StoredSource>,
     placements: Vec<(String, [[f64; 4]; 4])>,
@@ -185,6 +186,11 @@ fn storable(model: &Model, key: String, reads: Vec<Read>) -> Option<Stored> {
             })
             .collect(),
         colours: model.colours.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+        opacities: model
+            .opacities
+            .iter()
+            .map(|(k, v)| (k.clone(), *v))
+            .collect(),
         materials: model
             .materials
             .iter()
@@ -240,6 +246,7 @@ fn restored(stored: Stored) -> Option<Model> {
                 .collect(),
         ),
         colours: stored.colours.into_iter().collect(),
+        opacities: stored.opacities.into_iter().collect(),
         materials: stored.materials.into_iter().collect(),
         sources: stored
             .sources

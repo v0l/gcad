@@ -19,6 +19,7 @@ impl Model {
             }
         }
         copy(&mut self.colours, part, name);
+        copy(&mut self.opacities, part, name);
         copy(&mut self.materials, part, name);
         copy(&mut self.sources, part, name);
         let exploded: Vec<(String, Vector3)> = self

@@ -1217,3 +1217,21 @@ fn kept_parts_follow_their_files() {
     .expect("part");
     assert!((volume(&path) - 2000.0).abs() < 1.0);
 }
+
+#[test]
+fn see_through_parts() {
+    let glass = "rect 10 10\nextrude 2\ncolor #9cc7d9 opacity=0.3\n";
+    let (model, _) = built(
+        "see_through_parts",
+        "part a glass.gcad\npart b glass.gcad\ncolor b red opacity=0.6",
+        &[("glass.gcad", glass)],
+    );
+    assert_eq!(model.opacities.get("a"), Some(&0.3));
+    assert_eq!(model.opacities.get("b"), Some(&0.6));
+    let error = failed(
+        "see_through_bad",
+        "part a glass.gcad\ncolor a red opacity=0",
+        &[("glass.gcad", glass)],
+    );
+    assert!(error.contains("opacity must be above 0"), "{error}");
+}

@@ -865,6 +865,9 @@ impl Model {
             if let Some(colour) = loaded.colours.get(body) {
                 self.colours.insert(new.clone(), *colour);
             }
+            if let Some(opacity) = loaded.opacities.get(body) {
+                self.opacities.insert(new.clone(), *opacity);
+            }
             let source = loaded.sources.get(body).cloned().unwrap_or_else(|| Source {
                 file: path.clone(),
                 body: body.clone(),
@@ -1051,16 +1054,21 @@ impl Model {
     }
 
     fn op_colour_part(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["part", "colour"], &[], false)?;
+        let args = Args::new(line, &["part", "colour"], &["opacity"], false)?;
         let name = args.text("part")?.to_string();
         if !self.body_names().contains(&name) {
             bail!("no part called `{name}`; parts are {:?}", self.body_names());
         }
         let colour = self.colour_of(args.text("colour")?)?;
+        let opacity = super::bodies::opacity_of(&args, &self.scope)?;
         self.colours.insert(name.clone(), colour);
+        self.opacities.insert(name.clone(), opacity);
         Ok(format!(
-            "`{name}` is {:.2},{:.2},{:.2}",
-            colour[0], colour[1], colour[2]
+            "`{name}` is {:.2},{:.2},{:.2}{}",
+            colour[0],
+            colour[1],
+            colour[2],
+            super::bodies::see_through(opacity)
         ))
     }
 
