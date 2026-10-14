@@ -66,7 +66,96 @@ pub struct Scene {
     pub mesh: Arc<viewer3d::Scene<Ink>>,
     pub parts: Vec<Part>,
     pub vertices: Vec<(usize, V3)>,
+    pub edges: Vec<SnapEdge>,
     pub faces: Vec<FaceInfo>,
+}
+
+#[derive(Clone, Debug)]
+pub struct SnapEdge {
+    pub body: usize,
+    pub points: Vec<V3>,
+    pub circle: Option<(V3, f32)>,
+}
+
+impl SnapEdge {
+    fn new(body: usize, points: Vec<V3>) -> SnapEdge {
+        let circle = circle_through(&points);
+        SnapEdge {
+            body,
+            points,
+            circle,
+        }
+    }
+
+    pub fn closed(&self) -> bool {
+        closed(&self.points)
+    }
+
+    pub fn length(&self) -> f32 {
+        self.points
+            .windows(2)
+            .map(|w| length(sub(w[1], w[0])))
+            .sum()
+    }
+
+    pub fn middle(&self) -> Option<V3> {
+        let half = self.length() / 2.0;
+        let mut walked = 0.0;
+        for w in self.points.windows(2) {
+            let step = length(sub(w[1], w[0]));
+            if walked + step >= half && step > 0.0 {
+                let t = (half - walked) / step;
+                return Some(std::array::from_fn(|k| w[0][k] + (w[1][k] - w[0][k]) * t));
+            }
+            walked += step;
+        }
+        None
+    }
+}
+
+fn length(a: V3) -> f32 {
+    (a[0] * a[0] + a[1] * a[1] + a[2] * a[2]).sqrt()
+}
+
+fn closed(points: &[V3]) -> bool {
+    match (points.first(), points.last()) {
+        (Some(a), Some(b)) if points.len() > 2 => length(sub(*a, *b)) < 1.0e-6,
+        _ => false,
+    }
+}
+
+fn circle_through(points: &[V3]) -> Option<(V3, f32)> {
+    let closed = closed(points);
+    let open = points.len() - usize::from(closed);
+    if open < 4 {
+        return None;
+    }
+    let spread = if closed {
+        [0, open / 3, 2 * open / 3]
+    } else {
+        [0, open / 2, open - 1]
+    };
+    let wide = |p: V3| Vector3::new(p[0] as f64, p[1] as f64, p[2] as f64);
+    let [a, b, c] = spread.map(|i| wide(points[i]));
+    let (ab, ac) = (b - a, c - a);
+    let n = ab.cross(ac);
+    if n.magnitude2() <= 1.0e-12 * ab.magnitude2() * ac.magnitude2() {
+        return None;
+    }
+    let offset =
+        (ac.cross(n) * ab.magnitude2() + n.cross(ab) * ac.magnitude2()) / (2.0 * n.magnitude2());
+    let (centre, radius, axis) = (a + offset, offset.magnitude(), n.normalize());
+    let tolerance = radius * 2.0e-3 + 1.0e-5;
+    points
+        .iter()
+        .all(|p| {
+            let gap = wide(*p) - centre;
+            (gap.magnitude() - radius).abs() < tolerance && gap.dot(axis).abs() < tolerance
+        })
+        .then_some((
+            [centre.x as f32, centre.y as f32, centre.z as f32],
+            radius as f32,
+        ))
 }
 
 pub struct Highlight<'a> {
@@ -258,8 +347,10 @@ fn smooth(edge: &Edge, a: &Face, b: &Face) -> bool {
 fn edge_lines(
     solid: &Solid,
     meshed: &Meshed,
+    body: usize,
     skip: &std::collections::HashSet<EdgeId>,
     out: &mut Vec<[V3; 2]>,
+    snaps: &mut Vec<SnapEdge>,
 ) {
     for (shell, drawn) in solid.boundaries().iter().zip(meshed.boundaries()) {
         let mut owners: std::collections::HashMap<EdgeId, Vec<Face>> = Default::default();
@@ -270,17 +361,22 @@ fn edge_lines(
         }
         let mut seen = std::collections::HashSet::new();
         for (edge, polyline) in shell.edge_iter().zip(drawn.edge_iter()) {
-            if !seen.insert(edge.id()) || skip.contains(&edge.id()) {
+            if !seen.insert(edge.id()) {
                 continue;
             }
-            if let Some([a, b]) = owners.get(&edge.id()).map(Vec::as_slice)
+            let marked = skip.contains(&edge.id());
+            if !marked
+                && let Some([a, b]) = owners.get(&edge.id()).map(Vec::as_slice)
                 && a.id() != b.id()
                 && smooth(&edge, a, b)
             {
                 continue;
             }
             let points: Vec<V3> = polyline.curve().iter().map(|p| v3(*p)).collect();
-            segments(&points, out);
+            if !marked {
+                segments(&points, out);
+            }
+            snaps.push(SnapEdge::new(body, points));
         }
     }
 }
@@ -350,7 +446,8 @@ pub fn build(
                     width: EDGE_WIDTH,
                     ..Default::default()
                 };
-                edge_lines(solid, &meshed, &skip, &mut edges.segments);
+                let mut snaps = Vec::new();
+                edge_lines(solid, &meshed, body, &skip, &mut edges.segments, &mut snaps);
                 let mut seen = std::collections::HashSet::new();
                 let vertices: Vec<(usize, V3)> = solid
                     .boundaries()
@@ -375,11 +472,13 @@ pub fn build(
                     hidden: false,
                     role: Role::Body,
                 };
-                (surfaces, info, edges, vertices, part)
+                (surfaces, info, edges, vertices, snaps, part)
             })
             .collect()
     };
-    for (body_surfaces, body_info, edges, body_vertices, part) in built {
+    let mut snap_edges = Vec::new();
+    for (body_surfaces, body_info, edges, body_vertices, snaps, part) in built {
+        snap_edges.extend(snaps);
         surfaces.extend(body_surfaces);
         info.extend(body_info);
         lines.push(edges);
@@ -408,6 +507,7 @@ pub fn build(
         }),
         parts,
         vertices,
+        edges: snap_edges,
         faces: info,
     }
 }
@@ -595,6 +695,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         }),
         parts,
         vertices: Vec::new(),
+        edges: Vec::new(),
         faces: Vec::new(),
     }
 }
@@ -635,4 +736,75 @@ fn slice_quad(slice: &crate::sim::Slice, texture: usize, group: usize) -> Surfac
         }
     }
     surface
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{SnapEdge, V3};
+
+    fn arc(centre: V3, radius: f32, from: f32, to: f32, n: usize) -> Vec<V3> {
+        (0..=n)
+            .map(|i| {
+                let a = from + (to - from) * i as f32 / n as f32;
+                [
+                    centre[0] + radius * a.cos(),
+                    centre[1],
+                    centre[2] + radius * a.sin(),
+                ]
+            })
+            .collect()
+    }
+
+    #[test]
+    fn a_hole_rim_snaps_to_its_centre() {
+        let rim = SnapEdge::new(
+            0,
+            arc([18.0, 8.0, 6.0], 2.0, 0.0, std::f32::consts::TAU, 24),
+        );
+        assert!(rim.closed());
+        let (centre, radius) = rim.circle.expect("a circle");
+        assert!((radius - 2.0).abs() < 1.0e-4, "{radius}");
+        assert!(
+            centre
+                .iter()
+                .zip([18.0, 8.0, 6.0])
+                .all(|(a, b)| (a - b).abs() < 1.0e-4)
+        );
+    }
+
+    #[test]
+    fn a_short_arc_finds_its_centre_closely() {
+        let sliver = SnapEdge::new(0, arc([18.0, 8.0, 16.0], 5.0, 0.3, 0.7, 6));
+        let (centre, radius) = sliver.circle.expect("a circle");
+        assert!((radius - 5.0).abs() < 1.0e-3, "{radius}");
+        assert!(
+            centre
+                .iter()
+                .zip([18.0, 8.0, 16.0])
+                .all(|(a, b)| (a - b).abs() < 1.0e-3),
+            "{centre:?}"
+        );
+    }
+
+    #[test]
+    fn a_fillet_arc_snaps_to_its_centre_and_middle() {
+        let quarter = SnapEdge::new(0, arc([0.0; 3], 5.0, 0.0, std::f32::consts::FRAC_PI_2, 8));
+        assert!(!quarter.closed());
+        assert!(quarter.circle.is_some());
+        let middle = quarter.middle().expect("a middle");
+        let expected = 5.0 * std::f32::consts::FRAC_PI_4.cos();
+        assert!((middle[0] - expected).abs() < 0.05 && (middle[2] - expected).abs() < 0.05);
+    }
+
+    #[test]
+    fn straight_and_wavy_edges_have_no_centre() {
+        let line = SnapEdge::new(0, (0..6).map(|i| [i as f32, 0.0, 0.0]).collect());
+        assert!(line.circle.is_none());
+        assert_eq!(line.middle(), Some([2.5, 0.0, 0.0]));
+        let wave = SnapEdge::new(
+            0,
+            (0..12).map(|i| [i as f32, (i as f32).sin(), 0.0]).collect(),
+        );
+        assert!(wave.circle.is_none());
+    }
 }

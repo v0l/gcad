@@ -104,6 +104,34 @@ mod files {
     pub fn opened(_path: &Path) {}
 
     pub fn built(_seconds: f64) {}
+
+    fn settings_path() -> Option<PathBuf> {
+        let base = std::env::var_os("XDG_CONFIG_HOME")
+            .map(PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))?;
+        Some(base.join("gcad").join("view.toml"))
+    }
+
+    fn settings() -> toml::Table {
+        settings_path()
+            .and_then(|p| std::fs::read_to_string(p).ok())
+            .and_then(|t| t.parse().ok())
+            .unwrap_or_default()
+    }
+
+    pub fn setting(name: &str) -> Option<String> {
+        settings().get(name)?.as_str().map(str::to_string)
+    }
+
+    pub fn set_setting(name: &str, value: &str) {
+        let Some(path) = settings_path() else { return };
+        let mut table = settings();
+        table.insert(name.to_string(), value.into());
+        if let Some(dir) = path.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(path, table.to_string());
+    }
 }
 
 #[cfg(target_arch = "wasm32")]
@@ -258,6 +286,21 @@ mod files {
             Some(bytes) => hold(&FILES).insert(path, bytes),
             None => hold(&FILES).remove(&path),
         };
+    }
+
+    const SETTING: &str = "gcad-setting:";
+
+    pub fn setting(name: &str) -> Option<String> {
+        storage()?
+            .get_item(&format!("{SETTING}{name}"))
+            .ok()
+            .flatten()
+    }
+
+    pub fn set_setting(name: &str, value: &str) {
+        if let Some(storage) = storage() {
+            let _ = storage.set_item(&format!("{SETTING}{name}"), value);
+        }
     }
 
     pub fn restore() {

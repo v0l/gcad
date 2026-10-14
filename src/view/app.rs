@@ -1,4 +1,5 @@
 use super::scene::{self, Highlight, Ink, Scene, V3};
+use super::units::Units;
 use crate::geometry;
 use crate::host::Instant;
 use crate::model::{
@@ -79,8 +80,33 @@ enum Status {
 struct Pick {
     point: V3,
     face: Option<usize>,
-    vertex: bool,
+    snap: Snap,
+    edge: Option<usize>,
 }
+
+#[derive(Clone, Copy, PartialEq, Debug)]
+enum Snap {
+    Face,
+    Edge,
+    Corner,
+    Middle,
+    Centre,
+}
+
+impl Snap {
+    fn name(self) -> &'static str {
+        match self {
+            Snap::Face => "on face",
+            Snap::Edge => "on edge",
+            Snap::Corner => "corner",
+            Snap::Middle => "midpoint",
+            Snap::Centre => "centre",
+        }
+    }
+}
+
+const POINT_SNAP: f32 = 12.0;
+const EDGE_SNAP: f32 = 8.0;
 
 #[derive(Clone, Copy, PartialEq, Default)]
 enum Mode {
@@ -243,6 +269,7 @@ pub struct App {
     took: Duration,
     measuring: bool,
     picks: Vec<Pick>,
+    units: Units,
     joint_values: Vec<f64>,
     explode: f64,
     section: Option<(usize, f32, bool)>,
@@ -700,14 +727,15 @@ fn flat(m: Matrix4) -> Placement {
     out
 }
 
-const VIEWS: [(&str, f32, f32); 7] = [
-    ("iso", std::f32::consts::FRAC_PI_4, 0.6155),
-    ("top", 0.0, 1.5699),
-    ("front", 0.0, 0.0),
-    ("right", std::f32::consts::FRAC_PI_2, 0.0),
-    ("back", std::f32::consts::PI, 0.0),
-    ("left", -std::f32::consts::FRAC_PI_2, 0.0),
-    ("bottom", 0.0, -1.5699),
+const VIEWS: [Option<(&str, f32, f32)>; 8] = [
+    Some(("iso", std::f32::consts::FRAC_PI_4, 0.6155)),
+    Some(("top", 0.0, 1.5699)),
+    Some(("front", 0.0, 0.0)),
+    Some(("right", std::f32::consts::FRAC_PI_2, 0.0)),
+    None,
+    Some(("bottom", 0.0, -1.5699)),
+    Some(("back", std::f32::consts::PI, 0.0)),
+    Some(("left", -std::f32::consts::FRAC_PI_2, 0.0)),
 ];
 
 const CUBE_FACES: [(V3, &str); 6] = [
@@ -737,6 +765,116 @@ fn ghost_button(ui: &mut Ui, on: bool) -> egui::Response {
         ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
     }
     resp.on_hover_text(if on { "solid" } else { "see-through" })
+}
+
+fn unit_picker(ui: &mut Ui, current: Units) -> Option<Units> {
+    let font = figure(12.0);
+    let height = ui.fonts_mut(|f| f.row_height(&legend_font(11.5))) + 7.0;
+    let galleys: Vec<_> = Units::ALL
+        .iter()
+        .map(|u| {
+            let tint = if *u == current { READOUT } else { LEGEND };
+            ui.painter()
+                .layout_no_wrap(u.name().to_string(), font.clone(), tint)
+        })
+        .collect();
+    let widths: Vec<f32> = galleys
+        .iter()
+        .map(|g| g.size().x.max(14.0) + 14.0)
+        .collect();
+    let (rect, _) = ui.allocate_exact_size(Vec2::new(widths.iter().sum(), height), Sense::hover());
+    let mut x = rect.left();
+    let mut chosen = None;
+    for ((unit, galley), width) in Units::ALL.into_iter().zip(galleys).zip(widths) {
+        let cell = Rect::from_min_size(Pos2::new(x, rect.top()), Vec2::new(width, height));
+        x += width;
+        let resp = ui
+            .interact(cell, ui.id().with(("units", unit.name())), Sense::click())
+            .on_hover_text("units for lengths, areas, volumes and mass");
+        let on = unit == current;
+        let p = ui.painter();
+        let fill = if on {
+            READOUT.gamma_multiply(0.14)
+        } else if resp.hovered() {
+            BAND
+        } else {
+            WELL
+        };
+        p.rect_filled(cell, 0.0, fill);
+        p.rect_stroke(cell, 0.0, Stroke::new(1.0, ETCH), egui::StrokeKind::Inside);
+        if on {
+            let mark = Rect::from_min_max(
+                Pos2::new(cell.left(), cell.bottom() - 2.0),
+                cell.right_bottom(),
+            );
+            p.rect_filled(mark, 0.0, READOUT);
+        }
+        p.galley(cell.center() - galley.size() / 2.0, galley, LEGEND);
+        if resp.hovered() {
+            ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+        }
+        if resp.clicked() && !on {
+            chosen = Some(unit);
+        }
+    }
+    chosen
+}
+
+fn closest_along(a: Pos2, b: Pos2, p: Pos2) -> f32 {
+    let ab = b - a;
+    let span = ab.length_sq();
+    if span < 1.0e-6 {
+        return 0.0;
+    }
+    ((p - a).dot(ab) / span).clamp(0.0, 1.0)
+}
+
+fn lerp3(a: V3, b: V3, t: f32) -> V3 {
+    [
+        a[0] + (b[0] - a[0]) * t,
+        a[1] + (b[1] - a[1]) * t,
+        a[2] + (b[2] - a[2]) * t,
+    ]
+}
+
+fn snap_mark(p: &egui::Painter, at: Pos2, snap: Snap, colour: Color32) {
+    let stroke = Stroke::new(1.5, colour);
+    let corner = |x: f32, y: f32| at + Vec2::new(x, y);
+    match snap {
+        Snap::Corner => {
+            p.rect_stroke(
+                Rect::from_center_size(at, Vec2::splat(11.0)),
+                0.0,
+                stroke,
+                egui::StrokeKind::Middle,
+            );
+        }
+        Snap::Middle => {
+            p.add(egui::Shape::closed_line(
+                vec![corner(0.0, -6.5), corner(6.0, 4.5), corner(-6.0, 4.5)],
+                stroke,
+            ));
+        }
+        Snap::Centre => {
+            p.circle_stroke(at, 6.0, stroke);
+            p.line_segment([corner(-9.0, 0.0), corner(9.0, 0.0)], stroke);
+            p.line_segment([corner(0.0, -9.0), corner(0.0, 9.0)], stroke);
+        }
+        Snap::Edge => {
+            p.add(egui::Shape::closed_line(
+                vec![
+                    corner(-5.0, -5.0),
+                    corner(5.0, -5.0),
+                    corner(-5.0, 5.0),
+                    corner(5.0, 5.0),
+                ],
+                stroke,
+            ));
+        }
+        Snap::Face => {
+            p.circle_stroke(at, 3.5, stroke);
+        }
+    }
 }
 
 fn inside(polygon: &[Pos2], p: Pos2) -> bool {
@@ -796,6 +934,9 @@ impl App {
             took: Duration::ZERO,
             measuring: false,
             picks: Vec::new(),
+            units: crate::host::setting("units")
+                .and_then(|u| Units::parse(&u))
+                .unwrap_or_default(),
             joint_values: Vec::new(),
             explode: 0.0,
             section: None,
@@ -1158,9 +1299,6 @@ impl App {
                     None => Some((1, 0.5, false)),
                 };
             }
-            if toggle(ui, "ortho", self.cam.ortho).clicked() {
-                self.cam.ortho = !self.cam.ortho;
-            }
             if toggle(ui, "lines", self.lines_open).clicked() {
                 self.lines_open = !self.lines_open;
             }
@@ -1194,6 +1332,11 @@ impl App {
                 );
                 if self.path.is_some() && toggle(ui, "rebuild", false).clicked() {
                     self.reload(ctx);
+                }
+                ui.add_space(10.0);
+                if let Some(units) = unit_picker(ui, self.units) {
+                    self.units = units;
+                    crate::host::set_setting("units", units.name());
                 }
             });
         });
@@ -1389,7 +1532,7 @@ impl App {
                         .show(ui);
                 }
                 match snapshot.map(|s| &s.result) {
-                    Some(Ok(summary)) => note(ui, summary, LEGEND),
+                    Some(Ok(summary)) => note(ui, self.units.summary(summary), LEGEND),
                     Some(Err(error)) => note(ui, error, FAULT),
                     None => note(ui, "not run, an earlier line failed", LEGEND),
                 }
@@ -1548,36 +1691,55 @@ impl App {
                 if self.picks.is_empty() {
                     hint(
                         ui,
-                        "click the model to pick a point; a corner snaps. Pick two to measure between them",
+                        "click two points to measure between them. Corners, midpoints, centres and edges snap",
                     );
                 }
+                let units = self.units;
+                let wide = |p: V3| p.map(f64::from);
                 for (n, pick) in self.picks.iter().enumerate() {
-                    let p = pick.point;
                     Line::new()
                         .legend(if n == 0 { "a" } else { "b" })
-                        .value(format!("{:.3}, {:.3}, {:.3}", p[0], p[1], p[2]))
-                        .note(if pick.vertex { "corner" } else { "on face" })
+                        .value(units.lengths(&wide(pick.point), 3, ", "))
+                        .note(pick.snap.name())
                         .size(11.0)
                         .show(ui);
-                    if let Some(info) = pick.face.and_then(|f| scene.faces.get(f)) {
+                    if let Some(edge) = pick.edge.and_then(|e| scene.edges.get(e)) {
+                        let text = match edge.circle {
+                            Some((_, r)) if edge.closed() => {
+                                format!("circle, diameter {}", units.length(2.0 * r as f64, 3))
+                            }
+                            Some((_, r)) => format!(
+                                "arc, radius {}, length {}",
+                                units.length(r as f64, 3),
+                                units.length(edge.length() as f64, 3)
+                            ),
+                            None => {
+                                format!("edge, length {}", units.length(edge.length() as f64, 3))
+                            }
+                        };
+                        note(ui, text, LEGEND);
+                    }
+                    if pick.snap == Snap::Face
+                        && let Some(info) = pick.face.and_then(|f| scene.faces.get(f))
+                    {
                         let part = scene.parts.get(info.body).map_or("", |p| p.name.as_str());
                         note(
                             ui,
-                            format!("{part}: {}, area {:.3}", info.kind, info.area),
+                            format!("{part}: {}, area {}", info.kind, units.area(info.area, 3)),
                             LEGEND,
                         );
                     }
                 }
                 if let [a, b] = self.picks[..] {
-                    let d = sub(b.point, a.point);
-                    let length = dot(d, d).sqrt();
+                    let d = wide(sub(b.point, a.point));
+                    let length = (d[0] * d[0] + d[1] * d[1] + d[2] * d[2]).sqrt();
                     readouts(
                         ui,
                         &[
-                            ("distance", format!("{length:.3}"), TRACE),
-                            ("dx", format!("{:.3}", d[0].abs()), VALUE),
-                            ("dy", format!("{:.3}", d[1].abs()), VALUE),
-                            ("dz", format!("{:.3}", d[2].abs()), VALUE),
+                            ("distance", units.length(length, 3), TRACE),
+                            ("dx", units.length(d[0].abs(), 3), VALUE),
+                            ("dy", units.length(d[1].abs(), 3), VALUE),
+                            ("dz", units.length(d[2].abs(), 3), VALUE),
                         ],
                     );
                 }
@@ -1927,6 +2089,7 @@ impl App {
         let solids = shown.solids.clone();
         let (min, max) = shown.bounds;
         let faces = shown.faces;
+        let units = self.units;
         let mut show_all = false;
         let changed = !self.modes.is_empty();
         card(
@@ -1999,7 +2162,7 @@ impl App {
                             }
                         }
                         Line::new()
-                            .measured(format!("{:.1}", part.volume))
+                            .measured(units.volume(part.volume, 1))
                             .size(11.0)
                             .show(ui);
                     });
@@ -2015,11 +2178,10 @@ impl App {
                     .legend("faces")
                     .measured(faces.to_string())
                     .legend("size")
-                    .measured(format!(
-                        "{:.1} x {:.1} x {:.1}",
-                        max[0] - min[0],
-                        max[1] - min[1],
-                        max[2] - min[2]
+                    .measured(units.lengths(
+                        &[max[0] - min[0], max[1] - min[1], max[2] - min[2]],
+                        1,
+                        " x ",
                     ))
                     .size(11.0)
                     .show(ui);
@@ -2084,12 +2246,18 @@ impl App {
                         .size(11.0)
                         .show(ui);
                     let mut value = self.joint_values[i];
-                    ui.add_enabled(
-                        stuck.is_none() && driver.is_none(),
-                        egui::Slider::new(&mut value, low..=high)
-                            .suffix(joint.unit())
-                            .clamping(egui::SliderClamping::Always),
-                    );
+                    let slider = egui::Slider::new(&mut value, low..=high)
+                        .clamping(egui::SliderClamping::Always);
+                    let slider = match joint.kind {
+                        JointKind::Slide { .. } => slider
+                            .custom_formatter(move |v, _| units.length(v, 2))
+                            .custom_parser(move |text| {
+                                let bare = text.trim().trim_end_matches(units.name()).trim();
+                                bare.parse::<f64>().ok().map(|v| v / units.per_mm())
+                            }),
+                        _ => slider.suffix(joint.unit()),
+                    };
+                    ui.add_enabled(stuck.is_none() && driver.is_none(), slider);
                     if value != self.joint_values[i]
                         && let Ok((settled, _)) = rig.drive(&self.joint_values, i, value)
                     {
@@ -2139,8 +2307,10 @@ impl App {
                     .into_iter()
                     .map(|(i, j, shared)| {
                         format!(
-                            "{} and {} share about {shared:.3}",
-                            solids[i].0, solids[j].0
+                            "{} and {} share about {}",
+                            solids[i].0,
+                            solids[j].0,
+                            units.volume(shared, 3)
                         )
                     })
                     .collect();
@@ -2252,8 +2422,9 @@ impl App {
                     note(
                         ui,
                         format!(
-                            "cut at {}={place:.2}, showing {}",
+                            "cut at {}={}, showing {}",
                             ["x", "y", "z"][axis],
+                            self.units.length(place as f64, 2),
                             if flip { "above" } else { "below" }
                         ),
                         LEGEND,
@@ -2272,33 +2443,93 @@ impl App {
     }
 
     fn pick(&self, viewer: &Viewer<Ink>, rect: Rect, at: Pos2) -> Option<Pick> {
-        let shown = self.shown.as_ref()?;
-        let hit = viewer.pick(rect, at)?;
+        let scene = &self.shown.as_ref()?.scene;
         let projector = viewer.projector(rect);
         let cut = self.cut();
-        let corner = shown
-            .scene
+        let hit = viewer.pick(rect, at);
+        let face = hit.as_ref().map(|h| h.surface);
+        let slack = viewer.scene().radius * 0.01;
+        let in_front = |p: V3, of: V3| dot(sub(p, of), projector.forward) <= slack;
+        let seen = |p: V3| {
+            cut.is_none_or(|c| c.keeps(p))
+                && (hit.as_ref().is_some_and(|h| in_front(p, h.point))
+                    || projector
+                        .project(p)
+                        .is_some_and(|s| viewer.pick(rect, s).is_none_or(|h| in_front(p, h.point))))
+        };
+        let reach = |p: V3, most: f32| {
+            projector
+                .project(p)
+                .map(|s| s.distance(at))
+                .filter(|d| *d < most)
+        };
+        let shown_edges = || {
+            scene
+                .edges
+                .iter()
+                .enumerate()
+                .filter(|(_, e)| viewer.look(e.body).visible())
+        };
+        let corners = scene
             .vertices
             .iter()
             .filter(|(body, _)| viewer.look(*body).visible())
-            .map(|(body, p)| viewer.look(*body).place(*p))
-            .filter(|p| cut.is_none_or(|c| c.keeps(*p)))
-            .filter_map(|p| projector.project(p).map(|s| (s.distance(at), p)))
-            .filter(|(d, p)| {
-                let gap = sub(*p, hit.point);
-                *d < 10.0 && dot(gap, gap).sqrt() < viewer.scene().radius * 0.2
+            .map(|(body, p)| (viewer.look(*body).place(*p), Snap::Corner, None));
+        let marks = shown_edges().flat_map(|(i, e)| {
+            let look = viewer.look(e.body);
+            let centre = e
+                .circle
+                .map(|(c, _)| (look.place(c), Snap::Centre, Some(i)));
+            let middle = (!e.closed())
+                .then(|| e.middle())
+                .flatten()
+                .map(|m| (look.place(m), Snap::Middle, Some(i)));
+            centre.into_iter().chain(middle)
+        });
+        let mut points: Vec<(f32, V3, Snap, Option<usize>)> = corners
+            .chain(marks)
+            .filter_map(|(p, snap, edge)| Some((reach(p, POINT_SNAP)?, p, snap, edge)))
+            .collect();
+        points.sort_by(|a, b| a.0.total_cmp(&b.0));
+        if let Some((_, point, snap, edge)) = points.into_iter().take(4).find(|c| seen(c.1)) {
+            return Some(Pick {
+                point,
+                face,
+                snap,
+                edge,
+            });
+        }
+        let mut along: Vec<(f32, V3, usize)> = shown_edges()
+            .filter_map(|(i, e)| {
+                let look = viewer.look(e.body);
+                e.points
+                    .windows(2)
+                    .filter_map(|w| {
+                        let (a, b) = (look.place(w[0]), look.place(w[1]));
+                        let (sa, sb) = (projector.project(a)?, projector.project(b)?);
+                        let t = closest_along(sa, sb, at);
+                        let d = sa.lerp(sb, t).distance(at);
+                        (d < EDGE_SNAP).then(|| (d, lerp3(a, b, t), i))
+                    })
+                    .min_by(|x, y| x.0.total_cmp(&y.0))
             })
-            .min_by(|a, b| a.0.total_cmp(&b.0));
+            .collect();
+        along.sort_by(|a, b| a.0.total_cmp(&b.0));
+        if let Some((_, point, edge)) = along.into_iter().take(4).find(|c| seen(c.1)) {
+            return Some(Pick {
+                point,
+                face,
+                snap: Snap::Edge,
+                edge: Some(edge),
+            });
+        }
+        let hit = hit?;
         Some(Pick {
-            point: corner.map_or(hit.point, |(_, p)| p),
+            point: hit.point,
             face: Some(hit.surface),
-            vertex: corner.is_some(),
+            snap: Snap::Face,
+            edge: None,
         })
-    }
-
-    fn body_of(&self, pick: &Pick) -> Option<usize> {
-        let scene = &self.shown.as_ref()?.scene;
-        pick.face.and_then(|f| scene.faces.get(f)).map(|f| f.body)
     }
 
     fn focus_on(&mut self, body: usize, part: String) {
@@ -2344,6 +2575,7 @@ impl App {
         ui.painter_at(rect)
             .circle_stroke(anchor, 4.0, Stroke::new(1.5, READOUT));
         let mode = self.mode(&part.name);
+        let units = self.units;
         let mut chosen = None;
         let mut close = false;
         egui::Area::new(ui.id().with("focus"))
@@ -2389,12 +2621,12 @@ impl App {
                         let [x, y, z] = part.size;
                         Line::new()
                             .legend("volume")
-                            .measured(format!("{:.1}", part.volume))
+                            .measured(units.volume(part.volume, 1))
                             .size(11.0)
                             .show(ui);
                         Line::new()
                             .legend("size")
-                            .measured(format!("{x:.1} x {y:.1} x {z:.1}"))
+                            .measured(units.lengths(&[x, y, z], 1, " x "))
                             .size(11.0)
                             .show(ui);
                         if let Some((name, density)) = &part.material {
@@ -2402,7 +2634,7 @@ impl App {
                                 .legend("material")
                                 .value(name)
                                 .legend("mass")
-                                .measured(format!("{:.1} g", part.volume * density / 1000.0))
+                                .measured(units.mass(part.volume * density / 1000.0))
                                 .size(11.0)
                                 .show(ui);
                         }
@@ -2439,7 +2671,9 @@ impl App {
 
     fn view_cube(&mut self, ui: &Ui, rect: Rect, projector: &Projector) -> bool {
         let size = 34.0;
-        let centre = Pos2::new(rect.right() - 70.0, rect.top() + 70.0);
+        let (cell, gap) = (Vec2::new(40.0, 18.0), 2.0);
+        let grid = 4.0 * cell.x + 3.0 * gap;
+        let centre = Pos2::new(rect.right() - 12.0 - grid / 2.0, rect.top() + 70.0);
         let screen = |v: V3| {
             Pos2::new(
                 centre.x + dot(v, projector.right) * size,
@@ -2519,33 +2753,100 @@ impl App {
             };
             self.cam.pitch = (n[2] * 1.5699).clamp(-1.5699, 1.5699);
         }
-        let mut buttons_at = Pos2::new(centre.x - 62.0, centre.y + size * 1.9 + 4.0);
-        for (name, yaw, pitch) in VIEWS {
-            let button = Rect::from_min_size(buttons_at, Vec2::new(40.0, 16.0));
-            let r = ui.interact(button, ui.id().with(("view", name)), Sense::click());
-            let fill = if r.hovered() { BAND } else { PANEL };
+        let top_left = Pos2::new(centre.x - grid / 2.0, centre.y + size * 1.9 + 4.0);
+        let mut over_buttons = false;
+        for (slot, view) in VIEWS.into_iter().enumerate() {
+            let (column, row) = ((slot % 4) as f32, (slot / 4) as f32);
+            let button = Rect::from_min_size(
+                top_left + Vec2::new(column * (cell.x + gap), row * (cell.y + gap)),
+                cell,
+            );
+            let name = view.map_or("ortho", |(name, ..)| name);
+            let mut r = ui.interact(button, ui.id().with(("view", name)), Sense::click());
+            over_buttons |= r.hovered();
+            let on = view.is_none() && self.cam.ortho;
+            let (fill, ink) = match (on, r.hovered()) {
+                (true, _) => (READOUT.gamma_multiply(0.18), READOUT),
+                (false, true) => (BAND, READOUT),
+                (false, false) => (PANEL, LEGEND),
+            };
             p.rect_filled(button, 2.0, fill);
+            if on {
+                p.rect_stroke(
+                    button,
+                    2.0,
+                    Stroke::new(1.0, READOUT),
+                    egui::StrokeKind::Inside,
+                );
+            }
             p.text(
                 button.center(),
                 egui::Align2::CENTER_CENTER,
                 name,
                 egui::FontId::proportional(10.0),
-                if r.hovered() { READOUT } else { LEGEND },
+                ink,
             );
-            if r.clicked() {
-                self.cam.yaw = yaw;
-                self.cam.pitch = pitch;
-                if name == "iso" {
-                    self.cam.zoom = 1.0;
-                    self.cam.shift = [0.0; 3];
+            if view.is_none() {
+                r = r.on_hover_text(if self.cam.ortho {
+                    "orthographic: parallel lines stay parallel. Click for perspective"
+                } else {
+                    "perspective. Click for orthographic, where parallel lines stay parallel"
+                });
+            }
+            if !r.clicked() {
+                continue;
+            }
+            match view {
+                None => self.cam.ortho = !self.cam.ortho,
+                Some((name, yaw, pitch)) => {
+                    self.cam.yaw = yaw;
+                    self.cam.pitch = pitch;
+                    if name == "iso" {
+                        self.cam.zoom = 1.0;
+                        self.cam.shift = [0.0; 3];
+                    }
                 }
             }
-            buttons_at.x += 42.0;
-            if buttons_at.x > centre.x + 60.0 {
-                buttons_at = Pos2::new(centre.x - 62.0, buttons_at.y + 18.0);
-            }
         }
-        resp.hovered() || resp.clicked()
+        resp.hovered() || resp.clicked() || over_buttons
+    }
+
+    fn snap_preview(
+        &self,
+        p: &egui::Painter,
+        projector: &Projector,
+        viewer: &Viewer<Ink>,
+        scene: &Scene,
+        pick: Pick,
+    ) {
+        if let Some(edge) = pick.edge.and_then(|e| scene.edges.get(e)) {
+            let look = viewer.look(edge.body);
+            let line: Vec<Pos2> = edge
+                .points
+                .iter()
+                .filter_map(|q| projector.project(look.place(*q)))
+                .collect();
+            p.add(egui::Shape::line(
+                line,
+                Stroke::new(2.0, TRACE.gamma_multiply(0.8)),
+            ));
+        }
+        let Some(at) = projector.project(pick.point) else {
+            return;
+        };
+        snap_mark(p, at, pick.snap, TRACE);
+        let label = p.layout_no_wrap(
+            pick.snap.name().to_string(),
+            egui::FontId::proportional(11.0),
+            TRACE,
+        );
+        let corner = at + Vec2::new(12.0, 10.0);
+        p.rect_filled(
+            Rect::from_min_size(corner, label.size()).expand2(Vec2::new(4.0, 2.0)),
+            2.0,
+            BACKGROUND.gamma_multiply(0.9),
+        );
+        p.galley(corner, label, TRACE);
     }
 
     fn fps(&self) -> Option<f32> {
@@ -2723,16 +3024,25 @@ impl App {
                 && resp.clicked()
                 && let Some(at) = resp.interact_pointer_pos()
             {
-                let hit = self
-                    .pick(&viewer, rect, at)
-                    .and_then(|pick| Some((self.body_of(&pick)?, pick.point)));
+                let hit = viewer.pick(rect, at).and_then(|hit| {
+                    let face = scene.faces.get(hit.surface)?;
+                    Some((face.body, hit.point))
+                });
                 self.focus = hit.and_then(|(body, point)| {
                     let part = scene.parts.get(body)?.name.clone();
                     Some(Focus { part, at: point })
                 });
             }
         }
+        let hover = if self.measuring && !resp.dragged() && !on_cube {
+            resp.hover_pos().and_then(|at| self.pick(&viewer, rect, at))
+        } else {
+            None
+        };
         let projector = Projector::new(&scene.mesh, &self.cam, rect);
+        if let Some(pick) = hover {
+            self.snap_preview(&p, &projector, &viewer, &scene, pick);
+        }
         let points: Vec<Pos2> = self
             .picks
             .iter()
@@ -2741,13 +3051,18 @@ impl App {
         if let [a, b] = points[..] {
             p.line_segment([a, b], Stroke::new(1.5, TRACE));
             let d = sub(self.picks[1].point, self.picks[0].point);
-            p.text(
-                a.lerp(b, 0.5) + Vec2::new(8.0, -8.0),
-                egui::Align2::LEFT_BOTTOM,
-                format!("{:.3}", dot(d, d).sqrt()),
-                egui::FontId::proportional(13.0),
+            let label = p.layout_no_wrap(
+                self.units.length(dot(d, d).sqrt() as f64, 3),
+                figure(13.0),
                 TRACE,
             );
+            let at = a.lerp(b, 0.5) + Vec2::new(8.0, -8.0 - label.size().y);
+            p.rect_filled(
+                Rect::from_min_size(at, label.size()).expand2(Vec2::new(5.0, 3.0)),
+                2.0,
+                BACKGROUND.gamma_multiply(0.9),
+            );
+            p.galley(at, label, TRACE);
         }
         for (n, at) in points.iter().enumerate() {
             p.circle_filled(*at, 4.0, if n == 0 { READOUT } else { TRACE });
@@ -2792,7 +3107,7 @@ impl App {
             }
         }
         let help = if self.measuring {
-            "click to pick points, corners snap; drag to orbit, shift-drag to pan, scroll to zoom"
+            "click two points to measure, corners, midpoints, centres and edges snap; esc clears; drag to orbit, shift-drag to pan, scroll to zoom"
         } else {
             "click a part to select it, drag to orbit, shift-drag to pan, scroll to zoom, double-click to reset, up/down to step lines"
         };
