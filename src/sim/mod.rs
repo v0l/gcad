@@ -134,6 +134,8 @@ pub struct Spec {
     pub slice: Option<f64>,
     #[serde(default)]
     pub roles: Vec<magnetic::Assigned>,
+    #[serde(default)]
+    pub apart: Vec<(String, String)>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]

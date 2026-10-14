@@ -32,12 +32,12 @@ robust = "1.2"
 faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
 ttf-parser = "0.25"
 wgpu = "29"
-sims-field = { git = "https://github.com/v0l/sims", rev = "33d0756f8cca945c0abb500ad1bd1cd48aa8a50c" }
-sims-flow = { git = "https://github.com/v0l/sims", rev = "33d0756f8cca945c0abb500ad1bd1cd48aa8a50c" }
-sims-magnetic = { git = "https://github.com/v0l/sims", rev = "33d0756f8cca945c0abb500ad1bd1cd48aa8a50c" }
-sims-fem = { git = "https://github.com/v0l/sims", rev = "33d0756f8cca945c0abb500ad1bd1cd48aa8a50c" }
-sims-tet = { git = "https://github.com/v0l/sims", rev = "33d0756f8cca945c0abb500ad1bd1cd48aa8a50c" }
-sims-progress = { git = "https://github.com/v0l/sims", rev = "33d0756f8cca945c0abb500ad1bd1cd48aa8a50c" }
+sims-field = { git = "https://github.com/v0l/sims", rev = "6d90dd767ddf0512d2e15ba4c70f75fc92031342" }
+sims-flow = { git = "https://github.com/v0l/sims", rev = "6d90dd767ddf0512d2e15ba4c70f75fc92031342" }
+sims-magnetic = { git = "https://github.com/v0l/sims", rev = "6d90dd767ddf0512d2e15ba4c70f75fc92031342" }
+sims-fem = { git = "https://github.com/v0l/sims", rev = "6d90dd767ddf0512d2e15ba4c70f75fc92031342" }
+sims-tet = { git = "https://github.com/v0l/sims", rev = "6d90dd767ddf0512d2e15ba4c70f75fc92031342" }
+sims-progress = { git = "https://github.com/v0l/sims", rev = "6d90dd767ddf0512d2e15ba4c70f75fc92031342" }
 pollster = "0.4"
 bytemuck = "1"
 toml = "1.1.8"

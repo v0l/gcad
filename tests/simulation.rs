@@ -1292,14 +1292,14 @@ fn bonded_parts_carry_load() {
 }
 
 #[test]
-fn parts_a_clearance_apart_do_not_bond() {
+fn parts_kept_apart_do_not_bond_across_a_clearance() {
     let stack = "part a block.gcad\npart b block.gcad\nmove b 0,0,10.25\n";
-    let outcome = simulated(
-        "parts_a_clearance_apart_do_not_bond",
-        &[("block.gcad", SLAB), ("stack.gasm", stack)],
-        "sim static\npart stack.gasm\nfix a:<Z\nfix b:>Z\nload a:>Z force=0,0,-100\nmesh 3",
-    );
-    assert!(!outcome.notes.iter().any(|n| n.contains("bonded")), "{:?}", outcome.notes);
+    let sim = "sim static\npart stack.gasm\nfix a:<Z\nfix b:>Z\nload a:>Z force=0,0,-100\nmesh 3";
+    let files = [("block.gcad", SLAB), ("stack.gasm", stack)];
+    let close = simulated("parts_close_bond", &files, sim);
+    assert!(close.notes.iter().any(|n| n.contains("bonded a to b")), "{:?}", close.notes);
+    let apart = simulated("parts_kept_apart", &files, &format!("{sim}\napart a b"));
+    assert!(!apart.notes.iter().any(|n| n.contains("bonded")), "{:?}", apart.notes);
 }
 
 #[test]

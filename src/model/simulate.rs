@@ -324,6 +324,23 @@ impl Model {
                     )
                 })
             }
+            "apart" => {
+                let args = Args::new(line, &["a", "b"], &[], false)?;
+                let (a, b) = (args.text("a")?.to_string(), args.text("b")?.to_string());
+                let names: Vec<String> = self
+                    .target_mut()?
+                    .named_solids()
+                    .into_iter()
+                    .map(|(n, _)| n)
+                    .collect();
+                for pattern in [&a, &b] {
+                    if !names.iter().any(|n| crate::sim::matches(pattern, n)) {
+                        bail!("`{pattern}` matches no part; parts are {names:?}");
+                    }
+                }
+                self.spec().apart.push((a.clone(), b.clone()));
+                Ok(format!("`{a}` and `{b}` do not bond where they come close"))
+            }
             "source" => {
                 let args = Args::new(line, &["watts"], &[], false)?;
                 let watts = args.number("watts", &self.scope)?;
