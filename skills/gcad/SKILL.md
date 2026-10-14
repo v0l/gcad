@@ -148,7 +148,10 @@ explode case.lid 0,0,30
 - `pattern part count=3 angle=360 axis=A` copies a part with its mates, joints and couples.
 - End the file with `interference none` and sweep each joint once with
   `interference joint=NAME steps=12` to find the range where it clashes. Set `min`/`max` from
-  that.
+  that, then keep the sweep as `interference none joint=NAME steps=N` so the check fails if a
+  later change clashes; without `none` a sweep only reports. Pick `N` so a step is not a whole
+  tooth pitch of any geared joint, or a gear pair out of phase never shows. A couple's gear and
+  pinion may share up to `module`³ where their teeth meet.
 - Size what goes inside before you draw it. `gcad measure case.gasm space at=x,y,z` grows the
   largest empty box around a point and names what stops it on each side, then gives the free
   distance from the point along each axis, which is the inside width. `gcad measure asm.gasm box`

@@ -1563,6 +1563,28 @@ impl Model {
                 "`interference` takes `none` to fail on any overlap, and `joint=` `steps=` to sweep a joint"
             ),
         };
+        let slack: Vec<(&str, &str, f64)> = self
+            .couples
+            .iter()
+            .filter_map(|couple| {
+                let mesh = couple.mesh.as_ref()?;
+                Some((
+                    mesh.gear.as_deref()?,
+                    mesh.pinion.as_deref()?,
+                    mesh.module.powi(3),
+                ))
+            })
+            .collect();
+        let real = |found: Vec<Clash>| -> Vec<Clash> {
+            found
+                .into_iter()
+                .filter(|(a, b, v)| {
+                    !slack.iter().any(|(gear, pinion, limit)| {
+                        ((a == gear && b == pinion) || (a == pinion && b == gear)) && v < limit
+                    })
+                })
+                .collect()
+        };
         let report = |found: &[Clash]| {
             found
                 .iter()
@@ -1571,7 +1593,7 @@ impl Model {
                 .join(", ")
         };
         let Some(name) = args.values.get("joint").copied() else {
-            let found = self.overlaps();
+            let found = real(self.overlaps());
             if found.is_empty() {
                 return Ok(format!("{} bodies, no overlaps", self.body_names().len()));
             }
@@ -1595,6 +1617,7 @@ impl Model {
             .collect();
         let mut hits = Vec::new();
         for (value, found) in self.sweep_overlaps(index, &values)? {
+            let found = real(found);
             if !found.is_empty() {
                 hits.push(format!(
                     "at {value:.1}{}: {}",

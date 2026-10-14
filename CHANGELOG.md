@@ -67,6 +67,8 @@ All notable changes to gcad are listed here. The format follows
 - A boss glued onto a face, including twisted faces and over an edge; twisted extrudes with holes.
 
 ### Changed
+- `interference none` lets a coupled gear and pinion share up to `module`³ where their teeth meet,
+  so a sweep through a meshing pair fails only on a real clash.
 - The viewer's run button simulates the model it has already built instead of building the file
   again, and after the run only redraws the scene to pick up the result instead of reloading.
 - Simulation meshes are only refined again when an element is flatter than half a degree

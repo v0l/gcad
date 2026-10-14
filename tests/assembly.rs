@@ -198,6 +198,28 @@ fn strict_interference_fails() {
 }
 
 #[test]
+fn meshing_gears_may_touch() {
+    const BLOCK: &str = "rect 10 10\nextrude 5\n";
+    let top = |module: f64| {
+        format!(
+            "part base block.gcad\nmove base 100,0,0\npart a block.gcad\npart b block.gcad\nmove b 9.9,0,0\naxis wa 0,0,0 0,0,1\naxis wb 9.9,0,0 9.9,0,1\njoint turn a base turn about=wa\njoint spin b base turn about=wb\ncouple spin turn ratio=2 module={module} face=5 teeth=20 gear=a pinion=b\ninterference none"
+        )
+    };
+    let (_, text) = built(
+        "meshing_gears_may_touch",
+        &top(2.0),
+        &[("block.gcad", BLOCK)],
+    );
+    assert!(text.contains("no overlaps"), "{text}");
+    let error = failed(
+        "meshing_gears_may_touch_fine",
+        &top(1.0),
+        &[("block.gcad", BLOCK)],
+    );
+    assert!(error.contains("a and b share"), "{error}");
+}
+
+#[test]
 fn geometry_stays_in_parts() {
     let error = failed(
         "geometry_stays_in_parts",

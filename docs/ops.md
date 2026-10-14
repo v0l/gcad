@@ -234,6 +234,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | motors driving joints through gears | supported | `examples/robot/arm.gasm` | `assembly::robot_arm_example` |
 | posing a joint | supported | `pose open -90` | `assembly::pose_moves_children` |
 | check every pair of parts | supported | `interference none` | `assembly::clear_assembly`, `assembly::strict_interference_fails` |
+| meshing gears may touch | supported | `couple ... module=2 gear=a pinion=b`, overlap under `module`³ allowed | `assembly::meshing_gears_may_touch` |
 | pattern parts | supported | `pattern s1 holes=case.lid:screws.side`, `count=` `step=`/`angle=` | `assembly::pattern_copies_a_part_and_its_mates` |
 | exploded view | supported | `explode lid 0,0,30`, `render --explode` | `assembly::exploded_views_move_parts_apart` |
 | assembly drawing with parts list | supported | `gcad export top.gasm top.svg` | `output::assembly_drawing_lists_parts` |

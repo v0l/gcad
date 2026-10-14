@@ -335,7 +335,7 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 | `color` | `part colour` `opacity=` | colours a part, over the colour and opacity its file gave it |
 | `material` | `part name` `density=` | sets a part's material, over the one its file gave it |
 | `materials` | `file` | loads a material library, as in a part file |
-| `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
+| `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps`, and with `none` fails at any pose with an overlap. Steps that are whole tooth pitches never catch a gear pair out of phase, so pick a count that is not. The gear and pinion of a `couple` with `module=` may share up to `module`³ where their teeth meet |
 | `measure` | `mass`, `overlap a b`, `box`, `clearance a b`, `space at=` | as in part files, across every part where it is placed |
 
 Standard parts are built in, M2 to M12, and come in steel (inserts and standoffs in brass). A screw's
