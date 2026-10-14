@@ -32,12 +32,12 @@ robust = "1.2"
 faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
 ttf-parser = "0.25"
 wgpu = "29"
-sims-field = { git = "https://github.com/v0l/sims", rev = "2beffc1b0dc6d31f7625d2650256872649c3231e" }
-sims-flow = { git = "https://github.com/v0l/sims", rev = "2beffc1b0dc6d31f7625d2650256872649c3231e" }
-sims-magnetic = { git = "https://github.com/v0l/sims", rev = "2beffc1b0dc6d31f7625d2650256872649c3231e" }
-sims-fem = { git = "https://github.com/v0l/sims", rev = "2beffc1b0dc6d31f7625d2650256872649c3231e" }
-sims-tet = { git = "https://github.com/v0l/sims", rev = "2beffc1b0dc6d31f7625d2650256872649c3231e" }
-sims-progress = { git = "https://github.com/v0l/sims", rev = "2beffc1b0dc6d31f7625d2650256872649c3231e" }
+sims-field = { git = "https://github.com/v0l/sims", rev = "53c7192fb0131b438bca6ca209334d70ce2b8215" }
+sims-flow = { git = "https://github.com/v0l/sims", rev = "53c7192fb0131b438bca6ca209334d70ce2b8215" }
+sims-magnetic = { git = "https://github.com/v0l/sims", rev = "53c7192fb0131b438bca6ca209334d70ce2b8215" }
+sims-fem = { git = "https://github.com/v0l/sims", rev = "53c7192fb0131b438bca6ca209334d70ce2b8215" }
+sims-tet = { git = "https://github.com/v0l/sims", rev = "53c7192fb0131b438bca6ca209334d70ce2b8215" }
+sims-progress = { git = "https://github.com/v0l/sims", rev = "53c7192fb0131b438bca6ca209334d70ce2b8215" }
 pollster = "0.4"
 bytemuck = "1"
 toml = "1.1.8"
@@ -60,20 +60,20 @@ web-time = "1"
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
 [patch.crates-io]
-monstertruck = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-core = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-traits = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-derive = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-geometry = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-topology = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-mesh = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-meshing = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-modeling = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-solid = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-fillet = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-healing = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-assembly = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
-monstertruck-io = { git = "https://github.com/v0l/monstertruck", rev = "2053ff9b5e53560b900f4b57733892d559a3dac1" }
+monstertruck = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-core = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-traits = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-derive = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-geometry = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-topology = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-mesh = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-meshing = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-modeling = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-solid = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-fillet = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-healing = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-assembly = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
+monstertruck-io = { git = "https://github.com/v0l/monstertruck", rev = "b664f6efb507a1934746e6d823e443f528bde26e" }
 
 [target.'cfg(windows)'.build-dependencies]
 winresource = "0.1"

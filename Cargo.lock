@@ -2407,7 +2407,7 @@ dependencies = [
 [[package]]
 name = "monstertruck"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "monstertruck-core",
  "monstertruck-fillet",
@@ -2425,7 +2425,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-assembly"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "monstertruck-core",
  "rayon",
@@ -2434,7 +2434,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-core"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "cgmath",
  "matext4cgmath",
@@ -2446,7 +2446,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-derive"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "proc-macro-error",
  "proc-macro2",
@@ -2457,7 +2457,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-fillet"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2475,7 +2475,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-geometry"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2488,7 +2488,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-healing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "ahash",
  "getrandom 0.3.4",
@@ -2504,7 +2504,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-io"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "chrono",
  "derive_more",
@@ -2525,7 +2525,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-mesh"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "array-macro",
  "bytemuck",
@@ -2541,7 +2541,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-meshing"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "array-macro",
  "derive_more",
@@ -2560,7 +2560,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-modeling"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "derive_more",
  "itertools 0.14.0",
@@ -2581,7 +2581,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-solid"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "ahash",
  "derive_more",
@@ -2602,7 +2602,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-topology"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "monstertruck-core",
  "monstertruck-traits",
@@ -2617,7 +2617,7 @@ dependencies = [
 [[package]]
 name = "monstertruck-traits"
 version = "0.4.1"
-source = "git+https://github.com/v0l/monstertruck?rev=2053ff9b5e53560b900f4b57733892d559a3dac1#2053ff9b5e53560b900f4b57733892d559a3dac1"
+source = "git+https://github.com/v0l/monstertruck?rev=b664f6efb507a1934746e6d823e443f528bde26e#b664f6efb507a1934746e6d823e443f528bde26e"
 dependencies = [
  "getrandom 0.4.3",
  "monstertruck-core",
@@ -4114,7 +4114,7 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 [[package]]
 name = "sims-fem"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=2beffc1b0dc6d31f7625d2650256872649c3231e#2beffc1b0dc6d31f7625d2650256872649c3231e"
+source = "git+https://github.com/v0l/sims?rev=53c7192fb0131b438bca6ca209334d70ce2b8215#53c7192fb0131b438bca6ca209334d70ce2b8215"
 dependencies = [
  "anyhow",
  "faer",
@@ -4127,7 +4127,7 @@ dependencies = [
 [[package]]
 name = "sims-field"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=2beffc1b0dc6d31f7625d2650256872649c3231e#2beffc1b0dc6d31f7625d2650256872649c3231e"
+source = "git+https://github.com/v0l/sims?rev=53c7192fb0131b438bca6ca209334d70ce2b8215#53c7192fb0131b438bca6ca209334d70ce2b8215"
 dependencies = [
  "bytemuck",
  "pollster",
@@ -4139,7 +4139,7 @@ dependencies = [
 [[package]]
 name = "sims-flow"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=2beffc1b0dc6d31f7625d2650256872649c3231e#2beffc1b0dc6d31f7625d2650256872649c3231e"
+source = "git+https://github.com/v0l/sims?rev=53c7192fb0131b438bca6ca209334d70ce2b8215#53c7192fb0131b438bca6ca209334d70ce2b8215"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4154,7 +4154,7 @@ dependencies = [
 [[package]]
 name = "sims-magnetic"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=2beffc1b0dc6d31f7625d2650256872649c3231e#2beffc1b0dc6d31f7625d2650256872649c3231e"
+source = "git+https://github.com/v0l/sims?rev=53c7192fb0131b438bca6ca209334d70ce2b8215#53c7192fb0131b438bca6ca209334d70ce2b8215"
 dependencies = [
  "anyhow",
  "sims-fem",
@@ -4165,7 +4165,7 @@ dependencies = [
 [[package]]
 name = "sims-progress"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=2beffc1b0dc6d31f7625d2650256872649c3231e#2beffc1b0dc6d31f7625d2650256872649c3231e"
+source = "git+https://github.com/v0l/sims?rev=53c7192fb0131b438bca6ca209334d70ce2b8215#53c7192fb0131b438bca6ca209334d70ce2b8215"
 dependencies = [
  "web-time",
 ]
@@ -4173,7 +4173,7 @@ dependencies = [
 [[package]]
 name = "sims-tet"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=2beffc1b0dc6d31f7625d2650256872649c3231e#2beffc1b0dc6d31f7625d2650256872649c3231e"
+source = "git+https://github.com/v0l/sims?rev=53c7192fb0131b438bca6ca209334d70ce2b8215#53c7192fb0131b438bca6ca209334d70ce2b8215"
 dependencies = [
  "anyhow",
  "cgmath",

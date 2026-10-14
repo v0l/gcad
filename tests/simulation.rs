@@ -963,7 +963,7 @@ fn slightly_flat_elements_keep_the_mesh_size() {
     }
     let (mesh, used) = gcad::sim::mesh::mesh_part(&solid_of(&source), 4.0).expect("meshes");
     let worst = mesh.quality().min_dihedral;
-    assert!(worst > 0.5 && worst < 2.0, "{worst}");
+    assert!(worst > 0.5, "{worst}");
     assert_eq!(used, 4.0);
 }
 

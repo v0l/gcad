@@ -68,6 +68,14 @@ All notable changes to gcad are listed here. The format follows
   (was 2 degrees). Elements between the two solve fine, and parts that never reached 2 degrees
   were meshed far finer than asked: the rotator's electronics box at `mesh 3` made 15.7 million
   nodes instead of 78 thousand.
+- Simulation meshes have far fewer flat elements: points on the surface slide along their face
+  or edge to raise the worst element, and shedding flat elements no longer folds the surface.
+  The worst element across the example parts went from 0.27 to 5.2 degrees.
+- Booleans and part loading are faster: the truck example checks in about 4 s (was 23 s) and its
+  wheel part builds in 1 s (was 2.5 s). The viewer keeps loaded parts between rebuilds, so saving
+  an assembly rebuilds only what changed.
+- Simulations give the same answer every run; the solver's dot products no longer depend on how
+  threads split the work.
 - `stress` and `safety` leave out one element size of each part around its supports and bonds,
   where a rigid hold is singular. A part smaller than the `mesh` size uses a sixth of its own
   diagonal, so a key or pin in a large assembly still counts towards `safety`.
