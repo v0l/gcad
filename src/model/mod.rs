@@ -26,7 +26,7 @@ mod skin;
 mod solids;
 mod standard;
 mod step_raw;
-mod stored;
+pub(crate) mod stored;
 mod thread;
 mod weld;
 mod wrap;

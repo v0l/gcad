@@ -90,6 +90,8 @@ All notable changes to gcad are listed here. The format follows
   example's parts load in 1 s instead of 4.4 s. `GCAD_NO_PART_CACHE=1` turns it off. Sub-assemblies
   are kept too, and `interference` meshes each part once per build instead of once per line: checking
   the rotator again takes 7.6 s instead of 24 s.
+- Simulation meshes are kept in `~/.cache/gcad/meshes`, so opening a result in the viewer no longer
+  meshes the part again to draw it: the rotator yoke at `mesh 1` opens in 4 s instead of 66 s.
 - A save during a build stops it and starts again with the new files, after a quarter second without
   further saves, so an agent editing many parts no longer queues a build per file.
 - An assembly builds every part file below it, through all its sub-assemblies, in one parallel

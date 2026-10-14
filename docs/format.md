@@ -699,8 +699,10 @@ line that changes the solid it prints the face count, volume and bounding box.
 Every part file an assembly brings in is kept built in `~/.cache/gcad/parts` (or
 `$XDG_CACHE_HOME/gcad/parts`), up to 1 GB, and read back the next time the same file
 is used with the same variables, as long as no file it read has changed (the part file,
-its includes, imports and material libraries) and gcad is the same build. Set
-`GCAD_NO_PART_CACHE=1` to build every part from scratch.
+its includes, imports and material libraries) and gcad is the same build. Sub-assemblies
+are kept the same way, and simulation meshes are kept in `~/.cache/gcad/meshes` for the
+same solid at the same size, so opening a simulation result does not mesh the part again.
+Set `GCAD_NO_PART_CACHE=1` to build every part and mesh from scratch.
 
 `view` opens a window that rebuilds on every save. The left column is the file,
 one row per line, green when it ran, red where it failed. Clicking a row (or up and

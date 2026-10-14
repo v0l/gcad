@@ -12,6 +12,7 @@ type Read = (PathBuf, Option<[u8; 32]>, bool);
 type StoredSource = (String, PathBuf, String, Vec<(String, f64)>);
 type StoredGroup = (String, String, Surface);
 type StoredPartGroups = (String, Vec<StoredGroup>, [[f64; 4]; 4]);
+type NodeUvs = (u32, Vec<(usize, [f64; 2])>);
 
 #[derive(Serialize, Deserialize)]
 struct Stored {
@@ -118,21 +119,118 @@ pub(crate) fn put(path: &Path, vars: &[(String, f64)], model: &Model, reads: &cr
     let Some(stored) = storable(model, key.clone(), reads.contents()) else {
         return;
     };
-    if std::fs::create_dir_all(&dir).is_err() {
+    write_stored(&dir, &file_of(&dir, &key), &stored);
+}
+
+fn write_stored<T: Serialize>(dir: &Path, file: &Path, value: &T) {
+    if std::fs::create_dir_all(dir).is_err() {
         return;
     }
-    let file = file_of(&dir, &key);
     let partial = file.with_extension(format!("part.{}", std::process::id()));
     let written = std::fs::File::create(&partial).ok().and_then(|handle| {
         let mut gz = flate2::write::GzEncoder::new(handle, flate2::Compression::fast());
-        ciborium::into_writer(&stored, &mut gz).ok()?;
+        ciborium::into_writer(value, &mut gz).ok()?;
         gz.finish().ok()
     });
-    if written.is_some() && std::fs::rename(&partial, &file).is_ok() {
-        prune(&dir);
+    if written.is_some() && std::fs::rename(&partial, file).is_ok() {
+        prune(dir);
     } else {
         let _ = std::fs::remove_file(&partial);
     }
+}
+
+fn read_stored<T: serde::de::DeserializeOwned>(file: &Path) -> Option<T> {
+    let bytes = std::fs::read(file).ok()?;
+    let value = ciborium::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).ok()?;
+    if let Ok(handle) = std::fs::File::options().append(true).open(file) {
+        let _ = handle.set_modified(std::time::SystemTime::now());
+    }
+    Some(value)
+}
+
+#[derive(Serialize, Deserialize)]
+struct StoredMesh {
+    key: String,
+    nodes: Vec<[f64; 3]>,
+    tets: Vec<[u32; 4]>,
+    boundary: Vec<([u32; 3], usize)>,
+    faces: usize,
+    surfaces: Vec<Surface>,
+    uvs: Vec<NodeUvs>,
+    used: f64,
+}
+
+fn mesh_dir() -> Option<PathBuf> {
+    Some(dir()?.with_file_name("meshes"))
+}
+
+fn mesh_key(solid: &Solid, size: f64) -> Option<String> {
+    use sha2::Digest;
+    let mut bytes = Vec::new();
+    ciborium::into_writer(&solid.compress(), &mut bytes).ok()?;
+    let digest = sha2::Sha256::digest(&bytes);
+    let shape: String = digest.iter().map(|b| format!("{b:02x}")).collect();
+    let exe = std::env::current_exe()
+        .and_then(std::fs::metadata)
+        .ok()
+        .map(|meta| (meta.len(), meta.modified().ok()));
+    Some(format!(
+        "{}|{exe:?}|{size:?}|{shape}",
+        env!("GCAD_BUILD_VERSION")
+    ))
+}
+
+pub(crate) fn fetch_mesh(solid: &Solid, size: f64) -> Option<(crate::sim::tet::TetMesh, f64)> {
+    let dir = mesh_dir()?;
+    let key = mesh_key(solid, size)?;
+    let stored: StoredMesh = read_stored(&file_of(&dir, &key))?;
+    if stored.key != key {
+        return None;
+    }
+    let mesh = crate::sim::tet::TetMesh {
+        nodes: stored.nodes.into_iter().map(Point3::from).collect(),
+        tets: stored.tets,
+        boundary: stored.boundary,
+        faces: stored.faces,
+        surfaces: stored
+            .surfaces
+            .into_iter()
+            .map(crate::sim::tet::Exact)
+            .collect(),
+        uvs: stored
+            .uvs
+            .into_iter()
+            .map(|(node, uvs)| {
+                (
+                    node,
+                    uvs.into_iter().map(|(f, uv)| (f, uv.into())).collect(),
+                )
+            })
+            .collect(),
+    };
+    Some((mesh, stored.used))
+}
+
+pub(crate) fn put_mesh(solid: &Solid, size: f64, (mesh, used): &(crate::sim::tet::TetMesh, f64)) {
+    let Some(dir) = mesh_dir() else { return };
+    let Some(key) = mesh_key(solid, size) else {
+        return;
+    };
+    let stored = StoredMesh {
+        key: key.clone(),
+        nodes: mesh.nodes.iter().map(|&p| p.into()).collect(),
+        tets: mesh.tets.clone(),
+        boundary: mesh.boundary.clone(),
+        faces: mesh.faces,
+        surfaces: mesh.surfaces.iter().map(|s| s.0.clone()).collect(),
+        uvs: mesh
+            .uvs
+            .iter()
+            .map(|(&node, uvs)| (node, uvs.iter().map(|&(f, uv)| (f, uv.into())).collect()))
+            .collect(),
+        used: *used,
+    };
+    write_stored(&dir, &file_of(&dir, &key), &stored);
 }
 
 fn prune(dir: &Path) {

@@ -74,6 +74,15 @@ fn mesh_reporting(
     size: f64,
     stage: &crate::progress::Stage,
 ) -> Result<(TetMesh, f64)> {
+    if let Some(kept) = crate::model::stored::fetch_mesh(solid, size) {
+        return Ok(kept);
+    }
+    let meshed = mesh_fresh(solid, size, stage)?;
+    crate::model::stored::put_mesh(solid, size, &meshed);
+    Ok(meshed)
+}
+
+fn mesh_fresh(solid: &Solid, size: f64, stage: &crate::progress::Stage) -> Result<(TetMesh, f64)> {
     let own = size.min(geometry::bounds(solid).diameter() / 6.0);
     let mut tried = own;
     let mut best: Option<(TetMesh, f64, f64)> = None;

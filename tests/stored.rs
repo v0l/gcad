@@ -152,3 +152,25 @@ fn stored_sub_assemblies_follow_their_parts() {
     let taller = built();
     assert!((taller.0 - 3000.0).abs() < 1.0, "{taller:?}");
 }
+
+#[test]
+fn stored_meshes_come_back_the_same() {
+    let _one = ONE_STORE.lock().unwrap_or_else(|e| e.into_inner());
+    let store = store();
+    let meshes = store.with_file_name("meshes");
+    let _ = std::fs::remove_dir_all(&meshes);
+    let lines = gcad::parse::parse_program("circle 20\ns: extrude 30\nplane s.end\nhole 6 0,0\n")
+        .expect("parses");
+    let solid = gcad::model::run(&lines).model.solid.expect("a solid");
+    let (fresh, used) = gcad::sim::mesh::mesh_part(&solid, 4.0).expect("meshes");
+    assert_eq!(std::fs::read_dir(&meshes).expect("stored").count(), 1);
+    let (kept, again) = gcad::sim::mesh::mesh_part(&solid, 4.0).expect("meshes");
+    assert_eq!(used, again);
+    assert_eq!(fresh.nodes, kept.nodes);
+    assert_eq!(fresh.tets, kept.tets);
+    assert_eq!(fresh.boundary, kept.boundary);
+    assert_eq!(fresh.uvs, kept.uvs);
+    let (coarser, _) = gcad::sim::mesh::mesh_part(&solid, 6.0).expect("meshes");
+    assert_ne!(coarser.nodes.len(), fresh.nodes.len());
+    assert_eq!(std::fs::read_dir(&meshes).expect("stored").count(), 2);
+}
