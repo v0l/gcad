@@ -1496,17 +1496,30 @@ impl Model {
                 .iter()
                 .map(|name| pose.get(name).copied().unwrap_or_else(Matrix4::identity))
                 .collect();
-            let moved: Vec<Option<geometry::Meshed>> = deltas
-                .par_iter()
-                .zip(&meshes)
-                .map(|(delta, mesh)| {
-                    (!same_motion(*delta, Matrix4::identity())).then(|| mesh.transformed(*delta))
+            let still_body = |i: usize| same_motion(deltas[i], Matrix4::identity());
+            let bounds: Vec<_> = (0..meshes.len())
+                .map(|i| match still_body(i) {
+                    true => *meshes[i].bounds(),
+                    false => meshes[i].bounds_moved(deltas[i]),
                 })
                 .collect();
-            let mesh_of = |i: usize| moved[i].as_ref().unwrap_or(&*meshes[i]);
             let together = |i: usize, j: usize| same_motion(deltas[i], deltas[j]);
             let (rigid, relative): (Vec<_>, Vec<_>) =
                 pairs.iter().copied().partition(|&(i, j)| together(i, j));
+            let relative: Vec<(usize, usize)> = relative
+                .into_iter()
+                .filter(|&(i, j)| !geometry::boxes_apart(&bounds[i], &bounds[j]))
+                .collect();
+            let mut needed = vec![false; meshes.len()];
+            for &(i, j) in &relative {
+                needed[i] = true;
+                needed[j] = true;
+            }
+            let moved: Vec<Option<geometry::Meshed>> = (0..meshes.len())
+                .into_par_iter()
+                .map(|i| (needed[i] && !still_body(i)).then(|| meshes[i].transformed(deltas[i])))
+                .collect();
+            let mesh_of = |i: usize| moved[i].as_ref().unwrap_or(&*meshes[i]);
             let unknown: Vec<(usize, usize)> = rigid
                 .iter()
                 .copied()

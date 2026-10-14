@@ -633,6 +633,15 @@ pub struct Meshed {
     volume: f64,
 }
 
+fn flat_extent(tri: &[Point3; 3]) -> (f64, f64, f64, f64) {
+    (
+        tri.iter().map(|p| p.x).fold(f64::INFINITY, f64::min),
+        tri.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max),
+        tri.iter().map(|p| p.y).fold(f64::INFINITY, f64::min),
+        tri.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max),
+    )
+}
+
 impl Meshed {
     pub fn volume(&self) -> f64 {
         self.volume
@@ -667,8 +676,23 @@ impl Meshed {
     }
 
     fn apart(&self, other: &Meshed) -> bool {
-        let (a, b) = (&self.bounds, &other.bounds);
-        (0..3).any(|k| a.max()[k] < b.min()[k] || b.max()[k] < a.min()[k])
+        boxes_apart(&self.bounds, &other.bounds)
+    }
+
+    pub fn bounds_moved(&self, m: Matrix4) -> BoundingBox<Point3> {
+        let (lo, hi) = (self.bounds.min(), self.bounds.max());
+        (0..8)
+            .map(|k| {
+                let pick = |bit: usize, axis: usize| {
+                    if k >> bit & 1 == 0 {
+                        lo[axis]
+                    } else {
+                        hi[axis]
+                    }
+                };
+                m.transform_point(Point3::new(pick(0, 0), pick(1, 1), pick(2, 2)))
+            })
+            .collect()
     }
 
     pub fn clash(&self, other: &Meshed) -> Option<f64> {
@@ -678,6 +702,10 @@ impl Meshed {
         let shared = overlap_of(self, other, 96);
         (shared > 1.0e-6 * self.volume.abs().max(1.0)).then_some(shared)
     }
+}
+
+pub fn boxes_apart(a: &BoundingBox<Point3>, b: &BoundingBox<Point3>) -> bool {
+    (0..3).any(|k| a.max()[k] < b.min()[k] || b.max()[k] < a.min()[k])
 }
 
 pub fn clashes(meshes: &[std::sync::Arc<Meshed>]) -> Vec<(usize, usize, f64)> {
@@ -730,16 +758,20 @@ pub fn meshed_all(solids: &[&Solid]) -> Vec<std::sync::Arc<Meshed>> {
         .map(|(solid, found)| found.unwrap_or_else(|| Arc::new(Meshed::new(solid))))
         .collect();
     let mut cache = MESHES.lock().unwrap_or_else(|e| e.into_inner());
-    for ((solid, key), mesh) in solids.iter().zip(keys).zip(&made) {
-        if key.is_empty() || cache.entries.contains_key(&key) {
+    let wanted: std::collections::HashSet<&MeshKey> = keys.iter().collect();
+    let adding: usize = made.iter().map(|mesh| mesh.triangles.len()).sum();
+    if cache.triangles + adding > CACHED_TRIANGLES {
+        cache.entries.retain(|key, _| wanted.contains(key));
+        cache.triangles = cache.entries.values().map(|(_, m)| m.triangles.len()).sum();
+    }
+    for ((solid, key), mesh) in solids.iter().zip(&keys).zip(&made) {
+        if key.is_empty() || cache.entries.contains_key(key) {
             continue;
         }
-        if cache.triangles + mesh.triangles.len() > CACHED_TRIANGLES {
-            cache.entries.clear();
-            cache.triangles = 0;
-        }
         cache.triangles += mesh.triangles.len();
-        cache.entries.insert(key, ((*solid).clone(), mesh.clone()));
+        cache
+            .entries
+            .insert(key.clone(), ((*solid).clone(), mesh.clone()));
     }
     made
 }
@@ -771,22 +803,15 @@ pub fn overlap_of(ma: &Meshed, mb: &Meshed, per_side: usize) -> f64 {
     }
     let n = per_side;
     let (dx, dy) = ((x1 - x0) / n as f64, (y1 - y0) / n as f64);
-    let prepare = |triangles: &[[Point3; 3]]| {
+    let prepare = |mesh: &Meshed| {
         let mut bins = vec![Vec::new(); n * n];
-        for (index, tri) in triangles.iter().enumerate() {
+        for (index, tri) in mesh.triangles.iter().enumerate() {
             let range = |lo: f64, hi: f64, start: f64, step: f64| {
                 let a = (((lo - start) / step).floor().max(0.0) as usize).min(n - 1);
                 let b = (((hi - start) / step).floor().max(0.0) as usize).min(n - 1);
                 a..=b
             };
-            let (lx, hx) = (
-                tri.iter().map(|p| p.x).fold(f64::INFINITY, f64::min),
-                tri.iter().map(|p| p.x).fold(f64::NEG_INFINITY, f64::max),
-            );
-            let (ly, hy) = (
-                tri.iter().map(|p| p.y).fold(f64::INFINITY, f64::min),
-                tri.iter().map(|p| p.y).fold(f64::NEG_INFINITY, f64::max),
-            );
+            let (lx, hx, ly, hy) = flat_extent(tri);
             if hx < x0 || lx > x1 || hy < y0 || ly > y1 {
                 continue;
             }
@@ -799,7 +824,7 @@ pub fn overlap_of(ma: &Meshed, mb: &Meshed, per_side: usize) -> f64 {
         bins
     };
     let (ta, tb) = (&ma.triangles, &mb.triangles);
-    let (bins_a, bins_b) = (prepare(ta), prepare(tb));
+    let (bins_a, bins_b) = (prepare(ma), prepare(mb));
     let mut total = 0.0;
     for i in 0..n {
         for j in 0..n {
