@@ -609,6 +609,9 @@ impl Model {
 
     pub fn describe_solid(&self) -> Result<String> {
         let solid = self.solid.as_ref().ok_or_else(|| anyhow!("no solid"))?;
+        if self.depth > 0 {
+            return Ok(format!("{} faces", select::faces(solid).len()));
+        }
         let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
         let bounds: BoundingBox<Point3> = mesh.positions().iter().copied().collect();
         let tidy = |v: f64| if v.abs() < 5.0e-4 { 0.0 } else { v };
