@@ -774,6 +774,9 @@ impl Model {
         let building = crate::progress::stage("building parts", Some(fresh.len()), "files");
         crate::host::each(fresh, |((key, path, vars), depth)| {
             let settling = super::Settling::new(cache, &key);
+            if crate::host::superseded() {
+                return;
+            }
             let loaded = super::traced(|| super::load_model(&path, &vars, depth, cache));
             settling.settle(loaded);
             building.advance(1.0);

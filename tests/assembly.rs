@@ -1109,8 +1109,11 @@ fn bearings_dowels_and_standoffs() {
     assert!((bore.max().x - 11.0).abs() < 1.0e-6 && (bore.max().z - 7.0).abs() < 1.0e-6);
 }
 
+static KEPT_RUNS: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 #[test]
 fn kept_parts_rebuild_only_what_changed() {
+    let _one_viewer = KEPT_RUNS.lock().unwrap_or_else(|e| e.into_inner());
     let path = files(
         "kept_parts_rebuild_only_what_changed",
         "part s sub.gasm\npart c block.gcad w=30\n",
@@ -1121,8 +1124,8 @@ fn kept_parts_rebuild_only_what_changed() {
         ],
     );
     let build = || {
-        let (_, snapshots) = gcad::model::snapshots_path_kept(&path, &[]).expect("builds");
-        snapshots.last().expect("a line").model.clone()
+        let run = gcad::model::snapshots_path_kept(&path, &[]).expect("builds");
+        run.snapshots.last().expect("a line").model.clone()
     };
     let faces = |model: &Model, name: &str| -> Vec<_> {
         model
@@ -1159,18 +1162,48 @@ fn kept_parts_rebuild_only_what_changed() {
     assert_eq!(faces(&third, "s.b"), faces(&fourth, "s.b"));
     let wide = gcad::geometry::volume(&fourth.named_body("c").expect("c"));
     assert!((wide - 6000.0).abs() < 1.0, "{wide}");
+    let mut read: Vec<String> = gcad::model::snapshots_path_kept(&path, &[])
+        .expect("builds")
+        .files
+        .iter()
+        .filter_map(|file| Some(file.file_name()?.to_string_lossy().into_owned()))
+        .collect();
+    read.retain(|name| name.ends_with(".gcad") || name.ends_with(".gasm"));
+    assert_eq!(read, ["block.gcad", "other.gcad", "sub.gasm", "top.gasm"]);
+}
+
+#[test]
+fn a_newer_build_stops_the_older_one() {
+    let _one_viewer = KEPT_RUNS.lock().unwrap_or_else(|e| e.into_inner());
+    let path = files(
+        "a_newer_build_stops_the_older_one",
+        "part a block.gcad\npart b block.gcad\n",
+        &[("block.gcad", "rect 10 10\nextrude 10\n")],
+    );
+    let (steps, parts) = gcad::host::superseding(|| {
+        gcad::host::superseding(|| ());
+        let steps = run_path(&path, &[], None).expect("reads").steps;
+        let parts = gcad::host::each(vec![()], |_| gcad::host::superseded());
+        (steps, parts)
+    });
+    assert_eq!(steps.len(), 1);
+    let error = format!("{:#}", steps[0].1.as_ref().expect_err("stopped"));
+    assert!(error.contains("a newer build took over"), "{error}");
+    assert_eq!(parts, [Some(true)]);
+    assert!(!gcad::host::superseded());
 }
 
 #[test]
 fn kept_parts_follow_their_files() {
+    let _one_viewer = KEPT_RUNS.lock().unwrap_or_else(|e| e.into_inner());
     let path = files(
         "kept_parts_follow_their_files",
         "part a block.gcad\n",
         &[("block.gcad", "rect 10 10\nextrude 10\n")],
     );
     let volume = |path: &std::path::Path| {
-        let (_, snapshots) = gcad::model::snapshots_path_kept(path, &[]).expect("builds");
-        let model = &snapshots.last().expect("a line").model;
+        let run = gcad::model::snapshots_path_kept(path, &[]).expect("builds");
+        let model = &run.snapshots.last().expect("a line").model;
         gcad::geometry::volume(&model.named_body("a").expect("part a"))
     };
     assert!((volume(&path) - 1000.0).abs() < 1.0);

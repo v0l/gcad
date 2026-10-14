@@ -348,13 +348,45 @@ pub fn exists(path: &Path) -> bool {
     is_file(path) || is_dir(path)
 }
 
+static LATEST_RUN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+thread_local! {
+    static RUN: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+pub fn superseding<R>(work: impl FnOnce() -> R) -> R {
+    let run = LATEST_RUN.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    let outer = RUN.with(|cell| cell.replace(run));
+    let result = work();
+    RUN.with(|cell| cell.set(outer));
+    result
+}
+
+pub fn current_run() -> u64 {
+    RUN.with(std::cell::Cell::get)
+}
+
+pub fn run_superseded(run: u64) -> bool {
+    run != 0 && run != LATEST_RUN.load(std::sync::atomic::Ordering::SeqCst)
+}
+
+pub fn superseded() -> bool {
+    run_superseded(current_run())
+}
+
 #[cfg(not(target_arch = "wasm32"))]
 pub fn each<T: Send, R: Send>(items: Vec<T>, f: impl Fn(T) -> R + Sync) -> Vec<Option<R>> {
+    let run = RUN.with(std::cell::Cell::get);
     std::thread::scope(|scope| {
         let f = &f;
         let jobs: Vec<_> = items
             .into_iter()
-            .map(|item| scope.spawn(move || f(item)))
+            .map(|item| {
+                scope.spawn(move || {
+                    RUN.with(|cell| cell.set(run));
+                    f(item)
+                })
+            })
             .collect();
         jobs.into_iter().map(|job| job.join().ok()).collect()
     })

@@ -182,7 +182,7 @@ struct Shared {
 struct CacheEntries {
     parts: HashMap<String, Entry>,
     cylinders: HashMap<String, Vec<mate::Cylinder>>,
-    pending: std::collections::HashSet<String>,
+    pending: HashMap<String, u64>,
     clock: u64,
 }
 
@@ -193,8 +193,8 @@ struct Entry {
     used: u64,
 }
 
-pub(crate) struct Traced {
-    model: Result<Model>,
+pub(crate) struct Traced<T = Model> {
+    result: Result<T>,
     reads: crate::host::Reads,
     uses: Vec<String>,
 }
@@ -203,11 +203,15 @@ thread_local! {
     static USES: std::cell::RefCell<Vec<Vec<String>>> = const { std::cell::RefCell::new(Vec::new()) };
 }
 
-pub(crate) fn traced(load: impl FnOnce() -> Result<Model>) -> Traced {
+pub(crate) fn traced<T>(load: impl FnOnce() -> Result<T>) -> Traced<T> {
     USES.with(|stack| stack.borrow_mut().push(Vec::new()));
-    let (model, reads) = crate::host::recording(load);
+    let (result, reads) = crate::host::recording(load);
     let uses = USES.with(|stack| stack.borrow_mut().pop().unwrap_or_default());
-    Traced { model, reads, uses }
+    Traced {
+        result,
+        reads,
+        uses,
+    }
 }
 
 fn note_use(key: &str) {
@@ -310,6 +314,12 @@ impl CacheEntries {
         });
     }
 
+    fn building(&self, key: &str) -> bool {
+        self.pending
+            .get(key)
+            .is_some_and(|&run| !crate::host::run_superseded(run))
+    }
+
     fn found(&mut self, key: &str) -> Option<std::sync::Arc<Model>> {
         self.clock += 1;
         let clock = self.clock;
@@ -319,7 +329,7 @@ impl CacheEntries {
     }
 
     fn insert(&mut self, key: String, traced: Traced) -> Result<std::sync::Arc<Model>> {
-        let model = std::sync::Arc::new(traced.model?);
+        let model = std::sync::Arc::new(traced.result?);
         let entry = Entry {
             model: model.clone(),
             reads: traced.reads,
@@ -341,6 +351,36 @@ impl Cache {
         cache
     }
 
+    fn files_reached<T>(&self, run: &Traced<T>) -> Vec<PathBuf> {
+        let entries = self.lock();
+        let mut seen = std::collections::HashSet::new();
+        let mut todo: Vec<&String> = run.uses.iter().collect();
+        let mut files: Vec<PathBuf> = run
+            .reads
+            .files()
+            .map(std::path::Path::to_path_buf)
+            .collect();
+        while let Some(key) = todo.pop() {
+            if !seen.insert(key.clone()) {
+                continue;
+            }
+            if let Some(entry) = entries.parts.get(key) {
+                files.extend(entry.reads.files().map(std::path::Path::to_path_buf));
+                todo.extend(entry.uses.iter());
+            }
+        }
+        let mut files: Vec<PathBuf> = files
+            .into_iter()
+            .filter_map(|file| {
+                let dir = std::fs::canonicalize(file.parent()?).ok()?;
+                Some(dir.join(file.file_name()?))
+            })
+            .collect();
+        files.sort();
+        files.dedup();
+        files
+    }
+
     fn lock(&self) -> std::sync::MutexGuard<'_, CacheEntries> {
         self.0.entries.lock().unwrap_or_else(|e| e.into_inner())
     }
@@ -352,7 +392,7 @@ impl Cache {
     ) -> Result<std::sync::Arc<Model>> {
         note_use(&key);
         let mut entries = self.lock();
-        while !entries.parts.contains_key(&key) && entries.pending.contains(&key) {
+        while !entries.parts.contains_key(&key) && entries.building(&key) {
             entries = self
                 .0
                 .settled
@@ -364,19 +404,30 @@ impl Cache {
         }
         drop(entries);
         let traced = traced(load);
+        if crate::host::superseded() {
+            return traced.result.map(std::sync::Arc::new);
+        }
         self.lock().insert(key, traced)
     }
 
     pub(crate) fn claim(&self, key: &str) -> bool {
         let mut entries = self.lock();
-        entries.found(key).is_none() && entries.pending.insert(key.to_string())
+        if entries.found(key).is_some() || entries.building(key) {
+            return false;
+        }
+        entries
+            .pending
+            .insert(key.to_string(), crate::host::current_run());
+        true
     }
 
     fn settle(&self, key: &str, traced: Option<Traced>) {
         let mut entries = self.lock();
-        entries.pending.remove(key);
-        if let Some(traced) = traced {
-            let _ = entries.insert(key.to_string(), traced);
+        if entries.pending.get(key) == Some(&crate::host::current_run()) {
+            entries.pending.remove(key);
+            if let Some(traced) = traced.filter(|_| !crate::host::superseded()) {
+                let _ = entries.insert(key.to_string(), traced);
+            }
         }
         drop(entries);
         self.0.settled.notify_all();
@@ -938,35 +989,30 @@ pub fn snapshots_path(
     Ok((lines, snapshots))
 }
 
-pub fn kept_files() -> Vec<PathBuf> {
-    let kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
-    let Some(cache) = kept.as_ref() else {
-        return Vec::new();
-    };
-    let entries = cache.lock();
-    let mut files: Vec<PathBuf> = entries
-        .parts
-        .values()
-        .flat_map(|entry| entry.reads.files().map(std::path::Path::to_path_buf))
-        .filter_map(|file| {
-            let dir = std::fs::canonicalize(file.parent()?).ok()?;
-            Some(dir.join(file.file_name()?))
-        })
-        .collect();
-    files.sort();
-    files.dedup();
-    files
+pub struct KeptRun {
+    pub lines: Vec<Line>,
+    pub snapshots: Vec<Snapshot>,
+    pub files: Vec<PathBuf>,
 }
 
-pub fn snapshots_path_kept(
-    path: &std::path::Path,
-    vars: &[(String, f64)],
-) -> Result<(Vec<Line>, Vec<Snapshot>)> {
-    let mut start = start_for(path, vars, 0);
-    start.cache = Cache::kept();
-    let lines = read_lines(path)?;
-    let snapshots = snapshots_from(start, &lines, Some(path));
-    Ok((lines, snapshots))
+pub fn snapshots_path_kept(path: &std::path::Path, vars: &[(String, f64)]) -> Result<KeptRun> {
+    crate::host::superseding(|| {
+        let cache = Cache::kept();
+        let mut start = start_for(path, vars, 0);
+        start.cache = cache.clone();
+        let traced = traced(|| {
+            let lines = read_lines(path)?;
+            let snapshots = snapshots_from(start, &lines, Some(path));
+            Ok((lines, snapshots))
+        });
+        let files = cache.files_reached(&traced);
+        let (lines, snapshots) = traced.result?;
+        Ok(KeptRun {
+            lines,
+            snapshots,
+            files,
+        })
+    })
 }
 
 pub fn run_snapshots_in(dir: Option<PathBuf>, lines: &[Line]) -> Vec<Snapshot> {
@@ -1019,6 +1065,9 @@ fn snapshots_from(
     let mut snapshots = Vec::new();
     let running = lines_stage(&model, lines, path);
     for (index, line) in lines.iter().enumerate() {
+        if crate::host::superseded() {
+            break;
+        }
         running.progress(index as f64, || line_text(line));
         let before = model.clone();
         let result = model.apply(line).map_err(|error| format!("{error:#}"));
@@ -1060,6 +1109,11 @@ fn run_model(mut model: Model, lines: &[Line], path: Option<&std::path::Path>) -
     let mut took = Vec::new();
     let running = lines_stage(&model, lines, path);
     for (index, line) in lines.iter().enumerate() {
+        if crate::host::superseded() {
+            steps.push((line.clone(), Err(anyhow!("a newer build took over"))));
+            took.push(std::time::Duration::ZERO);
+            break;
+        }
         running.progress(index as f64, || line_text(line));
         let before = model.clone();
         let clock = crate::host::Instant::now();

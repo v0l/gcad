@@ -23,14 +23,16 @@ struct Program {
     lines: Vec<SourceLine>,
     snapshots: Vec<Snapshot>,
     error: Option<String>,
+    files: Vec<PathBuf>,
 }
 
 fn evaluate(path: &std::path::Path, vars: &[(String, f64)]) -> Program {
     match snapshots_path_kept(path, vars) {
-        Ok((lines, snapshots)) => Program {
-            snapshots,
-            lines,
+        Ok(run) => Program {
+            snapshots: run.snapshots,
+            lines: run.lines,
             error: None,
+            files: run.files,
         },
         Err(error) => Program {
             error: Some(format!("{error:#}")),
@@ -993,6 +995,10 @@ impl App {
         self.program = Arc::new(Program::default());
         self.shown = None;
         self.building = None;
+        self.loading = None;
+        self.clash_job = None;
+        self.lock_job = None;
+        self.dirty = None;
         self.picks.clear();
         self.modes.clear();
         self.focus = None;
@@ -1056,23 +1062,22 @@ impl App {
     }
 
     #[cfg(target_arch = "wasm32")]
-    fn follow_reads(&mut self) {}
+    fn follow_reads(&mut self, _read: &[PathBuf]) {}
 
     #[cfg(not(target_arch = "wasm32"))]
-    fn follow_reads(&mut self) {
+    fn follow_reads(&mut self, read: &[PathBuf]) {
         use notify::{RecursiveMode, Watcher};
         let Some(watching) = self.watching.as_mut() else {
             return;
         };
-        let read = crate::model::kept_files();
-        for file in &read {
+        for file in read {
             if let Some(dir) = file.parent()
                 && watching.dirs.insert(dir.to_path_buf())
             {
                 let _ = watching.watcher.watch(dir, RecursiveMode::NonRecursive);
             }
         }
-        *watching.files.lock().unwrap_or_else(|e| e.into_inner()) = read.into_iter().collect();
+        *watching.files.lock().unwrap_or_else(|e| e.into_inner()) = read.iter().cloned().collect();
     }
 
     fn reload(&mut self, ctx: &egui::Context) {
@@ -1157,18 +1162,20 @@ impl App {
                 Ok(program) => {
                     self.took = started.elapsed();
                     self.loading = None;
+                    self.follow_reads(&program.files);
                     self.install(program);
-                    self.follow_reads();
                 }
                 Err(TryRecvError::Empty) => {
                     ctx.request_repaint_after(Duration::from_millis(100));
-                    return;
+                    if self.dirty.is_none() {
+                        return;
+                    }
                 }
                 Err(TryRecvError::Disconnected) => self.loading = None,
             }
         }
         if let Some(t) = self.dirty {
-            let wait = Duration::from_millis(150);
+            let wait = Duration::from_millis(250);
             if t.elapsed() >= wait {
                 self.dirty = None;
                 self.reload(ctx);

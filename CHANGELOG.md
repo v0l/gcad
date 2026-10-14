@@ -78,6 +78,8 @@ All notable changes to gcad are listed here. The format follows
 - The viewer rebuilds only the parts whose files changed, and the sub-assemblies holding them; the
   rest of an assembly is reused. Saving one part of the truck example rebuilds it in 1.7 s (was 4.2 s).
   It also watches every file a build read, so parts and sub-assemblies in other folders rebuild on save.
+- A save during a build stops it and starts again with the new files, after a quarter second without
+  further saves, so an agent editing many parts no longer queues a build per file.
 - An assembly builds every part file below it, through all its sub-assemblies, in one parallel
   batch, and a part used by several sub-assemblies with the same variables is built once.
 - Simulations give the same answer every run; the solver's dot products no longer depend on how
@@ -91,6 +93,8 @@ All notable changes to gcad are listed here. The format follows
 - Viewer reloads when a result is written.
 
 ### Fixed
+- After opening another file the viewer stopped following the old file's parts; it used to rebuild
+  the new file whenever one of them changed.
 - Assemblies that hold each other stop at 16 levels with an error instead of crashing.
 - The wind setup's air box is drawn in the wind colour and labelled with its size; it was a
   black line on the dark background. Viewer labels stay inside the view.
