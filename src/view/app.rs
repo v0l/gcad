@@ -311,6 +311,9 @@ pub struct App {
     source: String,
     cursor_row: Option<usize>,
     sim_job: Option<SimJob>,
+    sim_remote: bool,
+    #[cfg(not(target_arch = "wasm32"))]
+    remote: super::remote_panel::RemotePanel,
     sim_error: Option<String>,
     sim_every_part: bool,
     sim_notes: bool,
@@ -987,6 +990,9 @@ impl App {
             source: String::new(),
             cursor_row: None,
             sim_job: None,
+            sim_remote: false,
+            #[cfg(not(target_arch = "wasm32"))]
+            remote: super::remote_panel::RemotePanel::new(),
             sim_every_part: false,
             sim_notes: false,
             activity,
@@ -1156,13 +1162,23 @@ impl App {
                     self.sim_error = result.err();
                     self.sim_job = None;
                     self.generation += 1;
+                    #[cfg(not(target_arch = "wasm32"))]
+                    if self.sim_remote {
+                        self.remote.refresh();
+                    }
+                    self.sim_remote = false;
                 }
                 Err(TryRecvError::Empty) => ctx.request_repaint_after(Duration::from_millis(500)),
                 Err(TryRecvError::Disconnected) => {
                     self.sim_error = Some("the simulation stopped without a result".to_string());
                     self.sim_job = None;
+                    self.sim_remote = false;
                 }
             }
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        if self.shown.as_ref().is_some_and(|s| s.sim.is_some()) {
+            self.remote.tick(ctx, self.sim_remote);
         }
         if let Some((key, rx)) = &self.building {
             match rx.try_recv() {
@@ -1634,6 +1650,7 @@ impl App {
             (Some(_), None) => OK,
         };
         let mut run = false;
+        let mut run_remote = false;
         card(
             ui,
             Some(rail),
@@ -1670,13 +1687,17 @@ impl App {
                             lamp(
                                 ui,
                                 &format!(
-                                    "running {}",
+                                    "running {} {}",
+                                    if self.sim_remote { "on the server" } else { "" },
                                     crate::progress::duration(started.elapsed())
-                                ),
+                                )
+                                .replace("  ", " "),
                                 true,
                                 false,
                             );
-                            watched.lock().unwrap_or_else(|e| e.into_inner()).show(ui);
+                            if !self.sim_remote {
+                                watched.lock().unwrap_or_else(|e| e.into_inner()).show(ui);
+                            }
                         }
                         None => {
                             let label = if sim.outcome.is_some() {
@@ -1685,6 +1706,23 @@ impl App {
                                 "run"
                             };
                             run = toggle(ui, label, false).clicked();
+                            #[cfg(not(target_arch = "wasm32"))]
+                            {
+                                run_remote = toggle(ui, "run on server", false)
+                                    .on_hover_text("build here, solve on a paid GPU on the sims server")
+                                    .clicked();
+                            }
+                        }
+                    }
+                    #[cfg(not(target_arch = "wasm32"))]
+                    {
+                        let label = self.remote.summary();
+                        if toggle(ui, &label, self.remote.open)
+                            .on_hover_text("account, balance, runners and recent runs on the sims server")
+                            .clicked()
+                        {
+                            self.remote.open = !self.remote.open;
+                            self.remote.refresh();
                         }
                     }
                 }
@@ -1722,6 +1760,59 @@ impl App {
         if run {
             self.run_sim(ui.ctx());
         }
+        #[cfg(not(target_arch = "wasm32"))]
+        if run_remote {
+            self.run_remote(ui.ctx());
+        }
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn remote_card(&mut self, ui: &mut Ui) {
+        if !self.remote.open || !self.shown.as_ref().is_some_and(|s| s.sim.is_some()) {
+            return;
+        }
+        let rail = if self.sim_remote { READOUT } else { TRACE };
+        card(
+            ui,
+            Some(rail),
+            |ui| {
+                Line::new()
+                    .legend("sims server")
+                    .value(if self.sim_remote { "running" } else { "" })
+                    .show(ui);
+            },
+            |ui| self.remote.show(ui),
+        );
+        ui.add_space(8.0);
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn run_remote(&mut self, ctx: &egui::Context) {
+        let Some(path) = self.path.clone() else {
+            return;
+        };
+        let vars = self.vars.clone();
+        let limits = self.remote.limits();
+        let (tx, rx) = channel();
+        let wake = ctx.clone();
+        crate::host::spawn(move || {
+            let result = crate::remote::simulate(&path, &vars, &limits, || {
+                let run = {
+                    let _stage = crate::progress::stage("building the model", None, "");
+                    crate::model::run_path(&path, &vars, None)?
+                };
+                if let Some((line, Err(error))) = run.steps.last() {
+                    anyhow::bail!("line {}: {error:#}", line.number);
+                }
+                Ok(run)
+            });
+            let _ = tx.send(result.map_err(|e| format!("{e:#}")));
+            crate::host::wake(&wake);
+        });
+        self.sim_error = None;
+        self.sim_remote = true;
+        self.remote.refresh();
+        self.sim_job = Some((rx, Instant::now(), self.activity.clone()));
     }
 
     fn run_sim(&mut self, ctx: &egui::Context) {
@@ -2438,6 +2529,8 @@ impl App {
             .show(ui, |ui| {
                 self.line_card(ui);
                 self.sim_card(ui);
+                #[cfg(not(target_arch = "wasm32"))]
+                self.remote_card(ui);
                 if self.render_open {
                     self.render_card(ui);
                 }

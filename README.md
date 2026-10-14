@@ -85,7 +85,8 @@ gcad render examples/robot/wind.gsim wind.png --flow
 
 A machine without a big enough GPU can run a simulation on a paid remote worker at
 [sims.gcad.sh](https://sims.gcad.sh). gcad builds the parts here, sends the built bodies (not
-the project files) and writes the result beside the `.gsim` as if it had run locally.
+the project files) and writes the result beside the `.gsim` as if it had run locally. The viewer
+shows the balance, the runners and your recent runs, and has a `run on server` button.
 
 ```
 gcad remote signup

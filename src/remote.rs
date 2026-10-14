@@ -161,11 +161,11 @@ impl Client {
     }
 }
 
-fn euros(cents: i64) -> String {
+pub fn euros(cents: i64) -> String {
     format!("€{}.{:02}", cents / 100, cents % 100)
 }
 
-fn duration(seconds: f64) -> String {
+pub fn duration(seconds: f64) -> String {
     let s = seconds.round() as u64;
     match s {
         0..60 => format!("{s} s"),
@@ -174,7 +174,7 @@ fn duration(seconds: f64) -> String {
     }
 }
 
-pub fn signup(server: Option<&str>) -> Result<()> {
+pub fn create_account(server: Option<&str>) -> Result<(proto::NewAccount, String, PathBuf)> {
     if saved().token.is_some() && server.is_none() {
         bail!(
             "there is already an account in {}; `gcad remote account` shows it",
@@ -189,6 +189,11 @@ pub fn signup(server: Option<&str>) -> Result<()> {
             .map_err(explain)?,
     )?;
     let path = save(&server, &made.token)?;
+    Ok((made, server, path))
+}
+
+pub fn signup(server: Option<&str>) -> Result<()> {
+    let (made, server, path) = create_account(server)?;
     println!("account {} on {server}", made.id);
     println!("token saved in {}", path.display());
     println!("top it up with that account id, then run `gcad sim FILE --remote`");
@@ -244,10 +249,100 @@ pub fn jobs() -> Result<()> {
     Ok(())
 }
 
+pub fn hold_cents(minutes: u64, price_cents_per_hour: u64) -> i64 {
+    (minutes * price_cents_per_hour).div_ceil(60) as i64
+}
+
+pub fn has_account() -> bool {
+    std::env::var_os("GCAD_SIMS_TOKEN").is_some() || saved().token.is_some()
+}
+
+pub fn cancel_job(id: &str) -> Result<Job> {
+    Client::open()?.post(&format!("jobs/{id}/cancel"))
+}
+
 pub fn cancel(id: &str) -> Result<()> {
-    let job: Job = Client::open()?.post(&format!("jobs/{id}/cancel"))?;
+    let job = cancel_job(id)?;
     println!("{id} {}", job.state.name());
     Ok(())
+}
+
+#[derive(Clone, Default)]
+pub struct Overview {
+    pub server: String,
+    pub signed_in: bool,
+    pub account: Option<proto::Account>,
+    pub jobs: Vec<Job>,
+    pub runners: Vec<proto::Runner>,
+    pub versions: Vec<String>,
+    pub queued: i64,
+    pub error: Option<String>,
+}
+
+impl Overview {
+    pub fn build() -> &'static str {
+        env!("GCAD_BUILD_VERSION")
+    }
+
+    pub fn known_on_this_build(&self) -> usize {
+        self.runners
+            .iter()
+            .filter(|r| r.version == Self::build())
+            .count()
+    }
+
+    pub fn online_on_this_build(&self) -> Vec<&proto::Runner> {
+        self.runners
+            .iter()
+            .filter(|r| r.online && r.version == Self::build())
+            .collect()
+    }
+
+    pub fn cheapest(&self) -> Option<i64> {
+        self.online_on_this_build()
+            .iter()
+            .map(|r| r.price_cents_per_hour)
+            .min()
+    }
+
+    pub fn priciest(&self) -> Option<i64> {
+        proto::default_price(self.runners.iter().filter(|r| r.version == Self::build()))
+    }
+
+    pub fn active(&self) -> impl Iterator<Item = &Job> {
+        self.jobs.iter().filter(|j| j.state.active())
+    }
+}
+
+pub fn overview() -> Overview {
+    let server = server_of(None);
+    let mut out = Overview {
+        server: server.clone(),
+        ..Default::default()
+    };
+    match status_at(&server) {
+        Ok(status) => {
+            out.runners = status.runners;
+            out.versions = status.versions;
+            out.queued = status.queued;
+        }
+        Err(error) => out.error = Some(format!("{error:#}")),
+    }
+    if let Ok(client) = Client::open() {
+        out.signed_in = true;
+        match client.get::<proto::Account>("account") {
+            Ok(account) => out.account = Some(account),
+            Err(error) => out.error = out.error.take().or(Some(format!("{error:#}"))),
+        }
+        match client.get::<proto::Jobs>("jobs") {
+            Ok(list) => {
+                out.jobs = list.jobs;
+                out.jobs.sort_by_key(|j| std::cmp::Reverse(j.created_at));
+            }
+            Err(error) => out.error = out.error.take().or(Some(format!("{error:#}"))),
+        }
+    }
+    out
 }
 
 fn hash_of(name: &str, stamp: &[(String, String)]) -> String {
@@ -392,10 +487,12 @@ fn ready(client: &Client, limits: &Limits) -> Result<u64> {
             euros(cap as i64)
         ),
         Some(cap) => cap,
-        None => proto::default_price(able.iter().copied()).unwrap_or(0).max(0) as u64,
+        None => proto::default_price(able.iter().copied())
+            .unwrap_or(0)
+            .max(0) as u64,
     };
     let me: proto::Account = client.get("account")?;
-    let hold = (limits.minutes * price).div_ceil(60) as i64;
+    let hold = hold_cents(limits.minutes, price);
     if me.balance_cents < hold {
         bail!(
             "a {} minute run at up to {} an hour holds {}, the balance is {}; top up at {} with account id {}, or lower --max-minutes or --max-price",

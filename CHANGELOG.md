@@ -9,6 +9,10 @@ All notable changes to gcad are listed here. The format follows
 ## [0.4.0] - 2026-10-14
 
 ### Added
+- The viewer shows the sims server: a `run on server` button, the balance and running jobs on
+  a `server` toggle, and a `sims server` card with the account, runners on this build, the run
+  limits, recent runs and cancel. `make account`, `top up` and `copy id` work from it.
+- The skill offers the sims server on slow hardware and tells an agent to ask before spending.
 - A standard material library of about 210 metals, plastics, 3D printing materials, rubbers,
   timbers, boards, construction materials, stone, ground, insulation, glass and composites.
   Every entry states density, stiffness, Poisson's ratio, strength, conductivity, expansion,

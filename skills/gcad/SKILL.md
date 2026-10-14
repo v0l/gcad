@@ -231,10 +231,8 @@ when an `expect` line does not hold. Kinds:
 `static` lines; keep it above about 3), `flow` (wind on the GPU), `magnetic`, `frame`, `conduction`
 and `acoustics` (the last three are described below); the plan and limits are in `docs/simulation.md`.
 Progress goes to stderr, one line per finished stage and one every 10 s while a stage runs, with
-the iterations, residual and time left; `-q` turns it off. `gcad sim x.gsim --remote` builds
-the model here and solves it on a paid GPU worker (needs `gcad remote signup` and credit; not
-for `torque`), writing the same result file. `gcad remote runners` lists the runners and their
-prices; `--max-price 2.50` caps the euro an hour.
+the iterations, residual and time left; `-q` turns it off. On a slow
+machine run it on the sims server instead (`gcad sim x.gsim --remote`, see below).
 
 ```
 sim torque
@@ -331,6 +329,35 @@ ambient=-5` (h is 1/R; lines with one label are one side). Read `coupling` in W/
 (later lines win; every face needs one), `speaker x,y,z` in mm, and `hall: probe x,y,z` for each listener.
 It reads `hall.T30`, `hall.EDT`, `hall.C80`, `hall.D50` and `hall.STI`, against `sabine` and `eyring`.
 Bodies inside the room are furniture. Raise `rays` if a reading is missing.
+
+## Slow hardware: run on the sims server
+
+Offer the sims server whenever a simulation would be slow or cannot run on the user's machine.
+Signs: no GPU or a weak one (`gcad gpu-bench` prints the FP32 TFLOPS and memory bandwidth as
+JSON and fails with no GPU), `gcad sim x.gsim --dry-run` sizing a flow or field problem past the
+card's memory, a laptop, or a local run that has gone over a few minutes. Say what it costs and
+let the user decide: runs are prepaid in euro and charged per second of the runner's time.
+
+```sh
+gcad remote account                  # id, balance, what is held; no account yet: gcad remote signup
+gcad remote runners                  # GPU, TFLOPS, price an hour, and which gcad build each runs
+gcad sim x.gsim --remote --max-price 0          # free runners only, no balance needed
+gcad sim x.gsim --remote --max-minutes 20 --max-price 2.50
+gcad remote jobs                     # recent runs, their time and cost
+gcad remote cancel ID                # the time it used is still charged
+```
+
+- Never make an account or start a paid run without the user's yes. Start with `--max-price 0`
+  and a short `--max-minutes`, since a run holds `minutes x price` from the balance until it ends.
+- A runner takes only a job from the same gcad build (`gcad --version`); with none online on
+  that build the command says which builds they run.
+- Credit is the user's to add: an "out of credit" error prints the shop link and the account id.
+- The model is built here first, so fix a model that fails locally before sending it. `torque`
+  runs stay local. The result is written beside the `.gsim` as if it had run here, and rerunning
+  the same command after an interruption picks the job up instead of paying twice.
+- The viewer shows it too: the simulation card has `run on server` and a `server` toggle that
+  reads the balance and running jobs, and opens a card with the account, runners, the run
+  limits and recent runs, each with a cancel button.
 
 ## Drawings
 

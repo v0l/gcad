@@ -92,6 +92,17 @@ of sending another, and a finished one when the result here is missing or stale,
 that stopped while it waited loses nothing. `GCAD_SIMS_SERVER` and `GCAD_SIMS_TOKEN` override
 the saved server and token.
 
+The viewer shows the same account. A simulation card has `run on server` beside the local run,
+and a `server` toggle that reads `server €12.34, 1 running` once an account exists. It opens a
+`sims server` card with the server, the runners on this gcad build with their GPU, speed and
+price, the account id and balance (with what running jobs hold), `top up` and `copy id`, the
+longest time and the most a run may charge (any, free only, or up to a price) with what a run
+would hold, and the recent runs with their state, runner, time, cost and progress, each active
+one with a `cancel` button. It asks the server once when a simulation opens and an account is
+saved, then only while the card is open (every 30 s, every 3 s while a run is active) or while
+this viewer has a run going; with no account it asks nothing until you open the card and
+choose `make account`.
+
 ## Materials
 
 `material` gains the properties the solvers need, beside density: Young's modulus, Poisson's
