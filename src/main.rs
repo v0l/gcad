@@ -47,6 +47,12 @@ enum Command {
         #[arg(long)]
         time: bool,
     },
+    /// Run the file, then one `measure` line without adding it, like `gcad measure case.gasm space at=0,0,5`
+    Measure {
+        file: String,
+        #[arg(required = true, trailing_var_arg = true, allow_hyphen_values = true)]
+        what: Vec<String>,
+    },
     /// List the faces and edges a selector matches after the whole file (or up to --line)
     Query {
         file: String,
@@ -342,6 +348,15 @@ fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
     Ok(())
 }
 
+fn measure(file: &str, what: &str, vars: &[(String, f64)]) -> Result<()> {
+    let mut run = load(file, None, vars)?;
+    finished(&run)?;
+    let after = run.steps.last().map_or(0, |(line, _)| line.number) + 1;
+    let line = gcad::parse::parse_line(after, &format!("measure {what}"))?;
+    println!("{}", run.model.apply(&line)?);
+    Ok(())
+}
+
 fn query(file: &str, selector: &str, until: Option<usize>, vars: &[(String, f64)]) -> Result<()> {
     let run = load(file, until, vars)?;
     finished(&run)?;
@@ -390,6 +405,7 @@ fn main() -> Result<()> {
     });
     match command {
         Command::Check { file, time } => check(&file, &vars, time),
+        Command::Measure { file, what } => measure(&file, &what.join(" "), &vars),
         Command::Docs => {
             print!("{}", include_str!("../docs/format.md"));
             Ok(())

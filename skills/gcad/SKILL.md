@@ -149,6 +149,11 @@ explode case.lid 0,0,30
 - End the file with `interference none` and sweep each joint once with
   `interference joint=NAME steps=12` to find the range where it clashes. Set `min`/`max` from
   that.
+- Size what goes inside before you draw it. `gcad measure case.gasm space at=x,y,z` grows the
+  largest empty box around a point and names what stops it on each side, then gives the free
+  distance from the point along each axis, which is the inside width. `gcad measure asm.gasm box`
+  lists every part's bounding box, and `clearance a b` the nearest gap between two parts and
+  where it is. None of these change the file.
 - `gcad bom asm.gasm` counts the parts; `gcad render asm.gasm x.png --explode` draws it apart.
 - Fasteners come from the built-in library rather than a part file: `part s1 shcs:M3x10`
   (also `fhcs:`, `hex:`, `nut:M3`, `washer:M3`, `insert:M3`, `standoff:M3x10`, `bearing:608`,

@@ -12,6 +12,7 @@ mod holes;
 mod import;
 pub mod mate;
 pub mod materials;
+mod clearance;
 mod measure;
 mod member;
 mod path;

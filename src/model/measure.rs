@@ -39,8 +39,9 @@ fn tidy(v: f64) -> f64 {
 
 impl Model {
     pub(crate) fn op_measure(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["what"], &["pull", "min"], true)?;
+        let args = Args::new(line, &["what"], &["pull", "min", "at"], true)?;
         let what = args.text("what")?;
+        let keyword = !self.groups.0.iter().any(|g| g.label == what);
         match (what, args.rest.as_slice()) {
             ("mass", []) => {
                 let mass = mass_properties(&self.solids());
@@ -96,6 +97,15 @@ impl Model {
                 Ok(format!("angle {:.3} degrees {what}", tidy(degrees)))
             }
             ("thickness", []) => self.thickness(),
+            ("box", names) if keyword => self.measure_box(names),
+            ("clearance", [a, b]) if keyword => self.measure_clearance(a, b),
+            ("space", []) if keyword => {
+                let at = match args.values.get("at") {
+                    Some(text) => Some(super::args::point3(text, &self.scope)?),
+                    None => None,
+                };
+                self.measure_space(at)
+            }
             ("draft", []) => {
                 let pull = args.values.get("pull").copied().unwrap_or("z");
                 let least = args.optional_number("min", &self.scope)?.unwrap_or(1.0);
@@ -103,7 +113,7 @@ impl Model {
             }
             (faces_a, [faces_b]) => self.distance(faces_a, faces_b),
             _ => bail!(
-                "`measure` takes `mass`, `thickness`, `draft pull=`, `overlap body body`, `angle faces faces`, or two face selectors"
+                "`measure` takes `mass`, `thickness`, `draft pull=`, `overlap body body`, `angle faces faces`, `box`, `clearance body body`, `space at=x,y,z`, or two face selectors"
             ),
         }
     }

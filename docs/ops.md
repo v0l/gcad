@@ -276,6 +276,9 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | materials and mass | supported | `material steel`, `material pla density=1.24` | `inspect::material_mass`, `assembly::materials_follow_parts` |
 | wall thickness | supported | `measure thickness` | `inspect::wall_thickness` |
 | draft analysis | supported | `measure draft pull=z` | `inspect::draft_analysis` |
+| bounding boxes | supported | `measure box`, `measure box pcb base.end` | `inspect::measure_boxes` |
+| clearance between bodies | supported | `measure clearance pcb lid` | `inspect::measure_clearance`, `assembly::clearance_between_parts` |
+| free space inside a case | supported | `measure space at=0,0,10`, `gcad measure case.gasm space` | `inspect::measure_space`, `assembly::clearance_between_parts` |
 | variables from outside the file | supported | `gcad check part.gcad --set w=20` | `inspect::outside_variables` |
 | include another file | supported | `include part.gcad d=10`; its new `let` names carry over | `inspect::include_file`, `inspect::include_brings_in_let` |
 | conditional lines | supported | `if w>30 chamfer 1 edges` | `inspect::conditional` |

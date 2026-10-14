@@ -210,6 +210,11 @@ Measuring, which changes nothing and prints the answer:
 | `measure` | `overlap a b` | the volume two bodies share |
 | `measure` | `thickness` | the thinnest wall and where it is |
 | `measure` | `draft` `pull=x\|y\|z` `min=` | how many faces have under `min` degrees (1 by default) of draft |
+| `measure` | `box` `body\|faces ...` | the size and bounding box of each body named, or of the faces a selector matches; with nothing named, of every body and of them all |
+| `measure` | `clearance a b` | the nearest gap between two bodies and the points it runs between, or the volume they share if they overlap, and the gap between their bounding boxes along x, y and z (negative where they overlap) |
+| `measure` | `space` `at=x,y,z` | the largest empty box around a point that grows evenly until something stops it on every side, and what stops each side (`open` where nothing does), then how far the point is from the first body along each axis. `at` is the middle of all the bodies unless given, and must not be inside one |
+
+`gcad measure file what ...` runs a file and then one `measure` line, without adding it: `gcad measure case.gasm space at=0,0,10`.
 
 Profiles drawn inside another profile in the same sketch become holes in it.
 A sketch for `sweep` is drawn around the workplane origin; `sweep` moves it to the first
@@ -310,7 +315,7 @@ Its lines have the same shape and use `let`, `if` and `include` the same way.
 | `material` | `part name` `density=` | sets a part's material, over the one its file gave it |
 | `materials` | `file` | loads a material library, as in a part file |
 | `interference` | `none`, `joint=` `steps=` | reports the volume each pair of parts shares; `none` fails the line if any do; `joint=` checks across the joint's range in `steps` |
-| `measure` | `mass`, `overlap a b` | as in part files |
+| `measure` | `mass`, `overlap a b`, `box`, `clearance a b`, `space at=` | as in part files, across every part where it is placed |
 
 Standard parts are built in, M2 to M12, and come in steel (inserts and standoffs in brass). A screw's
 axis is z, with the face its head bears on at z=0 and the shank going down, so

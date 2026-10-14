@@ -638,6 +638,14 @@ impl Meshed {
         self.volume
     }
 
+    pub fn triangles(&self) -> &[[Point3; 3]] {
+        &self.triangles
+    }
+
+    pub fn bounds(&self) -> &BoundingBox<Point3> {
+        &self.bounds
+    }
+
     fn from_triangles(triangles: Vec<[Point3; 3]>) -> Meshed {
         Meshed {
             bounds: triangles.iter().flatten().copied().collect(),

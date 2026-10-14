@@ -7,6 +7,12 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- `measure box`, `measure clearance a b` and `measure space at=x,y,z` in parts and assemblies:
+  bounding boxes, the nearest gap between two bodies, and the free box inside a case with what
+  bounds each side. `gcad measure file ...` runs one without adding it to the file.
+- Viewer: measure snaps to corners, edge midpoints, arc centres and edges, with a marker under
+  the cursor; a unit picker (mm, cm, m, in) labels every length, area, volume and mass; the
+  ortho toggle sits with the view presets.
 - `spin joint rpm=` in `sim flow`: a fan or propeller turns through the lattice and reads its
   torque, shaft power, thrust and flow (`examples/flow/fan.gsim`).
 - `sim magnetic`: a 2D slice through a motor with `magnet`, `iron` (M-19 and 1010 B-H curves) and
