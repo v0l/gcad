@@ -208,7 +208,7 @@ pub fn is_sim(path: &Path) -> bool {
 }
 
 pub fn result_path(spec: &Path) -> PathBuf {
-    spec.with_extension("result.json")
+    spec.with_extension("result.bin")
 }
 
 pub fn movie_path(spec: &Path) -> PathBuf {
@@ -217,10 +217,7 @@ pub fn movie_path(spec: &Path) -> PathBuf {
 
 pub fn write(spec: &Path, outcome: &Outcome, stamp: &[(String, String)]) -> Result<PathBuf> {
     let out = result_path(spec);
-    crate::host::write(
-        &out,
-        serde_json::to_string_pretty(&outcome.to_json(stamp))?.as_bytes(),
-    )?;
+    crate::host::write(&out, &outcome.packed(stamp)?)?;
     let frames = movie_path(spec);
     match &outcome.movie {
         Some(movie) => movie.write(&frames)?,

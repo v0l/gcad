@@ -90,6 +90,10 @@ All notable changes to gcad are listed here. The format follows
   example's parts load in 1 s instead of 4.4 s. `GCAD_NO_PART_CACHE=1` turns it off. Sub-assemblies
   are kept too, and `interference` meshes each part once per build instead of once per line: checking
   the rotator again takes 7.6 s instead of 24 s.
+- Simulation results are binary: `x.result.bin` replaces `x.result.json` (the bracket example's
+  result is 1.7 MB instead of 7.1 MB), and `gcad check x.gsim` prints the readings of an up to date
+  result. Old `.result.json` files are not read; rerun `gcad sim`. Remote jobs and the part and mesh
+  caches are written with bitcode instead of CBOR.
 - Simulation meshes are kept in `~/.cache/gcad/meshes`, so opening a result in the viewer no longer
   meshes the part again to draw it: the rotator yoke at `mesh 1` opens in 4 s instead of 66 s.
 - A save during a build stops it and starts again with the new files, after a quarter second without

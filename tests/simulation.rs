@@ -335,8 +335,7 @@ fn result_goes_stale() {
         "sim torque\npart arm.gasm\nsweep swing steps=4",
     );
     let outcome = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
-    let json = outcome.to_json(&gcad::sim::stamp(&path, &[]));
-    std::fs::write(gcad::sim::result_path(&path), json.to_string()).expect("write result");
+    gcad::sim::write(&path, &outcome, &gcad::sim::stamp(&path, &[])).expect("write result");
     assert_eq!(gcad::sim::stale(&path, &[]), None);
     let read = Outcome::read(&gcad::sim::result_path(&path)).expect("reads back");
     close(reading(&read, "swing"), reading(&outcome, "swing"), 1.0e-12);
@@ -577,11 +576,7 @@ fn stress_field_render() {
     let model = spec_of(&path);
     let spec = model.sim.as_deref().expect("sim");
     let outcome = gcad::sim::simulate(spec).expect("solves");
-    std::fs::write(
-        gcad::sim::result_path(&path),
-        outcome.to_json(&gcad::sim::stamp(&path, &[])).to_string(),
-    )
-    .expect("write");
+    gcad::sim::write(&path, &outcome, &gcad::sim::stamp(&path, &[])).expect("write");
     let picture = path.with_file_name("stress.png");
     gcad::sim::render(
         spec,
@@ -1837,8 +1832,7 @@ fn wind_loads_a_static_part() {
     let early = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"));
     assert!(format!("{:#}", early.expect_err("no flow result yet")).contains("no result yet"),);
     let outcome = gcad::sim::simulate(spec_of(&flow).sim.as_deref().expect("sim")).expect("flows");
-    let json = outcome.to_json(&gcad::sim::stamp(&flow, &[]));
-    std::fs::write(gcad::sim::result_path(&flow), json.to_string()).expect("write result");
+    gcad::sim::write(&flow, &outcome, &gcad::sim::stamp(&flow, &[])).expect("write result");
     let statics = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("loads");
     close(reading(&statics, "base"), reading(&outcome, "drag"), 0.06);
     close(

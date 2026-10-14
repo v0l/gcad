@@ -68,7 +68,7 @@ enum Command {
         #[arg(long)]
         section: Option<gcad::drawing::Section>,
     },
-    /// Run a .gsim simulation, write NAME.result.json beside it and print the readings
+    /// Run a .gsim simulation, write NAME.result.bin beside it and print the readings
     Sim {
         file: String,
         /// Build the problem and print its size without solving it
@@ -265,7 +265,13 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         let path = std::path::Path::new(file);
         match gcad::sim::stale(path, vars) {
             Some(why) => println!("note: {why}"),
-            None => println!("{} is up to date", gcad::sim::result_path(path).display()),
+            None => {
+                let result = gcad::sim::result_path(path);
+                println!("{} is up to date", result.display());
+                if let Ok(outcome) = gcad::sim::Outcome::read(&result) {
+                    print!("{}", outcome.table());
+                }
+            }
         }
     }
     Ok(())

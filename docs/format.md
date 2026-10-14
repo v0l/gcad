@@ -440,7 +440,7 @@ the assembly is saved.
 
 A `.gsim` file describes one simulation of a part or assembly, one operation per line
 like the other files, with `let`, `if` and `include` as usual. `gcad sim file.gsim` runs it,
-prints the readings, and writes them to `file.result.json` beside it. It fails if an
+prints the readings, and writes them to `file.result.bin` beside it. It fails if an
 `expect` line does not hold. `--dry-run` reports the size of the problem without solving it.
 
 ```
@@ -519,7 +519,8 @@ Joints that would read the same as another, like the copies a
 `pattern` makes, are listed in a note instead, and their names still work in `expect`.
 Parts with no material weigh nothing, and a note lists them.
 
-`gcad check file.gsim` runs the lines and says whether `file.result.json` is up to date.
+`gcad check file.gsim` runs the lines and says whether `file.result.bin` is up to date, and
+prints its readings if it is.
 A result is stale when the spec, any file it reads, the `--set` variables or the gcad
 version changed since it was written. `gcad render file.gsim file.png` plots the
 result's sweeps: one panel per sweep and unit, each joint's load against the first swept
@@ -682,7 +683,7 @@ gcad export part.gcad part.step       # or .stl, .obj, .3mf, .svg (a four-view d
 gcad export part.gcad part.svg --section y=0   # adds a hatched section across y=0
 gcad check part.gcad --set w=50       # override a `let` variable
 gcad check part.gcad --time           # also show how long each line took
-gcad sim arm.gsim                     # run a simulation, write arm.result.json
+gcad sim arm.gsim                     # run a simulation, write arm.result.bin
 gcad render arm.gsim arm.png          # plot a simulation's sweeps
 gcad docs                             # print this reference
 gcad part.gcad                        # open the viewer; plain `gcad` starts with a file picker

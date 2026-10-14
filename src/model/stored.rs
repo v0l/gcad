@@ -1,13 +1,13 @@
 use super::assembly::{Couple, Joint, Mate, Source};
 use super::bodies::Material;
 use super::{Model, PartGroups};
+use crate::packed::PackedSolid;
 use crate::select::{GroupEntry, Groups};
 use monstertruck::modeling::*;
-use monstertruck::topology::compress::CompressedSolid;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-type Body = CompressedSolid<Point3, Curve, Surface>;
+type Body = PackedSolid;
 type Read = (PathBuf, Option<[u8; 32]>, bool);
 type StoredSource = (String, PathBuf, String, Vec<(String, f64)>);
 type StoredGroup = (String, String, Surface);
@@ -84,10 +84,7 @@ pub(crate) fn fetch(path: &Path, vars: &[(String, f64)]) -> Option<Model> {
     let dir = dir()?;
     let key = key(path, vars)?;
     let file = file_of(&dir, &key);
-    let stored: Stored = {
-        let bytes = std::fs::read(&file).ok()?;
-        ciborium::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).ok()?
-    };
+    let stored: Stored = unpacked(&std::fs::read(&file).ok()?)?;
     if stored.key != key
         || !stored
             .reads
@@ -127,9 +124,10 @@ fn write_stored<T: Serialize>(dir: &Path, file: &Path, value: &T) {
         return;
     }
     let partial = file.with_extension(format!("part.{}", std::process::id()));
-    let written = std::fs::File::create(&partial).ok().and_then(|handle| {
+    let written = bitcode::serialize(value).ok().and_then(|bytes| {
+        let handle = std::fs::File::create(&partial).ok()?;
         let mut gz = flate2::write::GzEncoder::new(handle, flate2::Compression::fast());
-        ciborium::into_writer(value, &mut gz).ok()?;
+        std::io::Write::write_all(&mut gz, &bytes).ok()?;
         gz.finish().ok()
     });
     if written.is_some() && std::fs::rename(&partial, file).is_ok() {
@@ -139,9 +137,14 @@ fn write_stored<T: Serialize>(dir: &Path, file: &Path, value: &T) {
     }
 }
 
+fn unpacked<T: serde::de::DeserializeOwned>(packed: &[u8]) -> Option<T> {
+    let mut raw = Vec::new();
+    std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(packed), &mut raw).ok()?;
+    bitcode::deserialize(&raw).ok()
+}
+
 fn read_stored<T: serde::de::DeserializeOwned>(file: &Path) -> Option<T> {
-    let bytes = std::fs::read(file).ok()?;
-    let value = ciborium::from_reader(flate2::read::GzDecoder::new(bytes.as_slice())).ok()?;
+    let value = unpacked(&std::fs::read(file).ok()?)?;
     if let Ok(handle) = std::fs::File::options().append(true).open(file) {
         let _ = handle.set_modified(std::time::SystemTime::now());
     }
@@ -166,8 +169,7 @@ fn mesh_dir() -> Option<PathBuf> {
 
 fn mesh_key(solid: &Solid, size: f64) -> Option<String> {
     use sha2::Digest;
-    let mut bytes = Vec::new();
-    ciborium::into_writer(&solid.compress(), &mut bytes).ok()?;
+    let bytes = bitcode::serialize(&PackedSolid::of(solid)).ok()?;
     let digest = sha2::Sha256::digest(&bytes);
     let shape: String = digest.iter().map(|b| format!("{b:02x}")).collect();
     let exe = std::env::current_exe()
@@ -266,12 +268,12 @@ fn storable(model: &Model, key: String, reads: Vec<Read>) -> Option<Stored> {
     Some(Stored {
         key,
         reads,
-        solid: model.solid.as_ref().map(|solid| solid.compress()),
+        solid: model.solid.as_ref().map(PackedSolid::of),
         body: model.body.clone(),
         bodies: model
             .bodies
             .iter()
-            .map(|(name, solid)| (name.clone(), solid.compress()))
+            .map(|(name, solid)| (name.clone(), PackedSolid::of(solid)))
             .collect(),
         groups: stored_groups(&model.groups),
         colours: model.colours.iter().map(|(k, v)| (k.clone(), *v)).collect(),
@@ -328,13 +330,13 @@ fn storable(model: &Model, key: String, reads: Vec<Read>) -> Option<Stored> {
 
 fn restored(stored: Stored) -> Option<Model> {
     let solid = match stored.solid {
-        Some(body) => Some(Solid::extract(body).ok()?),
+        Some(body) => Some(body.solid().ok()?),
         None => None,
     };
     let bodies = stored
         .bodies
         .into_iter()
-        .map(|(name, body)| Some((name, Solid::extract(body).ok()?)))
+        .map(|(name, body)| Some((name, body.solid().ok()?)))
         .collect::<Option<Vec<_>>>()?;
     Some(Model {
         solid,

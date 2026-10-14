@@ -6,6 +6,7 @@ pub mod geometry;
 pub mod host;
 pub mod model;
 pub mod offset;
+pub mod packed;
 pub mod parse;
 pub mod plot;
 pub mod progress;

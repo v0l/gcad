@@ -24,7 +24,7 @@ monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
 monstertruck-topology = "0.4.1"
 serde_json = "1.0.151"
 serde = { version = "1", features = ["derive"] }
-ciborium = "0.2"
+bitcode = { version = "0.6", features = ["serde"] }
 flate2 = "1"
 sha2 = "0.10"
 spade = "2.15"

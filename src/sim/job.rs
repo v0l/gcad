@@ -1,12 +1,10 @@
 use super::{Kind, Nested, Spec, Warm};
 use crate::model::{Material, Model};
 use anyhow::{Context, Result, anyhow, bail};
-use monstertruck::modeling::*;
-use monstertruck::topology::compress::CompressedSolid;
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
-type Body = CompressedSolid<Point3, Curve, Surface>;
+type Body = crate::packed::PackedSolid;
 
 #[derive(Serialize, Deserialize)]
 struct Job {
@@ -78,7 +76,7 @@ fn job_of(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Job> {
         bodies: model
             .named_solids()
             .into_iter()
-            .map(|(name, solid)| (name, solid.compress()))
+            .map(|(name, solid)| (name, crate::packed::PackedSolid::of(solid)))
             .collect(),
         materials,
         warm,
@@ -89,7 +87,7 @@ fn job_of(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Job> {
 pub fn pack(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Vec<u8>> {
     let job = job_of(spec, stamp)?;
     let mut gz = flate2::write::GzEncoder::new(Vec::new(), flate2::Compression::default());
-    ciborium::into_writer(&job, &mut gz)?;
+    std::io::Write::write_all(&mut gz, &bitcode::serialize(&job)?)?;
     Ok(gz.finish()?)
 }
 
@@ -112,8 +110,9 @@ fn spec_of(job: Job) -> Result<Spec> {
     }
     let mut model = Model::default();
     for (name, body) in job.bodies {
-        let solid =
-            Solid::extract(body).map_err(|e| anyhow!("body `{name}` does not rebuild: {e}"))?;
+        let solid = body
+            .solid()
+            .map_err(|e| anyhow!("body `{name}` does not rebuild: {e}"))?;
         model.bodies.push((name, solid));
     }
     model.materials = job.materials.into_iter().collect();
@@ -122,7 +121,9 @@ fn spec_of(job: Job) -> Result<Spec> {
 }
 
 pub fn unpack(bytes: &[u8]) -> Result<Unpacked> {
-    let job: Job = ciborium::from_reader(flate2::read::GzDecoder::new(bytes)).map_err(|e| {
+    let mut raw = Vec::new();
+    std::io::Read::read_to_end(&mut flate2::read::GzDecoder::new(bytes), &mut raw)?;
+    let job: Job = bitcode::deserialize(&raw).map_err(|e| {
         anyhow!(
             "gcad {} cannot read the job ({e}); it needs the version that packed it",
             env!("GCAD_BUILD_VERSION")

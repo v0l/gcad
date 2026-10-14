@@ -504,14 +504,14 @@ fn wait(client: &Client, id: &str) -> Result<Job> {
 fn finish(client: &Client, file: &Path, job: &Job) -> Result<()> {
     let has = |name: &str| job.files.iter().any(|f| f == name);
     let mut wrote = None;
-    if has("result.json.gz") {
+    if has("result.bin.gz") {
         let out = crate::sim::result_path(file);
-        let packed = client.download(&job.id, "result.json.gz")?;
-        let mut text = Vec::new();
+        let packed = client.download(&job.id, "result.bin.gz")?;
+        let mut bytes = Vec::new();
         flate2::read::GzDecoder::new(packed.as_slice())
-            .read_to_end(&mut text)
+            .read_to_end(&mut bytes)
             .context("unpacking the result")?;
-        std::fs::write(&out, text)?;
+        std::fs::write(&out, bytes)?;
         let frames = crate::sim::movie_path(file);
         if has("frames.bin") {
             std::fs::write(&frames, client.download(&job.id, "frames.bin")?)?;
@@ -553,7 +553,7 @@ pub fn run_job(job: &Path, out: &Path) -> Result<()> {
     let outcome = crate::sim::simulate(&unpacked.spec)?;
     let spec_path = out.join("result.gsim");
     crate::sim::write(&spec_path, &outcome, &unpacked.stamp)?;
-    std::fs::rename(crate::sim::result_path(&spec_path), out.join("result.json"))?;
+    std::fs::rename(crate::sim::result_path(&spec_path), out.join("result.bin"))?;
     let frames = crate::sim::movie_path(&spec_path);
     if frames.is_file() {
         std::fs::rename(&frames, out.join("frames.bin"))?;

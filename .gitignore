@@ -1,4 +1,4 @@
 /target
-*.result.json
+*.result.bin
 .wrangler
 *.frames.bin

@@ -3,7 +3,7 @@ mod common;
 use common::scratch;
 use std::path::Path;
 
-fn local_and_packed(spec: &Path) -> (serde_json::Value, serde_json::Value) {
+fn local_and_packed(spec: &Path) -> (gcad::sim::Outcome, gcad::sim::Outcome) {
     let run = gcad::model::run_path(spec, &[], None).expect("reads");
     let spec_model = run.model.sim.as_deref().expect("a simulation");
     let stamp = gcad::sim::stamp(spec, &[]);
@@ -13,34 +13,31 @@ fn local_and_packed(spec: &Path) -> (serde_json::Value, serde_json::Value) {
     let unpacked = gcad::sim::job::unpack(&packed).expect("unpacks");
     assert_eq!(unpacked.stamp, stamp);
     let remote = gcad::sim::simulate(&unpacked.spec).expect("solves from the job");
-    (local.to_json(&stamp), remote.to_json(&unpacked.stamp))
+    let stored = gcad::sim::Outcome::unpacked(&remote.packed(&stamp).expect("packs the result"))
+        .expect("reads the result back");
+    (local, stored)
 }
 
-fn same(local: &serde_json::Value, remote: &serde_json::Value) {
-    assert_eq!(local["inputs"], remote["inputs"]);
-    assert_eq!(local["notes"], remote["notes"]);
-    let field = |v: &serde_json::Value| v["field"]["values"].as_array().map(Vec::len);
+fn same(local: &gcad::sim::Outcome, remote: &gcad::sim::Outcome) {
+    assert_eq!(local.notes, remote.notes);
+    let field = |o: &gcad::sim::Outcome| o.field.as_ref().map(|f| f.values.len());
     assert_eq!(field(local), field(remote), "the mesh differs");
-    let readings = |v: &serde_json::Value| v["readings"].as_array().cloned().unwrap_or_default();
-    let (a, b) = (readings(local), readings(remote));
+    let (a, b) = (&local.readings, &remote.readings);
     assert_eq!(a.len(), b.len());
-    let largest = |unit: &serde_json::Value| {
+    let largest = |unit: &str| {
         a.iter()
-            .filter(|r| &r["unit"] == unit)
-            .map(|r| r["value"].as_f64().unwrap().abs())
+            .filter(|r| r.unit == unit)
+            .map(|r| r.value.abs())
             .fold(0.0, f64::max)
     };
-    for (here, there) in a.iter().zip(&b) {
-        assert_eq!(here["name"], there["name"]);
-        let (x, y) = (
-            here["value"].as_f64().unwrap(),
-            there["value"].as_f64().unwrap(),
-        );
-        let scale = largest(&here["unit"]).max(x.abs()).max(1.0e-12);
+    for (here, there) in a.iter().zip(b) {
+        assert_eq!(here.name, there.name);
+        let (x, y) = (here.value, there.value);
+        let scale = largest(&here.unit).max(x.abs()).max(1.0e-12);
         assert!(
             (x - y).abs() <= 1.0e-7 * scale,
             "{}: {x} against {y}",
-            here["name"]
+            here.name
         );
     }
 }

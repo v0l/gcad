@@ -28,7 +28,7 @@ expect stress<60 displacement<0.2
   `interference none` fails an assembly.
 
 ```sh
-gcad sim bracket.gsim             # run it, write bracket.result.json, print the readings
+gcad sim bracket.gsim             # run it, write bracket.result.bin, print the readings
 gcad sim bracket.gsim --dry-run   # build the mesh and print nodes, elements and memory
 gcad sim bracket.gsim -q          # no progress lines
 gcad render bracket.gsim x.png    # the part coloured by the result field, with a scale bar
@@ -43,9 +43,10 @@ Each line has the count done, a percentage and the time left where it can be tol
 terminal one line updates in place; piped, a stage prints when it ends and every 10 s while it
 runs. The viewer's simulation card shows the same stages as bars while its run button is busy.
 
-`bracket.result.json` holds the readings, the field at each mesh node, and a hash of the spec,
+`bracket.result.bin` holds the readings, the field at each mesh node, and a hash of the spec,
 every part file it read, the `--set` variables and the gcad version; a mismatch makes the
-result stale. The viewer
+result stale. It is binary (bitcode after a small header), and `gcad check bracket.gsim` prints
+its readings while it is up to date. The viewer
 opens a `.gsim` and colours the part by the field, with a slider for mode shapes and deflection
 scale. Its simulation card lists the readings, the `expect` checks, the notes and each sweep as a
 trace, and has a run button that solves the file in the background. A stale result is still
@@ -63,7 +64,7 @@ bandwidth (`gcad gpu-bench`, hidden, measures both), video memory and CPU.
 ```sh
 gcad remote signup                  # make an account, keep its token in ~/.config/gcad/remote.toml
 gcad remote account                 # its id, balance and price; top up at the shop with the id
-gcad sim wind.gsim --remote         # build here, solve there, write wind.result.json here
+gcad sim wind.gsim --remote         # build here, solve there, write wind.result.bin here
 gcad sim wind.gsim --remote --max-minutes 20
 gcad sim wind.gsim --remote --max-price 2.50   # only runners asking at most €2.50 an hour
 gcad sim wind.gsim --remote --max-price 0      # only free runners; no balance needed

@@ -1,9 +1,9 @@
 use super::Expect;
-use anyhow::{Result, anyhow};
-use serde_json::{Value, json};
+use anyhow::{Result, anyhow, bail};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Reading {
     pub name: String,
     pub value: f64,
@@ -11,14 +11,14 @@ pub struct Reading {
     pub at: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Curve {
     pub name: String,
     pub unit: String,
     pub values: Vec<f64>,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct Series {
     pub title: String,
     pub axis: String,
@@ -26,7 +26,7 @@ pub struct Series {
     pub curves: Vec<Curve>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Field {
     pub title: String,
     pub unit: String,
@@ -34,7 +34,7 @@ pub struct Field {
     pub displacement: Vec<[f64; 3]>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Slice {
     pub title: String,
     pub width: usize,
@@ -55,7 +55,7 @@ impl Slice {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Stream {
     pub points: Vec<[f64; 3]>,
     pub speed: Vec<f64>,
@@ -216,7 +216,7 @@ impl Movie {
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct Outcome {
     pub kind: String,
     pub readings: Vec<Reading>,
@@ -227,6 +227,7 @@ pub struct Outcome {
     pub field: Option<Field>,
     pub slices: Vec<Slice>,
     pub streams: Vec<Stream>,
+    #[serde(skip)]
     pub movie: Option<Movie>,
 }
 
@@ -290,149 +291,57 @@ impl Outcome {
         out
     }
 
-    pub fn to_json(&self, stamp: &[(String, String)]) -> Value {
-        json!({
-            "gcad": env!("CARGO_PKG_VERSION"),
-            "kind": self.kind,
-            "inputs": stamp.iter().map(|(f, h)| json!({"file": f, "hash": h})).collect::<Vec<_>>(),
-            "readings": self.readings.iter().map(|r| json!({
-                "name": r.name, "value": r.value, "unit": r.unit, "at": r.at,
-            })).collect::<Vec<_>>(),
-            "notes": self.notes,
-            "aliases": self.aliases.iter().map(|(a, n)| json!([a, n])).collect::<Vec<_>>(),
-            "field": self.field.as_ref().map(|f| json!({
-                "title": f.title, "unit": f.unit, "values": f.values,
-                "displacement": f.displacement,
-            })),
-            "slices": self.slices.iter().map(|s| json!({
-                "title": s.title, "width": s.width, "spacing": s.spacing, "across": s.across,
-                "origin": s.origin, "right": s.right, "down": s.down,
-                "speed": s.speed, "along": s.along, "side": s.side, "snapshot": s.snapshot,
-            })).collect::<Vec<_>>(),
-            "streams": self.streams.iter().map(|s| json!({
-                "points": s.points, "speed": s.speed,
-                "turbulence": s.turbulence, "pressure": s.pressure,
-            })).collect::<Vec<_>>(),
-            "expect": self.checks.iter().map(|(t, v, p)| json!({
-                "text": t, "value": v, "pass": p,
-            })).collect::<Vec<_>>(),
-            "series": self.series.iter().map(|s| json!({
-                "title": s.title, "axis": s.axis, "x": s.x,
-                "curves": s.curves.iter().map(|c| json!({
-                    "name": c.name, "unit": c.unit, "values": c.values,
-                })).collect::<Vec<_>>(),
-            })).collect::<Vec<_>>(),
-        })
+    pub fn packed(&self, stamp: &[(String, String)]) -> Result<Vec<u8>> {
+        let header = bitcode::serialize(&Header {
+            gcad: env!("CARGO_PKG_VERSION").to_string(),
+            stamp: stamp.to_vec(),
+        })?;
+        let body = bitcode::serialize(self)?;
+        let mut out = Vec::with_capacity(RESULT.len() + 8 + header.len() + body.len());
+        out.extend_from_slice(RESULT);
+        out.extend_from_slice(&(header.len() as u64).to_le_bytes());
+        out.extend_from_slice(&header);
+        out.extend_from_slice(&body);
+        Ok(out)
     }
 
-    pub fn from_json(value: &Value) -> Result<Outcome> {
-        let text = |v: &Value, key: &str| v[key].as_str().unwrap_or_default().to_string();
-        let numbers = |v: &Value| -> Vec<f64> {
-            v.as_array()
-                .map(|a| a.iter().map(|x| x.as_f64().unwrap_or(f64::NAN)).collect())
-                .unwrap_or_default()
-        };
-        let list = |v: &Value| v.as_array().cloned().unwrap_or_default();
-        let triple = |v: &Value| -> [f64; 3] {
-            let n = numbers(v);
-            [0, 1, 2].map(|k| n.get(k).copied().unwrap_or(0.0))
-        };
-        Ok(Outcome {
-            kind: text(value, "kind"),
-            readings: list(&value["readings"])
-                .iter()
-                .map(|r| Reading {
-                    name: text(r, "name"),
-                    value: r["value"].as_f64().unwrap_or(f64::NAN),
-                    unit: text(r, "unit"),
-                    at: text(r, "at"),
-                })
-                .collect(),
-            notes: list(&value["notes"])
-                .iter()
-                .filter_map(|n| n.as_str().map(str::to_string))
-                .collect(),
-            series: list(&value["series"])
-                .iter()
-                .map(|s| Series {
-                    title: text(s, "title"),
-                    axis: text(s, "axis"),
-                    x: numbers(&s["x"]),
-                    curves: list(&s["curves"])
-                        .iter()
-                        .map(|c| Curve {
-                            name: text(c, "name"),
-                            unit: text(c, "unit"),
-                            values: numbers(&c["values"]),
-                        })
-                        .collect(),
-                })
-                .collect(),
-            movie: None,
-            slices: list(&value["slices"])
-                .iter()
-                .map(|s| Slice {
-                    title: text(s, "title"),
-                    width: s["width"].as_u64().unwrap_or(1) as usize,
-                    spacing: s["spacing"].as_f64().unwrap_or(1.0),
-                    across: text(s, "across"),
-                    origin: triple(&s["origin"]),
-                    right: triple(&s["right"]),
-                    down: triple(&s["down"]),
-                    speed: numbers(&s["speed"]),
-                    along: numbers(&s["along"]),
-                    side: numbers(&s["side"]),
-                    snapshot: numbers(&s["snapshot"]),
-                })
-                .collect(),
-            streams: list(&value["streams"])
-                .iter()
-                .map(|s| Stream {
-                    points: list(&s["points"]).iter().map(triple).collect(),
-                    speed: numbers(&s["speed"]),
-                    turbulence: s["turbulence"].as_f64().unwrap_or(0.0),
-                    pressure: s["pressure"].as_f64().unwrap_or(0.0),
-                })
-                .collect(),
-            field: value["field"].as_object().map(|_| {
-                let f = &value["field"];
-                Field {
-                    title: text(f, "title"),
-                    unit: text(f, "unit"),
-                    values: numbers(&f["values"]),
-                    displacement: list(&f["displacement"])
-                        .iter()
-                        .map(|d| {
-                            let n = numbers(d);
-                            [n[0], n[1], n[2]]
-                        })
-                        .collect(),
-                }
-            }),
-            aliases: list(&value["aliases"])
-                .iter()
-                .filter_map(|pair| {
-                    Some((pair[0].as_str()?.to_string(), pair[1].as_str()?.to_string()))
-                })
-                .collect(),
-            checks: list(&value["expect"])
-                .iter()
-                .map(|e| {
-                    (
-                        text(e, "text"),
-                        e["value"].as_f64().unwrap_or(f64::NAN),
-                        e["pass"].as_bool().unwrap_or(false),
-                    )
-                })
-                .collect(),
+    pub fn unpacked(bytes: &[u8]) -> Result<Outcome> {
+        let (header, body) = split(bytes)?;
+        bitcode::deserialize(body).map_err(|_| {
+            anyhow!(
+                "written by gcad {} in another layout; rerun `gcad sim`",
+                header.gcad
+            )
         })
     }
 
     pub fn read(path: &Path) -> Result<Outcome> {
-        let text = crate::host::read_to_string(path)
+        let bytes = crate::host::read(path)
             .map_err(|e| anyhow!("reading {}: {e}; run `gcad sim` first", path.display()))?;
-        Outcome::from_json(&serde_json::from_str(&text)?)
+        Outcome::unpacked(&bytes).map_err(|e| anyhow!("reading {}: {e}", path.display()))
     }
+}
+
+const RESULT: &[u8; 8] = b"GCADRES1";
+
+#[derive(Serialize, Deserialize)]
+struct Header {
+    gcad: String,
+    stamp: Vec<(String, String)>,
+}
+
+fn split(bytes: &[u8]) -> Result<(Header, &[u8])> {
+    if bytes.len() < RESULT.len() + 8 || &bytes[..RESULT.len()] != RESULT {
+        bail!("not a gcad result; rerun `gcad sim`");
+    }
+    let start = RESULT.len() + 8;
+    let length = u64::from_le_bytes(bytes[RESULT.len()..start].try_into()?) as usize;
+    let Some(header) = bytes.get(start..start + length) else {
+        bail!("the result is cut short; rerun `gcad sim`");
+    };
+    let header: Header = bitcode::deserialize(header)
+        .map_err(|_| anyhow!("written by another gcad; rerun `gcad sim`"))?;
+    Ok((header, &bytes[start + length..]))
 }
 
 pub fn short(value: f64) -> String {
@@ -522,24 +431,13 @@ pub fn stamp(spec: &Path, vars: &[(String, f64)]) -> Vec<(String, String)> {
 
 pub fn stale(spec: &Path, vars: &[(String, f64)]) -> Option<String> {
     let path = super::result_path(spec);
-    let Ok(text) = crate::host::read_to_string(&path) else {
+    let Ok(bytes) = crate::host::read(&path) else {
         return Some(format!("no result yet; run `gcad sim {}`", spec.display()));
     };
-    let Ok(value) = serde_json::from_str::<Value>(&text) else {
-        return Some(format!("{} cannot be read", path.display()));
+    let had = match split(&bytes) {
+        Ok((header, _)) => header.stamp,
+        Err(why) => return Some(format!("{}: {why}", path.display())),
     };
-    let had: Vec<(String, String)> = value["inputs"]
-        .as_array()
-        .cloned()
-        .unwrap_or_default()
-        .iter()
-        .map(|i| {
-            (
-                i["file"].as_str().unwrap_or_default().to_string(),
-                i["hash"].as_str().unwrap_or_default().to_string(),
-            )
-        })
-        .collect();
     let now = stamp(spec, vars);
     let changed: Vec<String> = now
         .iter()
