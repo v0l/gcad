@@ -533,6 +533,7 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         body_force,
         expansion: prepared.expansion(spec.warming.as_ref())?,
         wind: wind.as_ref(),
+        gpu: super::fem::gpu(),
     })?;
     let _reading = crate::progress::stage("taking readings", None, "");
     let mut readings = Vec::new();
@@ -1266,6 +1267,7 @@ pub fn buckle(spec: &Spec) -> Result<Outcome> {
             body_force,
             expansion: prepared.expansion(spec.warming.as_ref())?,
             wind: wind.as_ref(),
+            gpu: super::fem::gpu(),
         },
         wanted,
     )?;

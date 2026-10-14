@@ -4117,20 +4117,23 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 [[package]]
 name = "sims-fem"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=5e52805277a3ee90e43c381b92b0a1b05de465f0#5e52805277a3ee90e43c381b92b0a1b05de465f0"
+source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
 dependencies = [
  "anyhow",
+ "bytemuck",
  "faer",
  "rayon",
  "serde",
+ "sims-field",
  "sims-progress",
  "sims-tet",
+ "wgpu",
 ]
 
 [[package]]
 name = "sims-field"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=5e52805277a3ee90e43c381b92b0a1b05de465f0#5e52805277a3ee90e43c381b92b0a1b05de465f0"
+source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
 dependencies = [
  "bytemuck",
  "pollster",
@@ -4142,7 +4145,7 @@ dependencies = [
 [[package]]
 name = "sims-flow"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=5e52805277a3ee90e43c381b92b0a1b05de465f0#5e52805277a3ee90e43c381b92b0a1b05de465f0"
+source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4157,7 +4160,7 @@ dependencies = [
 [[package]]
 name = "sims-magnetic"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=5e52805277a3ee90e43c381b92b0a1b05de465f0#5e52805277a3ee90e43c381b92b0a1b05de465f0"
+source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
 dependencies = [
  "anyhow",
  "sims-fem",
@@ -4168,7 +4171,7 @@ dependencies = [
 [[package]]
 name = "sims-progress"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=5e52805277a3ee90e43c381b92b0a1b05de465f0#5e52805277a3ee90e43c381b92b0a1b05de465f0"
+source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
 dependencies = [
  "web-time",
 ]
@@ -4176,7 +4179,7 @@ dependencies = [
 [[package]]
 name = "sims-tet"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=5e52805277a3ee90e43c381b92b0a1b05de465f0#5e52805277a3ee90e43c381b92b0a1b05de465f0"
+source = "git+https://github.com/v0l/sims?rev=df93a43b019324d90ca93f89c491219fe20f9462#df93a43b019324d90ca93f89c491219fe20f9462"
 dependencies = [
  "anyhow",
  "cgmath",

@@ -391,6 +391,14 @@ directly, and two more sweeps. If that has not converged and the problem is unde
 unknowns, the direct solver takes over. Stresses are taken at each element's nodes and averaged,
 weighted by element volume and shape.
 
+When a GPU with 64-bit floats in shaders is present, the iterations run on it: the stiffness,
+the block-Jacobi and cluster smoothers, the corner-node level and the rigid-body level below
+it are copied once, and only the small aggregate solve comes back to the CPU each cycle. The
+frequency and buckling solvers use the same preconditioner on the GPU. The results match the
+CPU to 1e-8 in the same number of iterations: `examples/assemblies/case.gasm` at `mesh 3`
+(370,000 nodes, 1,726 iterations) solves in 43 s against 2 min 49 s, on a GPU shared with
+another job. `GCAD_FEM_CPU=1` keeps everything on the CPU.
+
 Measured on the 200 mm cantilever: at 284,000 unknowns the direct solver took 7 s and the
 two-level solver 28 iterations and 1.8 s; at 796,000 unknowns direct took 58 s and 15 GB, the
 two-level solver 28 iterations, 6 s and 1.4 GB. Bonded assemblies converge more slowly (the
@@ -556,8 +564,7 @@ the closed form.
 
 1. Spec files, results, staleness, charts, the material properties, and `torque`. Done.
 2. The tetrahedral mesher, `--dry-run` and mesh renders. Done.
-3. `static` on the CPU, checked against the closed forms. Done; the GPU waits on a multigrid
-   preconditioner.
+3. `static`, checked against the closed forms, on the CPU and the GPU. Done.
 4. `thermal`. Done.
 5. `modal`. Done.
 6. Bonded assemblies. Done.
