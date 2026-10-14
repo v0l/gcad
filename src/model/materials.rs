@@ -300,6 +300,7 @@ const TOML_KEYS: &[&str] = &[
     "yield",
     "k",
     "alpha",
+    "cp",
     "printed",
     "E1",
     "E2",
@@ -479,6 +480,7 @@ fn from_toml(text: &str, path: &Path) -> Result<Vec<Entry>> {
                 strength: number("yield")?,
                 conductivity: number("k")?,
                 expansion: number("alpha")?,
+                heat_capacity: number("cp")?,
                 printed,
             },
             axes: axes.any().then_some(axes),
@@ -505,6 +507,7 @@ fn check(entry: &Entry) -> Result<()> {
     positive("E", entry.mechanics.young)?;
     positive("yield", entry.mechanics.strength)?;
     positive("k", entry.mechanics.conductivity)?;
+    positive("cp", entry.mechanics.heat_capacity)?;
     if let Some(nu) = entry.mechanics.poisson
         && !(-1.0..0.5).contains(&nu)
     {
@@ -636,6 +639,7 @@ struct Si {
     ultimate: Option<f64>,
     conductivity: Option<f64>,
     expansion: Option<f64>,
+    heat_capacity: Option<f64>,
     axes_young: [Option<f64>; 3],
     axes_poisson: [Option<f64>; 3],
     axes_shear: [Option<f64>; 3],
@@ -670,6 +674,7 @@ impl Si {
                 strength: mpa(self.strength.or(self.ultimate)),
                 conductivity: self.conductivity,
                 expansion: micro(self.expansion),
+                heat_capacity: self.heat_capacity,
                 printed: false,
             },
             axes: axes.any().then_some(axes),
@@ -689,6 +694,7 @@ impl Si {
             "Tensile Yield Strength" | "YieldStrength" => Some(&mut self.strength),
             "Tensile Ultimate Strength" | "UltimateTensileStrength" => Some(&mut self.ultimate),
             "Thermal Conductivity" | "ThermalConductivity" => Some(&mut self.conductivity),
+            "Specific Heat" | "SpecificHeat" => Some(&mut self.heat_capacity),
             "Coefficient of Thermal Expansion" | "ThermalExpansionCoefficient" => {
                 Some(&mut self.expansion)
             }
@@ -1009,8 +1015,8 @@ pub fn table(target: Option<&Path>) -> Result<String> {
     rows.sort_by(|a, b| a.name.cmp(&b.name));
     let value = |v: Option<f64>| v.map_or("-".to_string(), crate::plot::label);
     let mut lines = vec![format!(
-        "{:<24} {:>8} {:>8} {:>6} {:>8} {:>8} {:>8}  {}",
-        "material", "g/cm³", "E GPa", "nu", "yield", "k", "alpha", "from"
+        "{:<24} {:>8} {:>8} {:>6} {:>8} {:>8} {:>8} {:>8}  {}",
+        "material", "g/cm³", "E GPa", "nu", "yield", "k", "alpha", "cp", "from"
     )];
     for e in &rows {
         let m = &e.mechanics;
@@ -1024,7 +1030,7 @@ pub fn table(target: Option<&Path>) -> Result<String> {
                 .to_string()
         };
         lines.push(format!(
-            "{:<24} {:>8} {:>8} {:>6} {:>8} {:>8} {:>8}  {}{}",
+            "{:<24} {:>8} {:>8} {:>6} {:>8} {:>8} {:>8} {:>8}  {}{}",
             e.name,
             value(e.density),
             value(m.young),
@@ -1032,6 +1038,7 @@ pub fn table(target: Option<&Path>) -> Result<String> {
             value(m.strength),
             value(m.conductivity),
             value(m.expansion),
+            value(m.heat_capacity),
             from,
             e.axes
                 .map(|a| format!(", along three axes: {}", a.summary()))

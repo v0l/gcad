@@ -7,12 +7,16 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
-- A standard material library of about 170 common metals, plastics, rubbers, timbers,
-  boards, masonry, stone, insulation, glass and composites, each with density, conductivity,
-  colour and finish, and stiffness, strength and expansion where they mean something. A project
-  table named like one keeps every key it does not give.
+- A standard material library of about 210 metals, plastics, 3D printing materials, rubbers,
+  timbers, boards, construction materials, stone, ground, insulation, glass and composites.
+  Every entry states density, stiffness, Poisson's ratio, strength, conductivity, expansion,
+  specific heat, colour, roughness, metallic and a texture, and a test fails if one does not. A
+  project table named like one keeps every key it does not give.
+- Specific heat: `cp` in `materials.toml` and `material ... cp=`, J/kg·K, also read from MatML
+  and FreeCAD cards and shown by `gcad materials`.
 - Material textures: `texture` (`wood`, `osb`, `concrete`, `stone`, `brick`, `sand`, `fabric`,
-  `foam`, `rubber`, `brushed`, `carbon-fibre`, or `none`), `texture_scale`, `texture_rotation`,
+  `foam`, `rubber`, `brushed`, `carbon-fibre`, `polished`, `cast`, `plaster`, `granulate`,
+  `marble`, `asphalt`, or `none`), `texture_scale`, `texture_rotation`,
   and `color_map`, `normal_map`, `roughness_map`, `metallic_map` image files, drawn in the
   viewer.
 - `member ... material=c24` assigns a material to every generated member. `count=N

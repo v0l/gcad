@@ -1,15 +1,165 @@
 [steel]
-density = 7.85
-E = 200.0
-nu = 0.29
-yield = 250.0
-k = 50.0
-alpha = 12.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
 texture = "brushed"
 texture_scale = 50.0
+
+[stainless]
+color = "#afb3b8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium]
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminum]
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[brass]
+color = "#c7a14b"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[copper]
+color = "#c7774c"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[titanium]
+color = "#9da1a8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[pla]
+color = "#b3bac4"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[petg]
+color = "#b3bac4"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[abs]
+color = "#b3bac4"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[asa]
+color = "#b3bac4"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[nylon]
+color = "#d7ceba"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[tpu]
+color = "#777b80"
+roughness = 0.8
+metallic = 0.0
+texture = "rubber"
+texture_scale = 20.0
+
+[polycarbonate]
+color = "#dce5e7"
+roughness = 0.12
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
+
+[acrylic]
+color = "#dce5e7"
+roughness = 0.12
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
+
+[resin]
+color = "#b3bac4"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[wood]
+color = "#d8b47a"
+roughness = 0.75
+metallic = 0.0
+texture = "wood"
+texture_scale = 200.0
+
+[concrete]
+color = "#a9a9a4"
+roughness = 0.85
+metallic = 0.0
+texture = "concrete"
+texture_scale = 100.0
+
+[brick]
+color = "#a85d42"
+roughness = 0.85
+metallic = 0.0
+texture = "brick"
+texture_scale = 200.0
+
+[glass]
+color = "#e6f0ed"
+metallic = 0.0
+roughness = 0.02
+transmission = 1.0
+ior = 1.52
+texture = "polished"
+texture_scale = 100.0
+
+[gypsum]
+color = "#eeeae0"
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
+
+[eps]
+color = "#e5e5df"
+roughness = 0.9
+metallic = 0.0
+texture = "foam"
+texture_scale = 50.0
+
+[wool]
+color = "#cfc9a0"
+roughness = 1.0
+metallic = 0.0
+texture = "fabric"
+texture_scale = 20.0
 
 [steel-s235]
 density = 7.85
@@ -18,6 +168,7 @@ nu = 0.3
 yield = 235.0
 k = 50.0
 alpha = 12.0
+cp = 490.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
@@ -31,6 +182,7 @@ nu = 0.3
 yield = 275.0
 k = 50.0
 alpha = 12.0
+cp = 490.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
@@ -44,6 +196,7 @@ nu = 0.3
 yield = 355.0
 k = 50.0
 alpha = 12.0
+cp = 490.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
@@ -57,6 +210,7 @@ nu = 0.26
 yield = 250.0
 k = 50.0
 alpha = 12.0
+cp = 490.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
@@ -70,6 +224,7 @@ nu = 0.29
 yield = 370.0
 k = 52.0
 alpha = 12.0
+cp = 486.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
@@ -83,6 +238,7 @@ nu = 0.29
 yield = 310.0
 k = 50.0
 alpha = 12.0
+cp = 486.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
@@ -96,6 +252,7 @@ nu = 0.29
 yield = 415.0
 k = 42.6
 alpha = 12.3
+cp = 473.0
 color = "#72777e"
 roughness = 0.35
 metallic = 1.0
@@ -109,6 +266,7 @@ nu = 0.29
 yield = 470.0
 k = 44.5
 alpha = 12.3
+cp = 475.0
 color = "#72777e"
 roughness = 0.35
 metallic = 1.0
@@ -119,8 +277,10 @@ texture_scale = 50.0
 density = 7.7
 E = 210.0
 nu = 0.28
+yield = 530.0
 k = 20.0
 alpha = 10.4
+cp = 460.0
 color = "#72777e"
 roughness = 0.35
 metallic = 1.0
@@ -131,8 +291,10 @@ texture_scale = 50.0
 density = 7.85
 E = 214.0
 nu = 0.29
+yield = 430.0
 k = 30.0
 alpha = 11.7
+cp = 460.0
 color = "#72777e"
 roughness = 0.35
 metallic = 1.0
@@ -146,20 +308,8 @@ nu = 0.29
 yield = 250.0
 k = 50.0
 alpha = 12.0
+cp = 480.0
 color = "#a0a6ad"
-roughness = 0.35
-metallic = 1.0
-texture = "brushed"
-texture_scale = 50.0
-
-[stainless]
-density = 8.0
-E = 193.0
-nu = 0.29
-yield = 215.0
-k = 16.0
-alpha = 17.0
-color = "#afb3b8"
 roughness = 0.35
 metallic = 1.0
 texture = "brushed"
@@ -172,6 +322,7 @@ nu = 0.29
 yield = 215.0
 k = 16.2
 alpha = 17.2
+cp = 500.0
 color = "#afb3b8"
 roughness = 0.35
 metallic = 1.0
@@ -185,6 +336,7 @@ nu = 0.3
 yield = 205.0
 k = 14.6
 alpha = 15.9
+cp = 500.0
 color = "#afb3b8"
 roughness = 0.35
 metallic = 1.0
@@ -198,6 +350,7 @@ nu = 0.28
 yield = 205.0
 k = 26.1
 alpha = 10.4
+cp = 460.0
 color = "#afb3b8"
 roughness = 0.35
 metallic = 1.0
@@ -211,6 +364,7 @@ nu = 0.27
 yield = 1170.0
 k = 18.0
 alpha = 10.8
+cp = 460.0
 color = "#afb3b8"
 roughness = 0.35
 metallic = 1.0
@@ -221,12 +375,14 @@ texture_scale = 50.0
 density = 7.2
 E = 110.0
 nu = 0.26
+yield = 200.0
 k = 46.0
 alpha = 10.5
+cp = 460.0
 color = "#494d51"
-roughness = 0.35
+roughness = 0.6
 metallic = 1.0
-texture = "stone"
+texture = "cast"
 texture_scale = 50.0
 
 [ductile-iron]
@@ -236,32 +392,21 @@ nu = 0.28
 yield = 310.0
 k = 36.0
 alpha = 11.0
+cp = 460.0
 color = "#494d51"
-roughness = 0.35
+roughness = 0.6
 metallic = 1.0
-texture = "stone"
-texture_scale = 50.0
-
-[aluminium]
-density = 2.7
-E = 69.0
-nu = 0.33
-yield = 240.0
-k = 167.0
-alpha = 23.6
-color = "#bfc5ca"
-roughness = 0.35
-metallic = 1.0
-texture = "brushed"
+texture = "cast"
 texture_scale = 50.0
 
 [aluminium-1050]
 density = 2.7
 E = 69.0
 nu = 0.33
-yield = 20.0
+yield = 28.0
 k = 230.0
 alpha = 23.5
+cp = 900.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -275,6 +420,7 @@ nu = 0.33
 yield = 34.0
 k = 222.0
 alpha = 23.6
+cp = 904.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -288,6 +434,7 @@ nu = 0.33
 yield = 345.0
 k = 121.0
 alpha = 23.2
+cp = 875.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -301,6 +448,7 @@ nu = 0.33
 yield = 193.0
 k = 138.0
 alpha = 23.8
+cp = 880.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -314,6 +462,7 @@ nu = 0.33
 yield = 125.0
 k = 117.0
 alpha = 23.8
+cp = 900.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -327,6 +476,7 @@ nu = 0.33
 yield = 276.0
 k = 167.0
 alpha = 23.6
+cp = 896.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -340,6 +490,7 @@ nu = 0.33
 yield = 214.0
 k = 200.0
 alpha = 23.4
+cp = 900.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -353,6 +504,7 @@ nu = 0.33
 yield = 250.0
 k = 180.0
 alpha = 23.4
+cp = 900.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -366,20 +518,8 @@ nu = 0.33
 yield = 503.0
 k = 130.0
 alpha = 23.6
+cp = 960.0
 color = "#bfc5ca"
-roughness = 0.35
-metallic = 1.0
-texture = "brushed"
-texture_scale = 50.0
-
-[brass]
-density = 8.5
-E = 97.0
-nu = 0.31
-yield = 124.0
-k = 115.0
-alpha = 20.5
-color = "#c7a14b"
 roughness = 0.35
 metallic = 1.0
 texture = "brushed"
@@ -392,6 +532,7 @@ nu = 0.34
 yield = 95.0
 k = 121.0
 alpha = 20.0
+cp = 375.0
 color = "#c7a14b"
 roughness = 0.35
 metallic = 1.0
@@ -405,6 +546,7 @@ nu = 0.34
 yield = 124.0
 k = 115.0
 alpha = 20.5
+cp = 380.0
 color = "#c7a14b"
 roughness = 0.35
 metallic = 1.0
@@ -418,6 +560,7 @@ nu = 0.34
 yield = 150.0
 k = 60.0
 alpha = 18.0
+cp = 380.0
 color = "#a87842"
 roughness = 0.35
 metallic = 1.0
@@ -431,20 +574,8 @@ nu = 0.34
 yield = 150.0
 k = 68.0
 alpha = 17.8
+cp = 380.0
 color = "#a87842"
-roughness = 0.35
-metallic = 1.0
-texture = "brushed"
-texture_scale = 50.0
-
-[copper]
-density = 8.96
-E = 117.0
-nu = 0.34
-yield = 70.0
-k = 390.0
-alpha = 17.0
-color = "#c7774c"
 roughness = 0.35
 metallic = 1.0
 texture = "brushed"
@@ -457,20 +588,8 @@ nu = 0.34
 yield = 69.0
 k = 391.0
 alpha = 16.9
+cp = 385.0
 color = "#c7774c"
-roughness = 0.35
-metallic = 1.0
-texture = "brushed"
-texture_scale = 50.0
-
-[titanium]
-density = 4.43
-E = 114.0
-nu = 0.34
-yield = 880.0
-k = 6.7
-alpha = 8.6
-color = "#9da1a8"
 roughness = 0.35
 metallic = 1.0
 texture = "brushed"
@@ -483,6 +602,7 @@ nu = 0.34
 yield = 275.0
 k = 16.4
 alpha = 8.6
+cp = 523.0
 color = "#9da1a8"
 roughness = 0.35
 metallic = 1.0
@@ -496,6 +616,7 @@ nu = 0.34
 yield = 880.0
 k = 6.7
 alpha = 8.6
+cp = 526.0
 color = "#9da1a8"
 roughness = 0.35
 metallic = 1.0
@@ -509,6 +630,7 @@ nu = 0.35
 yield = 200.0
 k = 96.0
 alpha = 26.0
+cp = 1000.0
 color = "#b5bac0"
 roughness = 0.35
 metallic = 1.0
@@ -522,6 +644,7 @@ nu = 0.25
 yield = 35.0
 k = 116.0
 alpha = 30.2
+cp = 390.0
 color = "#a3a9b0"
 roughness = 0.35
 metallic = 1.0
@@ -535,10 +658,11 @@ nu = 0.44
 yield = 12.0
 k = 35.0
 alpha = 29.0
+cp = 129.0
 color = "#6b7078"
-roughness = 0.35
+roughness = 0.6
 metallic = 1.0
-texture = "brushed"
+texture = "cast"
 texture_scale = 50.0
 
 [tin]
@@ -548,6 +672,7 @@ nu = 0.36
 yield = 9.0
 k = 67.0
 alpha = 22.0
+cp = 227.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -561,6 +686,7 @@ nu = 0.31
 yield = 59.0
 k = 91.0
 alpha = 13.4
+cp = 444.0
 color = "#bfc5ca"
 roughness = 0.35
 metallic = 1.0
@@ -574,11 +700,12 @@ nu = 0.28
 yield = 550.0
 k = 173.0
 alpha = 4.5
+cp = 134.0
 color = "#8e949b"
-roughness = 0.35
+roughness = 0.15
 metallic = 1.0
-texture = "brushed"
-texture_scale = 50.0
+texture = "polished"
+texture_scale = 100.0
 
 [silver]
 density = 10.49
@@ -587,11 +714,12 @@ nu = 0.37
 yield = 55.0
 k = 429.0
 alpha = 18.9
+cp = 235.0
 color = "#d5d9df"
-roughness = 0.35
+roughness = 0.15
 metallic = 1.0
-texture = "brushed"
-texture_scale = 50.0
+texture = "polished"
+texture_scale = 100.0
 
 [gold]
 density = 19.3
@@ -600,11 +728,12 @@ nu = 0.44
 yield = 120.0
 k = 317.0
 alpha = 14.2
+cp = 129.0
 color = "#edc354"
-roughness = 0.35
+roughness = 0.15
 metallic = 1.0
-texture = "brushed"
-texture_scale = 50.0
+texture = "polished"
+texture_scale = 100.0
 
 [invar-36]
 density = 8.05
@@ -613,6 +742,7 @@ nu = 0.29
 yield = 240.0
 k = 10.2
 alpha = 1.2
+cp = 515.0
 color = "#a3a9b0"
 roughness = 0.35
 metallic = 1.0
@@ -626,6 +756,7 @@ nu = 0.29
 yield = 550.0
 k = 11.4
 alpha = 13.0
+cp = 435.0
 color = "#a3a9b0"
 roughness = 0.35
 metallic = 1.0
@@ -639,8 +770,12 @@ nu = 0.38
 yield = 50.0
 k = 0.19
 alpha = 80.0
+cp = 1000.0
 color = "#d9d9d4"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pp]
 density = 0.9
@@ -649,8 +784,12 @@ nu = 0.42
 yield = 30.0
 k = 0.22
 alpha = 150.0
+cp = 1900.0
 color = "#dadbd5"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pe]
 density = 0.95
@@ -659,8 +798,12 @@ nu = 0.46
 yield = 22.0
 k = 0.4
 alpha = 180.0
+cp = 2300.0
 color = "#deded8"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [hdpe]
 density = 0.95
@@ -669,8 +812,12 @@ nu = 0.46
 yield = 22.0
 k = 0.4
 alpha = 180.0
+cp = 2250.0
 color = "#deded8"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [ldpe]
 density = 0.92
@@ -679,8 +826,12 @@ nu = 0.46
 yield = 10.0
 k = 0.33
 alpha = 200.0
+cp = 2300.0
 color = "#deded8"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [uhmwpe]
 density = 0.93
@@ -689,8 +840,12 @@ nu = 0.46
 yield = 20.0
 k = 0.42
 alpha = 180.0
+cp = 1900.0
 color = "#deded8"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pom]
 density = 1.41
@@ -699,8 +854,12 @@ nu = 0.35
 yield = 65.0
 k = 0.31
 alpha = 110.0
+cp = 1470.0
 color = "#e0e0da"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [ptfe]
 density = 2.16
@@ -709,8 +868,12 @@ nu = 0.46
 yield = 15.0
 k = 0.25
 alpha = 120.0
+cp = 1050.0
 color = "#e6e6e1"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [peek]
 density = 1.3
@@ -719,8 +882,12 @@ nu = 0.38
 yield = 90.0
 k = 0.25
 alpha = 47.0
+cp = 1340.0
 color = "#a49a7c"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pps]
 density = 1.35
@@ -729,8 +896,12 @@ nu = 0.36
 yield = 70.0
 k = 0.3
 alpha = 50.0
+cp = 1090.0
 color = "#c4bdab"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pet]
 density = 1.38
@@ -739,8 +910,12 @@ nu = 0.38
 yield = 55.0
 k = 0.24
 alpha = 60.0
+cp = 1170.0
 color = "#d9dbdf"
-roughness = 0.4
+roughness = 0.12
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
 
 [polystyrene]
 density = 1.05
@@ -749,8 +924,12 @@ nu = 0.34
 yield = 40.0
 k = 0.15
 alpha = 70.0
+cp = 1210.0
 color = "#d9dbdf"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [hips]
 density = 1.04
@@ -759,8 +938,12 @@ nu = 0.35
 yield = 25.0
 k = 0.15
 alpha = 80.0
+cp = 1250.0
 color = "#d9dbdf"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pa6]
 density = 1.13
@@ -769,8 +952,12 @@ nu = 0.39
 yield = 70.0
 k = 0.25
 alpha = 80.0
+cp = 1700.0
 color = "#d7ceba"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pa66]
 density = 1.14
@@ -779,8 +966,12 @@ nu = 0.39
 yield = 80.0
 k = 0.25
 alpha = 80.0
+cp = 1670.0
 color = "#d7ceba"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pa12]
 density = 1.01
@@ -789,8 +980,12 @@ nu = 0.39
 yield = 45.0
 k = 0.23
 alpha = 100.0
+cp = 1700.0
 color = "#d7ceba"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [polyurethane]
 density = 1.2
@@ -799,10 +994,12 @@ nu = 0.45
 yield = 10.0
 k = 0.2
 alpha = 150.0
+cp = 1800.0
 color = "#c9b67c"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [epoxy]
 density = 1.2
@@ -811,8 +1008,12 @@ nu = 0.35
 yield = 60.0
 k = 0.2
 alpha = 60.0
+cp = 1100.0
 color = "#b6a784"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [phenolic]
 density = 1.3
@@ -821,176 +1022,94 @@ nu = 0.3
 yield = 50.0
 k = 0.25
 alpha = 40.0
+cp = 1400.0
 color = "#715139"
-roughness = 0.4
-
-[pla]
-density = 1.24
-E = 2.8
-nu = 0.35
-yield = 40.0
-k = 0.13
-alpha = 68.0
-color = "#b3bac4"
-roughness = 0.4
-
-[petg]
-density = 1.27
-E = 2.0
-nu = 0.38
-yield = 35.0
-k = 0.2
-alpha = 60.0
-color = "#b3bac4"
-roughness = 0.4
-
-[abs]
-density = 1.04
-E = 2.0
-nu = 0.35
-yield = 30.0
-k = 0.17
-alpha = 90.0
-color = "#b3bac4"
-roughness = 0.4
-
-[asa]
-density = 1.07
-E = 1.9
-nu = 0.35
-yield = 32.0
-k = 0.17
-alpha = 95.0
-color = "#b3bac4"
-roughness = 0.4
-
-[nylon]
-density = 1.14
-E = 1.5
-nu = 0.39
-yield = 40.0
-k = 0.25
-alpha = 100.0
-color = "#d7ceba"
-roughness = 0.4
-
-[tpu]
-density = 1.21
-E = 0.026
-nu = 0.48
-yield = 8.0
-k = 0.2
-alpha = 150.0
-color = "#777b80"
-roughness = 0.75
-texture = "rubber"
-texture_scale = 50.0
-
-[polycarbonate]
-density = 1.2
-E = 2.3
-nu = 0.37
-yield = 60.0
-k = 0.2
-alpha = 68.0
-color = "#dce5e7"
-roughness = 0.4
-
-[acrylic]
-density = 1.18
-E = 3.2
-nu = 0.37
-yield = 65.0
-k = 0.19
-alpha = 75.0
-color = "#dce5e7"
-roughness = 0.4
-
-[resin]
-density = 1.2
-E = 2.2
-nu = 0.35
-yield = 50.0
-k = 0.2
-alpha = 80.0
-color = "#b3bac4"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [epdm]
 density = 1.15
 E = 0.007
 nu = 0.49
+yield = 8.0
 k = 0.25
 alpha = 180.0
+cp = 2000.0
 color = "#252729"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [silicone]
 density = 1.1
 E = 0.003
 nu = 0.49
+yield = 7.0
 k = 0.2
 alpha = 250.0
+cp = 1200.0
 color = "#d5d0c5"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [neoprene]
 density = 1.23
 E = 0.01
 nu = 0.49
+yield = 15.0
 k = 0.19
 alpha = 200.0
+cp = 2000.0
 color = "#313437"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [nitrile]
 density = 1.1
 E = 0.01
 nu = 0.49
+yield = 15.0
 k = 0.25
 alpha = 180.0
+cp = 1900.0
 color = "#313437"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [natural-rubber]
 density = 0.93
 E = 0.003
 nu = 0.49
+yield = 20.0
 k = 0.13
 alpha = 220.0
+cp = 1900.0
 color = "#3f4245"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
-
-[wood]
-density = 0.6
-E = 10.0
-nu = 0.3
-yield = 40.0
-k = 0.12
-alpha = 5.0
-color = "#d8b47a"
-roughness = 0.75
-texture = "wood"
-texture_scale = 200.0
+texture_scale = 20.0
 
 [pine]
 density = 0.5
 E = 9.0
 nu = 0.3
+yield = 40.0
 k = 0.12
 alpha = 5.0
+cp = 1600.0
 color = "#dbbd88"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -998,10 +1117,13 @@ texture_scale = 200.0
 density = 0.45
 E = 10.0
 nu = 0.3
+yield = 40.0
 k = 0.12
 alpha = 5.0
+cp = 1600.0
 color = "#dfc79d"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1009,10 +1131,13 @@ texture_scale = 200.0
 density = 0.5
 E = 11.0
 nu = 0.3
+yield = 45.0
 k = 0.12
 alpha = 5.0
+cp = 1600.0
 color = "#d7b588"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1020,10 +1145,13 @@ texture_scale = 200.0
 density = 0.38
 E = 7.0
 nu = 0.3
+yield = 30.0
 k = 0.1
 alpha = 5.0
+cp = 1600.0
 color = "#b97e59"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1031,10 +1159,13 @@ texture_scale = 200.0
 density = 0.59
 E = 11.0
 nu = 0.3
+yield = 45.0
 k = 0.13
 alpha = 5.0
+cp = 1600.0
 color = "#b9895c"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1042,10 +1173,13 @@ texture_scale = 200.0
 density = 0.65
 E = 13.0
 nu = 0.3
+yield = 60.0
 k = 0.16
 alpha = 5.0
+cp = 1600.0
 color = "#d1b082"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1053,10 +1187,13 @@ texture_scale = 200.0
 density = 0.71
 E = 14.0
 nu = 0.3
+yield = 65.0
 k = 0.17
 alpha = 5.0
+cp = 1600.0
 color = "#cda87f"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1064,10 +1201,13 @@ texture_scale = 200.0
 density = 0.67
 E = 12.0
 nu = 0.3
+yield = 60.0
 k = 0.16
 alpha = 5.0
+cp = 1600.0
 color = "#d1b487"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1075,10 +1215,13 @@ texture_scale = 200.0
 density = 0.65
 E = 12.0
 nu = 0.3
+yield = 65.0
 k = 0.16
 alpha = 5.0
+cp = 1600.0
 color = "#e0c59c"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1086,10 +1229,13 @@ texture_scale = 200.0
 density = 0.7
 E = 11.0
 nu = 0.3
+yield = 55.0
 k = 0.18
 alpha = 5.0
+cp = 1600.0
 color = "#b88a5a"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1097,10 +1243,13 @@ texture_scale = 200.0
 density = 0.61
 E = 11.0
 nu = 0.3
+yield = 60.0
 k = 0.15
 alpha = 5.0
+cp = 1600.0
 color = "#76523c"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1108,10 +1257,13 @@ texture_scale = 200.0
 density = 0.55
 E = 10.0
 nu = 0.3
+yield = 50.0
 k = 0.14
 alpha = 5.0
+cp = 1600.0
 color = "#975d42"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1119,10 +1271,13 @@ texture_scale = 200.0
 density = 0.16
 E = 3.0
 nu = 0.3
+yield = 15.0
 k = 0.06
 alpha = 5.0
+cp = 1700.0
 color = "#e5d4ad"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1130,10 +1285,13 @@ texture_scale = 200.0
 density = 0.7
 E = 12.0
 nu = 0.3
+yield = 70.0
 k = 0.15
 alpha = 5.0
+cp = 1600.0
 color = "#cbaa77"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1141,10 +1299,13 @@ texture_scale = 200.0
 density = 0.37
 E = 8.0
 nu = 0.3
+yield = 16.0
 k = 0.12
 alpha = 5.0
+cp = 1600.0
 color = "#d8b47a"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1152,10 +1313,13 @@ texture_scale = 200.0
 density = 0.42
 E = 11.0
 nu = 0.3
+yield = 24.0
 k = 0.12
 alpha = 5.0
+cp = 1600.0
 color = "#d8b47a"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1163,10 +1327,13 @@ texture_scale = 200.0
 density = 0.55
 E = 6.0
 nu = 0.3
+yield = 25.0
 k = 0.13
 alpha = 5.0
+cp = 1600.0
 color = "#cfaf7f"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1174,10 +1341,13 @@ texture_scale = 200.0
 density = 0.68
 E = 9.0
 nu = 0.3
+yield = 45.0
 k = 0.17
 alpha = 5.0
+cp = 1600.0
 color = "#cfaf7f"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1185,10 +1355,13 @@ texture_scale = 200.0
 density = 0.62
 E = 1.4
 nu = 0.3
+yield = 20.0
 k = 0.13
 alpha = 5.0
+cp = 1700.0
 color = "#c9a46a"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "osb"
 texture_scale = 200.0
 
@@ -1196,21 +1369,27 @@ texture_scale = 200.0
 density = 0.75
 E = 3.0
 nu = 0.3
+yield = 20.0
 k = 0.14
 alpha = 10.0
+cp = 1700.0
 color = "#bba07e"
-roughness = 0.75
-texture = "wood"
-texture_scale = 200.0
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [particleboard]
 density = 0.65
 E = 2.5
 nu = 0.3
+yield = 15.0
 k = 0.13
 alpha = 10.0
+cp = 1700.0
 color = "#baa17e"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "osb"
 texture_scale = 200.0
 
@@ -1218,71 +1397,83 @@ texture_scale = 200.0
 density = 0.9
 E = 4.0
 nu = 0.3
+yield = 35.0
 k = 0.18
 alpha = 10.0
+cp = 1700.0
 color = "#977455"
-roughness = 0.75
-texture = "wood"
-texture_scale = 200.0
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [cork]
 density = 0.12
-E = 0.01
-nu = 0.2
+E = 0.02
+nu = 0.05
+yield = 1.0
 k = 0.045
 alpha = 40.0
+cp = 1800.0
 color = "#b79667"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "foam"
-texture_scale = 50.0
-
-[concrete]
-color = "#a9a9a4"
-roughness = 0.75
-texture = "concrete"
-texture_scale = 50.0
+texture_scale = 30.0
 
 [concrete-c25-30]
 density = 2.4
 E = 31.0
 nu = 0.2
+yield = 25.0
 k = 2.0
 alpha = 10.0
+cp = 880.0
 color = "#a9a9a4"
-roughness = 0.75
+roughness = 0.85
+metallic = 0.0
 texture = "concrete"
-texture_scale = 50.0
+texture_scale = 100.0
 
 [concrete-c30-37]
 density = 2.4
 E = 33.0
 nu = 0.2
+yield = 30.0
 k = 2.0
 alpha = 10.0
+cp = 880.0
 color = "#a9a9a4"
-roughness = 0.75
+roughness = 0.85
+metallic = 0.0
 texture = "concrete"
-texture_scale = 50.0
+texture_scale = 100.0
 
 [lightweight-concrete]
 density = 1.8
 E = 15.0
 nu = 0.2
+yield = 10.0
 k = 1.15
 alpha = 10.0
+cp = 1000.0
 color = "#b1b1ac"
-roughness = 0.75
+roughness = 0.85
+metallic = 0.0
 texture = "concrete"
-texture_scale = 50.0
+texture_scale = 100.0
 
 [aerated-concrete]
 density = 0.5
 E = 2.0
 nu = 0.2
+yield = 3.0
 k = 0.15
 alpha = 8.0
+cp = 1000.0
 color = "#d2d2ca"
-roughness = 0.75
+roughness = 0.95
+metallic = 0.0
 texture = "foam"
 texture_scale = 50.0
 
@@ -1290,35 +1481,27 @@ texture_scale = 50.0
 density = 2.0
 E = 10.0
 nu = 0.2
+yield = 5.0
 k = 0.88
 alpha = 10.0
+cp = 1000.0
 color = "#b1ad9e"
-roughness = 0.75
+roughness = 0.85
+metallic = 0.0
 texture = "concrete"
-texture_scale = 50.0
-
-[cement]
-density = 1.5
-k = 0.35
-color = "#b2b0a5"
-roughness = 0.75
-texture = "sand"
-texture_scale = 50.0
-
-[brick]
-color = "#a85d42"
-roughness = 0.75
-texture = "brick"
-texture_scale = 200.0
+texture_scale = 100.0
 
 [terracotta]
 density = 1.9
 E = 15.0
 nu = 0.22
+yield = 20.0
 k = 0.81
 alpha = 6.0
+cp = 840.0
 color = "#bd7350"
-roughness = 0.75
+roughness = 0.85
+metallic = 0.0
 texture = "brick"
 texture_scale = 200.0
 
@@ -1326,234 +1509,323 @@ texture_scale = 200.0
 density = 0.68
 E = 2.0
 nu = 0.25
+yield = 3.0
 k = 0.25
 alpha = 15.0
+cp = 1000.0
 color = "#f2f0ea"
-roughness = 0.75
-texture = "concrete"
-texture_scale = 50.0
-
-[gypsum]
-color = "#eeeae0"
-roughness = 0.75
-texture = "concrete"
-texture_scale = 50.0
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
 
 [lime-plaster]
 density = 1.6
 E = 3.0
 nu = 0.2
+yield = 2.0
 k = 0.7
 alpha = 10.0
+cp = 1000.0
 color = "#e6dfcf"
-roughness = 0.75
-texture = "concrete"
-texture_scale = 50.0
-
-[glass]
-color = "#e6f0ed"
-transmission = 1.0
-ior = 1.52
-roughness = 0.01
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
 
 [borosilicate-glass]
 density = 2.23
 E = 64.0
 nu = 0.2
+yield = 35.0
 k = 1.2
 alpha = 3.3
+cp = 830.0
 color = "#e6f0ed"
+metallic = 0.0
+roughness = 0.02
 transmission = 1.0
-ior = 1.52
-roughness = 0.01
+ior = 1.47
+texture = "polished"
+texture_scale = 100.0
 
 [alumina]
 density = 3.9
 E = 370.0
 nu = 0.22
+yield = 300.0
 k = 30.0
 alpha = 8.0
+cp = 880.0
 color = "#deded5"
-roughness = 0.75
-texture = "stone"
-texture_scale = 50.0
+roughness = 0.12
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
 
 [porcelain]
 density = 2.4
 E = 70.0
 nu = 0.22
+yield = 50.0
 k = 1.5
 alpha = 6.0
+cp = 1070.0
 color = "#e4e0d7"
-roughness = 0.75
-texture = "stone"
-texture_scale = 50.0
+roughness = 0.12
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
 
 [granite]
 density = 2.7
 E = 50.0
 nu = 0.25
+yield = 150.0
 k = 3.0
 alpha = 8.0
+cp = 790.0
 color = "#999b99"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "stone"
-texture_scale = 50.0
+texture_scale = 150.0
 
 [marble]
 density = 2.7
 E = 60.0
 nu = 0.25
+yield = 100.0
 k = 2.5
 alpha = 7.0
+cp = 880.0
 color = "#c6c4bc"
-roughness = 0.75
-texture = "stone"
-texture_scale = 50.0
+roughness = 0.4
+metallic = 0.0
+texture = "marble"
+texture_scale = 400.0
 
 [slate]
 density = 2.7
 E = 30.0
 nu = 0.25
+yield = 100.0
 k = 2.0
 alpha = 8.0
+cp = 760.0
 color = "#5e656b"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "stone"
-texture_scale = 50.0
+texture_scale = 150.0
 
 [limestone]
 density = 2.3
 E = 30.0
 nu = 0.25
+yield = 60.0
 k = 1.3
 alpha = 8.0
+cp = 840.0
 color = "#c8c1a9"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "stone"
-texture_scale = 50.0
+texture_scale = 150.0
 
 [sandstone]
 density = 2.2
 E = 20.0
 nu = 0.25
+yield = 50.0
 k = 1.8
 alpha = 10.0
+cp = 920.0
 color = "#bfa77f"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "stone"
-texture_scale = 50.0
+texture_scale = 150.0
 
 [sand]
 density = 1.7
+E = 0.05
+nu = 0.3
+yield = 0.2
 k = 0.3
+alpha = 12.0
+cp = 830.0
 color = "#d8c9a0"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "sand"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [hardcore]
 density = 2.1
+E = 0.15
+nu = 0.3
+yield = 0.3
 k = 1.5
+alpha = 8.0
+cp = 840.0
 color = "#8a8378"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "stone"
-texture_scale = 50.0
+texture_scale = 150.0
 
 [gravel]
 density = 1.8
+E = 0.1
+nu = 0.3
+yield = 0.4
 k = 0.7
+alpha = 8.0
+cp = 840.0
 color = "#969388"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "stone"
-texture_scale = 50.0
+texture_scale = 150.0
 
 [soil]
 density = 1.5
+E = 0.02
+nu = 0.35
+yield = 0.1
 k = 0.5
+alpha = 10.0
+cp = 800.0
 color = "#79664a"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "sand"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [asphalt]
 density = 2.3
 E = 2.0
 nu = 0.35
+yield = 3.0
 k = 0.75
 alpha = 30.0
+cp = 920.0
 color = "#333638"
-roughness = 0.75
-texture = "concrete"
-texture_scale = 50.0
+roughness = 0.95
+metallic = 0.0
+texture = "asphalt"
+texture_scale = 40.0
 
 [pir]
 density = 0.032
+E = 0.008
+nu = 0.25
+yield = 0.15
 k = 0.022
+alpha = 40.0
+cp = 1400.0
 color = "#e9d98b"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "foam"
 texture_scale = 50.0
 
 [pur-foam]
 density = 0.035
+E = 0.005
+nu = 0.25
+yield = 0.1
 k = 0.025
+alpha = 50.0
+cp = 1400.0
 color = "#e9d98b"
-roughness = 0.75
-texture = "foam"
-texture_scale = 50.0
-
-[eps]
-color = "#e5e5df"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "foam"
 texture_scale = 50.0
 
 [xps]
 density = 0.035
+E = 0.015
+nu = 0.2
+yield = 0.3
 k = 0.034
+alpha = 70.0
+cp = 1450.0
 color = "#b2c7d8"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "foam"
 texture_scale = 50.0
 
 [rockwool]
 density = 0.03
+E = 0.0005
+nu = 0.1
+yield = 0.03
 k = 0.038
+alpha = 5.0
+cp = 1030.0
 color = "#9fae8a"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "fabric"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [glasswool]
 density = 0.02
+E = 0.0002
+nu = 0.1
+yield = 0.01
 k = 0.04
+alpha = 5.0
+cp = 840.0
 color = "#d5c875"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "fabric"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [cellulose-insulation]
 density = 0.05
+E = 0.0003
+nu = 0.1
+yield = 0.005
 k = 0.04
+alpha = 30.0
+cp = 1900.0
 color = "#aca593"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "fabric"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [wood-fibre-insulation]
 density = 0.16
+E = 0.005
+nu = 0.1
+yield = 0.1
 k = 0.045
+alpha = 10.0
+cp = 2100.0
 color = "#b89768"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "fabric"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [aerogel]
 density = 0.15
+E = 0.001
+nu = 0.2
+yield = 0.1
 k = 0.015
+alpha = 3.0
+cp = 1000.0
 color = "#e1e7e9"
-roughness = 0.75
+roughness = 0.9
+metallic = 0.0
 texture = "foam"
 texture_scale = 50.0
 
@@ -1561,72 +1833,504 @@ texture_scale = 50.0
 density = 1.85
 E = 20.0
 nu = 0.14
+yield = 300.0
 k = 0.3
 alpha = 16.0
+cp = 1100.0
 color = "#747e47"
-roughness = 0.75
+roughness = 0.5
+metallic = 0.0
 texture = "fabric"
-texture_scale = 50.0
+texture_scale = 5.0
 
 [carbon-fibre]
 density = 1.6
 E = 70.0
 nu = 0.3
+yield = 600.0
 k = 0.6
 alpha = 2.0
+cp = 800.0
 color = "#3b4047"
-roughness = 0.75
+roughness = 0.3
+metallic = 0.0
 texture = "carbon-fibre"
+texture_scale = 10.0
+
+[pla-plus]
+density = 1.24
+E = 2.6
+nu = 0.35
+yield = 45.0
+k = 0.13
+alpha = 68.0
+cp = 1800.0
+printed = true
+color = "#b3bac4"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[pla-cf]
+density = 1.3
+E = 5.5
+nu = 0.35
+yield = 50.0
+k = 0.25
+alpha = 35.0
+cp = 1700.0
+printed = true
+color = "#3b4047"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[petg-cf]
+density = 1.3
+E = 4.5
+nu = 0.36
+yield = 55.0
+k = 0.25
+alpha = 35.0
+cp = 1200.0
+printed = true
+color = "#3b4047"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[pctg]
+density = 1.23
+E = 1.9
+nu = 0.38
+yield = 45.0
+k = 0.2
+alpha = 65.0
+cp = 1200.0
+printed = true
+color = "#dce5e7"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[pa-cf]
+density = 1.15
+E = 5.5
+nu = 0.35
+yield = 70.0
+k = 0.3
+alpha = 40.0
+cp = 1700.0
+printed = true
+color = "#3b4047"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[pc-abs]
+density = 1.1
+E = 2.2
+nu = 0.37
+yield = 40.0
+k = 0.2
+alpha = 80.0
+cp = 1400.0
+printed = true
+color = "#8d9299"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[pva]
+density = 1.19
+E = 2.8
+nu = 0.4
+yield = 30.0
+k = 0.2
+alpha = 90.0
+cp = 1500.0
+printed = true
+color = "#e8e3d4"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[pei]
+density = 1.27
+E = 3.2
+nu = 0.36
+yield = 70.0
+k = 0.22
+alpha = 56.0
+cp = 1500.0
+printed = true
+color = "#c4a35a"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[resin-tough]
+density = 1.15
+E = 2.7
+nu = 0.38
+yield = 46.0
+k = 0.2
+alpha = 80.0
+cp = 1200.0
+printed = true
+color = "#8f969c"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[resin-flexible]
+density = 1.1
+E = 0.01
+nu = 0.48
+yield = 7.0
+k = 0.2
+alpha = 150.0
+cp = 1800.0
+printed = true
+color = "#cfd2d4"
+roughness = 0.8
+metallic = 0.0
+texture = "rubber"
+texture_scale = 20.0
+
+[ss316l-printed]
+density = 7.9
+E = 195.0
+nu = 0.3
+yield = 500.0
+k = 14.0
+alpha = 16.0
+cp = 500.0
+printed = true
+color = "#9a9fa6"
+roughness = 0.6
+metallic = 1.0
+texture = "cast"
 texture_scale = 50.0
 
-[cotton]
-density = 0.3
-k = 0.06
-color = "#d5ceb9"
-roughness = 0.75
-texture = "fabric"
+[ti64-printed]
+density = 4.43
+E = 114.0
+nu = 0.34
+yield = 1000.0
+k = 6.7
+alpha = 8.6
+cp = 526.0
+printed = true
+color = "#8e949b"
+roughness = 0.6
+metallic = 1.0
+texture = "cast"
 texture_scale = 50.0
 
-[felt]
-density = 0.25
-k = 0.05
-color = "#8a8b84"
-roughness = 0.75
-texture = "fabric"
-texture_scale = 50.0
-
-[leather]
-density = 0.85
-k = 0.15
-color = "#835f46"
-roughness = 0.75
-texture = "fabric"
-texture_scale = 50.0
-
-[water]
-density = 1.0
-k = 0.6
-color = "#b7d5e2"
-roughness = 0.4
-
-[air]
-density = 0.001225
-k = 0.0257
-color = "#d7e1eb"
-roughness = 0.4
-
-[aluminum]
-density = 2.7
-E = 69.0
+[alsi10mg-printed]
+density = 2.67
+E = 70.0
 nu = 0.33
 yield = 240.0
-k = 167.0
-alpha = 23.6
-color = "#bfc5ca"
-roughness = 0.35
+k = 120.0
+alpha = 21.0
+cp = 890.0
+printed = true
+color = "#adb3b9"
+roughness = 0.6
+metallic = 1.0
+texture = "cast"
+texture_scale = 50.0
+
+[rebar-b500b]
+density = 7.85
+E = 200.0
+nu = 0.3
+yield = 500.0
+k = 50.0
+alpha = 12.0
+cp = 490.0
+color = "#6f7479"
+roughness = 0.5
 metallic = 1.0
 texture = "brushed"
 texture_scale = 50.0
+
+[glulam-gl24h]
+density = 0.385
+E = 11.5
+nu = 0.3
+yield = 24.0
+k = 0.13
+alpha = 5.0
+cp = 1600.0
+color = "#d8b47a"
+roughness = 0.75
+metallic = 0.0
+texture = "wood"
+texture_scale = 200.0
+
+[glulam-gl28h]
+density = 0.425
+E = 12.6
+nu = 0.3
+yield = 28.0
+k = 0.13
+alpha = 5.0
+cp = 1600.0
+color = "#d1ac72"
+roughness = 0.75
+metallic = 0.0
+texture = "wood"
+texture_scale = 200.0
+
+[lvl]
+density = 0.51
+E = 13.8
+nu = 0.3
+yield = 44.0
+k = 0.13
+alpha = 5.0
+cp = 1600.0
+color = "#d6b682"
+roughness = 0.75
+metallic = 0.0
+texture = "wood"
+texture_scale = 200.0
+
+[clt]
+density = 0.45
+E = 8.0
+nu = 0.3
+yield = 24.0
+k = 0.12
+alpha = 5.0
+cp = 1600.0
+color = "#dfc79d"
+roughness = 0.75
+metallic = 0.0
+texture = "wood"
+texture_scale = 200.0
+
+[concrete-block-dense]
+density = 2.0
+E = 10.0
+nu = 0.2
+yield = 7.0
+k = 1.33
+alpha = 10.0
+cp = 1000.0
+color = "#9d9d98"
+roughness = 0.85
+metallic = 0.0
+texture = "concrete"
+texture_scale = 100.0
+
+[concrete-block-medium]
+density = 1.4
+E = 5.0
+nu = 0.2
+yield = 3.6
+k = 0.57
+alpha = 8.0
+cp = 1000.0
+color = "#b0b0aa"
+roughness = 0.85
+metallic = 0.0
+texture = "concrete"
+texture_scale = 100.0
+
+[fibre-cement-board]
+density = 1.7
+E = 14.0
+nu = 0.2
+yield = 20.0
+k = 0.5
+alpha = 10.0
+cp = 1000.0
+color = "#bdbdb6"
+roughness = 0.85
+metallic = 0.0
+texture = "concrete"
+texture_scale = 100.0
+
+[screed]
+density = 2.1
+E = 20.0
+nu = 0.2
+yield = 25.0
+k = 1.4
+alpha = 11.0
+cp = 1000.0
+color = "#b7b4aa"
+roughness = 0.85
+metallic = 0.0
+texture = "concrete"
+texture_scale = 100.0
+
+[cement-render]
+density = 1.8
+E = 10.0
+nu = 0.2
+yield = 5.0
+k = 0.9
+alpha = 10.0
+cp = 1000.0
+color = "#cfcbbf"
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
+
+[concrete-roof-tile]
+density = 2.1
+E = 25.0
+nu = 0.2
+yield = 20.0
+k = 1.5
+alpha = 10.0
+cp = 880.0
+color = "#6d6f72"
+roughness = 0.85
+metallic = 0.0
+texture = "concrete"
+texture_scale = 100.0
+
+[pvc-flexible]
+density = 1.3
+E = 0.01
+nu = 0.45
+yield = 15.0
+k = 0.16
+alpha = 200.0
+cp = 1000.0
+color = "#cfd2d3"
+roughness = 0.6
+metallic = 0.0
+texture = "rubber"
+texture_scale = 20.0
+
+[foamglass]
+density = 0.12
+E = 0.3
+nu = 0.25
+yield = 0.6
+k = 0.041
+alpha = 9.0
+cp = 840.0
+color = "#4a4d50"
+roughness = 0.9
+metallic = 0.0
+texture = "foam"
+texture_scale = 50.0
+
+[phenolic-foam]
+density = 0.035
+E = 0.01
+nu = 0.25
+yield = 0.1
+k = 0.021
+alpha = 30.0
+cp = 1400.0
+color = "#e6a07a"
+roughness = 0.9
+metallic = 0.0
+texture = "foam"
+texture_scale = 50.0
+
+[hemp-insulation]
+density = 0.04
+E = 0.0003
+nu = 0.1
+yield = 0.005
+k = 0.04
+alpha = 20.0
+cp = 1600.0
+color = "#b8a97e"
+roughness = 1.0
+metallic = 0.0
+texture = "fabric"
+texture_scale = 20.0
+
+[sheep-wool]
+density = 0.025
+E = 0.0002
+nu = 0.1
+yield = 0.005
+k = 0.038
+alpha = 20.0
+cp = 1720.0
+color = "#e8e2d2"
+roughness = 1.0
+metallic = 0.0
+texture = "fabric"
+texture_scale = 20.0
+
+[clay]
+density = 1.8
+E = 0.03
+nu = 0.35
+yield = 0.15
+k = 1.0
+alpha = 10.0
+cp = 880.0
+color = "#9a7b5c"
+roughness = 1.0
+metallic = 0.0
+texture = "sand"
+texture_scale = 20.0
+
+[rammed-earth]
+density = 2.0
+E = 0.5
+nu = 0.25
+yield = 3.0
+k = 1.0
+alpha = 8.0
+cp = 900.0
+color = "#a98b6a"
+roughness = 0.95
+metallic = 0.0
+texture = "stone"
+texture_scale = 150.0
+
+[ceramic-tile]
+density = 2.3
+E = 70.0
+nu = 0.22
+yield = 30.0
+k = 1.3
+alpha = 6.0
+cp = 840.0
+color = "#e4e0d7"
+roughness = 0.25
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
+
+[cement-bonded-particleboard]
+density = 1.2
+E = 4.5
+nu = 0.2
+yield = 9.0
+k = 0.23
+alpha = 10.0
+cp = 1500.0
+color = "#a7a9a3"
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
 
 [steel-mild]
 density = 7.85
@@ -1635,6 +2339,7 @@ nu = 0.29
 yield = 250.0
 k = 50.0
 alpha = 12.0
+cp = 490.0
 color = "#777b80"
 roughness = 0.35
 metallic = 1.0
@@ -1648,6 +2353,7 @@ nu = 0.29
 yield = 215.0
 k = 16.0
 alpha = 17.0
+cp = 500.0
 color = "#afb3b8"
 roughness = 0.35
 metallic = 1.0
@@ -1661,8 +2367,12 @@ nu = 0.42
 yield = 30.0
 k = 0.22
 alpha = 150.0
+cp = 1900.0
 color = "#dadbd5"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [polyethylene]
 density = 0.95
@@ -1671,8 +2381,12 @@ nu = 0.46
 yield = 22.0
 k = 0.4
 alpha = 180.0
+cp = 2300.0
 color = "#deded8"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [acetal]
 density = 1.41
@@ -1681,8 +2395,12 @@ nu = 0.35
 yield = 65.0
 k = 0.31
 alpha = 110.0
+cp = 1470.0
 color = "#e0e0da"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [teflon]
 density = 2.16
@@ -1691,8 +2409,12 @@ nu = 0.46
 yield = 15.0
 k = 0.25
 alpha = 120.0
+cp = 1050.0
 color = "#e6e6e1"
-roughness = 0.4
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [pmma]
 density = 1.18
@@ -1701,8 +2423,12 @@ nu = 0.37
 yield = 65.0
 k = 0.19
 alpha = 75.0
+cp = 1470.0
 color = "#dce5e7"
-roughness = 0.4
+roughness = 0.12
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
 
 [pc]
 density = 1.2
@@ -1711,8 +2437,12 @@ nu = 0.37
 yield = 60.0
 k = 0.2
 alpha = 68.0
+cp = 1200.0
 color = "#dce5e7"
-roughness = 0.4
+roughness = 0.12
+metallic = 0.0
+texture = "polished"
+texture_scale = 100.0
 
 [ps]
 density = 1.05
@@ -1721,67 +2451,80 @@ nu = 0.34
 yield = 40.0
 k = 0.15
 alpha = 70.0
+cp = 1210.0
 color = "#d9dbdf"
-roughness = 0.4
-
-[polystyrene-foam]
-density = 0.02
-E = 0.005
-nu = 0.1
-yield = 0.1
-k = 0.036
-alpha = 70.0
-color = "#e5e5df"
-roughness = 0.75
-texture = "foam"
-texture_scale = 50.0
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
 
 [mineral-wool]
 density = 0.03
+E = 0.0005
+nu = 0.1
+yield = 0.03
 k = 0.038
+alpha = 5.0
+cp = 1030.0
 color = "#9fae8a"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "fabric"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [stone-wool]
 density = 0.03
+E = 0.0005
+nu = 0.1
+yield = 0.03
 k = 0.038
+alpha = 5.0
+cp = 1030.0
 color = "#9fae8a"
-roughness = 0.75
+roughness = 1.0
+metallic = 0.0
 texture = "fabric"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [gypsum-board]
 density = 0.68
 E = 2.0
 nu = 0.25
+yield = 3.0
 k = 0.25
 alpha = 15.0
+cp = 1000.0
 color = "#f2f0ea"
-roughness = 0.75
-texture = "concrete"
-texture_scale = 50.0
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
 
 [drywall]
 density = 0.68
 E = 2.0
 nu = 0.25
+yield = 3.0
 k = 0.25
 alpha = 15.0
+cp = 1000.0
 color = "#f2f0ea"
-roughness = 0.75
-texture = "concrete"
-texture_scale = 50.0
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
 
 [softwood]
 density = 0.5
 E = 9.0
 nu = 0.3
+yield = 40.0
 k = 0.12
 alpha = 5.0
+cp = 1600.0
 color = "#dbbd88"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1789,10 +2532,13 @@ texture_scale = 200.0
 density = 0.7
 E = 11.0
 nu = 0.3
+yield = 55.0
 k = 0.18
 alpha = 5.0
+cp = 1600.0
 color = "#b88a5a"
 roughness = 0.75
+metallic = 0.0
 texture = "wood"
 texture_scale = 200.0
 
@@ -1800,10 +2546,13 @@ texture_scale = 200.0
 density = 0.62
 E = 1.4
 nu = 0.3
+yield = 20.0
 k = 0.13
 alpha = 5.0
+cp = 1700.0
 color = "#c9a46a"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "osb"
 texture_scale = 200.0
 
@@ -1811,31 +2560,270 @@ texture_scale = 200.0
 density = 1.15
 E = 0.007
 nu = 0.49
+yield = 8.0
 k = 0.25
 alpha = 180.0
+cp = 2000.0
 color = "#252729"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [silicone-rubber]
 density = 1.1
 E = 0.003
 nu = 0.49
+yield = 7.0
 k = 0.2
 alpha = 250.0
+cp = 1200.0
 color = "#d5d0c5"
-roughness = 0.75
+roughness = 0.8
+metallic = 0.0
 texture = "rubber"
-texture_scale = 50.0
+texture_scale = 20.0
 
 [g10]
 density = 1.85
 E = 20.0
 nu = 0.14
+yield = 300.0
 k = 0.3
 alpha = 16.0
+cp = 1100.0
 color = "#747e47"
-roughness = 0.75
+roughness = 0.5
+metallic = 0.0
 texture = "fabric"
+texture_scale = 5.0
+
+[aac]
+density = 0.5
+E = 2.0
+nu = 0.2
+yield = 3.0
+k = 0.15
+alpha = 8.0
+cp = 1000.0
+color = "#d2d2ca"
+roughness = 0.95
+metallic = 0.0
+texture = "foam"
 texture_scale = 50.0
+
+[clay-tile]
+density = 1.9
+E = 15.0
+nu = 0.22
+yield = 20.0
+k = 0.81
+alpha = 6.0
+cp = 840.0
+color = "#bd7350"
+roughness = 0.85
+metallic = 0.0
+texture = "brick"
+texture_scale = 200.0
+
+[float-glass]
+density = 2.5
+E = 70.0
+nu = 0.22
+yield = 40.0
+k = 1.0
+alpha = 9.0
+cp = 840.0
+color = "#e6f0ed"
+metallic = 0.0
+roughness = 0.02
+transmission = 1.0
+ior = 1.52
+texture = "polished"
+texture_scale = 100.0
+
+[laminated-glass]
+density = 2.5
+E = 70.0
+nu = 0.22
+yield = 40.0
+k = 1.0
+alpha = 9.0
+cp = 840.0
+color = "#e6f0ed"
+metallic = 0.0
+roughness = 0.02
+transmission = 1.0
+ior = 1.52
+texture = "polished"
+texture_scale = 100.0
+
+[toughened-glass]
+density = 2.5
+E = 70.0
+nu = 0.22
+yield = 40.0
+k = 1.0
+alpha = 9.0
+cp = 840.0
+color = "#e6f0ed"
+metallic = 0.0
+roughness = 0.02
+transmission = 1.0
+ior = 1.52
+texture = "polished"
+texture_scale = 100.0
+
+[damp-proof-membrane]
+density = 0.95
+E = 0.8
+nu = 0.46
+yield = 22.0
+k = 0.4
+alpha = 180.0
+cp = 2300.0
+color = "#deded8"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[vapour-barrier]
+density = 0.92
+E = 0.2
+nu = 0.46
+yield = 10.0
+k = 0.33
+alpha = 200.0
+cp = 2300.0
+color = "#deded8"
+roughness = 0.5
+metallic = 0.0
+texture = "granulate"
+texture_scale = 20.0
+
+[flagstone]
+density = 2.2
+E = 20.0
+nu = 0.25
+yield = 50.0
+k = 1.8
+alpha = 10.0
+cp = 920.0
+color = "#bfa77f"
+roughness = 0.9
+metallic = 0.0
+texture = "stone"
+texture_scale = 150.0
+
+[crushed-stone]
+density = 2.1
+E = 0.15
+nu = 0.3
+yield = 0.3
+k = 1.5
+alpha = 8.0
+cp = 840.0
+color = "#8a8378"
+roughness = 0.9
+metallic = 0.0
+texture = "stone"
+texture_scale = 150.0
+
+[ballast]
+density = 1.8
+E = 0.1
+nu = 0.3
+yield = 0.4
+k = 0.7
+alpha = 8.0
+cp = 840.0
+color = "#969388"
+roughness = 0.9
+metallic = 0.0
+texture = "stone"
+texture_scale = 150.0
+
+[topsoil]
+density = 1.5
+E = 0.02
+nu = 0.35
+yield = 0.1
+k = 0.5
+alpha = 10.0
+cp = 800.0
+color = "#79664a"
+roughness = 1.0
+metallic = 0.0
+texture = "sand"
+texture_scale = 20.0
+
+[stucco]
+density = 1.8
+E = 10.0
+nu = 0.2
+yield = 5.0
+k = 0.9
+alpha = 10.0
+cp = 1000.0
+color = "#cfcbbf"
+roughness = 0.9
+metallic = 0.0
+texture = "plaster"
+texture_scale = 100.0
+
+[zinc-sheet]
+density = 7.14
+E = 108.0
+nu = 0.25
+yield = 35.0
+k = 116.0
+alpha = 30.2
+cp = 390.0
+color = "#a3a9b0"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[lead-flashing]
+density = 11.34
+E = 16.0
+nu = 0.44
+yield = 12.0
+k = 35.0
+alpha = 29.0
+cp = 129.0
+color = "#6b7078"
+roughness = 0.6
+metallic = 1.0
+texture = "cast"
+texture_scale = 50.0
+
+[corrugated-steel]
+density = 7.85
+E = 200.0
+nu = 0.29
+yield = 250.0
+k = 50.0
+alpha = 12.0
+cp = 480.0
+color = "#a0a6ad"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[cement-board]
+density = 1.7
+E = 14.0
+nu = 0.2
+yield = 20.0
+k = 0.5
+alpha = 10.0
+cp = 1000.0
+color = "#bdbdb6"
+roughness = 0.85
+metallic = 0.0
+texture = "concrete"
+texture_scale = 100.0

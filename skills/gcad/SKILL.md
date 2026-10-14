@@ -92,11 +92,11 @@ watching; you work from `check` and `render`.
   sizes, which an assembly brings in as `part.name`, or a piece you `combine` into this part.
   When a part file ends with several bodies, `check` reminds you to bring it into a `.gasm`.
 - `color` and `material` on a body feed the STEP colours, the viewer and the mass in `bom`.
-- The standard library has about 170 common materials with density, conductivity, colour and
-  finish, plus stiffness, strength and expansion where those mean something: grades like
-  `steel-s355`, `stainless-316`, `aluminium-6061-t6`, plastics like `pom`, `peek`, `hdpe`,
-  timbers and boards like `oak`, `c24`, `plywood`, `osb`, and `concrete`, `brick`, `pir`,
-  `rockwool`, `glass`. Run `gcad materials` before inventing one.
+- The standard library has about 210 complete materials (density, `E`, `nu`, `yield`, `k`,
+  `alpha`, `cp`, colour, roughness, metallic, texture): steel grades, `rebar-b500b`, alloys,
+  plastics, printing materials (`pla-cf`, `petg-cf`, `pa-cf`, `resin-tough`, `ti64-printed`),
+  timbers (`c24`, `glulam-gl24h`, `clt`, `osb`), `concrete-c30-37`, `screed`, `cement-render`,
+  `brick`, `pir`, `rockwool`, `foamglass`, `glass`. Run `gcad materials` before inventing one.
 - Materials not in the standard library go in a `materials.toml` beside the files or above them
   (`[petg-cf]` then `density = 1.3`, `E = 3.8`, `nu = 0.36`, `yield = 52`; `E1 E2 E3 Xt Zt`
   for printed parts, axis 3 the print direction). `materials file.xml` or `file.FCMat` loads

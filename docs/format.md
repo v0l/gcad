@@ -229,7 +229,7 @@ Bodies:
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
 | `import` | `file.step` or `file.stl`, `solid=` | adds the solid in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file. A STEP file with several solids needs `solid=n` to pick one; the error lists them with their names and sizes. A STEP assembly's solids come where the file places them, a part used six times being six solids. Each solid is read in its own representation's length unit, so an inch vendor model inside a millimetre board comes in at its true size. Faceted breps and the surface models KiCad writes for small parts are built from their polygons, one solid per connected piece; a solid gcad still cannot read becomes a box of its extent, and the line says so and why. Void shells that lie outside their solid, which some exporters write for separate bodies, come in as solids of their own; a real cavity gcad cannot read is left solid, and the line counts them |
 | `color` | name, `#rrggbb` or `r,g,b`, `opacity=` | colours the current body in STEP and 3MF files; `opacity` below 1 (0.3 for glass) makes the viewer draw it see-through |
-| `material` | `name` `density=` `E=` `nu=` `yield=` `k=` `alpha=` | sets what the current body is made of, for its mass and for simulations. Names come from the standard library of about 170 common metals, plastics, rubbers, timbers, boards, masonry, insulation, glass and composites (see Material libraries; `gcad materials` lists them). `density=` in g/cm³ gives any other; the rest set stiffness in GPa, Poisson's ratio, yield strength in MPa, conductivity in W/m·K and expansion in µm/m·K. A name from a material library (see Material libraries) is used before a built-in one of the same name |
+| `material` | `name` `density=` `E=` `nu=` `yield=` `k=` `alpha=` `cp=` | sets what the current body is made of, for its mass and for simulations. Names come from the standard library of about 210 complete metals, plastics, printing materials, rubbers, timbers, boards, masonry, insulation, glass and composites (see Material libraries; `gcad materials` lists them). `density=` in g/cm³ gives any other; the rest set stiffness in GPa, Poisson's ratio, yield strength in MPa, conductivity in W/m·K, expansion in µm/m·K and specific heat in J/kg·K. A name from a material library (see Material libraries) is used before a built-in one of the same name |
 | `materials` | `file` | loads a material library: a `.toml` in gcad's own layout, a MatML `.xml` (Ansys Engineering Data, Granta) or a FreeCAD `.FCMat`. Its materials take names in lower case with dashes (`Structural Steel` is `structural-steel`) and come before any found automatically |
 
 Measuring, which changes nothing and prints the answer:
@@ -295,7 +295,7 @@ source = "own tensile bars, 0.2 mm layers, 100% infill"
 | key | unit | meaning |
 |---|---|---|
 | `density` | g/cm³ | |
-| `E`, `nu`, `yield`, `k`, `alpha` | GPa, -, MPa, W/m·K, µm/m·K | isotropic values |
+| `E`, `nu`, `yield`, `k`, `alpha`, `cp` | GPa, -, MPa, W/m·K, µm/m·K, J/kg·K | isotropic values; `cp` is the specific heat |
 | `E1` `E2` `E3`, `G12` `G13` `G23` | GPa | Young's and shear moduli along and between the axes |
 | `nu12` `nu13` `nu23` | - | Poisson's ratios |
 | `Xt` `Yt` `Zt`, `Xc` `Yc` `Zc`, `S12` `S13` `S23` | MPa | tensile, compressive and shear strengths |
@@ -309,7 +309,7 @@ source = "own tensile bars, 0.2 mm layers, 100% infill"
 | `clearcoat`, `clearcoat_roughness` | 0 to 1 | a lacquer layer over the colour, and how rough it is |
 | `transmission`, `ior` | 0 to 1, 1 to 3 | how much light passes through (1 for glass) and how it bends (1.5 for glass) |
 | `emission` | 0 and up | glows in its own colour, this bright |
-| `texture` | a pattern name | a built-in tiling surface: `wood`, `osb`, `concrete`, `stone`, `brick`, `sand`, `fabric`, `foam`, `rubber`, `brushed`, `carbon-fibre` |
+| `texture` | a pattern name | a built-in tiling surface: `wood`, `osb`, `concrete`, `stone`, `brick`, `sand`, `fabric`, `foam`, `rubber`, `brushed`, `carbon-fibre`, `polished`, `cast`, `plaster`, `granulate`, `marble`, `asphalt` |
 | `texture_scale` | mm | the size of one tile on the part, 100 unless given |
 | `texture_rotation` | degrees | turns the texture on every face; 0 runs the grain along the part's longest side |
 | `color_map`, `normal_map`, `roughness_map`, `metallic_map` | image file | PNG, JPEG or WebP maps beside the library, used instead of the pattern; the roughness and metallic maps are read from their red channel |
@@ -318,16 +318,25 @@ The look keys only change the viewer: it uses them when ray tracing, and the pla
 the roughness, metal, see-through glass and textures. Textures are projected from whichever
 side a face mostly faces, in the part's own frame, so a pattern or member copy keeps its grain.
 
-The standard library has about 170 common materials, each with density, conductivity, a
-colour and a finish, and stiffness, Poisson's ratio, strength and expansion where a single
-number means something: steels by grade (`steel-s355`, `stainless-316`, `tool-steel-d2`),
-aluminium alloys (`aluminium-6061-t6`, `aluminium-7075-t6`), copper alloys, titanium, cast
-iron, engineering and printing plastics (`pom`, `ptfe`, `peek`, `pa66`, `hdpe`), rubbers,
-timbers and boards (`oak`, `c24`, `plywood`, `osb`, `mdf`), masonry and stone (`concrete`,
-`brick`, `granite`), insulation (`pir`, `eps`, `xps`, `rockwool`), glass, composites, and
-common names for them (`aluminum`, `acetal`, `drywall`, `mineral-wool`). Values are typical room
-temperature figures; use a supplier's datasheet in a project library for design work. Loose
-fills, insulation and foams carry no stiffness, so a simulation that needs one asks for it.
+The standard library has about 210 materials (aliases included), and every one is complete:
+density, Young's modulus, Poisson's ratio, strength, conductivity, expansion, specific heat
+(`cp`), a colour, roughness, metallic and a texture. `strength` is the yield strength, or the
+working compressive or tensile strength of a material that does not yield (concrete, brick,
+timber in bending, foam, soil, and the tensile strength of rubber). A test fails if a standard material lacks any of them, so an
+incomplete entry is a bug, not a gap. It covers steels by grade (`steel-s355`, `stainless-316`,
+`rebar-b500b`), aluminium alloys, copper alloys, titanium and other metals; engineering plastics
+and rubbers (`pom`, `peek`, `hdpe`, `epdm`, `pvc-flexible`); 3D printing filaments, resins and
+printed metals, all flagged `printed` (`pla`, `pla-cf`, `petg-cf`, `pa-cf`, `pei`, `tpu`,
+`resin-tough`, `ss316l-printed`, `ti64-printed`); timbers and boards (`oak`, `c24`, `glulam-gl24h`,
+`lvl`, `clt`, `plywood`, `osb`, `mdf`); concrete, blocks, screed, render, brick, tile, stone and
+ground (`concrete-c30-37`, `aac`, `screed`, `cement-render`, `clay-tile`, `granite`, `soil`);
+board and insulation (`plasterboard`, `fibre-cement-board`, `pir`, `eps`, `xps`, `rockwool`,
+`foamglass`, `sheep-wool`); glass and composites; and common names for them (`aluminum`,
+`acetal`, `drywall`, `mineral-wool`, `float-glass`, `stucco`). Values are typical room
+temperature figures, and a printed material's are along the print plane: use a supplier's
+datasheet, or `E1 E2 E3` and `Xt Yt Zt` for the print direction, in a project library for
+design work. Materials with no meaningful strength or stiffness, such as air and water, are
+left out.
 
 A project table named like a standard material keeps every key it does not give from the
 standard one, so a project can give `steel` a paint finish and keep its weight and strength:

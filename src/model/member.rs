@@ -358,7 +358,7 @@ impl Model {
                 "offset" => {
                     section = shifted(section, crate::parse::eval_point(text, &self.scope)?)
                 }
-                "material" | "density" | "E" | "nu" | "yield" | "k" | "alpha" | "count"
+                "material" | "density" | "E" | "nu" | "yield" | "k" | "alpha" | "cp" | "count"
                 | "step" | "angle" | "axis" => {}
                 other => bail!(
                     "`member` takes up=, rotate=, offset=, material=, material properties and count= with step= or angle=/axis=, not `{other}=`"
@@ -376,7 +376,7 @@ impl Model {
         material.named.retain(|(key, _)| {
             matches!(
                 key.as_str(),
-                "density" | "E" | "nu" | "yield" | "k" | "alpha"
+                "density" | "E" | "nu" | "yield" | "k" | "alpha" | "cp"
             )
         });
         let has_material = !material.positional.is_empty() || !material.named.is_empty();

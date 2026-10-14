@@ -477,7 +477,7 @@ impl Model {
         let args = Args::new(
             line,
             wanted,
-            &["density", "E", "nu", "yield", "k", "alpha"],
+            &["density", "E", "nu", "yield", "k", "alpha", "cp"],
             true,
         )?;
         let label = match args.rest.as_slice() {
@@ -531,6 +531,7 @@ impl Model {
             ("yield", &mut mechanics.strength),
             ("k", &mut mechanics.conductivity),
             ("alpha", &mut mechanics.expansion),
+            ("cp", &mut mechanics.heat_capacity),
         ] {
             if let Some(value) = args.optional_number(key, &self.scope)? {
                 let fine = if key == "nu" {
@@ -1256,6 +1257,8 @@ pub struct Mechanics {
     pub strength: Option<f64>,
     pub conductivity: Option<f64>,
     pub expansion: Option<f64>,
+    #[serde(default)]
+    pub heat_capacity: Option<f64>,
     pub printed: bool,
 }
 
@@ -1267,6 +1270,7 @@ impl Mechanics {
             strength: self.strength.or(base.strength),
             conductivity: self.conductivity.or(base.conductivity),
             expansion: self.expansion.or(base.expansion),
+            heat_capacity: self.heat_capacity.or(base.heat_capacity),
             printed: self.printed || base.printed,
         }
     }
@@ -1280,13 +1284,21 @@ pub struct Stock {
     pub strength: f64,
     pub conductivity: f64,
     pub expansion: f64,
+    pub heat_capacity: f64,
     pub printed: bool,
 }
 
 const fn stock(
     name: &'static str,
     density: f64,
-    [young, poisson, strength, conductivity, expansion]: [f64; 5],
+    [
+        young,
+        poisson,
+        strength,
+        conductivity,
+        expansion,
+        heat_capacity,
+    ]: [f64; 6],
     printed: bool,
 ) -> Stock {
     Stock {
@@ -1297,34 +1309,75 @@ const fn stock(
         strength,
         conductivity,
         expansion,
+        heat_capacity,
         printed,
     }
 }
 
 pub const MATERIALS: &[Stock] = &[
-    stock("steel", 7.85, [200.0, 0.29, 250.0, 50.0, 12.0], false),
-    stock("stainless", 8.0, [193.0, 0.29, 215.0, 16.0, 17.0], false),
-    stock("aluminium", 2.7, [69.0, 0.33, 240.0, 167.0, 23.6], false),
-    stock("aluminum", 2.7, [69.0, 0.33, 240.0, 167.0, 23.6], false),
-    stock("brass", 8.5, [97.0, 0.31, 124.0, 115.0, 20.5], false),
-    stock("copper", 8.96, [117.0, 0.34, 70.0, 390.0, 17.0], false),
-    stock("titanium", 4.43, [114.0, 0.34, 880.0, 6.7, 8.6], false),
-    stock("pla", 1.24, [2.8, 0.35, 40.0, 0.13, 68.0], true),
-    stock("petg", 1.27, [2.0, 0.38, 35.0, 0.2, 60.0], true),
-    stock("abs", 1.04, [2.0, 0.35, 30.0, 0.17, 90.0], true),
-    stock("asa", 1.07, [1.9, 0.35, 32.0, 0.17, 95.0], true),
-    stock("nylon", 1.14, [1.5, 0.39, 40.0, 0.25, 100.0], true),
-    stock("tpu", 1.21, [0.026, 0.48, 8.0, 0.2, 150.0], true),
-    stock("polycarbonate", 1.2, [2.3, 0.37, 60.0, 0.2, 68.0], false),
-    stock("acrylic", 1.18, [3.2, 0.37, 65.0, 0.19, 75.0], false),
-    stock("resin", 1.2, [2.2, 0.35, 50.0, 0.2, 80.0], false),
-    stock("wood", 0.6, [10.0, 0.3, 40.0, 0.12, 5.0], false),
-    stock("concrete", 2.4, [30.0, 0.2, 30.0, 2.0, 10.0], false),
-    stock("brick", 1.8, [10.0, 0.2, 10.0, 0.81, 6.0], false),
-    stock("glass", 2.5, [70.0, 0.22, 40.0, 1.0, 9.0], false),
-    stock("gypsum", 0.9, [2.0, 0.25, 3.0, 0.25, 14.0], false),
-    stock("eps", 0.02, [0.005, 0.1, 0.1, 0.036, 70.0], false),
-    stock("wool", 0.04, [0.0005, 0.1, 0.02, 0.04, 3.0], false),
+    stock(
+        "steel",
+        7.85,
+        [200.0, 0.29, 250.0, 50.0, 12.0, 490.0],
+        false,
+    ),
+    stock(
+        "stainless",
+        8.0,
+        [193.0, 0.29, 215.0, 16.0, 17.0, 500.0],
+        false,
+    ),
+    stock(
+        "aluminium",
+        2.7,
+        [69.0, 0.33, 240.0, 167.0, 23.6, 900.0],
+        false,
+    ),
+    stock(
+        "aluminum",
+        2.7,
+        [69.0, 0.33, 240.0, 167.0, 23.6, 900.0],
+        false,
+    ),
+    stock("brass", 8.5, [97.0, 0.31, 124.0, 115.0, 20.5, 380.0], false),
+    stock(
+        "copper",
+        8.96,
+        [117.0, 0.34, 70.0, 390.0, 17.0, 385.0],
+        false,
+    ),
+    stock(
+        "titanium",
+        4.43,
+        [114.0, 0.34, 880.0, 6.7, 8.6, 523.0],
+        false,
+    ),
+    stock("pla", 1.24, [2.8, 0.35, 40.0, 0.13, 68.0, 1800.0], true),
+    stock("petg", 1.27, [2.0, 0.38, 35.0, 0.2, 60.0, 1200.0], true),
+    stock("abs", 1.04, [2.0, 0.35, 30.0, 0.17, 90.0, 1400.0], true),
+    stock("asa", 1.07, [1.9, 0.35, 32.0, 0.17, 95.0, 1300.0], true),
+    stock("nylon", 1.14, [1.5, 0.39, 40.0, 0.25, 100.0, 1700.0], true),
+    stock("tpu", 1.21, [0.026, 0.48, 8.0, 0.2, 150.0, 1800.0], true),
+    stock(
+        "polycarbonate",
+        1.2,
+        [2.3, 0.37, 60.0, 0.2, 68.0, 1200.0],
+        false,
+    ),
+    stock(
+        "acrylic",
+        1.18,
+        [3.2, 0.37, 65.0, 0.19, 75.0, 1470.0],
+        false,
+    ),
+    stock("resin", 1.2, [2.2, 0.35, 50.0, 0.2, 80.0, 1200.0], false),
+    stock("wood", 0.6, [10.0, 0.3, 40.0, 0.12, 5.0, 1600.0], false),
+    stock("concrete", 2.4, [30.0, 0.2, 30.0, 2.0, 10.0, 880.0], false),
+    stock("brick", 1.8, [10.0, 0.2, 10.0, 0.81, 6.0, 840.0], false),
+    stock("glass", 2.5, [70.0, 0.22, 40.0, 1.0, 9.0, 840.0], false),
+    stock("gypsum", 0.9, [2.0, 0.25, 3.0, 0.25, 14.0, 1090.0], false),
+    stock("eps", 0.02, [0.005, 0.1, 0.1, 0.036, 70.0, 1450.0], false),
+    stock("wool", 0.04, [0.0005, 0.1, 0.02, 0.04, 3.0, 1030.0], false),
 ];
 
 pub fn stock_of(name: &str) -> Option<&'static Stock> {
@@ -1340,6 +1393,7 @@ impl Stock {
             strength: Some(self.strength),
             conductivity: Some(self.conductivity),
             expansion: Some(self.expansion),
+            heat_capacity: Some(self.heat_capacity),
             printed: self.printed,
         }
     }

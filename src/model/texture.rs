@@ -14,6 +14,12 @@ pub const PATTERNS: &[&str] = &[
     "rubber",
     "brushed",
     "carbon-fibre",
+    "polished",
+    "cast",
+    "plaster",
+    "granulate",
+    "marble",
+    "asphalt",
 ];
 
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]

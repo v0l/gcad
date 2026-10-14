@@ -310,7 +310,9 @@ The plan for the rest is in `docs/simulation.md`.
 | setup before a result | supported | the viewer draws the mesh with its loads and supports, or the flow parts, duct, wind and heated faces | `simulation::setup_shown_before_a_result`, `simulation::flow_setup_shown_before_a_result` |
 | material libraries | supported | `materials.toml` beside or above a file, `~/.config/gcad/materials.toml`, `gcad materials` | `simulation::material_library_is_found` |
 | how a material looks | supported | `color`, `roughness`, `metallic`, `clearcoat`, `transmission`, `ior`, `emission` in `materials.toml`, for the viewer and its ray tracer | `simulation::material_library_sets_how_a_body_looks` |
-| standard material library | supported | `material stainless-316`, `material c24`, `material pir`; `gcad materials` lists them all | `simulation::standard_library_covers_common_materials` |
+| standard material library | supported | `material stainless-316`, `material c24`, `material pir`; `gcad materials` lists them all | `simulation::standard_library_covers_common_materials`, `simulation::standard_library_covers_construction_and_printing` |
+| complete standard materials | supported | every standard material has density, `E`, `nu`, `yield`, `k`, `alpha`, `cp`, colour, roughness, metallic and a texture | `simulation::every_standard_material_is_complete` |
+| specific heat | supported | `cp = 900` in `materials.toml`, `material steel cp=500` | `simulation::specific_heat_is_a_material_property` |
 | material textures | supported | `texture = "wood"`, `texture_scale`, `texture_rotation`, `color_map`, `normal_map`, `roughness_map`, `metallic_map` in `materials.toml` | `simulation::project_library_inherits_and_textures` |
 | material files from other tools | supported | `materials workbench.xml`, `materials PLA.FCMat` | `simulation::material_files_import` |
 | materials along three axes | supported | `E1= E2= E3= Xt= Zt=` in `materials.toml`, simulated with the weakest | `simulation::directional_material_takes_the_weakest` |

@@ -195,6 +195,20 @@ fn pattern(name: &str) -> Image {
                         }
                 }
                 "foam" => 0.73 + 0.2 * coarse + 0.06 * fine,
+                "polished" => 0.93 + 0.05 * smooth_noise(u, v, 4) + 0.015 * fine,
+                "cast" => 0.55 + 0.28 * smooth_noise(u, v, 24) + 0.12 * coarse + 0.06 * fine,
+                "plaster" => 0.8 + 0.1 * coarse + 0.06 * smooth_noise(u, v, 32) + 0.03 * fine,
+                "granulate" => 0.78 + 0.12 * fine + 0.07 * coarse,
+                "asphalt" => {
+                    0.4 + 0.42 * fine * fine + 0.1 * coarse + 0.08 * smooth_noise(u, v, 64)
+                }
+                "marble" => {
+                    let vein = ((u * 3.0 + v * 2.0 + 1.6 * smooth_noise(u, v, 6))
+                        * std::f32::consts::TAU)
+                        .sin()
+                        .abs();
+                    0.9 - 0.4 * vein.powf(6.0) + 0.04 * fine
+                }
                 "sand" => 0.65 + 0.34 * fine,
                 "rubber" => 0.89 + 0.1 * fine,
                 "stone" => 0.5 + 0.28 * smooth_noise(u, v, 8) + 0.15 * coarse + 0.06 * fine,

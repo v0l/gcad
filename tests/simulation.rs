@@ -2303,6 +2303,158 @@ fn standard_library_covers_common_materials() {
     assert_eq!(steel.finish.as_ref().unwrap().metallic, Some(1.0));
 }
 
+fn within(missing: &mut Vec<String>, what: &str, value: Option<f64>, low: f64, high: f64) {
+    match value {
+        None => missing.push(format!("{what} missing")),
+        Some(v) if !(low..=high).contains(&v) => {
+            missing.push(format!("{what} {v} outside {low}..{high}"))
+        }
+        _ => {}
+    }
+}
+
+#[test]
+fn every_standard_material_is_complete() {
+    let library = gcad::model::materials::builtins();
+    let known: Vec<&str> = gcad::model::texture::PATTERNS.to_vec();
+    let mut incomplete = Vec::new();
+    for (name, entry) in library {
+        let m = &entry.mechanics;
+        let mut missing: Vec<String> = Vec::new();
+        within(&mut missing, "density", entry.density, 0.005, 25.0);
+        within(&mut missing, "E", m.young, 1.0e-5, 1000.0);
+        within(&mut missing, "nu", m.poisson, -0.99, 0.499);
+        within(&mut missing, "yield", m.strength, 1.0e-3, 5000.0);
+        within(&mut missing, "k", m.conductivity, 0.005, 500.0);
+        within(&mut missing, "alpha", m.expansion, 0.1, 400.0);
+        within(&mut missing, "cp", m.heat_capacity, 100.0, 6000.0);
+        match &entry.finish {
+            None => missing.push("no finish".into()),
+            Some(f) => {
+                if f.colour.is_none() {
+                    missing.push("colour missing".into());
+                }
+                within(&mut missing, "roughness", f.roughness, 0.0, 1.0);
+                within(&mut missing, "metallic", f.metallic, 0.0, 1.0);
+                match f.texture.as_ref().and_then(|t| t.pattern.as_deref()) {
+                    Some(p) if p != "none" && known.contains(&p) => {}
+                    other => missing.push(format!("texture {other:?}")),
+                }
+            }
+        }
+        if !missing.is_empty() {
+            incomplete.push(format!("{name}: {}", missing.join(", ")));
+        }
+    }
+    incomplete.sort();
+    assert!(
+        incomplete.is_empty(),
+        "{} incomplete standard materials:\n{}",
+        incomplete.len(),
+        incomplete.join("\n")
+    );
+    assert!(library.len() >= 200, "{} materials", library.len());
+}
+
+#[test]
+fn standard_library_covers_construction_and_printing() {
+    let library = gcad::model::materials::builtins();
+    for name in [
+        "rebar-b500b",
+        "glulam-gl24h",
+        "lvl",
+        "clt",
+        "concrete-block-dense",
+        "aac",
+        "fibre-cement-board",
+        "screed",
+        "cement-render",
+        "clay-tile",
+        "concrete-roof-tile",
+        "pvc-flexible",
+        "foamglass",
+        "ceramic-tile",
+        "float-glass",
+        "laminated-glass",
+        "stucco",
+        "corrugated-steel",
+        "damp-proof-membrane",
+    ] {
+        assert!(library.contains_key(name), "no `{name}`");
+    }
+    for name in [
+        "pla",
+        "pla-plus",
+        "pla-cf",
+        "petg",
+        "petg-cf",
+        "pctg",
+        "abs",
+        "asa",
+        "nylon",
+        "pa12",
+        "pa-cf",
+        "pc-abs",
+        "tpu",
+        "pva",
+        "hips",
+        "pei",
+        "peek",
+        "resin",
+        "resin-tough",
+        "resin-flexible",
+        "ss316l-printed",
+        "ti64-printed",
+        "alsi10mg-printed",
+    ] {
+        let entry = library
+            .get(name)
+            .unwrap_or_else(|| panic!("no printing material `{name}`"));
+        let printed = entry.mechanics.printed
+            || ["pa12", "pc-abs", "hips", "peek", "pei", "resin"].contains(&name);
+        assert!(printed, "`{name}` is not flagged as a printed material");
+    }
+    let k = |n: &str| library[n].mechanics.conductivity.unwrap();
+    assert!(
+        k("alsi10mg-printed") > k("ti64-printed") && k("ti64-printed") < k("ss316l-printed") + 10.0
+    );
+    let cp = |n: &str| library[n].mechanics.heat_capacity.unwrap();
+    assert!(
+        cp("c24") > cp("steel") && cp("aluminium") > cp("copper") && cp("pir") > cp("concrete")
+    );
+}
+
+#[test]
+fn specific_heat_is_a_material_property() {
+    let model = common::build("rect 10 10\nextrude 10\nmaterial steel");
+    assert_eq!(model.materials["main"].mechanics.heat_capacity, Some(490.0));
+    let model = common::build("rect 10 10\nextrude 10\nmaterial steel cp=500");
+    assert_eq!(model.materials["main"].mechanics.heat_capacity, Some(500.0));
+    assert!(common::failure("rect 10 10\nextrude 10\nmaterial steel cp=-3").contains("cp=-3"));
+    let dir = PathBuf::from(scratch("specific_heat_is_a_material_property"));
+    std::fs::create_dir_all(dir.join(".git")).expect("dir");
+    std::fs::write(
+        dir.join("materials.toml"),
+        "[hempcrete]\ndensity = 0.33\nk = 0.07\ncp = 1550\n",
+    )
+    .expect("library");
+    std::fs::write(
+        dir.join("a.gcad"),
+        "rect 10 10\nextrude 10\nmaterial hempcrete\n",
+    )
+    .expect("part");
+    let spec = spec_of(&dir.join("a.gcad"));
+    assert_eq!(spec.materials["main"].mechanics.heat_capacity, Some(1550.0));
+    std::fs::write(
+        dir.join("materials.toml"),
+        "[hempcrete]\ndensity = 0.33\ncp = 0\n",
+    )
+    .expect("bad");
+    let run = gcad::model::run_path(&dir.join("a.gcad"), &[], None).expect("runs");
+    let (_, step) = run.steps.last().expect("a step");
+    assert!(format!("{:#}", step.as_ref().expect_err("cp 0")).contains("cp"));
+}
+
 #[test]
 fn project_library_inherits_and_textures() {
     let dir = PathBuf::from(scratch("project_library_inherits_and_textures"));
@@ -2697,8 +2849,8 @@ fn failing_spec(test: &str, files: &[(&str, &str)], spec: &str) -> String {
         return format!("{error:#}");
     }
     let model = run.model;
-    let error = gcad::sim::simulate(model.sim.as_deref().expect("a simulation"))
-        .expect_err("refused");
+    let error =
+        gcad::sim::simulate(model.sim.as_deref().expect("a simulation")).expect_err("refused");
     format!("{error:#}")
 }
 
