@@ -1,6 +1,4 @@
-pub mod field;
-pub mod plane;
-pub mod steel;
+pub use sims_magnetic::{field, plane, steel};
 
 use super::{Curve, Field, Outcome, Reading, Series, Spec, statics::FieldView};
 use anyhow::{Result, bail};
@@ -542,10 +540,12 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
     };
     let areas = field::areas(&plane, setup.shapes.len());
     use rayon::prelude::*;
+    let turning = crate::progress::stage("solving the poses", Some(poses), "poses");
     let solved: Vec<Pose> = (0..poses)
         .into_par_iter()
         .map(|k| -> Result<_> {
             let field = field::solve(&plane, &setup.shapes, k as i64 * setup.pitch)?;
+            turning.advance(1.0);
             let torque = field::torque(&plane, &field) * setup.length;
             let fluxes: Vec<f64> = setup
                 .coils
