@@ -327,49 +327,64 @@ pub fn build(
     let mut parts = Vec::new();
     let mut vertices = Vec::new();
     let skip: std::collections::HashSet<_> = marked.iter().map(|m| m.id()).collect();
-    for (body, (name, solid)) in bodies.iter().enumerate() {
-        let is_current = *name == current && model.solid.is_some();
-        let colour = model
-            .colours
-            .get(name)
-            .map_or(BODY, |c| c.map(|v| v as f32));
-        let own: &[Highlight<'_>] = if is_current { highlights } else { &[] };
-        let meshed = solid.robust_triangulation(geometry::mesh_tolerance(solid) * 0.5);
-        let volume = faces(solid, &meshed, body, colour, own, &mut surfaces, &mut info);
-        let mut edges = Lines {
-            colour: EDGE,
-            material: Ink::Edge,
-            group: body,
-            width: EDGE_WIDTH,
-            ..Default::default()
-        };
-        edge_lines(solid, &meshed, &skip, &mut edges.segments);
+    let built: Vec<_> = {
+        use rayon::prelude::*;
+        bodies
+            .par_iter()
+            .enumerate()
+            .map(|(body, (name, solid))| {
+                let meshed = solid.robust_triangulation(geometry::mesh_tolerance(solid) * 0.5);
+                let is_current = *name == current && model.solid.is_some();
+                let colour = model
+                    .colours
+                    .get(name)
+                    .map_or(BODY, |c| c.map(|v| v as f32));
+                let own: &[Highlight<'_>] = if is_current { highlights } else { &[] };
+                let mut surfaces = Vec::new();
+                let mut info = Vec::new();
+                let volume = faces(solid, &meshed, body, colour, own, &mut surfaces, &mut info);
+                let mut edges = Lines {
+                    colour: EDGE,
+                    material: Ink::Edge,
+                    group: body,
+                    width: EDGE_WIDTH,
+                    ..Default::default()
+                };
+                edge_lines(solid, &meshed, &skip, &mut edges.segments);
+                let mut seen = std::collections::HashSet::new();
+                let vertices: Vec<(usize, V3)> = solid
+                    .boundaries()
+                    .iter()
+                    .flat_map(|shell| shell.vertex_iter())
+                    .filter(|v| seen.insert(v.id()))
+                    .map(|v| (body, v3(v.point())))
+                    .collect();
+                let extent = geometry::bounds(solid);
+                let (low, high) = (extent.min(), extent.max());
+                let part = Part {
+                    name: name.clone(),
+                    colour,
+                    volume,
+                    current: is_current,
+                    source: model.sources.get(name).map(describe_source),
+                    material: model
+                        .materials
+                        .get(name)
+                        .map(|m| (m.name.clone(), m.density)),
+                    size: [high.x - low.x, high.y - low.y, high.z - low.z],
+                    hidden: false,
+                    role: Role::Body,
+                };
+                (surfaces, info, edges, vertices, part)
+            })
+            .collect()
+    };
+    for (body_surfaces, body_info, edges, body_vertices, part) in built {
+        surfaces.extend(body_surfaces);
+        info.extend(body_info);
         lines.push(edges);
-        let mut seen = std::collections::HashSet::new();
-        vertices.extend(
-            solid
-                .boundaries()
-                .iter()
-                .flat_map(|shell| shell.vertex_iter())
-                .filter(|v| seen.insert(v.id()))
-                .map(|v| (body, v3(v.point()))),
-        );
-        let extent = geometry::bounds(solid);
-        let (low, high) = (extent.min(), extent.max());
-        parts.push(Part {
-            name: name.clone(),
-            colour,
-            volume,
-            current: is_current,
-            source: model.sources.get(name).map(describe_source),
-            material: model
-                .materials
-                .get(name)
-                .map(|m| (m.name.clone(), m.density)),
-            size: [high.x - low.x, high.y - low.y, high.z - low.z],
-            hidden: false,
-            role: Role::Body,
-        });
+        vertices.extend(body_vertices);
+        parts.push(part);
     }
     let current_index = parts.iter().position(|p| p.current).unwrap_or(0);
     let mut highlighted = Lines {
