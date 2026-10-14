@@ -23,6 +23,16 @@ All notable changes to gcad are listed here. The format follows
 - `materials.toml` sets how a material looks: `color`, `roughness`, `metallic`, `specular`,
   `clearcoat`, `transmission`, `ior` and `emission`, used by the viewer and its ray tracer. A
   table named like a built-in material with no `density` adds to the built-in one.
+- `sim frame`: every body is a beam member, joined where ends meet, with `fix`, `pin`, `slide`,
+  `release`, `load`, `gravity`, `combine`, `modes` and `buckling`; reads displacement, stress,
+  safety, reactions and the deflected shape (`examples/frame/portal.gsim`).
+- `sim conduction`: steady 3D conduction on a graded grid for thermal bridges, reading the
+  coupling coefficient, heat flow per side, the coolest surface point and fRsi
+  (`examples/conduction/tie.gsim`).
+- `sim acoustics`: room acoustics by ray tracing with `absorb`, `speaker` and listener probes,
+  reading T30, T20, EDT, C80, D50 and STI against Sabine and Eyring
+  (`examples/acoustics/room.gsim`).
+- Built-in materials `concrete`, `brick`, `glass`, `gypsum`, `eps` and `wool`.
 - `.gdwg` drawing files: sheets with title blocks, views, sections and detail crops of named
   parts, dimension chains and setting-out, levels, callouts, notes and member cut lists,
   exported as a multi-page PDF or SVG sheets.

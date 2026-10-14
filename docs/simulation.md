@@ -19,7 +19,7 @@ mesh 1.5
 expect stress<60 displacement<0.2
 ```
 
-- `sim kind` comes first: `torque`, `static`, `thermal` or `modal`.
+- `sim kind` comes first: `torque`, `static`, `thermal`, `modal`, `buckling`, `flow`, `magnetic`, `frame`, `conduction` or `acoustics`.
 - `part file.gcad` or `part file.gasm` names what is simulated. Face selectors on the following
   lines are that file's own, and `part:faces` reaches a part of an assembly.
 - `material` overrides the part's material for this simulation.
@@ -304,6 +304,156 @@ iron part; and for each coil label `label.flux`, its flux linkage at the first p
 over a sweep `label.emf`, the peak back-EMF at 1000 rpm (V) from the change of flux linkage.
 The sweep is drawn as torque and flux linkage against angle, and the field is the flux density
 on the slice at the first pose.
+
+### frame
+
+Buildings and structures as beams, on `sims-frame`: every body of the part is one straight,
+prismatic member, and the members join into a 3D frame of beam-columns. Model a column from
+floor to the centreline of the girder it carries, and a girder between the faces of its
+columns, the way a drawing of a portal frame is dimensioned.
+
+```
+sim frame
+part portal.gasm
+gravity 0,0,-9.81
+base: fix left:<Z
+base: fix right:<Z
+live: load girder:+Z force=0,0,-60000
+wind: load left:<X force=10000,0,0
+combine uls weight:1.35 live:1.5 wind:1.5
+modes 3
+buckling 2
+mid: probe 3000,0,3650
+```
+
+What a body becomes. Its volume and second moments are integrated over the surface mesh, and the
+principal axes give the member's axis (the long one) and its two bending axes; the length is the
+body's extent along the axis, the area is volume over length, and the two second moments
+come from the other two principal moments. A section that is a rectangle (its area within 2% of
+width times depth) gets the torsion constant of a rectangle, any other section the polar
+moment, which is exact for a round bar or tube and too high for an open section like an I
+beam. Its material gives `E`, `nu` and the density. A body shorter than 3 times its depth is
+refused, since a beam model of it would be wrong: `leave` it out, or use `static`.
+
+How members join. An end that lies within the reach of another member's axis (the radius of
+its section, plus 1 mm) is joined to it: onto the other's end if it is within 1 mm of it,
+otherwise to a new node on the other's axis that splits the other member there. The joint is
+rigid, and `release faces` turns a member end into a pin that carries force and no moment.
+Rigid zones, the stiff overlap of a joint, are not modelled. Each stretch of member becomes
+4 elements, or elements no longer than `mesh`.
+
+Supports and loads work on end faces. `fix` holds the joint at a member end on those faces in
+all six directions, `pin` holds its position and its twist and leaves bending free, `slide`
+holds only the direction of the end's normal, which must be X, Y or Z. A `load` on an end face
+is a force on that joint; on a side face it is spread along the whole member as a line load
+in the global direction. Lines with one label are one load case, and `gravity` adds the case
+`weight` from the members' own mass. Without a `combine` line the cases are added at
+factor 1; each `combine name case:factor ...` line is a combination, read with the name as a
+prefix, like `uls.stress`.
+
+Readings, for each combination: `displacement` (the largest, in mm, and where), `stress` (the
+largest axial plus bending stress at the outer fibre of any member, in MPa), `safety` (the
+smallest of yield over stress, for materials that have a yield), a reading named after each
+support label (the reaction in N, with its components), and `probe.displacement` and
+`probe.stress` at the nearest member. `modes count` adds `mode1`, `mode2`, ... in Hz, and
+`buckling count` adds `buckling1`, ... as load factors on all the loads together. The field
+drawn is the stress of the combination with the highest stress, with the deflected shape.
+
+Checked against (tests in `tests/simulation.rs`): the tip deflection and root stress of a cantilever
+(exact), the midspan deflection and moment of a beam on pins under a uniform load, a fixed beam
+against the same beam with released ends (a ratio of 5), the sway of a fixed-base portal
+against the slope-deflection formula, Euler buckling of a cantilever column, and the first two
+bending frequencies of a cantilever.
+
+Not there yet: the stress of a joint, shear deformation of deep members, P-delta, response
+spectra, floor diaphragms, plates and shells, and cross sections that are not solid prisms
+(a tapered or notched body is read as a prism of its average section).
+
+### conduction
+
+Steady heat conduction through a construction, for thermal bridges and wall U-values, on
+`sims-thermal`: a finite-volume grid in the manner of ISO 10211, graded finely at each
+layer, solved directly (or on the GPU above 250,000 nodes). It is not the tetrahedral `sim thermal`; it takes layers
+of any thickness ratio, which tetrahedra do poorly, and gives the coupling coefficients that
+ISO 10211 asks for.
+
+```
+sim conduction
+part wall.gasm
+inside: convect concrete:<Z h=7.69 ambient=20
+outside: convect insulation:>Z h=25 ambient=-5
+outside: convect tie:>Z h=25 ambient=-5
+core: probe 300,300,100
+mesh 4
+```
+
+Every part needs a material with a conductivity (`concrete`, `brick`, `glass`, `gypsum`,
+`eps`, `wool` and `wood` are built in, or `material name density= k=`). Boxes go on the grid exactly; round
+or slanted parts are staircased onto it, so give them a `mesh` that resolves them. Where parts overlap the later one
+wins, and anything outside every part is air that carries no heat (model a cavity as a block
+with its equivalent conductivity).
+
+The sides of the construction are the labels of `convect` and `temperature` lines; at least
+two are needed. `convect` is a surface film: `h` is `1/R` for the surface resistance R in
+m²·K/W (R of 0.13 inside and 0.04 outside is `h=7.69` and `h=25`). `temperature` holds the faces fixed, through a film of 1e-6 m²·K/W.
+A boundary must be a flat face square to X, Y or Z, and it applies to the rectangle round the face.
+
+Readings: for each label the heat leaving through it in W (negative where heat comes in), the
+coupling coefficient `L.a.b` between each pair of labels in W/K and, with two sides,
+`coupling`; `coolest`, the lowest temperature on the warmest side, and `fRsi`, its temperature
+factor (the coolest point less the cold side's temperature, over the difference between the
+sides), which condensation and mould checks want above about 0.7; and `probe.temperature`
+inside the construction. The result is drawn as the temperature of the surface of every part. Divide `coupling` by
+the length of a linear bridge for W/(m·K), and subtract the 1D flow through the same area to get the bridge's loss.
+
+Checked against: the layers of a wall in series with their films (exact to 1e-4), a steel rod
+between two temperatures (within 3% at 2 mm cells), and, in `sims-thermal`'s own tests, all four
+ISO 10211 validation cases. Not there: dynamic behaviour, solar and internal gains, and ventilation, so it
+says nothing about heating and cooling loads.
+
+### acoustics
+
+The reverberation and clarity of a room by ray tracing, on `sims-acoustics`. The part is the air
+inside the room: a closed solid whose faces are its walls, floor and ceiling. Any other body
+inside it is an obstacle, and counts as furniture.
+
+```
+sim acoustics
+part room.gcad
+absorb all plaster
+absorb -Z carpet
+absorb +Z ceiling-tile
+speaker 2100,3300,1700
+front: probe 4000,3300,1200
+back: probe 7400,2200,1200
+rays 20000
+air temperature=20 humidity=50
+expect front.T30<1.2 back.STI>0.4
+```
+
+Every face needs an absorption: a material name, one coefficient, or seven for the octave bands
+125 Hz to 8 kHz. They are typical published values for each material and the 8 kHz one is extrapolated, so use
+measured values for anything that matters. Later `absorb` lines replace earlier ones for the faces they
+pick, so start with `absorb all`. `scattering=` is the share of reflections that are diffuse (0.2 unless
+given). The air absorbs the treble by ISO 9613-1, from `air temperature=` and `humidity=`
+(20 °C and 50%).
+
+Readings: `volume` and `surface`, `sabine` and `eyring` (the reverberation time of the whole room,
+mean of 500 and 1000 Hz), and for each listener `T30`, `T20`, `EDT`, `C80`, `D50` and `STI`.
+`T30` and `T20` come from a fit to the decay curve over 30 and 20 dB, `EDT` over the first 10 dB, `C80`
+and `D50` are clarity and definition, and all but `STI` are the mean of 500 and 1000 Hz. `STI` is the speech transmission
+index with no background noise. The chart is the T30 and EDT of each listener against
+frequency, with Sabine and Eyring; the picture is the room coloured by its absorption at 1 kHz.
+A listener is a sphere of 0.5 m radius (smaller in a small room), and a reading is missing, with a note, when
+the decay does not fall far enough: raise `rays`.
+
+Rays carry energy, so the result is for sound that behaves as rays: it does not know room modes or
+diffraction below a few hundred hertz, and it does not model sound passing through walls. There
+is no background noise, so `STI` is the room's own limit.
+
+Checked against (tests in `tests/simulation.rs` and in `sims-acoustics`): the volume and surface of a box,
+a diffuse room between Eyring and Sabine and within 8% of Eyring, a carpet floor
+shortening the decay of a hard room, and obstacles taking their volume out of the air.
 
 ## Meshing
 

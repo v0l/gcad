@@ -563,27 +563,27 @@ expect shoulder<15 sun_s_turn<4
 
 | operation | arguments | does |
 |---|---|---|
-| `sim` | `kind` | what to simulate. Comes first. `torque`, `static`, `thermal`, `modal`, `buckling`, `flow` and `magnetic`. `static`, `thermal`, `modal` and `buckling` mesh the part in tetrahedra, `magnetic` meshes a slice of it and `flow` puts it on a grid; `--dry-run` shows the mesh without solving. `flow` is described in `docs/simulation.md` |
+| `sim` | `kind` | what to simulate. Comes first. `torque`, `static`, `thermal`, `modal`, `buckling`, `flow`, `magnetic`, `frame`, `conduction` and `acoustics`. `static`, `thermal`, `modal` and `buckling` mesh the part in tetrahedra, `magnetic` meshes a slice of it, `flow` and `conduction` put it on a grid, `frame` turns each body into a beam member and `acoustics` traces rays in the room; `--dry-run` shows the mesh, grid or members without solving. `flow`, `frame`, `conduction` and `acoustics` are described in `docs/simulation.md` |
 | `part` | `file` `variable=value ...` | the `.gcad` or `.gasm` file simulated, with variables fixed as in an assembly's `part` line. Every body of it is simulated |
 | `pose` | `joint value` | poses a joint before the run, as in an assembly |
 | `material` | `part name` and the `material` arguments | overrides a part's material for this simulation |
 | `materials` | `file` | loads a material library for the simulated parts |
-| `gravity` | `x,y,z` | in m/s². A torque simulation uses `0,0,-9.81` unless given; a static one leaves the part's weight out unless this line is there |
+| `gravity` | `x,y,z` | in m/s². A torque simulation uses `0,0,-9.81` unless given; a static or frame one leaves the part's weight out unless this line is there |
 | `payload` | `part grams` `at=x,y,z` | a point mass carried by a part, at its centre of mass unless `at=` places it (in the assembly's coordinates as posed when the line runs). It moves with the part |
 | `sweep` | `joint ... steps=` | runs every pose of the listed joints across their ranges in `steps` (24 unless given) equal steps; a joint that turns all the way round goes from -180 to 180. Several joints on one line make a grid of poses; separate lines make separate sweeps |
-| `fix` | `faces` | holds the faces still (static). Its reaction force is a reading named after the line's label, or `fix1`, `fix2`, ... |
+| `fix` | `faces` | holds the faces still (static). In a frame it holds the member ends on those end faces in every direction, and `pin` holds position and twist but leaves bending free, `slide` only along the end's normal. Its reaction force is a reading named after the line's label, or `fix1`, `fix2`, ... |
 | `slide` | `faces` | holds the faces only along their normal, free to slide along them (static); a symmetry plane, or a part resting on a flat. Reading as for `fix` |
 | `pin` | `faces` | holds every point of a round face on its axis, free to turn about it, like a link on a pin; the face cannot tilt, so a short band acts as a clamp (static). Reading as for `fix` |
 | `bearing` | `faces` `axial` | holds a round band sideways at one ring of nodes, on the edge nearer the middle of the part, free to turn and tilt, like a shaft in a ball bearing: it carries force and no moment. With `axial` it also holds the band along its axis at one node; give that to one bearing of a shaft (static). Reading as for `fix`. `bearing part:faces shaft` `axial` `at=` `C0=` `stiffness=` instead joins two parts of an assembly: `shaft` turns in the housing's bore `faces` on a ball row at the middle of the bore, or across from `at=`, free to turn and tilt, so it carries force and no moment; with `axial` it also carries thrust, through the axis. `stiffness` is its radial stiffness in N/mm (1e5, a small ball bearing, unless given). It reads the radial load as the line's label (the housing's name unless labelled), `.axial` the thrust, and with the static rating `C0` in newtons `.safety`, C0 over the equivalent load max(Fr, 0.6 Fr + 0.5 Fa) |
 | `torque` | `faces moment` `axis=x,y,z` `at=x,y,z` | twists the faces by `moment` N·m about their axis: the axis of a round face, or the normal through the middle of a flat one, unless `axis=` and `at=` say; `axis=` also takes `x`, `y`, `z` or `-z` (static) |
 | `speed` | `joint value` | how fast a joint runs, in rpm (mm/s on a `slide`); joints it drives or is driven by follow through the couples, and each reads its power and each mesh its heat (torque) |
 | `torque` | `joint value` | a steady torque in N·m (a force in N on a `slide`) on the joint, pushing it positive, like wind on an antenna (torque) |
-| `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static) |
+| `load` | `faces force=x,y,z` | a force in newtons spread over the faces by area (static). In a frame a force on an end face is a force on that joint, and on a side face it is spread along the whole member; lines with the same label are one load case |
 | `pressure` | `faces value` | a pressure in MPa pushing into the faces (static) |
 | `warm` | `by` `part=`, or `file.gsim from=` | warms the whole part evenly by that many °C (negative cools it), or with `part=` one part of an assembly (lines add up, so a bolt can be cooled to preload a joint: its shrink over its length is the stretch it is tightened by), so it expands by its material's `alpha` (static, buckling). Given a `sim thermal` file with the same `part` and `mesh` lines, it takes the temperatures that simulation works out instead, expanding from `from` °C (20 unless given). Parts held from growing, or bonded to a material that grows differently, take stress from it |
-| `probe` | `x,y,z`, with a label | reads the von Mises stress and displacement at a point inside the part or on its surface as `label.stress` and `label.displacement`; a point just outside a coarse curved face is read on the mesh surface, with a note |
-| `temperature` | `faces value` | holds the faces at that temperature in °C (thermal). The heat leaving the part through them, in watts, is a reading named after the line's label (negative where heat comes in) |
-| `convect` | `faces h= ambient=` | the faces lose heat to air at `ambient` °C (20 unless given) with a film coefficient `h` in W/m²·K: about 5 to 10 for still air, 20 to 100 with a fan (thermal). The heat lost is a reading named after the label |
+| `probe` | `x,y,z`, with a label | reads the von Mises stress and displacement at a point inside the part or on its surface as `label.stress` and `label.displacement` (in a conduction simulation `label.temperature`, in a frame the nearest member, and in acoustics a listener whose readings are `label.T30`, `label.T20`, `label.EDT`, `label.C80`, `label.D50`, `label.STI`); a point just outside a coarse curved face is read on the mesh surface, with a note |
+| `temperature` | `faces value` | holds the faces at that temperature in °C (thermal, conduction). The heat leaving the part through them, in watts, is a reading named after the line's label (negative where heat comes in) |
+| `convect` | `faces h= ambient=` | the faces lose heat to air at `ambient` °C (20 unless given) with a film coefficient `h` in W/m²·K: about 5 to 10 for still air, 20 to 100 with a fan (thermal, conduction). In a conduction simulation lines with one label are one side of the construction, and the label names its heat flow. The heat lost is a reading named after the label |
 | `heat` | `faces watts` | puts that much heat into the faces, spread by area (thermal, flow). In a flow simulation the air carries it away, and the line's label reads the mean temperature of those faces |
 | `spin` | `joint rpm=` | turns a part on its `turn` joint through the air at that speed (flow), see `docs/simulation.md` |
 | `turn` | `joint` `sweep=` `steps=` | the rotor's `turn` joint (magnetic). Its axis is the slice's normal and everything it carries turns. With `sweep` the rotor turns through that many degrees in `steps` (12 unless given), and the step must divide a whole turn |
@@ -592,13 +592,19 @@ expect shoulder<15 sun_s_turn<4
 | `magnet` | `parts ...` `Br=` `mu=` `toward=` | the parts are permanent magnets of remanence `Br` in tesla and recoil permeability `mu` (1.05 unless given), magnetized `toward=radial` (the default), `-radial` or along a direction like `0,1,0` that turns with the rotor (magnetic) |
 | `iron` | `parts ...` `material=` or `mu=` | the parts are steel with the B-H curve of `material`: `m19` (the default, lamination) or `1010` (solid low carbon); or iron of constant relative permeability `mu` (magnetic) |
 | `coil` | `parts ...` `turns=` `current=` `axis=` | the parts are windings of `turns` turns carrying `current` amps (0 unless given). A coil part the slice cuts in two pieces, one each side of the tooth it is wound round, carries the current one way in one and back in the other: positive current goes counterclockwise about `axis`, the direction from the motor's axis out through the coil unless given. Negative `turns` winds it the other way. Lines with the same label are one phase, and the label names its readings (magnetic) |
+| `release` | `faces` | pins the member ends on those end faces: they carry force and no moment (frame) |
+| `buckling` | `count` | how many buckling load factors `frame` finds, for all the loads together; they read `buckling1`, `buckling2`, ... |
+| `combine` | `name load:factor ...` | adds the loads, each times its factor, into a combination read as `name.stress`, `name.displacement` and so on. A load is named by its label, and `weight` is the member's own weight (frame) |
+| `absorb` | `faces material` or `faces a,b,c,d,e,f,g` `scattering=` | what the faces absorb, as a material (`concrete`, `brick`, `plaster`, `plasterboard`, `glass`, `wood`, `panelling`, `marble`, `carpet`, `curtain`, `ceiling-tile`, `audience`) or as one coefficient or seven, for the octave bands 125 Hz to 8 kHz. `scattering` is the share of reflections that are diffuse, 0.2 unless given. Later lines replace earlier ones, so start with `absorb all concrete` (acoustics) |
+| `speaker` | `x,y,z` | where the sound comes from, in mm (acoustics) |
+| `rays` | `count` | how many rays to trace, 20000 unless given (acoustics) |
 | `source` | `watts` | makes that much heat evenly through the part's volume (thermal) |
-| `modes` | `count` | how many natural frequencies `modal` finds, 6 unless given |
+| `modes` | `count` | how many natural frequencies `modal` or `frame` finds, 6 unless given |
 | `contact` | `part part` `friction=` | the two parts press on each other where they touch instead of being bonded, and may part (static). Without `friction` they slide freely, so give them supports that stop that; with it (a coefficient, 0.3 for dry steel) they hold until the sideways force passes `friction` times the pressing force, and the run reports how many node pairs slip. A load that friction cannot hold is an error that says the parts slide. Frequencies and buckling treat the pair as bonded |
 | `apart` | `part part` | the two parts do not bond where they come within a tenth of an element of each other, for a cover over a gear or anything else that sits close without carrying load across the gap. `*` matches any run of letters, as in `leave`, so `apart cover* wheel*` keeps every cover off every wheel |
 | `leave` | `part ...` | leaves the named parts of an assembly out of the simulation; `*` matches any run of letters, so `leave ctl* *screw*` drops the control board parts and every screw. Use it for parts that carry no load (boards, cables, seals) and for fasteners in clearance holes, which only touch under their heads |
 | `converge` | `within=` | solves a second time on a mesh 1.5 times coarser and adds a note naming every reading that moved more than `within` percent (5 unless given) between the two. A reading that moves has not settled: a peak stress at a sharp inside corner never does, so `probe` away from it or refine the mesh. Costs about a third more time |
-| `mesh` | `size` | the target edge length of the tetrahedra in mm, for `static`, `thermal` and `modal`; a twentieth of the part's size unless given. The mesher makes elements smaller where walls are thin, gaps are narrow or edges run close together |
+| `mesh` | `size` | the target edge length of the tetrahedra in mm, for `static`, `thermal` and `modal`; a twentieth of the part's size unless given. In `conduction` it is the finest grid spacing, a quarter of the thinnest layer unless given, and in `frame` the longest element along a member, a quarter of each stretch between joints unless given. The mesher makes elements smaller where walls are thin, gaps are narrow or edges run close together |
 | `expect` | `reading<limit ...` or `reading>limit` | a check on a reading, by name. `gcad sim` fails when one does not hold |
 
 `sim torque` works out the load each joint of an assembly must hold against gravity and
@@ -723,6 +729,12 @@ density:
 | acrylic | 3.2 | 0.37 | 65 | 0.19 | 75 |
 | resin | 2.2 | 0.35 | 50 | 0.2 | 80 |
 | wood | 10 | 0.3 | 40 | 0.12 | 5 |
+| concrete | 30 | 0.2 | 30 | 2 | 10 |
+| brick | 10 | 0.2 | 10 | 0.81 | 6 |
+| glass | 70 | 0.22 | 40 | 1 | 9 |
+| gypsum | 2 | 0.25 | 3 | 0.25 | 14 |
+| eps | 0.005 | 0.1 | 0.1 | 0.036 | 70 |
+| wool | 0.0005 | 0.1 | 0.02 | 0.04 | 3 |
 
 Printed plastics carry printed-part values, lower than moulded ones, along the layers;
 across the layers they are weaker again. Wood is along the grain. `material name E= nu= yield= k= alpha=` sets

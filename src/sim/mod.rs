@@ -1,9 +1,13 @@
+pub mod acoustics;
+pub mod conduction;
 pub mod fem;
+pub mod frame;
 mod heat;
 pub mod job;
 pub mod magnetic;
 pub mod mesh;
 mod result;
+pub mod skin;
 pub mod statics;
 pub mod tet;
 mod torque;
@@ -28,10 +32,22 @@ pub enum Kind {
     Buckling,
     Flow,
     Magnetic,
+    Acoustics,
+    Conduction,
+    Frame,
 }
 
 pub const KINDS: &[&str] = &[
-    "torque", "static", "thermal", "modal", "buckling", "flow", "magnetic",
+    "torque",
+    "static",
+    "thermal",
+    "modal",
+    "buckling",
+    "flow",
+    "magnetic",
+    "acoustics",
+    "conduction",
+    "frame",
 ];
 
 impl Kind {
@@ -44,6 +60,9 @@ impl Kind {
             "buckling" => Ok(Kind::Buckling),
             "flow" => Ok(Kind::Flow),
             "magnetic" => Ok(Kind::Magnetic),
+            "acoustics" => Ok(Kind::Acoustics),
+            "conduction" => Ok(Kind::Conduction),
+            "frame" => Ok(Kind::Frame),
             other => bail!(
                 "unknown simulation `{other}`; kinds are {}",
                 KINDS.join(", ")
@@ -60,11 +79,22 @@ impl Kind {
             Kind::Buckling => "buckling",
             Kind::Flow => "flow",
             Kind::Magnetic => "magnetic",
+            Kind::Acoustics => "acoustics",
+            Kind::Conduction => "conduction",
+            Kind::Frame => "frame",
         }
     }
 
     pub fn meshed(self) -> bool {
-        !matches!(self, Kind::Torque | Kind::Flow | Kind::Magnetic)
+        !matches!(
+            self,
+            Kind::Torque
+                | Kind::Flow
+                | Kind::Magnetic
+                | Kind::Acoustics
+                | Kind::Conduction
+                | Kind::Frame
+        )
     }
 }
 
@@ -136,6 +166,20 @@ pub struct Spec {
     pub roles: Vec<magnetic::Assigned>,
     #[serde(default)]
     pub apart: Vec<(String, String)>,
+    #[serde(default)]
+    pub absorb: Vec<acoustics::Absorb>,
+    #[serde(default)]
+    pub speaker: Option<Point3>,
+    #[serde(default)]
+    pub rays: Option<usize>,
+    #[serde(default)]
+    pub humidity: Option<f64>,
+    #[serde(default)]
+    pub releases: Vec<Vec<usize>>,
+    #[serde(default)]
+    pub buckling: Option<usize>,
+    #[serde(default)]
+    pub combinations: Vec<frame::Combination>,
 }
 
 #[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
@@ -232,6 +276,9 @@ pub fn plan(spec: &Spec) -> Result<String> {
         Some(Kind::Torque) => torque::plan(spec),
         Some(Kind::Flow) => wind::plan(spec),
         Some(Kind::Magnetic) => magnetic::plan(spec),
+        Some(Kind::Acoustics) => acoustics::plan(spec),
+        Some(Kind::Conduction) => conduction::plan(spec),
+        Some(Kind::Frame) => frame::plan(spec),
         Some(_) => mesh::plan(spec),
         None => bail!("the file has no `sim` line"),
     }
@@ -243,6 +290,7 @@ pub fn simulate(spec: &Spec) -> Result<Outcome> {
         let size = match spec.kind {
             Some(Kind::Flow) => wind::cell(spec)?,
             Some(Kind::Magnetic) => magnetic::size(spec)?,
+            Some(Kind::Conduction) => conduction::size(spec)?,
             _ => mesh::size(spec)?,
         };
         let mut coarse = spec.clone();
@@ -341,6 +389,9 @@ fn solve(spec: &Spec) -> Result<Outcome> {
         Some(Kind::Buckling) => statics::buckle(spec)?,
         Some(Kind::Flow) => wind::run(spec)?,
         Some(Kind::Magnetic) => magnetic::run(spec)?,
+        Some(Kind::Acoustics) => acoustics::run(spec)?,
+        Some(Kind::Conduction) => conduction::run(spec)?,
+        Some(Kind::Frame) => frame::run(spec)?,
         None => bail!("the file has no `sim` line"),
     };
     Ok(outcome)
@@ -360,6 +411,13 @@ pub fn render(spec: &Spec, result: &Path, output: &str) -> Result<()> {
         }
         (Some(Kind::Magnetic), Some(outcome)) => {
             statics::draw(&magnetic::field_view(spec, Some(&outcome))?, output)
+        }
+        (Some(Kind::Acoustics), _) => statics::draw(&acoustics::field_view(spec)?, output),
+        (Some(Kind::Frame), outcome) => {
+            statics::draw(&frame::field_view(spec, outcome.as_ref())?, output)
+        }
+        (Some(Kind::Conduction), outcome) => {
+            statics::draw(&conduction::field_view(spec, outcome.as_ref())?, output)
         }
         (Some(kind), _) if kind.meshed() => mesh::render(&mesh::bodies(spec)?, output),
         _ => bail!("there is no result to draw yet; run `gcad sim` first"),
@@ -393,12 +451,18 @@ pub fn picture(spec: &Spec, vars: &[(String, f64)]) -> Option<Picture> {
     let shown = outcome.as_ref().and_then(|outcome| match kind {
         Kind::Flow => wind::field_view(spec, outcome).ok(),
         Kind::Magnetic => magnetic::field_view(spec, Some(outcome)).ok(),
+        Kind::Acoustics => acoustics::field_view(spec).ok(),
+        Kind::Conduction => conduction::field_view(spec, Some(outcome)).ok(),
+        Kind::Frame => frame::field_view(spec, Some(outcome)).ok(),
         Kind::Torque => None,
         _ => statics::field_view(spec, outcome).ok(),
     });
     let field = shown.or_else(|| match kind {
         Kind::Flow => wind::setup_view(spec).ok(),
         Kind::Magnetic => magnetic::field_view(spec, None).ok(),
+        Kind::Acoustics => acoustics::field_view(spec).ok(),
+        Kind::Conduction => conduction::field_view(spec, None).ok(),
+        Kind::Frame => frame::field_view(spec, None).ok(),
         Kind::Torque => None,
         _ => statics::setup_view(spec).ok(),
     });

@@ -228,7 +228,8 @@ A `.gsim` file is a simulation of a part or assembly, run with `gcad sim x.gsim`
 readings, writes `x.result.bin` (binary; `gcad check x.gsim` prints its readings again), and fails
 when an `expect` line does not hold. Kinds:
 `torque`, `static`, `thermal`, `modal`, `buckling` (load factor before buckling under the
-`static` lines; keep it above about 3), `flow` (wind on the GPU); the plan and limits are in `docs/simulation.md`.
+`static` lines; keep it above about 3), `flow` (wind on the GPU), `magnetic`, `frame`, `conduction`
+and `acoustics` (the last three are described below); the plan and limits are in `docs/simulation.md`.
 Progress goes to stderr, one line per finished stage and one every 10 s while a stage runs, with
 the iterations, residual and time left; `-q` turns it off. `gcad sim x.gsim --remote` builds
 the model here and solves it on a paid GPU worker (needs `gcad remote signup` and credit; not
@@ -313,6 +314,23 @@ well. Then `wind flow.gsim` in a `sim static` loads the parts with that surface 
 needs the flow's result to be fresh. `gcad render wind.gsim flow.png --flow` draws the air speed on
 slices through the parts, and `--lines` the streamlines round them in 3D. Only `leave` parts inside a closed box: a gland or screw left out is
 a hole the wind blows into.
+
+`sim frame` is for buildings: each body is a straight prismatic member (a column drawn floor to the
+girder's centreline, a girder between column faces), joined where ends meet. `fix`, `pin` and `slide`
+take member end faces (`left:<Z`); `load left:>Z force=...` on an end face is a joint force and on a side
+face (`girder:+Z`) a line load; `gravity 0,0,-9.81` adds the self weight; `combine uls weight:1.35 live:1.5`
+makes `uls.stress` and `uls.displacement`; `release beam:<X` pins an end; `modes 3` and `buckling 2` add
+`mode1` (Hz) and `buckling1` (a load factor). A body under 3 times its depth is refused: `leave` it.
+
+`sim conduction` is for thermal bridges: parts with a conductivity (`concrete`, `brick`, `glass`, `eps`,
+`wool`, or `k=`), `inside: convect concrete:<Z h=7.69 ambient=20` and `outside: convect board:>Z h=25
+ambient=-5` (h is 1/R; lines with one label are one side). Read `coupling` in W/K, `fRsi` (keep it above
+0.7) and `coolest`. Boundaries need flat faces square to X, Y or Z; round parts are staircased.
+
+`sim acoustics` takes the air inside a room as the part: `absorb all plaster`, then `absorb -Z carpet`
+(later lines win; every face needs one), `speaker x,y,z` in mm, and `hall: probe x,y,z` for each listener.
+It reads `hall.T30`, `hall.EDT`, `hall.C80`, `hall.D50` and `hall.STI`, against `sabine` and `eyring`.
+Bodies inside the room are furniture. Raise `rays` if a reading is missing.
 
 ## Drawings
 

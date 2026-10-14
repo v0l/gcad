@@ -1,0 +1,4 @@
+plane YZ offset=100
+rect 200 300 at=0,3650
+beam: extrude 5800
+material steel

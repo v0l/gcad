@@ -33,6 +33,9 @@ faer = { version = "0.24", default-features = false, features = ["std", "sparse-
 ttf-parser = "0.25"
 wgpu = "29"
 sims-field = { git = "https://github.com/v0l/sims", rev = "97191c614e16446af1ad06ed4b883903508b0ba9" }
+sims-acoustics = { git = "https://github.com/v0l/sims", rev = "97191c614e16446af1ad06ed4b883903508b0ba9" }
+sims-frame = { git = "https://github.com/v0l/sims", rev = "97191c614e16446af1ad06ed4b883903508b0ba9" }
+sims-thermal = { git = "https://github.com/v0l/sims", rev = "97191c614e16446af1ad06ed4b883903508b0ba9" }
 sims-flow = { git = "https://github.com/v0l/sims", rev = "97191c614e16446af1ad06ed4b883903508b0ba9" }
 sims-magnetic = { git = "https://github.com/v0l/sims", rev = "97191c614e16446af1ad06ed4b883903508b0ba9" }
 sims-fem = { git = "https://github.com/v0l/sims", rev = "97191c614e16446af1ad06ed4b883903508b0ba9" }

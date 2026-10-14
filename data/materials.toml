@@ -1237,11 +1237,6 @@ texture = "foam"
 texture_scale = 50.0
 
 [concrete]
-density = 2.4
-E = 30.0
-nu = 0.2
-k = 2.0
-alpha = 10.0
 color = "#a9a9a4"
 roughness = 0.75
 texture = "concrete"
@@ -1311,11 +1306,6 @@ texture = "sand"
 texture_scale = 50.0
 
 [brick]
-density = 1.7
-E = 10.0
-nu = 0.2
-k = 0.77
-alpha = 6.0
 color = "#a85d42"
 roughness = 0.75
 texture = "brick"
@@ -1344,11 +1334,6 @@ texture = "concrete"
 texture_scale = 50.0
 
 [gypsum]
-density = 2.3
-E = 5.0
-nu = 0.25
-k = 0.48
-alpha = 15.0
 color = "#eeeae0"
 roughness = 0.75
 texture = "concrete"
@@ -1366,11 +1351,6 @@ texture = "concrete"
 texture_scale = 50.0
 
 [glass]
-density = 2.5
-E = 70.0
-nu = 0.23
-k = 1.0
-alpha = 9.0
 color = "#e6f0ed"
 transmission = 1.0
 ior = 1.52
@@ -1524,8 +1504,6 @@ texture = "foam"
 texture_scale = 50.0
 
 [eps]
-density = 0.02
-k = 0.038
 color = "#e5e5df"
 roughness = 0.75
 texture = "foam"
@@ -1748,7 +1726,11 @@ roughness = 0.4
 
 [polystyrene-foam]
 density = 0.02
-k = 0.038
+E = 0.005
+nu = 0.1
+yield = 0.1
+k = 0.036
+alpha = 70.0
 color = "#e5e5df"
 roughness = 0.75
 texture = "foam"

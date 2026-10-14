@@ -1,0 +1,3 @@
+part left column.gcad x=0
+part right column.gcad x=6000
+part girder girder.gcad

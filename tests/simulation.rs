@@ -1657,6 +1657,18 @@ fn example_simulations() {
 }
 
 #[test]
+fn building_example_simulations() {
+    let root = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples");
+    for name in ["frame/portal", "conduction/tie", "acoustics/room"] {
+        let path = root.join(format!("{name}.gsim"));
+        let outcome =
+            gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
+        assert!(outcome.failed().is_empty(), "{name}: {}", outcome.table());
+        assert!(!outcome.readings.is_empty(), "{name}");
+    }
+}
+
+#[test]
 fn column_buckling() {
     let outcome = simulated(
         "column_buckling",
@@ -2676,4 +2688,543 @@ fn magnetic_lines_need_their_simulation() {
         )
         .contains("no steel called `cheese`")
     );
+}
+
+fn failing_spec(test: &str, files: &[(&str, &str)], spec: &str) -> String {
+    let path = written(test, files, spec);
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
+    if let Some((_, Err(error))) = run.steps.last() {
+        return format!("{error:#}");
+    }
+    let model = run.model;
+    let error = gcad::sim::simulate(model.sim.as_deref().expect("a simulation"))
+        .expect_err("refused");
+    format!("{error:#}")
+}
+
+const ROOM: &str = "rect 10000 7000 at=5000,3500\nextrude 4000\n";
+
+#[test]
+fn shoebox_rings_between_eyring_and_sabine() {
+    let outcome = simulated(
+        "shoebox_rings_between_eyring_and_sabine",
+        &[("room.gcad", ROOM)],
+        "sim acoustics\npart room.gcad\nabsorb all 0.1 scattering=1\nspeaker 2100,3300,1700\nhall: probe 7400,2200,1200\nrays 6000\nexpect hall.T30<2",
+    );
+    close(reading(&outcome, "volume"), 280.0, 1.0e-6);
+    close(reading(&outcome, "surface"), 276.0, 1.0e-6);
+    let (eyring, sabine) = (reading(&outcome, "eyring"), reading(&outcome, "sabine"));
+    let t30 = reading(&outcome, "hall.T30");
+    assert!(eyring < t30 && t30 < sabine, "{eyring} < {t30} < {sabine}");
+    close(t30, eyring, 0.08);
+    assert!(reading(&outcome, "hall.STI") > 0.3);
+    assert!(outcome.checks.iter().all(|c| c.2), "{:?}", outcome.checks);
+}
+
+#[test]
+fn absorption_shortens_the_reverberation() {
+    let run = |test: &str, coefficient: &str| {
+        simulated(
+            test,
+            &[("room.gcad", ROOM)],
+            &format!(
+                "sim acoustics\npart room.gcad\nabsorb all concrete\nabsorb -Z {coefficient}\nspeaker 2100,3300,1700\nhall: probe 7400,2200,1200\nrays 4000"
+            ),
+        )
+    };
+    let hard = run("absorption_hard_floor", "marble");
+    let soft = run("absorption_carpet_floor", "carpet");
+    assert!(reading(&soft, "hall.T30") < 0.6 * reading(&hard, "hall.T30"));
+    assert!(reading(&soft, "eyring") < reading(&hard, "eyring"));
+}
+
+#[test]
+fn obstacles_take_volume_out_of_the_room() {
+    let outcome = simulated(
+        "obstacles_take_volume_out_of_the_room",
+        &[
+            ("room.gcad", ROOM),
+            (
+                "block.gcad",
+                "plane XY offset=1000\nrect 1000 1000 at=5000,3500\nextrude 1000\n",
+            ),
+            ("both.gasm", "part room room.gcad\npart block block.gcad\n"),
+        ],
+        "sim acoustics\npart both.gasm\nabsorb room:all 0.1\nabsorb block:all 0.3\nspeaker 2100,3300,1700\nhall: probe 7400,2200,1200\nrays 2000",
+    );
+    close(reading(&outcome, "volume"), 279.0, 1.0e-6);
+    close(reading(&outcome, "surface"), 282.0, 1.0e-6);
+    assert!(outcome.notes.iter().any(|n| n.contains("obstacles")));
+}
+
+#[test]
+fn acoustics_needs_absorption_and_a_source() {
+    let files = [("room.gcad", ROOM)];
+    assert!(
+        failing_spec(
+            "acoustics_bare_walls",
+            &files,
+            "sim acoustics\npart room.gcad\nspeaker 2000,3000,1500\nhall: probe 7000,2000,1200"
+        )
+        .contains("have no absorption")
+    );
+    assert!(
+        failing_spec(
+            "acoustics_no_speaker",
+            &files,
+            "sim acoustics\npart room.gcad\nabsorb all 0.1\nhall: probe 7000,2000,1200"
+        )
+        .contains("`speaker x,y,z`")
+    );
+    assert!(
+        failing_spec(
+            "acoustics_no_listener",
+            &files,
+            "sim acoustics\npart room.gcad\nabsorb all 0.1\nspeaker 2000,3000,1500"
+        )
+        .contains("probe")
+    );
+    assert!(
+        failing_spec(
+            "acoustics_bad_material",
+            &files,
+            "sim acoustics\npart room.gcad\nabsorb all cheese"
+        )
+        .contains("materials are")
+    );
+}
+
+#[test]
+fn acoustic_view_draws_the_room() {
+    let path = written(
+        "acoustic_view_draws_the_room",
+        &[("room.gcad", ROOM)],
+        "sim acoustics\npart room.gcad\nabsorb all plaster\nabsorb -Z carpet\nspeaker 2100,3300,1700\nhall: probe 7400,2200,1200",
+    );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("a simulation");
+    let picture = gcad::sim::picture(spec, &[]).expect("a picture");
+    let view = picture.field.expect("a field");
+    assert_eq!(view.title, "absorption at 1 kHz");
+    assert!(view.high > 0.3);
+    assert!(!view.marks.is_empty());
+}
+
+const WALL_FILES: [(&str, &str); 4] = [
+    (
+        "concrete.gcad",
+        "rect 1000 1000 at=500,500\nextrude 200\nmaterial concrete\n",
+    ),
+    (
+        "board.gcad",
+        "plane XY offset=200\nrect 1000 1000 at=500,500\nextrude 100\nmaterial eps\n",
+    ),
+    (
+        "wall.gasm",
+        "part concrete concrete.gcad\npart board board.gcad\n",
+    ),
+    (
+        "pin.gcad",
+        "plane XY offset=150\ncircle 20 at=500,500\nextrude 150\nmaterial steel\n",
+    ),
+];
+
+const WALL_SPEC: &str = "sim conduction\npart wall.gasm\ninside: convect concrete:<Z h=7.6923076923 ambient=20\noutside: convect board:>Z h=25 ambient=-5\nmesh 10\n";
+
+#[test]
+fn conduction_through_a_composite_wall() {
+    let outcome = simulated(
+        "conduction_through_a_composite_wall",
+        &WALL_FILES,
+        WALL_SPEC,
+    );
+    let resistance = 0.13 + 0.2 / 2.0 + 0.1 / 0.036 + 0.04;
+    close(reading(&outcome, "coupling"), 1.0 / resistance, 1.0e-4);
+    close(
+        reading(&outcome, "L.inside.outside"),
+        1.0 / resistance,
+        1.0e-4,
+    );
+    close(reading(&outcome, "outside"), 25.0 / resistance, 1.0e-4);
+    close(reading(&outcome, "inside"), -25.0 / resistance, 1.0e-4);
+    close(reading(&outcome, "fRsi"), 1.0 - 0.13 / resistance, 1.0e-4);
+    close(
+        reading(&outcome, "coolest"),
+        20.0 - 25.0 * 0.13 / resistance,
+        1.0e-4,
+    );
+}
+
+#[test]
+fn a_steel_pin_bridges_the_insulation() {
+    let mut files = WALL_FILES.to_vec();
+    files[2] = (
+        "wall.gasm",
+        "part concrete concrete.gcad\npart board board.gcad\npart pin pin.gcad\n",
+    );
+    let spec = "sim conduction\npart wall.gasm\ninside: convect concrete:<Z h=7.6923076923 ambient=20\noutside: convect board:>Z h=25 ambient=-5\noutside: convect pin:>Z h=25 ambient=-5\nmesh 5\nmid: probe 500,500,100";
+    let pinned = simulated("a_steel_pin_bridges_the_insulation", &files, spec);
+    let plain = 1.0 / (0.13 + 0.2 / 2.0 + 0.1 / 0.036 + 0.04);
+    let coupling = reading(&pinned, "coupling");
+    assert!(coupling > plain * 1.02, "{coupling} against {plain}");
+    let mid = reading(&pinned, "mid.temperature");
+    assert!((-5.0..20.0).contains(&mid), "{mid}");
+    assert!(pinned.notes.iter().any(|n| n.contains("`pin` is round")));
+}
+
+#[test]
+fn conduction_through_a_round_part() {
+    let outcome = simulated(
+        "conduction_through_a_round_part",
+        &[("rod.gcad", "circle 50\nrod: extrude 100\nmaterial steel\n")],
+        "sim conduction\npart rod.gcad\nhot: temperature <Z 100\ncold: temperature >Z 20\nmesh 2",
+    );
+    let want = 50.0 * std::f64::consts::PI * 0.025 * 0.025 / 0.1;
+    close(reading(&outcome, "coupling"), want, 0.03);
+}
+
+#[test]
+fn conduction_asks_for_what_it_needs() {
+    let files = [(
+        "rod.gcad",
+        "circle 50\nrod: extrude 100\nmaterial name density=1\n",
+    )];
+    assert!(
+        failing_spec(
+            "conduction_without_conductivity",
+            &files,
+            "sim conduction\npart rod.gcad\na: temperature <Z 100\nb: temperature >Z 20"
+        )
+        .contains("conductivity")
+    );
+    let files = [("rod.gcad", "circle 50\nrod: extrude 100\nmaterial steel\n")];
+    assert!(
+        failing_spec(
+            "conduction_with_heat",
+            &files,
+            "sim conduction\npart rod.gcad\na: temperature <Z 100\nb: heat >Z 20"
+        )
+        .contains("takes `temperature` and `convect`")
+    );
+    assert!(
+        failing_spec(
+            "conduction_one_side",
+            &files,
+            "sim conduction\npart rod.gcad\na: temperature <Z 100"
+        )
+        .contains("at least two sides")
+    );
+}
+
+const FRAME_COLUMN: &str = "plane XY\nrect 100 100\ncolumn: extrude 4000\nmaterial steel\n";
+const FRAME_BEAM: &str = "plane YZ\nrect 100 200\nbeam: extrude 3000\nmaterial steel\n";
+
+#[test]
+fn frame_cantilever_matches_beam_theory() {
+    let outcome = simulated(
+        "frame_cantilever_matches_beam_theory",
+        &[("beam.gcad", FRAME_BEAM)],
+        "sim frame\npart beam.gcad\nfix <X\nload >X force=0,0,-1000\ntip: probe 3000,0,0",
+    );
+    let i = 100.0 * 200.0_f64.powi(3) / 12.0;
+    close(
+        reading(&outcome, "displacement"),
+        1000.0 * 3000.0_f64.powi(3) / (3.0 * 200_000.0 * i),
+        1.0e-6,
+    );
+    close(
+        reading(&outcome, "stress"),
+        1000.0 * 3000.0 * 100.0 / i,
+        1.0e-6,
+    );
+    close(reading(&outcome, "fix1"), 1000.0, 1.0e-6);
+    close(
+        reading(&outcome, "tip.displacement"),
+        reading(&outcome, "displacement"),
+        1.0e-6,
+    );
+    close(
+        reading(&outcome, "safety"),
+        250.0 / reading(&outcome, "stress"),
+        1.0e-6,
+    );
+}
+
+#[test]
+fn frame_beam_on_pins_carries_a_uniform_load() {
+    let outcome = simulated(
+        "frame_beam_on_pins_carries_a_uniform_load",
+        &[("beam.gcad", FRAME_BEAM)],
+        "sim frame\npart beam.gcad\npin <X\npin >X\nload +Z force=0,0,-12000",
+    );
+    let i = 100.0 * 200.0_f64.powi(3) / 12.0;
+    let w = 12000.0 / 3000.0;
+    close(
+        reading(&outcome, "displacement"),
+        5.0 * w * 3000.0_f64.powi(4) / (384.0 * 200_000.0 * i),
+        2.0e-3,
+    );
+    close(
+        reading(&outcome, "stress"),
+        w * 3000.0 * 3000.0 / 8.0 * 100.0 / i,
+        0.02,
+    );
+}
+
+#[test]
+fn frame_releases_turn_a_fixed_beam_into_a_simple_one() {
+    let run = |test: &str, release: &str| {
+        simulated(
+            test,
+            &[("beam.gcad", FRAME_BEAM)],
+            &format!(
+                "sim frame\npart beam.gcad\nfix <X\nfix >X\n{release}load +Z force=0,0,-12000"
+            ),
+        )
+    };
+    let fixed = run("frame_fixed_beam", "");
+    let simple = run("frame_released_beam", "release <X\nrelease >X\n");
+    close(
+        reading(&simple, "displacement") / reading(&fixed, "displacement"),
+        5.0,
+        2.0e-3,
+    );
+}
+
+#[test]
+fn frame_members_may_slope() {
+    let outcome = simulated(
+        "frame_members_may_slope",
+        &[(
+            "tilt.gcad",
+            "plane XY ry=60\nrect 100 200\nbeam: extrude 3000\nmaterial steel\n",
+        )],
+        "sim frame\npart tilt.gcad\nfix beam.start\nload beam.end force=0,0,-1000",
+    );
+    let across = 1000.0 * 30.0_f64.to_radians().cos();
+    let i = 200.0 * 100.0_f64.powi(3) / 12.0;
+    close(
+        reading(&outcome, "displacement"),
+        across * 3000.0_f64.powi(3) / (3.0 * 200_000.0 * i),
+        1.0e-3,
+    );
+    close(
+        reading(&outcome, "stress"),
+        across * 3000.0 * 50.0 / i + 500.0 / 20_000.0,
+        1.0e-3,
+    );
+}
+
+#[test]
+fn frame_columns_buckle_at_eulers_load() {
+    let outcome = simulated(
+        "frame_columns_buckle_at_eulers_load",
+        &[("column.gcad", FRAME_COLUMN)],
+        "sim frame\npart column.gcad\nfix <Z\nload >Z force=0,0,-1000\nbuckling 1",
+    );
+    let i = 100.0_f64.powi(4) / 12.0;
+    let euler = std::f64::consts::PI.powi(2) * 200_000.0 * i / (4.0 * 4000.0 * 4000.0);
+    close(reading(&outcome, "buckling1"), euler / 1000.0, 0.01);
+}
+
+#[test]
+fn frame_cantilever_rings_at_its_beam_frequency() {
+    let outcome = simulated(
+        "frame_cantilever_rings_at_its_beam_frequency",
+        &[("beam.gcad", FRAME_BEAM)],
+        "sim frame\npart beam.gcad\nfix <X\nmodes 2",
+    );
+    let (e, rho) = (200.0e9, 7850.0);
+    let (i, a) = (100.0 * 200.0_f64.powi(3) / 12.0 * 1.0e-12, 0.02);
+    let (iy, length) = (200.0 * 100.0_f64.powi(3) / 12.0 * 1.0e-12, 3.0);
+    let f = |inertia: f64| {
+        1.875104_f64.powi(2) / (2.0 * std::f64::consts::PI * length * length)
+            * (e * inertia / (rho * a)).sqrt()
+    };
+    close(reading(&outcome, "mode1"), f(iy), 0.01);
+    close(reading(&outcome, "mode2"), f(i), 0.01);
+}
+
+fn portal_files() -> Vec<(&'static str, &'static str)> {
+    vec![
+        (
+            "column.gcad",
+            "let x=0\nrect 200 200 at=x,0\ncolumn: extrude 3650\nmaterial steel\n",
+        ),
+        (
+            "girder.gcad",
+            "plane YZ offset=100\nrect 200 300 at=0,3650\nbeam: extrude 5800\nmaterial steel\n",
+        ),
+        (
+            "portal.gasm",
+            "part left column.gcad x=0\npart right column.gcad x=6000\npart girder girder.gcad\n",
+        ),
+    ]
+}
+
+#[test]
+fn frame_portal_sways_as_slope_deflection_says() {
+    let outcome = simulated(
+        "frame_portal_sways_as_slope_deflection_says",
+        &portal_files(),
+        "sim frame\npart portal.gasm\nfix left:<Z\nfix right:<Z\nload left:>Z force=10000,0,0\ntop: probe 0,0,3650",
+    );
+    let (h, span, push, e) = (3650.0, 6000.0, 10_000.0, 200_000.0);
+    let ic = 200.0_f64.powi(4) / 12.0;
+    let ib = 200.0 * 300.0_f64.powi(3) / 12.0;
+    let k = (ib / span) / (ic / h);
+    let want = push * h.powi(3) / (12.0 * e * ic * (2.0 - 6.0 / (4.0 + 6.0 * k)));
+    close(reading(&outcome, "top.displacement"), want, 0.05);
+}
+
+#[test]
+fn frame_combinations_add_loads_by_their_factors() {
+    let outcome = simulated(
+        "frame_combinations_add_loads_by_their_factors",
+        &portal_files(),
+        "sim frame\npart portal.gasm\ngravity 0,0,-9.81\nbase: fix left:<Z\nbase: fix right:<Z\nlive: load girder:+Z force=0,0,-60000\nwind: load left:<X force=10000,0,0\ncombine one weight:1 live:1 wind:1\ncombine uls weight:1.35 live:1.5 wind:1.5\nmodes 1",
+    );
+    let (one, uls) = (reading(&outcome, "one.base"), reading(&outcome, "uls.base"));
+    assert!(uls > 1.3 * one && uls < 1.5 * one, "{one} {uls}");
+    let mass = (2.0 * 0.2 * 0.2 * 3.65 + 0.2 * 0.3 * 6.0) * 7850.0;
+    let down = 60000.0 + mass * 9.81;
+    assert!(
+        (outcome
+            .reading("one.base")
+            .expect("reaction")
+            .at
+            .contains("z "))
+            && down > 0.0
+    );
+    assert!(reading(&outcome, "mode1") > 1.0);
+}
+
+#[test]
+fn frame_joins_a_girder_to_the_middle_of_a_column() {
+    let files = [
+        (
+            "column.gcad",
+            "rect 200 200\ncolumn: extrude 4000\nmaterial steel\n",
+        ),
+        (
+            "girder.gcad",
+            "plane YZ offset=100\nrect 200 300 at=0,2000\nbeam: extrude 3000\nmaterial steel\n",
+        ),
+        ("t.gasm", "part post column.gcad\npart girder girder.gcad\n"),
+    ];
+    let path = written(
+        "frame_joins_a_girder_to_the_middle_of_a_column",
+        &files,
+        "sim frame\npart t.gasm\nfix post:<Z\nload girder:>X force=0,0,-2000\nend: probe 3100,0,2000",
+    );
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("a simulation");
+    let plan = gcad::sim::plan(spec).expect("plans");
+    assert!(plan.contains("1 members split by a joint"), "{plan}");
+    let outcome = gcad::sim::simulate(spec).expect("simulates");
+    let i = 200.0 * 300.0_f64.powi(3) / 12.0;
+    let tip = 2000.0 * 3000.0_f64.powi(3) / (3.0 * 200_000.0 * i);
+    let got = reading(&outcome, "end.displacement");
+    assert!(got > tip, "{got} against {tip}");
+}
+
+#[test]
+fn frame_asks_for_what_it_needs() {
+    let files = [
+        ("beam.gcad", FRAME_BEAM),
+        ("block.gcad", "rect 100 100\nextrude 150\nmaterial steel\n"),
+    ];
+    assert!(
+        failing_spec(
+            "frame_unsupported",
+            &files,
+            "sim frame\npart beam.gcad\nload >X force=0,0,-1"
+        )
+        .contains("hold the frame")
+    );
+    assert!(
+        failing_spec(
+            "frame_unloaded",
+            &files,
+            "sim frame\npart beam.gcad\nfix <X"
+        )
+        .contains("load the frame")
+    );
+    assert!(
+        failing_spec(
+            "frame_stout_member",
+            &files,
+            "sim frame\npart block.gcad\nfix <Z\nload >Z force=0,0,-1"
+        )
+        .contains("too stout")
+    );
+    assert!(
+        failing_spec(
+            "frame_side_support",
+            &files,
+            "sim frame\npart beam.gcad\nfix +Z\nload >X force=0,0,-1"
+        )
+        .contains("end faces")
+    );
+}
+
+#[test]
+fn frame_view_shows_the_deflected_members() {
+    let path = written(
+        "frame_view_shows_the_deflected_members",
+        &portal_files(),
+        "sim frame\npart portal.gasm\nfix left:<Z\nfix right:<Z\nload left:>Z force=10000,0,0",
+    );
+    let _ = std::fs::remove_file(gcad::sim::result_path(&path));
+    let model = spec_of(&path);
+    let spec = model.sim.as_deref().expect("a simulation");
+    let outcome = gcad::sim::simulate(spec).expect("simulates");
+    let field = outcome.field.as_ref().expect("a field");
+    assert_eq!(field.unit, "MPa");
+    let view = gcad::sim::picture(spec, &[])
+        .and_then(|p| p.field)
+        .expect("setup view");
+    assert_eq!(view.title, "the frame");
+    gcad::sim::save(&path, &[], &outcome).expect("saves");
+    let picture = gcad::sim::picture(spec, &[]).expect("a picture");
+    let shown = picture.field.expect("a field");
+    assert_eq!(shown.unit, "MPa");
+    assert!(shown.scale > 1.0);
+}
+
+#[test]
+fn new_kinds_have_no_mesh_to_converge() {
+    let files = [("room.gcad", ROOM)];
+    assert!(
+        failing_spec(
+            "converge_in_acoustics",
+            &files,
+            "sim acoustics\npart room.gcad\nconverge"
+        )
+        .contains("has none")
+    );
+}
+
+#[test]
+fn building_kinds_run_remotely() {
+    for (kind, files, spec) in [
+        (
+            "frame",
+            vec![("beam.gcad", FRAME_BEAM)],
+            "sim frame\npart beam.gcad\nfix <X\nload >X force=0,0,-1000",
+        ),
+        (
+            "acoustics",
+            vec![("room.gcad", ROOM)],
+            "sim acoustics\npart room.gcad\nabsorb all 0.2\nspeaker 2000,3000,1500\nhall: probe 7000,2000,1200\nrays 500",
+        ),
+    ] {
+        let path = written(&format!("remote_{kind}"), &files, spec);
+        let model = spec_of(&path);
+        let sim = model.sim.as_deref().expect("a simulation");
+        let packed = gcad::sim::job::pack(sim, Vec::new()).expect("packs");
+        let unpacked = gcad::sim::job::unpack(&packed).expect("unpacks");
+        let outcome = gcad::sim::simulate(&unpacked.spec).expect("simulates");
+        assert_eq!(outcome.kind, kind);
+    }
 }
