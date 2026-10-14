@@ -75,6 +75,8 @@ All notable changes to gcad are listed here. The format follows
   the CPU, and its wheel part builds in 1 s (was 2.5 s). Faces of a boolean operand far from the
   other one are meshed coarsely. The viewer keeps loaded parts between rebuilds, so saving
   an assembly rebuilds only what changed.
+- An assembly builds every part file below it, through all its sub-assemblies, in one parallel
+  batch, and a part used by several sub-assemblies with the same variables is built once.
 - Simulations give the same answer every run; the solver's dot products no longer depend on how
   threads split the work.
 - `stress` and `safety` leave out one element size of each part around its supports and bonds,
@@ -86,6 +88,7 @@ All notable changes to gcad are listed here. The format follows
 - Viewer reloads when a result is written.
 
 ### Fixed
+- Assemblies that hold each other stop at 16 levels with an error instead of crashing.
 - The wind setup's air box is drawn in the wind colour and labelled with its size; it was a
   black line on the dark background. Viewer labels stay inside the view.
 - STEP imports read each solid in its own length unit; inch vendor models came in 25.4 times too

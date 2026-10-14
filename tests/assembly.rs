@@ -369,6 +369,52 @@ fn a_sub_assembly_moves_as_one() {
 const SLAB: &str = "rect 100 100\nplate: extrude 10\n";
 const ROD: &str = "circle 5\nrod: extrude 40\n";
 
+#[test]
+fn sub_assemblies_build_a_shared_part_once() {
+    let parts = [
+        ("pin.gcad", "let r=5\ncircle 2*r\np: extrude 30\n"),
+        (
+            "pair.gasm",
+            "let r=5\npart a pin.gcad r=r\npart b pin.gcad r=r+1\n",
+        ),
+        ("left.gasm", "part pins pair.gasm\npart c pin.gcad r=5\n"),
+        (
+            "right.gasm",
+            "part pins pair.gasm r=6\npart c pin.gcad r=5\n",
+        ),
+    ];
+    let (model, _) = built(
+        "sub_assemblies_build_a_shared_part_once",
+        "part l left.gasm\npart r right.gasm\n",
+        &parts,
+    );
+    let faces = |name: &str| -> Vec<_> {
+        model
+            .named_body(name)
+            .expect("part")
+            .boundaries()
+            .iter()
+            .flat_map(|shell| shell.face_iter().map(|face| face.id()).collect::<Vec<_>>())
+            .collect()
+    };
+    assert_eq!(faces("l.c"), faces("r.c"));
+    assert_eq!(faces("l.pins.a"), faces("l.c"));
+    assert_eq!(faces("l.pins.b"), faces("r.pins.a"));
+    assert_ne!(faces("r.pins.a"), faces("r.pins.b"));
+    let wide = extent(&model, "r.pins.b");
+    assert!(near(wide.max().x - wide.min().x, 14.0), "{wide:?}");
+}
+
+#[test]
+fn assemblies_that_hold_each_other_fail() {
+    let error = failed(
+        "assemblies_that_hold_each_other_fail",
+        "part a a.gasm\n",
+        &[("a.gasm", "part b b.gasm\n"), ("b.gasm", "part a a.gasm\n")],
+    );
+    assert!(error.contains("nested more than 16 deep"), "{error}");
+}
+
 fn extent(
     model: &Model,
     part: &str,

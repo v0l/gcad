@@ -703,6 +703,87 @@ impl Model {
     }
 
     pub(crate) fn prefetch(&self, lines: &[Line]) {
+        if self.depth >= 16 {
+            return;
+        }
+        let wanted = self.wanted(lines);
+        if cfg!(not(target_arch = "wasm32"))
+            && self.depth == 0
+            && let Some(plan) = self.plan(&wanted)
+        {
+            return self.build(plan);
+        }
+        let depth = self.depth + 1;
+        let cache = &self.cache;
+        let building = if self.depth <= 1 {
+            crate::progress::stage("building parts", Some(wanted.len()), "files")
+        } else {
+            crate::progress::Stage::silent()
+        };
+        crate::host::each(wanted, |(key, path, vars)| {
+            let _ = cache.part(key, || super::load_model(&path, &vars, depth, cache));
+            building.advance(1.0);
+            building.detail(|| {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+                format!("`{}`", name.unwrap_or_default())
+            });
+        });
+    }
+
+    fn plan(&self, wanted: &[PartKey]) -> Option<Vec<(PartKey, usize)>> {
+        fn visit(
+            wanted: &[PartKey],
+            depth: usize,
+            chain: &mut Vec<String>,
+            seen: &mut std::collections::HashSet<String>,
+            out: &mut Vec<(PartKey, usize)>,
+        ) -> bool {
+            for (key, path, vars) in wanted {
+                if chain.contains(key) || depth > 16 {
+                    return false;
+                }
+                if !seen.insert(key.clone()) {
+                    continue;
+                }
+                if super::is_assembly(path)
+                    && let Ok(lines) = super::read_lines(path)
+                {
+                    let inner = super::start_for(path, vars, depth).wanted(&lines);
+                    chain.push(key.clone());
+                    let fine = visit(&inner, depth + 1, chain, seen, out);
+                    chain.pop();
+                    if !fine {
+                        return false;
+                    }
+                }
+                out.push(((key.clone(), path.clone(), vars.clone()), depth));
+            }
+            true
+        }
+        let mut out = Vec::new();
+        let mut seen = std::collections::HashSet::new();
+        visit(wanted, self.depth + 1, &mut Vec::new(), &mut seen, &mut out).then_some(out)
+    }
+
+    fn build(&self, plan: Vec<(PartKey, usize)>) {
+        let cache = &self.cache;
+        let fresh: Vec<_> = plan
+            .into_iter()
+            .filter(|((key, _, _), _)| cache.claim(key))
+            .collect();
+        let building = crate::progress::stage("building parts", Some(fresh.len()), "files");
+        crate::host::each(fresh, |((key, path, vars), depth)| {
+            let loaded = super::load_model(&path, &vars, depth, cache).ok();
+            cache.settle(&key, loaded);
+            building.advance(1.0);
+            building.detail(|| {
+                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
+                format!("`{}`", name.unwrap_or_default())
+            });
+        });
+    }
+
+    fn wanted(&self, lines: &[Line]) -> Vec<PartKey> {
         let mut probe = self.clone();
         let mut wanted: Vec<PartKey> = Vec::new();
         for line in lines {
@@ -727,21 +808,7 @@ impl Model {
                 _ => {}
             }
         }
-        let depth = self.depth + 1;
-        let cache = &self.cache;
-        let building = if self.depth <= 1 {
-            crate::progress::stage("building parts", Some(wanted.len()), "files")
-        } else {
-            crate::progress::Stage::silent()
-        };
-        crate::host::each(wanted, |(key, path, vars)| {
-            let _ = cache.part(key, || super::load_model(&path, &vars, depth, cache));
-            building.advance(1.0);
-            building.detail(|| {
-                let name = path.file_name().map(|n| n.to_string_lossy().into_owned());
-                format!("`{}`", name.unwrap_or_default())
-            });
-        });
+        wanted
     }
 
     fn op_part(&mut self, line: &Line) -> Result<String> {

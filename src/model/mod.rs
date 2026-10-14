@@ -170,12 +170,19 @@ pub struct GearLead {
 }
 
 #[derive(Clone, Default)]
-pub struct Cache(std::sync::Arc<std::sync::Mutex<CacheEntries>>);
+pub struct Cache(std::sync::Arc<Shared>);
+
+#[derive(Default)]
+struct Shared {
+    entries: std::sync::Mutex<CacheEntries>,
+    settled: std::sync::Condvar,
+}
 
 #[derive(Default)]
 struct CacheEntries {
     parts: HashMap<String, std::sync::Arc<Model>>,
     cylinders: HashMap<String, Vec<mate::Cylinder>>,
+    pending: std::collections::HashSet<String>,
 }
 
 pub(crate) const INLINE_KEY: &str = "inline|";
@@ -191,12 +198,15 @@ impl Cache {
         }
         let cache = match reusable {
             Some(old) => {
-                let entries = old.0.lock().map(|mut e| std::mem::take(&mut *e));
-                let mut entries = entries.unwrap_or_default();
+                let mut entries = std::mem::take(&mut *old.lock());
                 entries
                     .cylinders
                     .retain(|key, _| !key.starts_with(INLINE_KEY));
-                Cache(std::sync::Arc::new(std::sync::Mutex::new(entries)))
+                entries.pending.clear();
+                Cache(std::sync::Arc::new(Shared {
+                    entries: std::sync::Mutex::new(entries),
+                    settled: std::sync::Condvar::new(),
+                }))
             }
             None => Cache::default(),
         };
@@ -204,19 +214,47 @@ impl Cache {
         cache
     }
 
+    fn lock(&self) -> std::sync::MutexGuard<'_, CacheEntries> {
+        self.0.entries.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
     pub(crate) fn part(
         &self,
         key: String,
         load: impl FnOnce() -> Result<Model>,
     ) -> Result<std::sync::Arc<Model>> {
-        if let Some(found) = self.0.lock().ok().and_then(|c| c.parts.get(&key).cloned()) {
-            return Ok(found);
+        let mut entries = self.lock();
+        while !entries.parts.contains_key(&key) && entries.pending.contains(&key) {
+            entries = self
+                .0
+                .settled
+                .wait(entries)
+                .unwrap_or_else(|e| e.into_inner());
         }
+        if let Some(found) = entries.parts.get(&key) {
+            return Ok(found.clone());
+        }
+        drop(entries);
         let loaded = std::sync::Arc::new(load()?);
-        if let Ok(mut entries) = self.0.lock() {
-            entries.parts.insert(key, loaded.clone());
-        }
+        self.lock().parts.insert(key, loaded.clone());
         Ok(loaded)
+    }
+
+    pub(crate) fn claim(&self, key: &str) -> bool {
+        let mut entries = self.lock();
+        !entries.parts.contains_key(key) && entries.pending.insert(key.to_string())
+    }
+
+    pub(crate) fn settle(&self, key: &str, loaded: Option<Model>) {
+        let mut entries = self.lock();
+        entries.pending.remove(key);
+        if let Some(model) = loaded {
+            entries
+                .parts
+                .insert(key.to_string(), std::sync::Arc::new(model));
+        }
+        drop(entries);
+        self.0.settled.notify_all();
     }
 
     pub(crate) fn cylinders(
@@ -224,18 +262,11 @@ impl Cache {
         key: String,
         fit: impl FnOnce() -> Vec<mate::Cylinder>,
     ) -> Vec<mate::Cylinder> {
-        if let Some(found) = self
-            .0
-            .lock()
-            .ok()
-            .and_then(|c| c.cylinders.get(&key).cloned())
-        {
+        if let Some(found) = self.lock().cylinders.get(&key).cloned() {
             return found;
         }
         let fitted = fit();
-        if let Ok(mut entries) = self.0.lock() {
-            entries.cylinders.insert(key, fitted.clone());
-        }
+        self.lock().cylinders.insert(key, fitted.clone());
         fitted
     }
 }
@@ -679,7 +710,7 @@ pub fn is_assembly(path: &std::path::Path) -> bool {
         .is_some_and(|e| e.eq_ignore_ascii_case("gasm"))
 }
 
-fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Model {
+pub(crate) fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Model {
     let mut model = start(path.parent().map(std::path::Path::to_path_buf));
     model.fixed = vars.iter().cloned().collect();
     model.scope = model.fixed.clone();
@@ -694,7 +725,7 @@ fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: usize) -> Mo
     model
 }
 
-fn read_lines(path: &std::path::Path) -> Result<Vec<Line>> {
+pub(crate) fn read_lines(path: &std::path::Path) -> Result<Vec<Line>> {
     let source = crate::host::read_to_string(path)
         .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
     crate::parse::parse_program(&source).map_err(|e| anyhow!("{}: {e:#}", path.display()))
