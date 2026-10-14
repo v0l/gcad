@@ -41,6 +41,13 @@ fn evaluate(path: &std::path::Path, vars: &[(String, f64)]) -> Program {
 
 type Locks = (SceneKey, Vec<f64>, Vec<Option<String>>);
 
+#[cfg(not(target_arch = "wasm32"))]
+struct Watching {
+    watcher: notify::RecommendedWatcher,
+    files: Arc<std::sync::Mutex<std::collections::HashSet<PathBuf>>>,
+    dirs: std::collections::HashSet<PathBuf>,
+}
+
 #[derive(Clone, PartialEq)]
 struct SceneKey {
     generation: u64,
@@ -262,7 +269,7 @@ pub struct App {
     orbit: Orbit,
     events: Option<Receiver<()>>,
     #[cfg(not(target_arch = "wasm32"))]
-    _watcher: Option<notify::RecommendedWatcher>,
+    watching: Option<Watching>,
     dirty: Option<Instant>,
     loading: Option<(Receiver<Program>, Instant)>,
     loaded: Instant,
@@ -927,7 +934,7 @@ impl App {
             orbit: Orbit::default(),
             events: None,
             #[cfg(not(target_arch = "wasm32"))]
-            _watcher: None,
+            watching: None,
             dirty: None,
             loading: None,
             loaded: Instant::now(),
@@ -994,7 +1001,7 @@ impl App {
         self.cam = Camera::default();
         #[cfg(not(target_arch = "wasm32"))]
         {
-            self._watcher = None;
+            self.watching = None;
         }
         self.events = None;
         self.reload(ctx);
@@ -1012,11 +1019,18 @@ impl App {
         };
         let (tx, rx) = channel();
         let watched = file.clone();
+        let files: Arc<std::sync::Mutex<std::collections::HashSet<PathBuf>>> = Arc::default();
+        let read = files.clone();
         let watcher = notify::recommended_watcher(move |res: notify::Result<notify::Event>| {
+            let known = |p: &PathBuf| {
+                let read = read.lock().unwrap_or_else(|e| e.into_inner());
+                read.contains(p) || std::fs::canonicalize(p).is_ok_and(|c| read.contains(&c))
+            };
             if let Ok(event) = res
                 && changes_content(&event.kind)
                 && event.paths.iter().any(|p| {
                     p == &watched
+                        || known(p)
                         || p.parent() == watched.parent()
                             && p.extension().is_some_and(|e| {
                                 e == "gcad" || e == "gasm" || e == "gsim" || e == "json"
@@ -1031,9 +1045,34 @@ impl App {
             && let Some(dir) = file.parent()
             && watcher.watch(dir, RecursiveMode::NonRecursive).is_ok()
         {
-            self._watcher = Some(watcher);
+            let dirs = std::fs::canonicalize(dir).into_iter().collect();
+            self.watching = Some(Watching {
+                watcher,
+                files,
+                dirs,
+            });
             self.events = Some(rx);
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    fn follow_reads(&mut self) {}
+
+    #[cfg(not(target_arch = "wasm32"))]
+    fn follow_reads(&mut self) {
+        use notify::{RecursiveMode, Watcher};
+        let Some(watching) = self.watching.as_mut() else {
+            return;
+        };
+        let read = crate::model::kept_files();
+        for file in &read {
+            if let Some(dir) = file.parent()
+                && watching.dirs.insert(dir.to_path_buf())
+            {
+                let _ = watching.watcher.watch(dir, RecursiveMode::NonRecursive);
+            }
+        }
+        *watching.files.lock().unwrap_or_else(|e| e.into_inner()) = read.into_iter().collect();
     }
 
     fn reload(&mut self, ctx: &egui::Context) {
@@ -1119,6 +1158,7 @@ impl App {
                     self.took = started.elapsed();
                     self.loading = None;
                     self.install(program);
+                    self.follow_reads();
                 }
                 Err(TryRecvError::Empty) => {
                     ctx.request_repaint_after(Duration::from_millis(100));

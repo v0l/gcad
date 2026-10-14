@@ -77,6 +77,7 @@ All notable changes to gcad are listed here. The format follows
   an assembly rebuilds only what changed.
 - The viewer rebuilds only the parts whose files changed, and the sub-assemblies holding them; the
   rest of an assembly is reused. Saving one part of the truck example rebuilds it in 1.7 s (was 4.2 s).
+  It also watches every file a build read, so parts and sub-assemblies in other folders rebuild on save.
 - An assembly builds every part file below it, through all its sub-assemblies, in one parallel
   batch, and a part used by several sub-assemblies with the same variables is built once.
 - Simulations give the same answer every run; the solver's dot products no longer depend on how

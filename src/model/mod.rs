@@ -938,6 +938,26 @@ pub fn snapshots_path(
     Ok((lines, snapshots))
 }
 
+pub fn kept_files() -> Vec<PathBuf> {
+    let kept = KEPT.lock().unwrap_or_else(|e| e.into_inner());
+    let Some(cache) = kept.as_ref() else {
+        return Vec::new();
+    };
+    let entries = cache.lock();
+    let mut files: Vec<PathBuf> = entries
+        .parts
+        .values()
+        .flat_map(|entry| entry.reads.files().map(std::path::Path::to_path_buf))
+        .filter_map(|file| {
+            let dir = std::fs::canonicalize(file.parent()?).ok()?;
+            Some(dir.join(file.file_name()?))
+        })
+        .collect();
+    files.sort();
+    files.dedup();
+    files
+}
+
 pub fn snapshots_path_kept(
     path: &std::path::Path,
     vars: &[(String, f64)],
