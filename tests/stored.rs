@@ -3,6 +3,8 @@ mod common;
 use common::scratch;
 use std::path::{Path, PathBuf};
 
+static ONE_STORE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn store() -> PathBuf {
     let store = PathBuf::from(scratch("stored_parts")).join("store");
     let _ = std::fs::remove_dir_all(&store);
@@ -34,6 +36,7 @@ fn write(dir: &Path, name: &str, text: &str) {
 #[cfg(unix)]
 #[test]
 fn stored_parts_follow_their_files() {
+    let _one = ONE_STORE.lock().unwrap_or_else(|e| e.into_inner());
     let store = store();
     let dir = PathBuf::from(scratch("stored_parts")).join("model");
     let _ = std::fs::remove_dir_all(&dir);
@@ -108,4 +111,44 @@ fn stored_parts_follow_their_files() {
         std::fs::write(file, b"not a stored part").expect("writes");
     }
     assert_eq!(built().1, Some(7.0));
+}
+
+#[cfg(unix)]
+#[test]
+fn stored_sub_assemblies_follow_their_parts() {
+    let _one = ONE_STORE.lock().unwrap_or_else(|e| e.into_inner());
+    let store = PathBuf::from(scratch("stored_subs")).join("store");
+    let _ = std::fs::remove_dir_all(&store);
+    gcad::model::store_parts_in(Some(store.clone()));
+    let dir = PathBuf::from(scratch("stored_subs")).join("model");
+    let _ = std::fs::remove_dir_all(&dir);
+    std::fs::create_dir_all(&dir).expect("dir");
+    write(&dir, "top.gasm", "part s sub.gasm\n");
+    write(
+        &dir,
+        "sub.gasm",
+        "part a block.gcad\npart b block.gcad\nmove b 0,0,10\naxis up 0,0,0 0,0,1\njoint spin b a turn about=up\n",
+    );
+    write(&dir, "block.gcad", "rect 10 10\nextrude 10\n");
+    let built = || {
+        let run = gcad::model::run_path(&dir.join("top.gasm"), &[], None).expect("reads");
+        let error = run
+            .steps
+            .iter()
+            .find_map(|(_, r)| r.as_ref().err().map(|e| format!("{e:#}")));
+        assert!(error.is_none(), "{error:?}");
+        let volume = gcad::geometry::volume(&run.model.named_body("s.b").expect("s.b"));
+        let joints: Vec<String> = run.model.joints.iter().map(|j| j.name.clone()).collect();
+        (volume, joints)
+    };
+    let first = built();
+    assert!((first.0 - 1000.0).abs() < 1.0, "{first:?}");
+    assert_eq!(first.1, ["s.spin"]);
+    let kept = stored(&store);
+    assert_eq!(kept.len(), 2, "the part and the sub-assembly");
+    assert_eq!(built(), first);
+    assert_eq!(stored(&store), kept, "both come back from the store");
+    write(&dir, "block.gcad", "rect 10 10\nextrude 30\n");
+    let taller = built();
+    assert!((taller.0 - 3000.0).abs() < 1.0, "{taller:?}");
 }

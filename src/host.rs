@@ -55,7 +55,7 @@ mod files {
                 .collect()
         }
 
-        fn merge(&mut self, other: Reads) {
+        pub fn merge(&mut self, other: Reads) {
             for (file, seen) in other.0 {
                 let entry = self.0.entry(file).or_default();
                 entry.stamp = seen.stamp;
@@ -231,6 +231,8 @@ mod files {
         pub fn contents(&self) -> Vec<(PathBuf, Option<[u8; 32]>, bool)> {
             Vec::new()
         }
+
+        pub fn merge(&mut self, _other: Reads) {}
     }
 
     pub fn recording<R>(work: impl FnOnce() -> R) -> (R, Reads) {

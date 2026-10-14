@@ -5,14 +5,14 @@ use crate::parse::Line;
 use anyhow::{Result, anyhow, bail};
 use monstertruck::modeling::*;
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum JointKind {
     Turn { through: Point3, axis: Vector3 },
     Slide { along: Vector3 },
     Fixed,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Feature {
     Axis(Point3, Vector3),
     Plane(Point3, Vector3),
@@ -45,7 +45,7 @@ impl Feature {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub enum Condition {
     Concentric,
     Flush(f64),
@@ -54,7 +54,7 @@ pub enum Condition {
     Distance(f64),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Mate {
     pub text: String,
     pub parts: [String; 2],
@@ -174,7 +174,7 @@ pub struct Source {
     pub vars: Vec<(String, f64)>,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug, Default, serde::Serialize, serde::Deserialize)]
 pub struct Couple {
     pub driven: String,
     pub driver: String,
@@ -187,7 +187,7 @@ pub struct Couple {
     pub mesh: Option<Mesh>,
 }
 
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Mesh {
     pub module: f64,
     pub face: f64,
@@ -348,7 +348,7 @@ pub fn broken(mates: &[Mate], moves: &std::collections::HashMap<String, Matrix4>
         .collect()
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
 pub struct Joint {
     pub name: String,
     pub child: String,

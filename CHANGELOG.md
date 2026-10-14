@@ -85,7 +85,9 @@ All notable changes to gcad are listed here. The format follows
   It also watches every file a build read, so parts and sub-assemblies in other folders rebuild on save.
 - Built part files are kept in `~/.cache/gcad/parts` and read back while none of the files they
   read has changed, so opening or checking an assembly again skips building its parts: the truck
-  example's parts load in 1 s instead of 4.4 s. `GCAD_NO_PART_CACHE=1` turns it off.
+  example's parts load in 1 s instead of 4.4 s. `GCAD_NO_PART_CACHE=1` turns it off. Sub-assemblies
+  are kept too, and `interference` meshes each part once per build instead of once per line: checking
+  the rotator again takes 7.6 s instead of 24 s.
 - A save during a build stops it and starts again with the new files, after a quarter second without
   further saves, so an agent editing many parts no longer queues a build per file.
 - An assembly builds every part file below it, through all its sub-assemblies, in one parallel

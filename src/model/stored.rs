@@ -1,6 +1,6 @@
-use super::Model;
-use super::assembly::Source;
+use super::assembly::{Couple, Joint, Mate, Source};
 use super::bodies::Material;
+use super::{Model, PartGroups};
 use crate::select::{GroupEntry, Groups};
 use monstertruck::modeling::*;
 use monstertruck::topology::compress::CompressedSolid;
@@ -10,6 +10,8 @@ use std::path::{Path, PathBuf};
 type Body = CompressedSolid<Point3, Curve, Surface>;
 type Read = (PathBuf, Option<[u8; 32]>, bool);
 type StoredSource = (String, PathBuf, String, Vec<(String, f64)>);
+type StoredGroup = (String, String, Surface);
+type StoredPartGroups = (String, Vec<StoredGroup>, [[f64; 4]; 4]);
 
 #[derive(Serialize, Deserialize)]
 struct Stored {
@@ -18,7 +20,7 @@ struct Stored {
     solid: Option<Body>,
     body: String,
     bodies: Vec<(String, Body)>,
-    groups: Vec<(String, String, Surface)>,
+    groups: Vec<StoredGroup>,
     colours: Vec<(String, [f64; 3])>,
     opacities: Vec<(String, f64)>,
     materials: Vec<(String, Material)>,
@@ -27,6 +29,12 @@ struct Stored {
     axes: Vec<(String, [f64; 3], [f64; 3])>,
     filled: Vec<(String, usize)>,
     stand_ins: Vec<(String, String)>,
+    joints: Vec<Joint>,
+    mates: Vec<Mate>,
+    couples: Vec<Couple>,
+    explode: Vec<(String, [f64; 3])>,
+    part_groups: Vec<StoredPartGroups>,
+    assembly: bool,
 }
 
 static DIR: std::sync::Mutex<Option<PathBuf>> = std::sync::Mutex::new(None);
@@ -154,13 +162,7 @@ fn prune(dir: &Path) {
 }
 
 fn storable(model: &Model, key: String, reads: Vec<Read>) -> Option<Stored> {
-    let assembled = !model.joints.is_empty()
-        || !model.couples.is_empty()
-        || !model.mates.is_empty()
-        || !model.explode.is_empty()
-        || !model.part_groups.is_empty()
-        || model.sim.is_some();
-    if assembled || reads.is_empty() {
+    if model.sim.is_some() || reads.is_empty() {
         return None;
     }
     Some(Stored {
@@ -173,18 +175,7 @@ fn storable(model: &Model, key: String, reads: Vec<Read>) -> Option<Stored> {
             .iter()
             .map(|(name, solid)| (name.clone(), solid.compress()))
             .collect(),
-        groups: model
-            .groups
-            .0
-            .iter()
-            .map(|entry| {
-                (
-                    entry.label.clone(),
-                    entry.group.clone(),
-                    entry.surface.clone(),
-                )
-            })
-            .collect(),
+        groups: stored_groups(&model.groups),
         colours: model.colours.iter().map(|(k, v)| (k.clone(), *v)).collect(),
         opacities: model
             .opacities
@@ -217,6 +208,23 @@ fn storable(model: &Model, key: String, reads: Vec<Read>) -> Option<Stored> {
             .iter()
             .map(|(k, v)| (k.clone(), v.clone()))
             .collect(),
+        assembly: model.assembly,
+        joints: model.joints.clone(),
+        mates: model.mates.clone(),
+        couples: model.couples.clone(),
+        explode: model
+            .explode
+            .iter()
+            .map(|(k, v)| (k.clone(), (*v).into()))
+            .collect(),
+        part_groups: model
+            .part_groups
+            .iter()
+            .map(|(k, g)| {
+                let (groups, placed) = g.parts();
+                (k.clone(), stored_groups(groups), placed.into())
+            })
+            .collect(),
     })
 }
 
@@ -234,17 +242,7 @@ fn restored(stored: Stored) -> Option<Model> {
         solid,
         body: stored.body,
         bodies,
-        groups: Groups(
-            stored
-                .groups
-                .into_iter()
-                .map(|(label, group, surface)| GroupEntry {
-                    label,
-                    group,
-                    surface,
-                })
-                .collect(),
-        ),
+        groups: restored_groups(stored.groups),
         colours: stored.colours.into_iter().collect(),
         opacities: stored.opacities.into_iter().collect(),
         materials: stored.materials.into_iter().collect(),
@@ -265,6 +263,52 @@ fn restored(stored: Stored) -> Option<Model> {
             .collect(),
         filled: stored.filled.into_iter().collect(),
         stand_ins: stored.stand_ins.into_iter().collect(),
+        joints: stored.joints,
+        mates: stored.mates,
+        couples: stored.couples,
+        explode: stored
+            .explode
+            .into_iter()
+            .map(|(k, v)| (k, v.into()))
+            .collect(),
+        part_groups: stored
+            .part_groups
+            .into_iter()
+            .map(|(k, groups, placed)| {
+                (
+                    k,
+                    PartGroups::from_parts(restored_groups(groups), placed.into()),
+                )
+            })
+            .collect(),
+        assembly: stored.assembly,
         ..Model::default()
     })
+}
+
+fn stored_groups(groups: &Groups) -> Vec<StoredGroup> {
+    groups
+        .0
+        .iter()
+        .map(|entry| {
+            (
+                entry.label.clone(),
+                entry.group.clone(),
+                entry.surface.clone(),
+            )
+        })
+        .collect()
+}
+
+fn restored_groups(groups: Vec<StoredGroup>) -> Groups {
+    Groups(
+        groups
+            .into_iter()
+            .map(|(label, group, surface)| GroupEntry {
+                label,
+                group,
+                surface,
+            })
+            .collect(),
+    )
 }

@@ -132,6 +132,17 @@ pub struct PartGroups {
 }
 
 impl PartGroups {
+    pub(crate) fn parts(&self) -> (&Groups, Matrix4) {
+        (&self.groups, self.placed)
+    }
+
+    pub(crate) fn from_parts(groups: Groups, placed: Matrix4) -> Self {
+        PartGroups {
+            groups: std::sync::Arc::new(groups),
+            placed,
+        }
+    }
+
     pub fn new(groups: Groups) -> Self {
         PartGroups {
             groups: std::sync::Arc::new(groups),
@@ -208,7 +219,18 @@ thread_local! {
 pub(crate) fn traced<T>(load: impl FnOnce() -> Result<T>) -> Traced<T> {
     USES.with(|stack| stack.borrow_mut().push(Vec::new()));
     let (result, reads) = crate::host::recording(load);
-    let uses = USES.with(|stack| stack.borrow_mut().pop().unwrap_or_default());
+    let uses = USES.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let uses = stack.pop().unwrap_or_default();
+        if let Some(outer) = stack.last_mut() {
+            for key in &uses {
+                if !outer.contains(key) {
+                    outer.push(key.clone());
+                }
+            }
+        }
+        uses
+    });
     Traced {
         result,
         reads,
@@ -381,6 +403,23 @@ impl Cache {
         files.sort();
         files.dedup();
         files
+    }
+
+    fn reads_reached(&self, own: &crate::host::Reads, uses: &[String]) -> crate::host::Reads {
+        let entries = self.lock();
+        let mut reads = own.clone();
+        let mut seen = std::collections::HashSet::new();
+        let mut todo: Vec<&String> = uses.iter().collect();
+        while let Some(key) = todo.pop() {
+            if !seen.insert(key.clone()) {
+                continue;
+            }
+            if let Some(entry) = entries.parts.get(key) {
+                reads.merge(entry.reads.clone());
+                todo.extend(entry.uses.iter());
+            }
+        }
+        reads
     }
 
     fn lock(&self) -> std::sync::MutexGuard<'_, CacheEntries> {
@@ -920,11 +959,15 @@ pub(crate) fn load_model(
     if let Some(spec) = path.to_str().filter(|text| standard::is_standard(text)) {
         return standard_model(spec);
     }
-    let lasting = !is_assembly(path) && !crate::sim::is_sim(path);
+    let lasting = !crate::sim::is_sim(path);
     if lasting && let Some(model) = stored::fetch(path, vars) {
         return Ok(model);
     }
-    let (built, reads) = crate::host::recording(|| {
+    let Traced {
+        result: built,
+        reads,
+        uses,
+    } = traced(|| {
         if path
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("step") || e.eq_ignore_ascii_case("stp"))
@@ -944,7 +987,7 @@ pub(crate) fn load_model(
     });
     let model = built?;
     if lasting && !crate::host::superseded() {
-        stored::put(path, vars, &model, &reads);
+        stored::put(path, vars, &model, &cache.reads_reached(&reads, &uses));
     }
     Ok(model)
 }
