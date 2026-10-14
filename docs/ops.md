@@ -160,7 +160,8 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| structural members | supported | `member tube 40x40x3 x,y,z x,y,z ...`, `bar`, `pipe`, `rod`, `angle`, `channel` | `features::structural_members` |
+| structural members | supported | `member tube 40x40x3 x,y,z x,y,z ...`, `bar`, `pipe`, `rod`, `angle`, `channel` | `features::structural_members`, `features::member_materials`, `features::member_pattern_preserves_library_material` |
+| member patterns | supported | `member bar 44x175 ... material=c24 count=19 step=400,0,-10`, `end_step=`, `when=`, `count=8 angle=360 axis=hub` | `features::linear_member_pattern`, `features::circular_member_pattern`, `features::member_row_tapers_and_skips` |
 | mitred frame and cut list | supported | `member tube 40x40x3 ... closed`, `gcad bom` | `features::mitred_frame` |
 
 ## Fillets and chamfers
@@ -308,6 +309,9 @@ The plan for the rest is in `docs/simulation.md`.
 | progress while a simulation runs | supported | `gcad sim x.gsim` prints each stage to stderr (`-q` for none); the viewer's simulation card shows bars while it runs | `progress::static_run_reports_its_stages` |
 | setup before a result | supported | the viewer draws the mesh with its loads and supports, or the flow parts, duct, wind and heated faces | `simulation::setup_shown_before_a_result`, `simulation::flow_setup_shown_before_a_result` |
 | material libraries | supported | `materials.toml` beside or above a file, `~/.config/gcad/materials.toml`, `gcad materials` | `simulation::material_library_is_found` |
+| how a material looks | supported | `color`, `roughness`, `metallic`, `clearcoat`, `transmission`, `ior`, `emission` in `materials.toml`, for the viewer and its ray tracer | `simulation::material_library_sets_how_a_body_looks` |
+| standard material library | supported | `material stainless-316`, `material c24`, `material pir`; `gcad materials` lists them all | `simulation::standard_library_covers_common_materials` |
+| material textures | supported | `texture = "wood"`, `texture_scale`, `texture_rotation`, `color_map`, `normal_map`, `roughness_map`, `metallic_map` in `materials.toml` | `simulation::project_library_inherits_and_textures` |
 | material files from other tools | supported | `materials workbench.xml`, `materials PLA.FCMat` | `simulation::material_files_import` |
 | materials along three axes | supported | `E1= E2= E3= Xt= Zt=` in `materials.toml`, simulated with the weakest | `simulation::directional_material_takes_the_weakest` |
 | stiffness, strength and conductivity | supported | `material pla`, `material delrin density=1.41 E=3.1 nu=0.35 yield=65` | `simulation::material_properties` |

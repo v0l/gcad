@@ -945,6 +945,131 @@ fn structural_members() {
 }
 
 #[test]
+fn member_materials() {
+    let model = build(
+        "body panel\nrect 10 10\nextrude 1\nmaterial pla\nbeam: member bar 10x20 0,0,0 100,0,0 material=wood\nframe: member bar 4x4 0,0,40 100,0,40 100,100,40 material=steel yield=355",
+    );
+    assert_eq!(model.materials["panel"].name, "pla");
+    assert_eq!(model.materials["beam"].name, "wood");
+    assert_eq!(model.materials["beam"].density, 0.6);
+    for name in ["frame_1", "frame_2"] {
+        assert_eq!(model.materials[name].name, "steel");
+        assert_eq!(model.materials[name].mechanics.strength, Some(355.0));
+    }
+    assert!(failure("member bar 10x10 0,0,0 100,0,0 material=unknown").contains("density="));
+    assert!(
+        failure("member bar 10x10 0,0,0 100,0,0 material=wood density=-1").contains("above zero")
+    );
+}
+
+#[test]
+fn linear_member_pattern() {
+    let single = build("beam: member bar 10x20 0,0,0 0,100,0 material=wood count=1 step=40,0,0");
+    assert_eq!(single.members.len(), 1);
+    let path =
+        build("frame: member bar 10x20 0,0,0 100,0,0 100,100,0 material=wood count=3 step=0,0,50");
+    assert_eq!(path.members.len(), 6);
+    assert_eq!(path.materials.len(), 6);
+    let source = "joist: member bar 10x20 0,0,0 0,100,0 material=wood count=100 step=40,0,-1";
+    let model = build(source);
+    assert_eq!(model.members.len(), 100);
+    assert_eq!(model.solids().len(), 100);
+    assert_eq!(model.materials.len(), 100);
+    assert!(model.materials.values().all(|m| m.name == "wood"));
+    assert_bounds(&model, [-5.0, 0.0, -109.0], [3965.0, 100.0, 10.0]);
+    assert_volume(&model, 2_000_000.0, 1.0e-6);
+    let items = gcad::bom::items(&model, std::path::Path::new("joists.gcad"));
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].names.len(), 100);
+    assert!(common::summary(source).contains("100 instances"));
+    assert!(!common::summary(&format!("{source}\nmeasure mass")).contains("no material"));
+}
+
+#[test]
+fn circular_member_pattern() {
+    let model = build(
+        "axis hub 10,20,0 10,20,1\nspoke: member bar 4x6 30,20,0 110,20,0 material=aluminium count=4 angle=360 axis=hub",
+    );
+    assert_eq!(model.members.len(), 4);
+    assert_eq!(model.materials.len(), 4);
+    assert!(model.materials.values().all(|m| m.name == "aluminium"));
+    assert_bounds(&model, [-90.0, -80.0, -3.0], [110.0, 120.0, 3.0]);
+    assert_volume(&model, 4.0 * 4.0 * 6.0 * 80.0, 1.0e-6);
+    for options in [
+        "count=2.5 step=10,0,0",
+        "count=0 step=10,0,0",
+        "count=2",
+        "count=2 angle=360",
+        "count=2 step=10,0,0 angle=360",
+    ] {
+        assert!(!failure(&format!("member bar 4x6 0,0,0 0,0,100 {options}")).is_empty());
+    }
+}
+
+#[test]
+fn member_pattern_preserves_library_material() {
+    let dir = std::path::PathBuf::from(common::scratch("member_pattern_material"));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        dir.join("materials.toml"),
+        "[timber]\ndensity = 0.45\nE = 11\ncolor = \"#d8b47a\"\nroughness = 0.75\n",
+    )
+    .unwrap();
+    let lines = gcad::parse::parse_program("beam: member bar 10x20 0,0,0 0,100,0 material=timber count=3 step=40,0,0\npattern beam_1 count=2 step=0,0,40").unwrap();
+    let run = gcad::model::run_in(Some(dir), &lines);
+    for (_, result) in &run.steps {
+        assert!(result.is_ok(), "{result:?}");
+    }
+    let model = run.model;
+    assert_eq!(model.members.len(), 4);
+    for name in &model.members {
+        let m = &model.materials[name];
+        assert_eq!(m.density, 0.45);
+        assert_eq!(m.mechanics.young, Some(11.0));
+        assert!(m.finish.is_some());
+        assert_eq!(model.colours[name], model.colours["beam_1"]);
+    }
+}
+
+#[test]
+fn member_row_tapers_and_skips() {
+    let model = build(
+        "let gap=300\nstud: member bar 20x40 0,0,0 0,0,1000 material=c24 count=8 step=100,0,0 end_step=100,0,-50 when=(k*100<gap)+(k*100>=500)",
+    );
+    assert_eq!(model.members.len(), 6);
+    assert_eq!(model.materials.len(), 6);
+    let names: Vec<&String> = model.members.iter().collect();
+    assert_eq!(
+        names,
+        ["stud_1", "stud_2", "stud_3", "stud_6", "stud_7", "stud_8"]
+    );
+    let lengths = [
+        1000.0,
+        1000.0 - 50.0,
+        1000.0 - 100.0,
+        1000.0 - 250.0,
+        1000.0 - 300.0,
+        1000.0 - 350.0,
+    ];
+    assert_volume(&model, lengths.iter().sum::<f64>() * 800.0, 1.0e-6);
+    let items = gcad::bom::items(&model, std::path::Path::new("studs.gcad"));
+    assert_eq!(items.len(), 6);
+    assert!(
+        common::summary("stud: member bar 20x40 0,0,0 0,0,100 count=4 step=50,0,0 when=k>1")
+            .contains("2 skipped")
+    );
+    assert!(common::failure("member bar 20x40 0,0,0 0,0,100 step=50,0,0").contains("count"));
+    assert!(
+        common::failure("member bar 20x40 0,0,0 0,0,50 0,50,50 count=2 step=5,0,0 end_step=5,0,1")
+            .contains("two points")
+    );
+    assert!(
+        common::failure("member bar 20x40 0,0,0 0,0,100 count=2 step=50,0,0 when=nothing")
+            .contains("nothing")
+    );
+}
+
+#[test]
 fn mitred_frame() {
     let model = build("frame: member tube 40x40x3 0,0,0 500,0,0 500,300,0 0,300,0 closed");
     let area = 1600.0 - 34.0 * 34.0;

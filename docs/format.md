@@ -194,11 +194,22 @@ Weldments:
 
 | operation | parameters | does |
 |---|---|---|
-| `member` | `kind size x,y,z x,y,z ...` `closed` `up=x,y,z` `rotate=` `offset=u,v` | adds one straight structural member per segment of the path through the points, mitred where two meet; `closed` joins the last point back to the first. Kinds: `tube WxHxT` and `bar WxH` (centred), `pipe DxT` and `rod D` (centred), `angle WxHxT` (its outer corner on the path, legs along the profile's x and y) and `channel WxHxT` (the back of its web on the path, flanges up y). The profile's y points along `up`, or square to the path's plane when it is flat, or as near +Z as it can; `rotate` turns it about the path and `offset` moves it in its own x and y. Each member is its own body, named `label_1`, `label_2`, ... (just `label` for one segment). Groups: `side`, `end` |
+| `member` | `kind size x,y,z x,y,z ...` `closed` `up=x,y,z` `rotate=` `offset=u,v` `material=name` `count=` `step=x,y,z` `end_step=x,y,z` `when=expr` `angle=` `axis=name` | adds one straight structural member per segment of the path through the points, mitred where two meet; `closed` joins the last point back to the first. Kinds: `tube WxHxT` and `bar WxH` (centred), `pipe DxT` and `rod D` (centred), `angle WxHxT` (its outer corner on the path, legs along the profile's x and y) and `channel WxHxT` (the back of its web on the path, flanges up y). The profile's y points along `up`, or square to the path's plane when it is flat, or as near +Z as it can; `rotate` turns it about the path and `offset` moves it in its own x and y. Each member is its own body, named `label_1`, `label_2`, ... (just `label` for one segment). Groups: `side`, `end` |
 
 Members are listed in the bill of materials as a cut list, by profile, length to the long
 point and end cuts, like `tube 40x40x3  540.0 long, cut 45.0/45.0`, and `check` does not
-count them as separate parts.
+count them as separate parts. `material=` assigns every generated member, with the same
+optional property overrides as `material` (`density=`, `E=`, `nu=`, `yield=`, `k=`, `alpha=`).
+Add `count=N step=x,y,z` to lay N members in a row, each moved `step` from the last, in
+one line instead of N. Instance `k` (0 to N-1) is named `label_<k+1>`. `end_step=x,y,z` moves
+the last point by its own step, so studs under a sloping roof keep their base level while
+their tops follow the slope (two-point members only). `when=expr` skips the instances where
+`expr` is 0, with `k` bound to the instance index, so a row can leave out an opening:
+`member bar 44x150 x0,y,zp x0,y,ztop count=13 step=600,0,0 end_step=600,0,-15 when=(x0+600*k<ox0)+(x0+600*k>ox1)`.
+For a circular array use `count=N angle=360 axis=hub`, where `hub` is a datum axis and
+`angle` is the total sweep. Every instance keeps the material, finish and cut-list entry (a
+row of equal lengths is one cut-list line). A multi-segment member repeats the whole path.
+`pattern name ...` also works in part files for an existing body or member.
 
 `mode=cut` and `mode=intersect` on `revolve`, `sweep` and `loft` remove the shape or
 keep only what it shares with the solid.
@@ -218,7 +229,7 @@ Bodies:
 | `place` | `body` `on=faces` | moves the body so its lowest point sits on the faces |
 | `import` | `file.step` or `file.stl`, `solid=` | adds the solid in a STEP file, or a watertight STL mesh with its flat regions merged into faces, relative to the `.gcad` file. A STEP file with several solids needs `solid=n` to pick one; the error lists them with their names and sizes. A STEP assembly's solids come where the file places them, a part used six times being six solids. Each solid is read in its own representation's length unit, so an inch vendor model inside a millimetre board comes in at its true size. Faceted breps and the surface models KiCad writes for small parts are built from their polygons, one solid per connected piece; a solid gcad still cannot read becomes a box of its extent, and the line says so and why. Void shells that lie outside their solid, which some exporters write for separate bodies, come in as solids of their own; a real cavity gcad cannot read is left solid, and the line counts them |
 | `color` | name, `#rrggbb` or `r,g,b`, `opacity=` | colours the current body in STEP and 3MF files; `opacity` below 1 (0.3 for glass) makes the viewer draw it see-through |
-| `material` | `name` `density=` `E=` `nu=` `yield=` `k=` `alpha=` | sets what the current body is made of, for its mass and for simulations. Known names: steel, stainless, aluminium, brass, copper, titanium, pla, petg, abs, asa, nylon, tpu, polycarbonate, acrylic, resin, wood (their properties are under Simulations). `density=` in g/cm³ gives any other; the rest set stiffness in GPa, Poisson's ratio, yield strength in MPa, conductivity in W/m·K and expansion in µm/m·K. A name from a material library (see Material libraries) is used before a built-in one of the same name |
+| `material` | `name` `density=` `E=` `nu=` `yield=` `k=` `alpha=` | sets what the current body is made of, for its mass and for simulations. Names come from the standard library of about 170 common metals, plastics, rubbers, timbers, boards, masonry, insulation, glass and composites (see Material libraries; `gcad materials` lists them). `density=` in g/cm³ gives any other; the rest set stiffness in GPa, Poisson's ratio, yield strength in MPa, conductivity in W/m·K and expansion in µm/m·K. A name from a material library (see Material libraries) is used before a built-in one of the same name |
 | `materials` | `file` | loads a material library: a `.toml` in gcad's own layout, a MatML `.xml` (Ansys Engineering Data, Granta) or a FreeCAD `.FCMat`. Its materials take names in lower case with dashes (`Structural Steel` is `structural-steel`) and come before any found automatically |
 
 Measuring, which changes nothing and prints the answer:
@@ -246,7 +257,7 @@ path point (or the start of the helix) and turns it to face along the path.
 
 A file's materials come from, in order: `materials file` lines, a `materials.toml` beside the
 file or in any folder above it up to the repository root (nearer files first), then
-`~/.config/gcad/materials.toml`, then the built-in list. `gcad materials [file or folder]` prints
+`~/.config/gcad/materials.toml`, then the standard library. `gcad materials [file or folder]` prints
 what a file can use and where each came from. A library is checked into the project, so a
 material gives the same result on any machine, and a changed library makes simulation results
 stale.
@@ -291,6 +302,58 @@ source = "own tensile bars, 0.2 mm layers, 100% infill"
 | `k1` `k2` `k3`, `alpha1` `alpha2` `alpha3` | W/m·K, µm/m·K | conductivity and expansion along the axes |
 | `printed` | true or false | the readings say the values are for printed parts |
 | `source` | text | where the numbers came from |
+| `color` | `"#rrggbb"`, a colour name or `[r, g, b]` | the colour of a body made of it, unless the body has its own `color` line |
+| `roughness` | 0 to 1 | 0 is a mirror, 1 is chalk |
+| `metallic` | 0 to 1 | 1 is bare metal, 0 is paint, plastic, wood and stone |
+| `specular` | 0 to 2 | reflection of a non-metal; 0.5 is the usual 4% |
+| `clearcoat`, `clearcoat_roughness` | 0 to 1 | a lacquer layer over the colour, and how rough it is |
+| `transmission`, `ior` | 0 to 1, 1 to 3 | how much light passes through (1 for glass) and how it bends (1.5 for glass) |
+| `emission` | 0 and up | glows in its own colour, this bright |
+| `texture` | a pattern name | a built-in tiling surface: `wood`, `osb`, `concrete`, `stone`, `brick`, `sand`, `fabric`, `foam`, `rubber`, `brushed`, `carbon-fibre` |
+| `texture_scale` | mm | the size of one tile on the part, 100 unless given |
+| `texture_rotation` | degrees | turns the texture on every face; 0 runs the grain along the part's longest side |
+| `color_map`, `normal_map`, `roughness_map`, `metallic_map` | image file | PNG, JPEG or WebP maps beside the library, used instead of the pattern; the roughness and metallic maps are read from their red channel |
+
+The look keys only change the viewer: it uses them when ray tracing, and the plain view shows
+the roughness, metal, see-through glass and textures. Textures are projected from whichever
+side a face mostly faces, in the part's own frame, so a pattern or member copy keeps its grain.
+
+The standard library has about 170 common materials, each with density, conductivity, a
+colour and a finish, and stiffness, Poisson's ratio, strength and expansion where a single
+number means something: steels by grade (`steel-s355`, `stainless-316`, `tool-steel-d2`),
+aluminium alloys (`aluminium-6061-t6`, `aluminium-7075-t6`), copper alloys, titanium, cast
+iron, engineering and printing plastics (`pom`, `ptfe`, `peek`, `pa66`, `hdpe`), rubbers,
+timbers and boards (`oak`, `c24`, `plywood`, `osb`, `mdf`), masonry and stone (`concrete`,
+`brick`, `granite`), insulation (`pir`, `eps`, `xps`, `rockwool`), glass, composites, and
+common names for them (`aluminum`, `acetal`, `drywall`, `mineral-wool`). Values are typical room
+temperature figures; use a supplier's datasheet in a project library for design work. Loose
+fills, insulation and foams carry no stiffness, so a simulation that needs one asks for it.
+
+A project table named like a standard material keeps every key it does not give from the
+standard one, so a project can give `steel` a paint finish and keep its weight and strength:
+
+```toml
+[steel]
+color = "#3a3f44"
+roughness = 0.45
+clearcoat = 0.3
+
+[oak]
+texture_scale = 300
+
+[decking]
+density = 0.55
+k = 0.13
+color_map = "textures/decking.jpg"
+normal_map = "textures/decking-normal.png"
+
+[float-glass]
+density = 2.5
+color = "#e8f2ef"
+transmission = 1
+ior = 1.52
+roughness = 0.02
+```
 
 The solvers are isotropic. A material given along three axes and no isotropic value is
 simulated with its weakest: the smallest modulus, the smallest tensile or compressive

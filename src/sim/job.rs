@@ -67,7 +67,13 @@ fn job_of(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Job> {
     let mut materials: Vec<(String, Material)> = model
         .materials
         .iter()
-        .map(|(n, m)| (n.clone(), m.clone()))
+        .map(|(n, m)| {
+            let mut m = m.clone();
+            if let Some(finish) = m.finish.as_mut() {
+                finish.texture = None;
+            }
+            (n.clone(), m)
+        })
         .collect();
     materials.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(Job {

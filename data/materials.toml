@@ -1,0 +1,1859 @@
+[steel]
+density = 7.85
+E = 200.0
+nu = 0.29
+yield = 250.0
+k = 50.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-s235]
+density = 7.85
+E = 210.0
+nu = 0.3
+yield = 235.0
+k = 50.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-s275]
+density = 7.85
+E = 210.0
+nu = 0.3
+yield = 275.0
+k = 50.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-s355]
+density = 7.85
+E = 210.0
+nu = 0.3
+yield = 355.0
+k = 50.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-a36]
+density = 7.85
+E = 200.0
+nu = 0.26
+yield = 250.0
+k = 50.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-1018]
+density = 7.87
+E = 205.0
+nu = 0.29
+yield = 370.0
+k = 52.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-1045]
+density = 7.87
+E = 205.0
+nu = 0.29
+yield = 310.0
+k = 50.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-4140-annealed]
+density = 7.85
+E = 205.0
+nu = 0.29
+yield = 415.0
+k = 42.6
+alpha = 12.3
+color = "#72777e"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-4340-annealed]
+density = 7.85
+E = 205.0
+nu = 0.29
+yield = 470.0
+k = 44.5
+alpha = 12.3
+color = "#72777e"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[tool-steel-d2]
+density = 7.7
+E = 210.0
+nu = 0.28
+k = 20.0
+alpha = 10.4
+color = "#72777e"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[tool-steel-o1]
+density = 7.85
+E = 214.0
+nu = 0.29
+k = 30.0
+alpha = 11.7
+color = "#72777e"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[galvanized-steel]
+density = 7.85
+E = 200.0
+nu = 0.29
+yield = 250.0
+k = 50.0
+alpha = 12.0
+color = "#a0a6ad"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[stainless]
+density = 8.0
+E = 193.0
+nu = 0.29
+yield = 215.0
+k = 16.0
+alpha = 17.0
+color = "#afb3b8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[stainless-304]
+density = 8.0
+E = 193.0
+nu = 0.29
+yield = 215.0
+k = 16.2
+alpha = 17.2
+color = "#afb3b8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[stainless-316]
+density = 8.03
+E = 200.0
+nu = 0.3
+yield = 205.0
+k = 14.6
+alpha = 15.9
+color = "#afb3b8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[stainless-430]
+density = 7.7
+E = 200.0
+nu = 0.28
+yield = 205.0
+k = 26.1
+alpha = 10.4
+color = "#afb3b8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[stainless-17-4ph-h900]
+density = 7.8
+E = 197.0
+nu = 0.27
+yield = 1170.0
+k = 18.0
+alpha = 10.8
+color = "#afb3b8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[cast-iron]
+density = 7.2
+E = 110.0
+nu = 0.26
+k = 46.0
+alpha = 10.5
+color = "#494d51"
+roughness = 0.35
+metallic = 1.0
+texture = "stone"
+texture_scale = 50.0
+
+[ductile-iron]
+density = 7.1
+E = 170.0
+nu = 0.28
+yield = 310.0
+k = 36.0
+alpha = 11.0
+color = "#494d51"
+roughness = 0.35
+metallic = 1.0
+texture = "stone"
+texture_scale = 50.0
+
+[aluminium]
+density = 2.7
+E = 69.0
+nu = 0.33
+yield = 240.0
+k = 167.0
+alpha = 23.6
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-1050]
+density = 2.7
+E = 69.0
+nu = 0.33
+yield = 20.0
+k = 230.0
+alpha = 23.5
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-1100]
+density = 2.71
+E = 69.0
+nu = 0.33
+yield = 34.0
+k = 222.0
+alpha = 23.6
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-2024-t3]
+density = 2.78
+E = 73.1
+nu = 0.33
+yield = 345.0
+k = 121.0
+alpha = 23.2
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-5052-h32]
+density = 2.68
+E = 70.3
+nu = 0.33
+yield = 193.0
+k = 138.0
+alpha = 23.8
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-5083-h111]
+density = 2.66
+E = 71.0
+nu = 0.33
+yield = 125.0
+k = 117.0
+alpha = 23.8
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-6061-t6]
+density = 2.7
+E = 68.9
+nu = 0.33
+yield = 276.0
+k = 167.0
+alpha = 23.6
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-6063-t6]
+density = 2.7
+E = 68.9
+nu = 0.33
+yield = 214.0
+k = 200.0
+alpha = 23.4
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-6082-t6]
+density = 2.7
+E = 70.0
+nu = 0.33
+yield = 250.0
+k = 180.0
+alpha = 23.4
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[aluminium-7075-t6]
+density = 2.81
+E = 71.7
+nu = 0.33
+yield = 503.0
+k = 130.0
+alpha = 23.6
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[brass]
+density = 8.5
+E = 97.0
+nu = 0.31
+yield = 124.0
+k = 115.0
+alpha = 20.5
+color = "#c7a14b"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[brass-c260]
+density = 8.53
+E = 110.0
+nu = 0.34
+yield = 95.0
+k = 121.0
+alpha = 20.0
+color = "#c7a14b"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[brass-c360]
+density = 8.5
+E = 97.0
+nu = 0.34
+yield = 124.0
+k = 115.0
+alpha = 20.5
+color = "#c7a14b"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[bronze]
+density = 8.8
+E = 110.0
+nu = 0.34
+yield = 150.0
+k = 60.0
+alpha = 18.0
+color = "#a87842"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[phosphor-bronze]
+density = 8.86
+E = 110.0
+nu = 0.34
+yield = 150.0
+k = 68.0
+alpha = 17.8
+color = "#a87842"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[copper]
+density = 8.96
+E = 117.0
+nu = 0.34
+yield = 70.0
+k = 390.0
+alpha = 17.0
+color = "#c7774c"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[copper-c110]
+density = 8.89
+E = 117.0
+nu = 0.34
+yield = 69.0
+k = 391.0
+alpha = 16.9
+color = "#c7774c"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[titanium]
+density = 4.43
+E = 114.0
+nu = 0.34
+yield = 880.0
+k = 6.7
+alpha = 8.6
+color = "#9da1a8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[titanium-grade-2]
+density = 4.51
+E = 105.0
+nu = 0.34
+yield = 275.0
+k = 16.4
+alpha = 8.6
+color = "#9da1a8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[titanium-grade-5]
+density = 4.43
+E = 114.0
+nu = 0.34
+yield = 880.0
+k = 6.7
+alpha = 8.6
+color = "#9da1a8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[magnesium-az31b]
+density = 1.77
+E = 45.0
+nu = 0.35
+yield = 200.0
+k = 96.0
+alpha = 26.0
+color = "#b5bac0"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[zinc]
+density = 7.14
+E = 108.0
+nu = 0.25
+yield = 35.0
+k = 116.0
+alpha = 30.2
+color = "#a3a9b0"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[lead]
+density = 11.34
+E = 16.0
+nu = 0.44
+yield = 12.0
+k = 35.0
+alpha = 29.0
+color = "#6b7078"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[tin]
+density = 7.31
+E = 50.0
+nu = 0.36
+yield = 9.0
+k = 67.0
+alpha = 22.0
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[nickel]
+density = 8.9
+E = 200.0
+nu = 0.31
+yield = 59.0
+k = 91.0
+alpha = 13.4
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[tungsten]
+density = 19.3
+E = 411.0
+nu = 0.28
+yield = 550.0
+k = 173.0
+alpha = 4.5
+color = "#8e949b"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[silver]
+density = 10.49
+E = 83.0
+nu = 0.37
+yield = 55.0
+k = 429.0
+alpha = 18.9
+color = "#d5d9df"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[gold]
+density = 19.3
+E = 79.0
+nu = 0.44
+yield = 120.0
+k = 317.0
+alpha = 14.2
+color = "#edc354"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[invar-36]
+density = 8.05
+E = 141.0
+nu = 0.29
+yield = 240.0
+k = 10.2
+alpha = 1.2
+color = "#a3a9b0"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[inconel-718-annealed]
+density = 8.19
+E = 200.0
+nu = 0.29
+yield = 550.0
+k = 11.4
+alpha = 13.0
+color = "#a3a9b0"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[pvc]
+density = 1.4
+E = 3.0
+nu = 0.38
+yield = 50.0
+k = 0.19
+alpha = 80.0
+color = "#d9d9d4"
+roughness = 0.4
+
+[pp]
+density = 0.9
+E = 1.3
+nu = 0.42
+yield = 30.0
+k = 0.22
+alpha = 150.0
+color = "#dadbd5"
+roughness = 0.4
+
+[pe]
+density = 0.95
+E = 0.8
+nu = 0.46
+yield = 22.0
+k = 0.4
+alpha = 180.0
+color = "#deded8"
+roughness = 0.4
+
+[hdpe]
+density = 0.95
+E = 0.8
+nu = 0.46
+yield = 22.0
+k = 0.4
+alpha = 180.0
+color = "#deded8"
+roughness = 0.4
+
+[ldpe]
+density = 0.92
+E = 0.2
+nu = 0.46
+yield = 10.0
+k = 0.33
+alpha = 200.0
+color = "#deded8"
+roughness = 0.4
+
+[uhmwpe]
+density = 0.93
+E = 0.7
+nu = 0.46
+yield = 20.0
+k = 0.42
+alpha = 180.0
+color = "#deded8"
+roughness = 0.4
+
+[pom]
+density = 1.41
+E = 3.1
+nu = 0.35
+yield = 65.0
+k = 0.31
+alpha = 110.0
+color = "#e0e0da"
+roughness = 0.4
+
+[ptfe]
+density = 2.16
+E = 0.5
+nu = 0.46
+yield = 15.0
+k = 0.25
+alpha = 120.0
+color = "#e6e6e1"
+roughness = 0.4
+
+[peek]
+density = 1.3
+E = 3.6
+nu = 0.38
+yield = 90.0
+k = 0.25
+alpha = 47.0
+color = "#a49a7c"
+roughness = 0.4
+
+[pps]
+density = 1.35
+E = 3.5
+nu = 0.36
+yield = 70.0
+k = 0.3
+alpha = 50.0
+color = "#c4bdab"
+roughness = 0.4
+
+[pet]
+density = 1.38
+E = 2.7
+nu = 0.38
+yield = 55.0
+k = 0.24
+alpha = 60.0
+color = "#d9dbdf"
+roughness = 0.4
+
+[polystyrene]
+density = 1.05
+E = 3.0
+nu = 0.34
+yield = 40.0
+k = 0.15
+alpha = 70.0
+color = "#d9dbdf"
+roughness = 0.4
+
+[hips]
+density = 1.04
+E = 2.0
+nu = 0.35
+yield = 25.0
+k = 0.15
+alpha = 80.0
+color = "#d9dbdf"
+roughness = 0.4
+
+[pa6]
+density = 1.13
+E = 2.8
+nu = 0.39
+yield = 70.0
+k = 0.25
+alpha = 80.0
+color = "#d7ceba"
+roughness = 0.4
+
+[pa66]
+density = 1.14
+E = 3.0
+nu = 0.39
+yield = 80.0
+k = 0.25
+alpha = 80.0
+color = "#d7ceba"
+roughness = 0.4
+
+[pa12]
+density = 1.01
+E = 1.4
+nu = 0.39
+yield = 45.0
+k = 0.23
+alpha = 100.0
+color = "#d7ceba"
+roughness = 0.4
+
+[polyurethane]
+density = 1.2
+E = 0.05
+nu = 0.45
+yield = 10.0
+k = 0.2
+alpha = 150.0
+color = "#c9b67c"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[epoxy]
+density = 1.2
+E = 3.0
+nu = 0.35
+yield = 60.0
+k = 0.2
+alpha = 60.0
+color = "#b6a784"
+roughness = 0.4
+
+[phenolic]
+density = 1.3
+E = 7.0
+nu = 0.3
+yield = 50.0
+k = 0.25
+alpha = 40.0
+color = "#715139"
+roughness = 0.4
+
+[pla]
+density = 1.24
+E = 2.8
+nu = 0.35
+yield = 40.0
+k = 0.13
+alpha = 68.0
+color = "#b3bac4"
+roughness = 0.4
+
+[petg]
+density = 1.27
+E = 2.0
+nu = 0.38
+yield = 35.0
+k = 0.2
+alpha = 60.0
+color = "#b3bac4"
+roughness = 0.4
+
+[abs]
+density = 1.04
+E = 2.0
+nu = 0.35
+yield = 30.0
+k = 0.17
+alpha = 90.0
+color = "#b3bac4"
+roughness = 0.4
+
+[asa]
+density = 1.07
+E = 1.9
+nu = 0.35
+yield = 32.0
+k = 0.17
+alpha = 95.0
+color = "#b3bac4"
+roughness = 0.4
+
+[nylon]
+density = 1.14
+E = 1.5
+nu = 0.39
+yield = 40.0
+k = 0.25
+alpha = 100.0
+color = "#d7ceba"
+roughness = 0.4
+
+[tpu]
+density = 1.21
+E = 0.026
+nu = 0.48
+yield = 8.0
+k = 0.2
+alpha = 150.0
+color = "#777b80"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[polycarbonate]
+density = 1.2
+E = 2.3
+nu = 0.37
+yield = 60.0
+k = 0.2
+alpha = 68.0
+color = "#dce5e7"
+roughness = 0.4
+
+[acrylic]
+density = 1.18
+E = 3.2
+nu = 0.37
+yield = 65.0
+k = 0.19
+alpha = 75.0
+color = "#dce5e7"
+roughness = 0.4
+
+[resin]
+density = 1.2
+E = 2.2
+nu = 0.35
+yield = 50.0
+k = 0.2
+alpha = 80.0
+color = "#b3bac4"
+roughness = 0.4
+
+[epdm]
+density = 1.15
+E = 0.007
+nu = 0.49
+k = 0.25
+alpha = 180.0
+color = "#252729"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[silicone]
+density = 1.1
+E = 0.003
+nu = 0.49
+k = 0.2
+alpha = 250.0
+color = "#d5d0c5"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[neoprene]
+density = 1.23
+E = 0.01
+nu = 0.49
+k = 0.19
+alpha = 200.0
+color = "#313437"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[nitrile]
+density = 1.1
+E = 0.01
+nu = 0.49
+k = 0.25
+alpha = 180.0
+color = "#313437"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[natural-rubber]
+density = 0.93
+E = 0.003
+nu = 0.49
+k = 0.13
+alpha = 220.0
+color = "#3f4245"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[wood]
+density = 0.6
+E = 10.0
+nu = 0.3
+yield = 40.0
+k = 0.12
+alpha = 5.0
+color = "#d8b47a"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[pine]
+density = 0.5
+E = 9.0
+nu = 0.3
+k = 0.12
+alpha = 5.0
+color = "#dbbd88"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[spruce]
+density = 0.45
+E = 10.0
+nu = 0.3
+k = 0.12
+alpha = 5.0
+color = "#dfc79d"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[fir]
+density = 0.5
+E = 11.0
+nu = 0.3
+k = 0.12
+alpha = 5.0
+color = "#d7b588"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[cedar]
+density = 0.38
+E = 7.0
+nu = 0.3
+k = 0.1
+alpha = 5.0
+color = "#b97e59"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[larch]
+density = 0.59
+E = 11.0
+nu = 0.3
+k = 0.13
+alpha = 5.0
+color = "#b9895c"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[birch]
+density = 0.65
+E = 13.0
+nu = 0.3
+k = 0.16
+alpha = 5.0
+color = "#d1b082"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[beech]
+density = 0.71
+E = 14.0
+nu = 0.3
+k = 0.17
+alpha = 5.0
+color = "#cda87f"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[ash]
+density = 0.67
+E = 12.0
+nu = 0.3
+k = 0.16
+alpha = 5.0
+color = "#d1b487"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[maple]
+density = 0.65
+E = 12.0
+nu = 0.3
+k = 0.16
+alpha = 5.0
+color = "#e0c59c"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[oak]
+density = 0.7
+E = 11.0
+nu = 0.3
+k = 0.18
+alpha = 5.0
+color = "#b88a5a"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[walnut]
+density = 0.61
+E = 11.0
+nu = 0.3
+k = 0.15
+alpha = 5.0
+color = "#76523c"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[mahogany]
+density = 0.55
+E = 10.0
+nu = 0.3
+k = 0.14
+alpha = 5.0
+color = "#975d42"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[balsa]
+density = 0.16
+E = 3.0
+nu = 0.3
+k = 0.06
+alpha = 5.0
+color = "#e5d4ad"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[bamboo]
+density = 0.7
+E = 12.0
+nu = 0.3
+k = 0.15
+alpha = 5.0
+color = "#cbaa77"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[c16]
+density = 0.37
+E = 8.0
+nu = 0.3
+k = 0.12
+alpha = 5.0
+color = "#d8b47a"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[c24]
+density = 0.42
+E = 11.0
+nu = 0.3
+k = 0.12
+alpha = 5.0
+color = "#d8b47a"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[plywood]
+density = 0.55
+E = 6.0
+nu = 0.3
+k = 0.13
+alpha = 5.0
+color = "#cfaf7f"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[birch-plywood]
+density = 0.68
+E = 9.0
+nu = 0.3
+k = 0.17
+alpha = 5.0
+color = "#cfaf7f"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[osb]
+density = 0.62
+E = 1.4
+nu = 0.3
+k = 0.13
+alpha = 5.0
+color = "#c9a46a"
+roughness = 0.75
+texture = "osb"
+texture_scale = 200.0
+
+[mdf]
+density = 0.75
+E = 3.0
+nu = 0.3
+k = 0.14
+alpha = 10.0
+color = "#bba07e"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[particleboard]
+density = 0.65
+E = 2.5
+nu = 0.3
+k = 0.13
+alpha = 10.0
+color = "#baa17e"
+roughness = 0.75
+texture = "osb"
+texture_scale = 200.0
+
+[hardboard]
+density = 0.9
+E = 4.0
+nu = 0.3
+k = 0.18
+alpha = 10.0
+color = "#977455"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[cork]
+density = 0.12
+E = 0.01
+nu = 0.2
+k = 0.045
+alpha = 40.0
+color = "#b79667"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[concrete]
+density = 2.4
+E = 30.0
+nu = 0.2
+k = 2.0
+alpha = 10.0
+color = "#a9a9a4"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[concrete-c25-30]
+density = 2.4
+E = 31.0
+nu = 0.2
+k = 2.0
+alpha = 10.0
+color = "#a9a9a4"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[concrete-c30-37]
+density = 2.4
+E = 33.0
+nu = 0.2
+k = 2.0
+alpha = 10.0
+color = "#a9a9a4"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[lightweight-concrete]
+density = 1.8
+E = 15.0
+nu = 0.2
+k = 1.15
+alpha = 10.0
+color = "#b1b1ac"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[aerated-concrete]
+density = 0.5
+E = 2.0
+nu = 0.2
+k = 0.15
+alpha = 8.0
+color = "#d2d2ca"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[mortar]
+density = 2.0
+E = 10.0
+nu = 0.2
+k = 0.88
+alpha = 10.0
+color = "#b1ad9e"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[cement]
+density = 1.5
+k = 0.35
+color = "#b2b0a5"
+roughness = 0.75
+texture = "sand"
+texture_scale = 50.0
+
+[brick]
+density = 1.7
+E = 10.0
+nu = 0.2
+k = 0.77
+alpha = 6.0
+color = "#a85d42"
+roughness = 0.75
+texture = "brick"
+texture_scale = 200.0
+
+[terracotta]
+density = 1.9
+E = 15.0
+nu = 0.22
+k = 0.81
+alpha = 6.0
+color = "#bd7350"
+roughness = 0.75
+texture = "brick"
+texture_scale = 200.0
+
+[plasterboard]
+density = 0.68
+E = 2.0
+nu = 0.25
+k = 0.25
+alpha = 15.0
+color = "#f2f0ea"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[gypsum]
+density = 2.3
+E = 5.0
+nu = 0.25
+k = 0.48
+alpha = 15.0
+color = "#eeeae0"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[lime-plaster]
+density = 1.6
+E = 3.0
+nu = 0.2
+k = 0.7
+alpha = 10.0
+color = "#e6dfcf"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[glass]
+density = 2.5
+E = 70.0
+nu = 0.23
+k = 1.0
+alpha = 9.0
+color = "#e6f0ed"
+transmission = 1.0
+ior = 1.52
+roughness = 0.01
+
+[borosilicate-glass]
+density = 2.23
+E = 64.0
+nu = 0.2
+k = 1.2
+alpha = 3.3
+color = "#e6f0ed"
+transmission = 1.0
+ior = 1.52
+roughness = 0.01
+
+[alumina]
+density = 3.9
+E = 370.0
+nu = 0.22
+k = 30.0
+alpha = 8.0
+color = "#deded5"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[porcelain]
+density = 2.4
+E = 70.0
+nu = 0.22
+k = 1.5
+alpha = 6.0
+color = "#e4e0d7"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[granite]
+density = 2.7
+E = 50.0
+nu = 0.25
+k = 3.0
+alpha = 8.0
+color = "#999b99"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[marble]
+density = 2.7
+E = 60.0
+nu = 0.25
+k = 2.5
+alpha = 7.0
+color = "#c6c4bc"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[slate]
+density = 2.7
+E = 30.0
+nu = 0.25
+k = 2.0
+alpha = 8.0
+color = "#5e656b"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[limestone]
+density = 2.3
+E = 30.0
+nu = 0.25
+k = 1.3
+alpha = 8.0
+color = "#c8c1a9"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[sandstone]
+density = 2.2
+E = 20.0
+nu = 0.25
+k = 1.8
+alpha = 10.0
+color = "#bfa77f"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[sand]
+density = 1.7
+k = 0.3
+color = "#d8c9a0"
+roughness = 0.75
+texture = "sand"
+texture_scale = 50.0
+
+[hardcore]
+density = 2.1
+k = 1.5
+color = "#8a8378"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[gravel]
+density = 1.8
+k = 0.7
+color = "#969388"
+roughness = 0.75
+texture = "stone"
+texture_scale = 50.0
+
+[soil]
+density = 1.5
+k = 0.5
+color = "#79664a"
+roughness = 0.75
+texture = "sand"
+texture_scale = 50.0
+
+[asphalt]
+density = 2.3
+E = 2.0
+nu = 0.35
+k = 0.75
+alpha = 30.0
+color = "#333638"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[pir]
+density = 0.032
+k = 0.022
+color = "#e9d98b"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[pur-foam]
+density = 0.035
+k = 0.025
+color = "#e9d98b"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[eps]
+density = 0.02
+k = 0.038
+color = "#e5e5df"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[xps]
+density = 0.035
+k = 0.034
+color = "#b2c7d8"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[rockwool]
+density = 0.03
+k = 0.038
+color = "#9fae8a"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[glasswool]
+density = 0.02
+k = 0.04
+color = "#d5c875"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[cellulose-insulation]
+density = 0.05
+k = 0.04
+color = "#aca593"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[wood-fibre-insulation]
+density = 0.16
+k = 0.045
+color = "#b89768"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[aerogel]
+density = 0.15
+k = 0.015
+color = "#e1e7e9"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[fr4]
+density = 1.85
+E = 20.0
+nu = 0.14
+k = 0.3
+alpha = 16.0
+color = "#747e47"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[carbon-fibre]
+density = 1.6
+E = 70.0
+nu = 0.3
+k = 0.6
+alpha = 2.0
+color = "#3b4047"
+roughness = 0.75
+texture = "carbon-fibre"
+texture_scale = 50.0
+
+[cotton]
+density = 0.3
+k = 0.06
+color = "#d5ceb9"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[felt]
+density = 0.25
+k = 0.05
+color = "#8a8b84"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[leather]
+density = 0.85
+k = 0.15
+color = "#835f46"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[water]
+density = 1.0
+k = 0.6
+color = "#b7d5e2"
+roughness = 0.4
+
+[air]
+density = 0.001225
+k = 0.0257
+color = "#d7e1eb"
+roughness = 0.4
+
+[aluminum]
+density = 2.7
+E = 69.0
+nu = 0.33
+yield = 240.0
+k = 167.0
+alpha = 23.6
+color = "#bfc5ca"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[steel-mild]
+density = 7.85
+E = 200.0
+nu = 0.29
+yield = 250.0
+k = 50.0
+alpha = 12.0
+color = "#777b80"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[stainless-steel]
+density = 8.0
+E = 193.0
+nu = 0.29
+yield = 215.0
+k = 16.0
+alpha = 17.0
+color = "#afb3b8"
+roughness = 0.35
+metallic = 1.0
+texture = "brushed"
+texture_scale = 50.0
+
+[polypropylene]
+density = 0.9
+E = 1.3
+nu = 0.42
+yield = 30.0
+k = 0.22
+alpha = 150.0
+color = "#dadbd5"
+roughness = 0.4
+
+[polyethylene]
+density = 0.95
+E = 0.8
+nu = 0.46
+yield = 22.0
+k = 0.4
+alpha = 180.0
+color = "#deded8"
+roughness = 0.4
+
+[acetal]
+density = 1.41
+E = 3.1
+nu = 0.35
+yield = 65.0
+k = 0.31
+alpha = 110.0
+color = "#e0e0da"
+roughness = 0.4
+
+[teflon]
+density = 2.16
+E = 0.5
+nu = 0.46
+yield = 15.0
+k = 0.25
+alpha = 120.0
+color = "#e6e6e1"
+roughness = 0.4
+
+[pmma]
+density = 1.18
+E = 3.2
+nu = 0.37
+yield = 65.0
+k = 0.19
+alpha = 75.0
+color = "#dce5e7"
+roughness = 0.4
+
+[pc]
+density = 1.2
+E = 2.3
+nu = 0.37
+yield = 60.0
+k = 0.2
+alpha = 68.0
+color = "#dce5e7"
+roughness = 0.4
+
+[ps]
+density = 1.05
+E = 3.0
+nu = 0.34
+yield = 40.0
+k = 0.15
+alpha = 70.0
+color = "#d9dbdf"
+roughness = 0.4
+
+[polystyrene-foam]
+density = 0.02
+k = 0.038
+color = "#e5e5df"
+roughness = 0.75
+texture = "foam"
+texture_scale = 50.0
+
+[mineral-wool]
+density = 0.03
+k = 0.038
+color = "#9fae8a"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[stone-wool]
+density = 0.03
+k = 0.038
+color = "#9fae8a"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0
+
+[gypsum-board]
+density = 0.68
+E = 2.0
+nu = 0.25
+k = 0.25
+alpha = 15.0
+color = "#f2f0ea"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[drywall]
+density = 0.68
+E = 2.0
+nu = 0.25
+k = 0.25
+alpha = 15.0
+color = "#f2f0ea"
+roughness = 0.75
+texture = "concrete"
+texture_scale = 50.0
+
+[softwood]
+density = 0.5
+E = 9.0
+nu = 0.3
+k = 0.12
+alpha = 5.0
+color = "#dbbd88"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[hardwood]
+density = 0.7
+E = 11.0
+nu = 0.3
+k = 0.18
+alpha = 5.0
+color = "#b88a5a"
+roughness = 0.75
+texture = "wood"
+texture_scale = 200.0
+
+[osb3]
+density = 0.62
+E = 1.4
+nu = 0.3
+k = 0.13
+alpha = 5.0
+color = "#c9a46a"
+roughness = 0.75
+texture = "osb"
+texture_scale = 200.0
+
+[epdm-rubber]
+density = 1.15
+E = 0.007
+nu = 0.49
+k = 0.25
+alpha = 180.0
+color = "#252729"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[silicone-rubber]
+density = 1.1
+E = 0.003
+nu = 0.49
+k = 0.2
+alpha = 250.0
+color = "#d5d0c5"
+roughness = 0.75
+texture = "rubber"
+texture_scale = 50.0
+
+[g10]
+density = 1.85
+E = 20.0
+nu = 0.14
+k = 0.3
+alpha = 16.0
+color = "#747e47"
+roughness = 0.75
+texture = "fabric"
+texture_scale = 50.0

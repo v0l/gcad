@@ -10,7 +10,8 @@ use crate::select;
 use egui::{Color32, Pos2, Rect, Sense, Stroke, Ui, Vec2};
 use egui_bench::prelude::*;
 use egui_bench::viewer3d::{
-    self, BACKGROUND, Camera, Cut, Look, Orbit, Placement, Projector, Viewer, dot, sub,
+    self, BACKGROUND, Camera, Cut, Lighting, Look, Orbit, Painted, Placement, Preset, Projector,
+    RenderMode, Viewer, dot, sub,
 };
 use monstertruck::modeling::{Matrix4, Solid, SquareMatrix};
 use std::path::PathBuf;
@@ -296,6 +297,15 @@ pub struct App {
     locks: Option<Locks>,
     lock_job: Option<Receiver<Locks>>,
     browser: Option<Picker>,
+    help_open: bool,
+    render_open: bool,
+    mode: RenderMode,
+    preset: Preset,
+    lighting: Lighting,
+    trace: viewer3d::Trace,
+    traced: bool,
+    edges: bool,
+    painted: Painted,
     frames: std::collections::VecDeque<Instant>,
     editing: bool,
     source: String,
@@ -963,6 +973,15 @@ impl App {
             locks: None,
             lock_job: None,
             browser: None,
+            help_open: false,
+            render_open: false,
+            mode: RenderMode::Shaded,
+            preset: Preset::Studio,
+            lighting: Lighting::STUDIO,
+            trace: viewer3d::Trace::default(),
+            traced: false,
+            edges: true,
+            painted: Painted::default(),
             frames: std::collections::VecDeque::new(),
             editing: WEB,
             source: String::new(),
@@ -977,7 +996,7 @@ impl App {
         match path {
             Some(path) => app.open(path, &cc.egui_ctx),
             None if crate::host::status().is_some() => {}
-            None => app.browser = Some(browser_at(std::env::current_dir().unwrap_or_default())),
+            None => app.help_open = true,
         }
         app
     }
@@ -1337,6 +1356,9 @@ impl App {
                     )),
                 };
             }
+            if toggle(ui, "?", self.help_open).clicked() {
+                self.help_open = !self.help_open;
+            }
             if WEB && toggle(ui, "edit", self.editing).clicked() {
                 self.editing = !self.editing;
             }
@@ -1355,6 +1377,10 @@ impl App {
             }
             if toggle(ui, "parts", self.parts_open).clicked() {
                 self.parts_open = !self.parts_open;
+            }
+            if toggle(ui, "render", self.render_open).clicked() {
+                self.render_open = !self.render_open;
+                self.parts_open |= self.render_open;
             }
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 if self.path.is_none() {
@@ -2412,6 +2438,9 @@ impl App {
             .show(ui, |ui| {
                 self.line_card(ui);
                 self.sim_card(ui);
+                if self.render_open {
+                    self.render_card(ui);
+                }
                 if self.section.is_some() {
                     self.section_card(ui);
                 }
@@ -2445,6 +2474,45 @@ impl App {
             normal,
             offset: if flip { -place } else { place },
         })
+    }
+
+    fn render_card(&mut self, ui: &mut Ui) {
+        card(
+            ui,
+            None,
+            |ui| {
+                Line::new().legend("render").show(ui);
+            },
+            |ui| {
+                viewer3d::mode_controls(ui, &mut self.mode);
+                ui.add_space(6.0);
+                ui.horizontal(|ui| {
+                    if toggle(ui, "ray traced", self.traced).clicked() {
+                        self.traced = !self.traced;
+                    }
+                    if toggle(ui, "edges", self.edges).clicked() {
+                        self.edges = !self.edges;
+                    }
+                    if self.traced {
+                        note(ui, trace_state(self.painted), LEGEND);
+                    }
+                });
+                viewer3d::trace_controls(ui, &mut self.trace);
+                ui.add_space(6.0);
+                if viewer3d::preset_controls(ui, &mut self.preset) {
+                    self.lighting = self.preset.lighting();
+                }
+                egui::CollapsingHeader::new(legend("lights"))
+                    .id_salt("render lights")
+                    .show(ui, |ui| {
+                        viewer3d::lighting_controls(ui, &mut self.lighting);
+                        if toggle(ui, "reset to preset", false).clicked() {
+                            self.lighting = self.preset.lighting();
+                        }
+                    });
+            },
+        );
+        ui.add_space(8.0);
     }
 
     fn section_card(&mut self, ui: &mut Ui) {
@@ -2495,6 +2563,10 @@ impl App {
         Viewer::new(shown.scene.mesh.clone(), self.cam)
             .looks(self.looks())
             .cut(self.cut())
+            .lighting(self.lighting)
+            .trace(self.traced.then_some(self.trace))
+            .mode(self.mode)
+            .edges(self.edges)
     }
 
     fn pick(&self, viewer: &Viewer<Ink>, rect: Rect, at: Pos2) -> Option<Pick> {
@@ -2989,7 +3061,7 @@ impl App {
         let scene = shown.scene.clone();
         let built = shown.built;
         let mut viewer = self.viewer(shown);
-        viewer.paint(ui, rect);
+        self.painted = viewer.paint(ui, rect);
         let projector = viewer.projector(rect);
         if let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
             && is_flow(&field)
@@ -3226,6 +3298,58 @@ impl App {
         }
     }
 
+    fn help(&mut self, ctx: &egui::Context) {
+        if !self.help_open {
+            return;
+        }
+        let modal = egui::Modal::new(egui::Id::new("gcad_help")).show(ctx, |ui| {
+            ui.set_width(560.0);
+            modal_title(ui, "gcad is built for coding agents");
+            note(
+                ui,
+                "it models mechanical parts as one operation per line, like G-code. an agent writes the file, runs `gcad check`, and fixes errors until it builds. this viewer shows the result and keeps it live.",
+                LEGEND,
+            );
+            ui.add_space(8.0);
+            Line::new().legend("open a file").show(ui);
+            hint(ui, "cmd+o or the open button above. drop .gcad, .gasm and .gsim files anywhere on the view. `gcad file.gcad` on the command line opens it too");
+            ui.add_space(4.0);
+            Line::new().legend("follow the agent").show(ui);
+            hint(ui, "save to the file while it is open and the view rebuilds itself. the line panel shows every operation, and a failing one is marked");
+            ui.add_space(4.0);
+            Line::new().legend("work with the model").show(ui);
+            hint(ui, "orbit by dragging, pan with the middle button, zoom with the wheel. the cube sets the view. for assemblies, drag the joint sliders, use explode to pull the parts apart, and section to cut a view through them");
+            ui.add_space(4.0);
+            Line::new().legend("measure and inspect").show(ui);
+            hint(ui, "press the measure button, then click two points to measure between them. the parts panel shows materials, mass and geometry, with show, ghost and opacity controls per part");
+            ui.add_space(8.0);
+            if WEB {
+                hint(ui, "the examples ship with the page, and the address bar opens any file from github");
+            } else {
+                hint(ui, "open a file to start working");
+            }
+            let label = if WEB { "open the examples" } else { "browse" };
+            let button = egui::Button::new(legend(label))
+                .fill(WELL)
+                .stroke(Stroke::new(1.0, ETCH));
+            ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                if ui.add(button).clicked() {
+                    self.help_open = false;
+                    self.browser = Some(browser_at(
+                        if WEB {
+                            PathBuf::from("examples")
+                        } else {
+                            std::env::current_dir().unwrap_or_default()
+                        },
+                    ));
+                }
+            });
+        });
+        if modal.should_close() {
+            self.help_open = false;
+        }
+    }
+
     fn dropped(&mut self, ctx: &egui::Context) {
         let files = ctx.input(|i| i.raw.dropped_files.clone());
         let mut found: Vec<PathBuf> = Vec::new();
@@ -3263,11 +3387,18 @@ impl App {
             return;
         }
         if ctx.input(|i| i.key_pressed(egui::Key::Escape)) {
+            if self.help_open {
+                self.help_open = false;
+                return;
+            }
             self.picks.clear();
             self.focus = None;
         }
         if ctx.input(|i| i.modifiers.command && i.key_pressed(egui::Key::O)) {
             self.browser = Some(browser_at(std::env::current_dir().unwrap_or_default()));
+        }
+        if ctx.input(|i| i.key_pressed(egui::Key::Questionmark)) {
+            self.help_open = true;
         }
         let count = self.program.lines.len();
         if count == 0 {
@@ -3862,6 +3993,7 @@ impl eframe::App for App {
             self.viewport(ui);
         });
         self.browser(&ctx);
+        self.help(&ctx);
         if self.loading.is_some() || self.building.is_some() || self.clash_job.is_some() {
             ctx.request_repaint_after(Duration::from_millis(50));
         }
@@ -3887,6 +4019,10 @@ pub fn run(
                 eframe::icon_data::from_png_bytes(include_bytes!("../../assets/icon-256.png"))
                     .unwrap_or_default(),
             ),
+        wgpu_options: eframe::egui_wgpu::WgpuConfiguration {
+            wgpu_setup: viewer3d::wgpu_setup(),
+            ..Default::default()
+        },
         ..Default::default()
     };
     eframe::run_native(
@@ -3894,6 +4030,15 @@ pub fn run(
         options,
         Box::new(move |cc| Ok(Box::new(App::new(cc, path, query, line, vars)))),
     )
+}
+
+fn trace_state(painted: Painted) -> String {
+    let engine = if painted.hardware { "ray query" } else { "compute" };
+    if painted.traced() {
+        format!("{engine}: {} / {} samples", painted.samples, painted.target)
+    } else {
+        format!("{engine}: settling")
+    }
 }
 
 fn exploded(

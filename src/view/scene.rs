@@ -1,6 +1,6 @@
 use crate::geometry;
 use crate::model::Model;
-use egui_bench::viewer3d::{self, Material, Shading};
+use egui_bench::viewer3d::{self, Material, Pbr, Shading};
 use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
 use std::sync::Arc;
@@ -11,14 +11,79 @@ pub use egui_bench::viewer3d::V3;
 pub enum Ink {
     #[default]
     Body,
+    Finished(Finish),
     Edge,
     Marked,
 }
 
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
+pub struct Finish([u32; 10]);
+
+impl Finish {
+    fn new(finish: &crate::model::materials::Finish, colour: V3) -> Finish {
+        let base = Ink::Body.shading().pbr();
+        let or = |v: Option<f64>, default: f32| v.map_or(default, |v| v as f32);
+        let glow = or(finish.emission, 0.0);
+        let linear = |c: f32| {
+            if c <= 0.04045 {
+                c / 12.92
+            } else {
+                ((c + 0.055) / 1.055).powf(2.4)
+            }
+        };
+        let values = [
+            or(finish.roughness, base.roughness),
+            or(finish.metallic, base.metallic),
+            or(finish.specular, base.specular),
+            or(finish.clearcoat, base.clearcoat),
+            or(finish.clearcoat_roughness, base.clearcoat_roughness),
+            or(finish.transmission, base.transmission),
+            or(finish.ior, base.ior),
+            linear(colour[0]) * glow,
+            linear(colour[1]) * glow,
+            linear(colour[2]) * glow,
+        ];
+        Finish(values.map(f32::to_bits))
+    }
+
+    fn pbr(&self) -> Pbr {
+        let [
+            roughness,
+            metallic,
+            specular,
+            clearcoat,
+            clearcoat_roughness,
+            transmission,
+            ior,
+            r,
+            g,
+            b,
+        ] = self.0.map(f32::from_bits);
+        Pbr {
+            roughness,
+            metallic,
+            specular,
+            clearcoat,
+            clearcoat_roughness,
+            transmission,
+            ior,
+            emission: [r, g, b],
+            ..Pbr::default()
+        }
+    }
+}
+
 impl Material for Ink {
+    fn pbr(&self) -> Pbr {
+        match self {
+            Ink::Finished(finish) => finish.pbr(),
+            _ => self.shading().pbr(),
+        }
+    }
+
     fn shading(&self) -> Shading {
         match self {
-            Ink::Body => Shading {
+            Ink::Body | Ink::Finished(_) => Shading {
                 capped: true,
                 ..Shading::default()
             },
@@ -224,6 +289,7 @@ fn faces(
     meshed: &Meshed,
     body: usize,
     base: V3,
+    ink: Ink,
     highlights: &[Highlight<'_>],
     out: &mut Vec<Surface>,
     info: &mut Vec<FaceInfo>,
@@ -239,6 +305,7 @@ fn faces(
         let Some(mesh) = face.surface() else { continue };
         let mut surface = Surface {
             colour: face_colour(index, base, highlights),
+            material: ink,
             group: body,
             ..Default::default()
         };
@@ -424,6 +491,21 @@ pub fn build(
     let mut parts = Vec::new();
     let mut vertices = Vec::new();
     let skip: std::collections::HashSet<_> = marked.iter().map(|m| m.id()).collect();
+    let mut textures = super::textures::Library::new();
+    let bindings: Vec<_> = bodies
+        .iter()
+        .map(|(name, _)| {
+            let tint = model
+                .colours
+                .get(name)
+                .map_or(BODY, |c| c.map(|v| v as f32));
+            model
+                .materials
+                .get(name)
+                .and_then(|m| m.finish.as_ref())
+                .and_then(|f| textures.binding(f, tint))
+        })
+        .collect();
     let built: Vec<_> = {
         use rayon::prelude::*;
         bodies
@@ -439,7 +521,29 @@ pub fn build(
                 let own: &[Highlight<'_>] = if is_current { highlights } else { &[] };
                 let mut surfaces = Vec::new();
                 let mut info = Vec::new();
-                let volume = faces(solid, &meshed, body, colour, own, &mut surfaces, &mut info);
+                let ink = model
+                    .materials
+                    .get(name)
+                    .and_then(|m| m.finish.as_ref())
+                    .map_or(Ink::Body, |f| Ink::Finished(Finish::new(f, colour)));
+                let volume = faces(
+                    solid,
+                    &meshed,
+                    body,
+                    colour,
+                    ink,
+                    own,
+                    &mut surfaces,
+                    &mut info,
+                );
+                if let Some(binding) = bindings[body] {
+                    let placement = model
+                        .placements
+                        .get(name)
+                        .copied()
+                        .unwrap_or_else(Matrix4::identity);
+                    super::textures::apply(&mut surfaces, binding, placement);
+                }
                 let mut edges = Lines {
                     colour: EDGE,
                     material: Ink::Edge,
@@ -503,6 +607,7 @@ pub fn build(
         mesh: Arc::new(viewer3d::Scene {
             surfaces,
             lines,
+            images: textures.images,
             centre: v3(bounds.center()),
             radius,
             ..Default::default()
@@ -745,7 +850,8 @@ fn slice_quad(slice: &crate::sim::Slice, texture: usize, group: usize) -> Surfac
 
 #[cfg(test)]
 mod tests {
-    use super::{SnapEdge, V3};
+    use super::{Finish, Ink, SnapEdge, V3};
+    use egui_bench::viewer3d::Material;
 
     fn arc(centre: V3, radius: f32, from: f32, to: f32, n: usize) -> Vec<V3> {
         (0..=n)
@@ -811,5 +917,35 @@ mod tests {
             (0..12).map(|i| [i as f32, (i as f32).sin(), 0.0]).collect(),
         );
         assert!(wave.circle.is_none());
+    }
+
+    #[test]
+    fn a_finish_overrides_only_what_it_names() {
+        let plain = Ink::Body.pbr();
+        let glass = crate::model::materials::Finish {
+            transmission: Some(1.0),
+            ior: Some(1.52),
+            roughness: Some(0.01),
+            ..Default::default()
+        };
+        let pbr = Ink::Finished(Finish::new(&glass, [0.9, 0.95, 0.93])).pbr();
+        assert_eq!(
+            (pbr.transmission, pbr.ior, pbr.roughness),
+            (1.0, 1.52, 0.01)
+        );
+        assert_eq!(
+            (pbr.metallic, pbr.specular),
+            (plain.metallic, plain.specular)
+        );
+        assert_eq!(pbr.emission, [0.0; 3]);
+        let lamp = crate::model::materials::Finish {
+            emission: Some(4.0),
+            ..Default::default()
+        };
+        let glow = Ink::Finished(Finish::new(&lamp, [1.0, 1.0, 1.0]))
+            .pbr()
+            .emission;
+        assert!(glow.iter().all(|c| (c - 4.0).abs() < 1.0e-5), "{glow:?}");
+        assert!(Ink::Finished(Finish::new(&lamp, [1.0; 3])).shading().capped);
     }
 }

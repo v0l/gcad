@@ -22,6 +22,9 @@ impl Model {
         copy(&mut self.opacities, part, name);
         copy(&mut self.materials, part, name);
         copy(&mut self.sources, part, name);
+        if self.members.iter().any(|member| member == part) {
+            self.members.push(name.to_string());
+        }
         let exploded: Vec<(String, Vector3)> = self
             .explode
             .iter()
@@ -172,8 +175,8 @@ impl Model {
             }
             None => {
                 let count = args.number("count", &self.scope)?;
-                if count < 2.0 || count.fract() != 0.0 {
-                    bail!("count must be a whole number of at least 2");
+                if !count.is_finite() || count < 1.0 || count.fract() != 0.0 {
+                    bail!("count must be a positive whole number");
                 }
                 let each = match (args.values.get("step"), args.values.get("angle")) {
                     (Some(step), None) => {
@@ -216,9 +219,14 @@ impl Model {
             0 => String::new(),
             n => format!(", each with {} {what} of `{part}`", n / made.len().max(1)),
         };
+        let summary = if made.is_empty() || made.len() > 12 {
+            format!("{} instances of `{part}` (including seed)", made.len() + 1)
+        } else {
+            made.join(", ")
+        };
         Ok(format!(
             "{}{}{}",
-            made.join(", "),
+            summary,
             each(mated, "mate(s)"),
             each(jointed, "joint(s)")
         ))

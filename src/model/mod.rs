@@ -28,6 +28,7 @@ mod standard;
 mod step_raw;
 pub(crate) mod stored;
 mod thread;
+pub mod texture;
 mod weld;
 mod wrap;
 
@@ -683,6 +684,7 @@ impl Model {
             "dart" => self.op_dart(line),
             "unfold" => self.op_unfold(line),
             "member" => self.op_member(line),
+            "pattern" => self.op_pattern(line),
             "thread" => self.op_thread(line),
             "fillet" => self.op_blend(line, FilletProfile::Round),
             "chamfer" => self.op_blend(line, FilletProfile::Chamfer),

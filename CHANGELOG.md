@@ -7,9 +7,28 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- A standard material library of about 170 common metals, plastics, rubbers, timbers,
+  boards, masonry, stone, insulation, glass and composites, each with density, conductivity,
+  colour and finish, and stiffness, strength and expansion where they mean something. A project
+  table named like one keeps every key it does not give.
+- Material textures: `texture` (`wood`, `osb`, `concrete`, `stone`, `brick`, `sand`, `fabric`,
+  `foam`, `rubber`, `brushed`, `carbon-fibre`, or `none`), `texture_scale`, `texture_rotation`,
+  and `color_map`, `normal_map`, `roughness_map`, `metallic_map` image files, drawn in the
+  viewer.
+- `member ... material=c24` assigns a material to every generated member. `count=N
+  step=x,y,z` lays a row of members in one line, `end_step=` moves only the last point (studs
+  under a sloping roof) and `when=expr` skips instances, with `k` the index (openings);
+  `count=N angle=360 axis=hub` makes a circular array. `pattern` also takes `count=1` and
+  reports large patterns as a count.
+- `materials.toml` sets how a material looks: `color`, `roughness`, `metallic`, `specular`,
+  `clearcoat`, `transmission`, `ior` and `emission`, used by the viewer and its ray tracer. A
+  table named like a built-in material with no `density` adds to the built-in one.
 - `.gdwg` drawing files: sheets with title blocks, views, sections and detail crops of named
   parts, dimension chains and setting-out, levels, callouts, notes and member cut lists,
   exported as a multi-page PDF or SVG sheets.
+- Viewer: opening with no file shows a short help (what gcad is for, how to open a file,
+  how the live view works), with a `?` toggle and `?` key to bring it back.
+  The browser page shows it too instead of defaulting to an example.
 - `color ... opacity=` on a body or an assembly part: the viewer draws it see-through, so
   glass can be glass.
 - Sheet metal from a flat blank: `tab` takes any outline with holes, `bend a,b c,d angle=` folds

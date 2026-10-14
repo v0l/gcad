@@ -973,9 +973,9 @@ dependencies = [
 
 [[package]]
 name = "egui_bench"
-version = "0.3.0"
+version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0d816714add577fe6a942be04a56da13755940cba286e437d0ff7823e5fec355"
+checksum = "e58aabebda0b2fcadaaa95e8fabd367e3fa4be1d6feb3bd850385f01086fca35"
 dependencies = [
  "bytemuck",
  "egui",
@@ -2017,10 +2017,23 @@ checksum = "85ab80394333c02fe689eaf900ab500fbd0c2213da414687ebf995a65d5a6104"
 dependencies = [
  "bytemuck",
  "byteorder-lite",
+ "image-webp",
  "moxcms",
  "num-traits",
  "png",
  "tiff",
+ "zune-core",
+ "zune-jpeg",
+]
+
+[[package]]
+name = "image-webp"
+version = "0.2.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "525e9ff3e1a4be2fbea1fdf0e98686a6d98b4d8f937e1bf7402245af1909e8c3"
+dependencies = [
+ "byteorder-lite",
+ "quick-error",
 ]
 
 [[package]]
@@ -4117,7 +4130,7 @@ checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
 [[package]]
 name = "sims-fem"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=9add52421f250b250df067ec033fe3cbbd5f199d#9add52421f250b250df067ec033fe3cbbd5f199d"
+source = "git+https://github.com/v0l/sims?rev=97191c614e16446af1ad06ed4b883903508b0ba9#97191c614e16446af1ad06ed4b883903508b0ba9"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4133,7 +4146,7 @@ dependencies = [
 [[package]]
 name = "sims-field"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=9add52421f250b250df067ec033fe3cbbd5f199d#9add52421f250b250df067ec033fe3cbbd5f199d"
+source = "git+https://github.com/v0l/sims?rev=97191c614e16446af1ad06ed4b883903508b0ba9#97191c614e16446af1ad06ed4b883903508b0ba9"
 dependencies = [
  "bytemuck",
  "pollster",
@@ -4145,7 +4158,7 @@ dependencies = [
 [[package]]
 name = "sims-flow"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=9add52421f250b250df067ec033fe3cbbd5f199d#9add52421f250b250df067ec033fe3cbbd5f199d"
+source = "git+https://github.com/v0l/sims?rev=97191c614e16446af1ad06ed4b883903508b0ba9#97191c614e16446af1ad06ed4b883903508b0ba9"
 dependencies = [
  "anyhow",
  "bytemuck",
@@ -4160,7 +4173,7 @@ dependencies = [
 [[package]]
 name = "sims-magnetic"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=9add52421f250b250df067ec033fe3cbbd5f199d#9add52421f250b250df067ec033fe3cbbd5f199d"
+source = "git+https://github.com/v0l/sims?rev=97191c614e16446af1ad06ed4b883903508b0ba9#97191c614e16446af1ad06ed4b883903508b0ba9"
 dependencies = [
  "anyhow",
  "sims-fem",
@@ -4171,7 +4184,7 @@ dependencies = [
 [[package]]
 name = "sims-progress"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=9add52421f250b250df067ec033fe3cbbd5f199d#9add52421f250b250df067ec033fe3cbbd5f199d"
+source = "git+https://github.com/v0l/sims?rev=97191c614e16446af1ad06ed4b883903508b0ba9#97191c614e16446af1ad06ed4b883903508b0ba9"
 dependencies = [
  "web-time",
 ]
@@ -4179,7 +4192,7 @@ dependencies = [
 [[package]]
 name = "sims-tet"
 version = "0.1.0"
-source = "git+https://github.com/v0l/sims?rev=9add52421f250b250df067ec033fe3cbbd5f199d#9add52421f250b250df067ec033fe3cbbd5f199d"
+source = "git+https://github.com/v0l/sims?rev=97191c614e16446af1ad06ed4b883903508b0ba9#97191c614e16446af1ad06ed4b883903508b0ba9"
 dependencies = [
  "anyhow",
  "cgmath",

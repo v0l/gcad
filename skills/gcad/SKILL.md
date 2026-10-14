@@ -92,10 +92,22 @@ watching; you work from `check` and `render`.
   sizes, which an assembly brings in as `part.name`, or a piece you `combine` into this part.
   When a part file ends with several bodies, `check` reminds you to bring it into a `.gasm`.
 - `color` and `material` on a body feed the STEP colours, the viewer and the mass in `bom`.
-- Materials not in the built-in list go in a `materials.toml` beside the files or above them
+- The standard library has about 170 common materials with density, conductivity, colour and
+  finish, plus stiffness, strength and expansion where those mean something: grades like
+  `steel-s355`, `stainless-316`, `aluminium-6061-t6`, plastics like `pom`, `peek`, `hdpe`,
+  timbers and boards like `oak`, `c24`, `plywood`, `osb`, and `concrete`, `brick`, `pir`,
+  `rockwool`, `glass`. Run `gcad materials` before inventing one.
+- Materials not in the standard library go in a `materials.toml` beside the files or above them
   (`[petg-cf]` then `density = 1.3`, `E = 3.8`, `nu = 0.36`, `yield = 52`; `E1 E2 E3 Xt Zt`
   for printed parts, axis 3 the print direction). `materials file.xml` or `file.FCMat` loads
   Ansys MatML or FreeCAD cards. `gcad materials` lists what a file can use.
+- The same tables set the look: `color`, `roughness`, `metallic` (1 only for bare metal;
+  painted or powder-coated metal is 0), `clearcoat`, `transmission = 1` with `ior = 1.5` for
+  glass. A `[steel]` table keeps every key of the standard steel it does not give.
+- Textures: `texture = "wood"` (also `osb`, `concrete`, `stone`, `brick`, `sand`, `fabric`,
+  `foam`, `rubber`, `brushed`, `carbon-fibre`) with `texture_scale` in mm and
+  `texture_rotation`, or image maps `color_map`, `normal_map`, `roughness_map`, `metallic_map`
+  beside the library. Grain runs along a part's longest side.
 
 Selectors pick faces: `label`, `label.end`, `label.side`, `label.start`, `>Z` (flat faces
 furthest along +Z), `+Z` (every flat face facing +Z), `all`, and `a,b` for either. Edges are
@@ -204,7 +216,11 @@ pattern. The blank must cross each bend on straight edges with no holes in the b
 `member tube 40x40x3 0,0,0 500,0,0 500,300,0 0,300,0 closed` lays a mitred frame of square
 tube, one body per straight run; also `bar`, `pipe DxT`, `rod D`, `angle`, `channel`.
 `gcad bom` turns them into a cut list. `up=`, `rotate=` and `offset=u,v` set how the profile
-sits on the path.
+sits on the path. `material=wood` assigns every member. Add `count=19 step=400,0,-10`
+for equally spaced copies in one line, or `count=8 angle=360 axis=hub` for a circular array.
+The count includes the seed; copies retain the material, finish and cut-list entry. In a row,
+`end_step=x,y,z` moves only the last point (studs under a sloping roof) and `when=expr` skips
+instances where it is 0, with `k` the index (openings). Never write one `member` line per stud.
 
 ## Simulations
 

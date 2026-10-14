@@ -7,8 +7,6 @@ use wasm_bindgen::prelude::*;
 
 include!(concat!(env!("OUT_DIR"), "/bundle.rs"));
 
-const FIRST: &str = "examples/parts/plate.gcad";
-
 thread_local! {
     static LATEST: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
     static CONTEXT: RefCell<Option<egui::Context>> = const { RefCell::new(None) };
@@ -127,7 +125,7 @@ pub fn start() {
     let asked = link::parse(&hash()).or_else(|| query_file().and_then(|f| link::parse(&f)));
     let file = match asked {
         Some(target) => follow(Some(target)),
-        None => Some(PathBuf::from(FIRST)),
+        None => None,
     };
     listen_for_hash_changes();
     wasm_bindgen_futures::spawn_local(async move {

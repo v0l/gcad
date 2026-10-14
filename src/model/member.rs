@@ -221,7 +221,114 @@ fn member_solid(
 }
 
 impl Model {
+    fn member_row(&mut self, line: &Line) -> Result<String> {
+        let [kind, size, rest @ ..] = line.positional.as_slice() else {
+            bail!("write `member kind size x,y,z x,y,z ... count=N step=x,y,z`");
+        };
+        let text = |key: &str| {
+            line.named
+                .iter()
+                .find(|(name, _)| name == key)
+                .map(|(_, value)| value.as_str())
+        };
+        let count = crate::parse::eval(
+            text("count")
+                .ok_or_else(|| anyhow!("`step=`, `end_step=` and `when=` need a `count=`"))?,
+            &self.scope,
+        )?;
+        if !count.is_finite() || count < 1.0 || count.fract() != 0.0 {
+            bail!("count must be a positive whole number");
+        }
+        if text("angle").is_some() || text("axis").is_some() {
+            bail!("give `step=`, or `angle=` with `axis=`, not both");
+        }
+        let step = point3(text("step").unwrap_or("0,0,0"), &self.scope)?.to_vec();
+        let end_step = text("end_step")
+            .map(|t| point3(t, &self.scope).map(|p| p.to_vec()))
+            .transpose()?;
+        let closed = rest.iter().any(|word| word == "closed");
+        let points = rest
+            .iter()
+            .filter(|word| *word != "closed")
+            .map(|word| point3(word, &self.scope))
+            .collect::<Result<Vec<_>>>()?;
+        if end_step.is_some() && (points.len() != 2 || closed) {
+            bail!("`end_step=` needs a member of exactly two points");
+        }
+        let when = text("when");
+        let label = label_of(line);
+        let previous = self.scope.get("k").copied();
+        let mut made = 0;
+        let mut members = 0;
+        let mut failure = None;
+        let last = points.len() - 1;
+        for k in 0..count as usize {
+            self.scope.insert("k".into(), k as f64);
+            let wanted = match when.map(|w| crate::parse::eval(w, &self.scope)) {
+                None => true,
+                Some(Ok(value)) => value != 0.0,
+                Some(Err(error)) => {
+                    failure = Some(error);
+                    break;
+                }
+            };
+            if !wanted {
+                continue;
+            }
+            let shifted: Vec<Point3> = points
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    let by = match (&end_step, i == last) {
+                        (Some(end), true) => *end,
+                        _ => step,
+                    };
+                    p + by * k as f64
+                })
+                .collect();
+            let mut one = line.clone();
+            one.label = Some(format!("{label}_{}", k + 1));
+            one.named
+                .retain(|(key, _)| !matches!(key.as_str(), "count" | "step" | "end_step" | "when"));
+            one.positional = [kind.clone(), size.clone()]
+                .into_iter()
+                .chain(shifted.iter().map(|p| format!("{},{},{}", p.x, p.y, p.z)))
+                .chain(closed.then(|| "closed".to_string()))
+                .collect();
+            let before = self.members.len();
+            if let Err(error) = self.op_member(&one) {
+                failure = Some(error.context(format!("instance {} of `{label}`", k + 1)));
+                break;
+            }
+            members += self.members.len() - before;
+            made += 1;
+        }
+        match previous {
+            Some(value) => self.scope.insert("k".into(), value),
+            None => self.scope.remove("k"),
+        };
+        if let Some(error) = failure {
+            return Err(error);
+        }
+        let skipped = count as usize - made;
+        let skipped = if skipped > 0 {
+            format!(", {skipped} skipped by when=")
+        } else {
+            String::new()
+        };
+        Ok(format!(
+            "{kind} {size}: {made} instances of `{label}`, {members} members{skipped}"
+        ))
+    }
+
     pub(crate) fn op_member(&mut self, line: &Line) -> Result<String> {
+        if line
+            .named
+            .iter()
+            .any(|(key, _)| key == "step" || key == "when" || key == "end_step")
+        {
+            return self.member_row(line);
+        }
         let [kind, size, rest @ ..] = line.positional.as_slice() else {
             bail!(
                 "write `member kind size x,y,z x,y,z ...`, like `member tube 40x40x3 0,0,0 500,0,0`"
@@ -251,9 +358,34 @@ impl Model {
                 "offset" => {
                     section = shifted(section, crate::parse::eval_point(text, &self.scope)?)
                 }
-                other => bail!("`member` takes up=, rotate= and offset=, not `{other}=`"),
+                "material" | "density" | "E" | "nu" | "yield" | "k" | "alpha" | "count"
+                | "step" | "angle" | "axis" => {}
+                other => bail!(
+                    "`member` takes up=, rotate=, offset=, material=, material properties and count= with step= or angle=/axis=, not `{other}=`"
+                ),
             }
         }
+        let mut material = line.clone();
+        material.op = "material".into();
+        material.positional = line
+            .named
+            .iter()
+            .filter(|(key, _)| key == "material")
+            .map(|(_, value)| value.clone())
+            .collect();
+        material.named.retain(|(key, _)| {
+            matches!(
+                key.as_str(),
+                "density" | "E" | "nu" | "yield" | "k" | "alpha"
+            )
+        });
+        let has_material = !material.positional.is_empty() || !material.named.is_empty();
+        let mut pattern = line.clone();
+        pattern.op = "pattern".into();
+        pattern
+            .named
+            .retain(|(key, _)| matches!(key.as_str(), "count" | "step" | "angle" | "axis"));
+        let repeated = !pattern.named.is_empty();
         let count = if closed {
             points.len()
         } else {
@@ -281,6 +413,7 @@ impl Model {
         });
         let label = label_of(line);
         let mut said = Vec::new();
+        let mut seeds = Vec::new();
         for i in 0..count {
             let along = directions[i];
             let mut lift = match (up, flat.then_some(plane).flatten()) {
@@ -379,10 +512,29 @@ impl Model {
                 })
                 .collect();
             self.record(&label, groups);
+            if has_material {
+                self.material_for(&material, name.clone(), &[])?;
+            }
             self.members.push(name.clone());
             said.push(format!("{name} {length:.1}"));
+            seeds.push(name.clone());
             self.bodies.push((name, solid));
         }
-        Ok(format!("{}: {}", section.name, said.join(", ")))
+        if repeated {
+            let before = self.members.len();
+            for seed in &seeds {
+                pattern.positional = vec![seed.clone()];
+                self.op_pattern(&pattern)?;
+            }
+            let instances = (self.members.len() - before) / seeds.len() + 1;
+            Ok(format!(
+                "{}: {} instances of `{label}`, {} members",
+                section.name,
+                instances,
+                instances * seeds.len()
+            ))
+        } else {
+            Ok(format!("{}: {}", section.name, said.join(", ")))
+        }
     }
 }

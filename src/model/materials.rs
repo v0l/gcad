@@ -51,12 +51,101 @@ impl Axes {
     }
 }
 
+#[derive(Clone, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
+pub struct Finish {
+    pub colour: Option<[f64; 3]>,
+    pub roughness: Option<f64>,
+    pub metallic: Option<f64>,
+    pub specular: Option<f64>,
+    pub clearcoat: Option<f64>,
+    pub clearcoat_roughness: Option<f64>,
+    pub transmission: Option<f64>,
+    pub ior: Option<f64>,
+    pub emission: Option<f64>,
+    #[serde(default)]
+    pub texture: Option<super::texture::Texture>,
+}
+
+impl Finish {
+    fn over(self, base: Finish) -> Finish {
+        Finish {
+            colour: self.colour.or(base.colour),
+            roughness: self.roughness.or(base.roughness),
+            metallic: self.metallic.or(base.metallic),
+            specular: self.specular.or(base.specular),
+            clearcoat: self.clearcoat.or(base.clearcoat),
+            clearcoat_roughness: self.clearcoat_roughness.or(base.clearcoat_roughness),
+            transmission: self.transmission.or(base.transmission),
+            ior: self.ior.or(base.ior),
+            emission: self.emission.or(base.emission),
+            texture: match (self.texture, base.texture) {
+                (Some(own), Some(base)) => Some(own.over(base)),
+                (own, base) => own.or(base),
+            },
+        }
+    }
+
+    fn any(&self) -> bool {
+        self.colour.is_some()
+            || self.texture.is_some()
+            || [
+                self.roughness,
+                self.metallic,
+                self.specular,
+                self.clearcoat,
+                self.clearcoat_roughness,
+                self.transmission,
+                self.ior,
+                self.emission,
+            ]
+            .iter()
+            .any(Option::is_some)
+    }
+
+    pub fn summary(&self) -> String {
+        let mut parts = Vec::new();
+        if let Some([r, g, b]) = self.colour {
+            let byte = |v: f64| (v * 255.0).round() as u8;
+            parts.push(format!("#{:02x}{:02x}{:02x}", byte(r), byte(g), byte(b)));
+        }
+        for (key, value) in [
+            ("roughness", self.roughness),
+            ("metallic", self.metallic),
+            ("specular", self.specular),
+            ("clearcoat", self.clearcoat),
+            ("clearcoat_roughness", self.clearcoat_roughness),
+            ("transmission", self.transmission),
+            ("ior", self.ior),
+            ("emission", self.emission),
+        ] {
+            if let Some(v) = value {
+                parts.push(format!("{key} {}", crate::plot::label(v)));
+            }
+        }
+        if let Some(texture) = &self.texture {
+            if let Some(pattern) = &texture.pattern {
+                parts.push(format!("texture {pattern}"));
+            }
+            if texture.colour.is_some()
+                || texture.normal.is_some()
+                || texture.roughness.is_some()
+                || texture.metallic.is_some()
+            {
+                parts.push("image maps".into());
+            }
+            parts.push(format!("tile {} mm", crate::plot::label(texture.scale())));
+        }
+        parts.join(", ")
+    }
+}
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Entry {
     pub name: String,
     pub density: Option<f64>,
     pub mechanics: Mechanics,
     pub axes: Option<Axes>,
+    pub finish: Option<Finish>,
     pub source: PathBuf,
 }
 
@@ -69,6 +158,17 @@ fn largest(set: &[Option<f64>; 3]) -> Option<f64> {
 }
 
 impl Entry {
+    pub(crate) fn over(mut self, base: Entry) -> Entry {
+        self.density = self.density.or(base.density);
+        self.mechanics = self.mechanics.over(base.mechanics);
+        self.axes = self.axes.or(base.axes);
+        self.finish = match (self.finish, base.finish) {
+            (Some(own), Some(base)) => Some(own.over(base)),
+            (own, base) => own.or(base),
+        };
+        self
+    }
+
     fn settle(mut self) -> Entry {
         if let Some(axes) = self.axes {
             let m = &mut self.mechanics;
@@ -144,10 +244,49 @@ fn config_library() -> Option<PathBuf> {
     Some(base.join("gcad").join(LIBRARY))
 }
 
+pub fn builtins() -> &'static HashMap<String, Entry> {
+    static ENTRIES: std::sync::OnceLock<HashMap<String, Entry>> = std::sync::OnceLock::new();
+    ENTRIES.get_or_init(|| {
+        let mut entries: HashMap<String, Entry> = super::bodies::MATERIALS
+            .iter()
+            .map(|stock| {
+                (
+                    stock.name.into(),
+                    Entry {
+                        name: stock.name.into(),
+                        density: Some(stock.density),
+                        mechanics: stock.mechanics(),
+                        axes: None,
+                        finish: None,
+                        source: PathBuf::from("built in"),
+                    },
+                )
+            })
+            .collect();
+        for entry in from_toml(
+            include_str!("../../data/materials.toml"),
+            Path::new("built in"),
+        )
+        .expect("valid standard material library")
+        {
+            let entry = match entries.remove(&entry.name) {
+                Some(base) => entry.over(base),
+                None => entry,
+            };
+            entries.insert(entry.name.clone(), entry);
+        }
+        entries
+    })
+}
+
 pub fn discovered(dir: Option<&Path>) -> Result<HashMap<String, Entry>> {
-    let mut library = HashMap::new();
+    let mut library = builtins().clone();
     for file in discover(dir).into_iter().rev() {
         for entry in load(&file)? {
+            let entry = match library.remove(&entry.name) {
+                Some(base) => entry.over(base),
+                None => entry,
+            };
             library.insert(entry.name.clone(), entry);
         }
     }
@@ -155,10 +294,123 @@ pub fn discovered(dir: Option<&Path>) -> Result<HashMap<String, Entry>> {
 }
 
 const TOML_KEYS: &[&str] = &[
-    "density", "E", "nu", "yield", "k", "alpha", "printed", "E1", "E2", "E3", "nu12", "nu13",
-    "nu23", "G12", "G13", "G23", "Xt", "Yt", "Zt", "Xc", "Yc", "Zc", "S12", "S13", "S23", "k1",
-    "k2", "k3", "alpha1", "alpha2", "alpha3", "source",
+    "density",
+    "E",
+    "nu",
+    "yield",
+    "k",
+    "alpha",
+    "printed",
+    "E1",
+    "E2",
+    "E3",
+    "nu12",
+    "nu13",
+    "nu23",
+    "G12",
+    "G13",
+    "G23",
+    "Xt",
+    "Yt",
+    "Zt",
+    "Xc",
+    "Yc",
+    "Zc",
+    "S12",
+    "S13",
+    "S23",
+    "k1",
+    "k2",
+    "k3",
+    "alpha1",
+    "alpha2",
+    "alpha3",
+    "source",
+    "color",
+    "roughness",
+    "metallic",
+    "specular",
+    "clearcoat",
+    "clearcoat_roughness",
+    "transmission",
+    "ior",
+    "emission",
+    "texture",
+    "texture_scale",
+    "texture_rotation",
+    "color_map",
+    "normal_map",
+    "roughness_map",
+    "metallic_map",
 ];
+
+fn toml_colour(name: &str, value: &toml::Value) -> Result<[f64; 3]> {
+    let wrong =
+        || anyhow!("`{name}.color` should be \"#rrggbb\", a colour name, or [r, g, b] from 0 to 1");
+    match value {
+        toml::Value::String(text) => super::bodies::colour_text(text).ok_or_else(wrong),
+        toml::Value::Array(items) if items.len() == 3 => {
+            let mut rgb = [0.0; 3];
+            for (slot, item) in rgb.iter_mut().zip(items) {
+                *slot = match item {
+                    toml::Value::Float(v) => *v,
+                    toml::Value::Integer(v) => *v as f64,
+                    _ => return Err(wrong()),
+                };
+                if !(0.0..=1.0).contains(slot) {
+                    return Err(wrong());
+                }
+            }
+            Ok(rgb)
+        }
+        _ => Err(wrong()),
+    }
+}
+
+fn texture_from_toml(
+    name: &str,
+    fields: &toml::Table,
+    path: &Path,
+) -> Result<Option<super::texture::Texture>> {
+    use super::texture::{Map, Texture};
+    let text = |key: &str| -> Result<Option<&str>> {
+        match fields.get(key) {
+            None => Ok(None),
+            Some(toml::Value::String(value)) => Ok(Some(value)),
+            Some(_) => bail!("`{name}.{key}` must be a string"),
+        }
+    };
+    let number = |key: &str| -> Result<Option<f64>> {
+        match fields.get(key) {
+            None => Ok(None),
+            Some(toml::Value::Integer(v)) => Ok(Some(*v as f64)),
+            Some(toml::Value::Float(v)) => Ok(Some(*v)),
+            Some(_) => bail!("`{name}.{key}` must be a number"),
+        }
+    };
+    let map = |key: &str| -> Result<Option<Map>> {
+        text(key)?
+            .map(|file| Map::load(&path.parent().unwrap_or(Path::new(".")).join(file)))
+            .transpose()
+    };
+    let texture = Texture {
+        pattern: text("texture")?.map(str::to_string),
+        tile: number("texture_scale")?,
+        turn: number("texture_rotation")?,
+        colour: map("color_map")?,
+        normal: map("normal_map")?,
+        roughness: map("roughness_map")?,
+        metallic: map("metallic_map")?,
+    };
+    if !fields
+        .keys()
+        .any(|key| key.starts_with("texture") || key.ends_with("_map"))
+    {
+        return Ok(None);
+    }
+    texture.check()?;
+    Ok(Some(texture))
+}
 
 fn from_toml(text: &str, path: &Path) -> Result<Vec<Entry>> {
     let table: toml::Table = text.parse().map_err(|e| anyhow!("{e}"))?;
@@ -203,6 +455,21 @@ fn from_toml(text: &str, path: &Path) -> Result<Vec<Entry>> {
             Some(toml::Value::Boolean(b)) => *b,
             Some(other) => bail!("`{name}.printed` should be true or false, not {other}"),
         };
+        let finish = Finish {
+            colour: fields
+                .get("color")
+                .map(|v| toml_colour(name, v))
+                .transpose()?,
+            roughness: number("roughness")?,
+            metallic: number("metallic")?,
+            specular: number("specular")?,
+            clearcoat: number("clearcoat")?,
+            clearcoat_roughness: number("clearcoat_roughness")?,
+            transmission: number("transmission")?,
+            ior: number("ior")?,
+            emission: number("emission")?,
+            texture: texture_from_toml(name, fields, path)?,
+        };
         let entry = Entry {
             name: slug(name),
             density: number("density")?,
@@ -215,6 +482,7 @@ fn from_toml(text: &str, path: &Path) -> Result<Vec<Entry>> {
                 printed,
             },
             axes: axes.any().then_some(axes),
+            finish: finish.any().then_some(finish),
             source: path.to_path_buf(),
         };
         check(&entry)?;
@@ -241,6 +509,28 @@ fn check(entry: &Entry) -> Result<()> {
         && !(-1.0..0.5).contains(&nu)
     {
         bail!("`{name}` has nu {nu}; an isotropic Poisson's ratio is below 0.5");
+    }
+    if let Some(finish) = &entry.finish {
+        for (key, value, range) in [
+            ("roughness", finish.roughness, 0.0..=1.0),
+            ("metallic", finish.metallic, 0.0..=1.0),
+            ("specular", finish.specular, 0.0..=2.0),
+            ("clearcoat", finish.clearcoat, 0.0..=1.0),
+            ("clearcoat_roughness", finish.clearcoat_roughness, 0.0..=1.0),
+            ("transmission", finish.transmission, 0.0..=1.0),
+            ("ior", finish.ior, 1.0..=3.0),
+            ("emission", finish.emission, 0.0..=1000.0),
+        ] {
+            if let Some(v) = value
+                && !range.contains(&v)
+            {
+                bail!(
+                    "`{name}` has {key} {v}; it goes from {} to {}",
+                    range.start(),
+                    range.end()
+                );
+            }
+        }
     }
     if let Some(axes) = &entry.axes {
         for (what, set) in [
@@ -383,6 +673,7 @@ impl Si {
                 printed: false,
             },
             axes: axes.any().then_some(axes),
+            finish: None,
             source: path.to_path_buf(),
         };
         check(&entry)?;
@@ -696,12 +987,19 @@ pub fn table(target: Option<&Path>) -> Result<String> {
         };
         let mut found: Vec<Entry> = discovered(Some(&dir))?.into_values().collect();
         for stock in super::bodies::MATERIALS {
-            if !found.iter().any(|e| e.name == stock.name) {
+            if let Some(entry) = found
+                .iter_mut()
+                .find(|e| e.name == stock.name && e.density.is_none())
+            {
+                entry.density = Some(stock.density);
+                entry.mechanics = entry.mechanics.over(stock.mechanics());
+            } else if !found.iter().any(|e| e.name == stock.name) {
                 found.push(Entry {
                     name: stock.name.to_string(),
                     density: Some(stock.density),
                     mechanics: stock.mechanics(),
                     axes: None,
+                    finish: None,
                     source: PathBuf::new(),
                 });
             }
@@ -738,6 +1036,10 @@ pub fn table(target: Option<&Path>) -> Result<String> {
             e.axes
                 .map(|a| format!(", along three axes: {}", a.summary()))
                 .unwrap_or_default()
+                + &e.finish
+                    .as_ref()
+                    .map(|f| format!(", looks {}", f.summary()))
+                    .unwrap_or_default()
         ));
     }
     Ok(lines.join("\n"))

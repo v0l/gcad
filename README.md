@@ -95,8 +95,10 @@ gcad sim examples/robot/wind.gsim --remote
 ![Streamlines past the robot arm, ranked by turbulence](docs/robot-arm-wind.png)
 ![Air speed on slices through the arm and its wake](docs/robot-arm-wind-slices.png)
 
-With no command, `gcad` opens the viewer: a live view of the file that rebuilds on
-save, with a view cube, measuring, and sliders for an assembly's joints. Each part has its own
+With no command, `gcad` opens the viewer: a help card explains how it fits the agent
+workflow, and a browse button (or `cmd+o`, or dropping a file) opens a model. Open, it is a
+live view of the file that rebuilds on save, with a view cube, measuring, and sliders for an
+assembly's joints. The `?` toggle in the header brings the help back. Each part has its own
 show, ghost and opacity controls, and the LINES and PARTS buttons fold away the side columns.
 
 The format, operations and selectors are in [docs/format.md](docs/format.md), which
@@ -108,6 +110,7 @@ operations exist, which are still missing and the tests behind each are in
 
 The viewer also runs as a WebAssembly page with an editor beside the view. Edits are kept
 in the browser's local storage, and you can drop `.gcad` and `.gasm` files on the page.
+With no link in the address it shows the same help card the desktop app does.
 
 ```sh
 ./web/build.sh

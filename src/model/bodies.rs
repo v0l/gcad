@@ -465,6 +465,15 @@ impl Model {
             self.body_name()
         };
         let wanted: &[&str] = if self.assembly { &["part"] } else { &[] };
+        self.material_for(line, name, wanted)
+    }
+
+    pub(crate) fn material_for(
+        &mut self,
+        line: &Line,
+        name: String,
+        wanted: &[&'static str],
+    ) -> Result<String> {
         let args = Args::new(
             line,
             wanted,
@@ -480,11 +489,7 @@ impl Model {
         let entry = label
             .as_deref()
             .and_then(|l| self.library.get(&super::materials::slug(l)).cloned());
-        let known = if entry.is_some() {
-            None
-        } else {
-            label.as_deref().and_then(stock_of)
-        };
+        let known = label.as_deref().and_then(stock_of);
         let listed = entry
             .as_ref()
             .and_then(|e| e.density)
@@ -510,10 +515,15 @@ impl Model {
             (None, None, None) => bail!("write `material steel` or `material name density=1.2`"),
         };
         let mut mechanics = match (&entry, known) {
+            (Some(e), Some(stock)) if e.density.is_none() => e.mechanics.over(stock.mechanics()),
             (Some(e), _) => e.mechanics,
             (None, Some(stock)) => stock.mechanics(),
             (None, None) => Mechanics::default(),
         };
+        let finish = entry.as_ref().and_then(|e| e.finish.clone());
+        if let Some(colour) = finish.as_ref().and_then(|f| f.colour) {
+            self.colours.entry(name.clone()).or_insert(colour);
+        }
         let axes = entry.as_ref().and_then(|e| e.axes);
         for (key, slot) in [
             ("E", &mut mechanics.young),
@@ -542,6 +552,7 @@ impl Model {
                 density,
                 mechanics,
                 axes,
+                finish,
             },
         );
         let from = entry
@@ -564,9 +575,14 @@ impl Model {
         if !crate::host::is_file(file) {
             bail!("no file {}", file.display());
         }
+        self.ensure_library()?;
         let entries = super::materials::load(file)?;
         let names: Vec<String> = entries.iter().map(|e| e.name.clone()).collect();
         for entry in entries {
+            let entry = match self.library.remove(&entry.name) {
+                Some(base) => entry.over(base),
+                None => entry,
+            };
             self.library.insert(entry.name.clone(), entry);
         }
         Ok(format!("materials {}", names.join(", ")))
@@ -587,33 +603,8 @@ impl Model {
     }
 
     pub(crate) fn colour_of(&self, text: &str) -> Result<[f64; 3]> {
-        let named = |name: &str| -> Option<[f64; 3]> {
-            Some(match name {
-                "red" => [0.85, 0.1, 0.1],
-                "green" => [0.1, 0.6, 0.2],
-                "blue" => [0.1, 0.3, 0.85],
-                "yellow" => [0.95, 0.8, 0.1],
-                "orange" => [0.95, 0.5, 0.1],
-                "purple" => [0.5, 0.2, 0.7],
-                "cyan" => [0.1, 0.7, 0.8],
-                "magenta" => [0.85, 0.2, 0.6],
-                "black" => [0.05, 0.05, 0.05],
-                "white" => [0.95, 0.95, 0.95],
-                "grey" | "gray" => [0.5, 0.5, 0.5],
-                "silver" => [0.75, 0.75, 0.78],
-                _ => return None,
-            })
-        };
-        let colour = if let Some(hex) = text.strip_prefix('#') {
-            let channel = |i: usize| {
-                hex.get(i..i + 2)
-                    .and_then(|h| u8::from_str_radix(h, 16).ok())
-                    .map(|v| v as f64 / 255.0)
-            };
-            match (hex.len(), channel(0), channel(2), channel(4)) {
-                (6, Some(r), Some(g), Some(b)) => [r, g, b],
-                _ => bail!("`{text}` is not a colour; write #rrggbb"),
-            }
+        let colour = if text.starts_with('#') {
+            colour_text(text).ok_or_else(|| anyhow!("`{text}` is not a colour; write #rrggbb"))?
         } else if text.contains(',') {
             let p = point3(text, &self.scope)?;
             let rgb = [p.x, p.y, p.z];
@@ -622,7 +613,7 @@ impl Model {
             }
             rgb
         } else {
-            named(text).ok_or_else(|| {
+            colour_text(text).ok_or_else(|| {
                 anyhow!("`{text}` is not a colour; use a name like red or grey, #rrggbb, or r,g,b from 0 to 1")
             })?
         };
@@ -1219,12 +1210,43 @@ fn read_step(path: &std::path::Path, pick: Option<usize>) -> Result<Vec<StepSoli
     Ok(out)
 }
 
+pub(crate) fn colour_text(text: &str) -> Option<[f64; 3]> {
+    if let Some(hex) = text.strip_prefix('#') {
+        let channel = |i: usize| {
+            hex.get(i..i + 2)
+                .and_then(|h| u8::from_str_radix(h, 16).ok())
+                .map(|v| v as f64 / 255.0)
+        };
+        return match (hex.len(), channel(0), channel(2), channel(4)) {
+            (6, Some(r), Some(g), Some(b)) => Some([r, g, b]),
+            _ => None,
+        };
+    }
+    Some(match text {
+        "red" => [0.85, 0.1, 0.1],
+        "green" => [0.1, 0.6, 0.2],
+        "blue" => [0.1, 0.3, 0.85],
+        "yellow" => [0.95, 0.8, 0.1],
+        "orange" => [0.95, 0.5, 0.1],
+        "purple" => [0.5, 0.2, 0.7],
+        "cyan" => [0.1, 0.7, 0.8],
+        "magenta" => [0.85, 0.2, 0.6],
+        "black" => [0.05, 0.05, 0.05],
+        "white" => [0.95, 0.95, 0.95],
+        "grey" | "gray" => [0.5, 0.5, 0.5],
+        "silver" => [0.75, 0.75, 0.78],
+        _ => return None,
+    })
+}
+
 #[derive(Clone, Debug, PartialEq, serde::Serialize, serde::Deserialize)]
 pub struct Material {
     pub name: String,
     pub density: f64,
     pub mechanics: Mechanics,
     pub axes: Option<super::materials::Axes>,
+    #[serde(default)]
+    pub finish: Option<super::materials::Finish>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, serde::Serialize, serde::Deserialize)]
@@ -1235,6 +1257,19 @@ pub struct Mechanics {
     pub conductivity: Option<f64>,
     pub expansion: Option<f64>,
     pub printed: bool,
+}
+
+impl Mechanics {
+    pub(crate) fn over(self, base: Mechanics) -> Mechanics {
+        Mechanics {
+            young: self.young.or(base.young),
+            poisson: self.poisson.or(base.poisson),
+            strength: self.strength.or(base.strength),
+            conductivity: self.conductivity.or(base.conductivity),
+            expansion: self.expansion.or(base.expansion),
+            printed: self.printed || base.printed,
+        }
+    }
 }
 
 pub struct Stock {

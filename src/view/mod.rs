@@ -1,5 +1,6 @@
 mod app;
 mod scene;
+mod textures;
 mod units;
 
 pub use app::App;

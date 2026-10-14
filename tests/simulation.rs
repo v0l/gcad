@@ -122,7 +122,10 @@ fn torque_through_gears() {
 
 #[test]
 fn torque_through_lossy_gears() {
-    let lossy = LIFT.replace("ratio=360/(pi*20)", "ratio=360/(pi*20) efficiency=0.5 back=0.25");
+    let lossy = LIFT.replace(
+        "ratio=360/(pi*20)",
+        "ratio=360/(pi*20) efficiency=0.5 back=0.25",
+    );
     let outcome = simulated(
         "torque_through_lossy_gears",
         &[
@@ -144,7 +147,10 @@ fn drag_on_joints() {
     let dragged = LIFT
         .replace("min=0 max=50", "min=0 max=50 drag=0.1")
         .replace("turn about=spin", "turn about=spin drag=0.0002")
-        .replace("ratio=360/(pi*20)", "ratio=360/(pi*20) efficiency=0.5 back=0.25");
+        .replace(
+            "ratio=360/(pi*20)",
+            "ratio=360/(pi*20) efficiency=0.5 back=0.25",
+        );
     let outcome = simulated(
         "drag_on_joints",
         &[
@@ -167,13 +173,24 @@ fn drag_on_joints() {
         held * 0.25 - 0.1 * 0.01 - 0.0002,
         1.0e-6,
     );
-    close(reading(&outcome, "lift"), force + 0.1 + 0.0002 / 0.01, 1.0e-6);
-    close(reading(&outcome, "lift.back"), force - 0.1 - 0.0002 / 0.01, 1.0e-6);
+    close(
+        reading(&outcome, "lift"),
+        force + 0.1 + 0.0002 / 0.01,
+        1.0e-6,
+    );
+    close(
+        reading(&outcome, "lift.back"),
+        force - 0.1 - 0.0002 / 0.01,
+        1.0e-6,
+    );
 }
 
 #[test]
 fn worm_that_locks() {
-    let worm = LIFT.replace("ratio=360/(pi*20)", "ratio=360/(pi*20) lead=3.58 friction=0.1");
+    let worm = LIFT.replace(
+        "ratio=360/(pi*20)",
+        "ratio=360/(pi*20) lead=3.58 friction=0.1",
+    );
     let outcome = simulated(
         "worm_that_locks",
         &[
@@ -214,13 +231,25 @@ fn worm_drive_forces_stresses_and_heat() {
     let motor = ideal / efficiency + 0.02;
     close(reading(&outcome, "spin"), motor, 1.0e-6);
     close(reading(&outcome, "spin.ideal"), ideal, 1.0e-6);
-    close(reading(&outcome, "spin.friction"), ideal / efficiency - ideal, 1.0e-6);
+    close(
+        reading(&outcome, "spin.friction"),
+        ideal / efficiency - ideal,
+        1.0e-6,
+    );
     close(reading(&outcome, "spin.drag"), 0.02, 1.0e-6);
-    close(reading(&outcome, "mesh.turn.efficiency"), efficiency * 100.0, 1.0e-9);
+    close(
+        reading(&outcome, "mesh.turn.efficiency"),
+        efficiency * 100.0,
+        1.0e-9,
+    );
     assert_eq!(reading(&outcome, "mesh.turn.back"), 0.0);
     close(reading(&outcome, "mesh.turn.torque"), 12.0, 1.0e-6);
     let tangential = 12.0 / 0.040;
-    close(reading(&outcome, "mesh.turn.tangential"), tangential, 1.0e-6);
+    close(
+        reading(&outcome, "mesh.turn.tangential"),
+        tangential,
+        1.0e-6,
+    );
     close(
         reading(&outcome, "mesh.turn.radial"),
         tangential * alpha.sin() / (alpha.cos() * lead.cos() - mu * lead.sin()),
@@ -233,9 +262,15 @@ fn worm_drive_forces_stresses_and_heat() {
     );
     let bending = tangential / (12.0 * 2.0 * (0.484 - 2.87 / 40.0));
     close(reading(&outcome, "mesh.turn.bending"), bending, 1.0e-6);
-    close(reading(&outcome, "mesh.turn.safety"), 150.0 / bending, 1.0e-6);
+    close(
+        reading(&outcome, "mesh.turn.safety"),
+        150.0 / bending,
+        1.0e-6,
+    );
     let compliance = (1.0 - 0.34_f64.powi(2)) / 110.0e3 + (1.0 - 0.29_f64.powi(2)) / 200.0e3;
-    let contact = (tangential / alpha.cos() / (std::f64::consts::PI * 12.0)
+    let contact = (tangential
+        / alpha.cos()
+        / (std::f64::consts::PI * 12.0)
         / (40.0 * alpha.sin())
         / compliance)
         .sqrt();
@@ -264,20 +299,31 @@ fn spur_gear_mesh_forces() {
     );
     let outcome = simulated(
         "spur_gear_mesh_forces",
-        &[("base.gcad", BASE), ("disc.gcad", DISC), ("drive.gasm", &spur)],
+        &[
+            ("base.gcad", BASE),
+            ("disc.gcad", DISC),
+            ("drive.gasm", &spur),
+        ],
         "sim torque\npart drive.gasm\ngravity 0,0,0\ntorque turn 12\nmaterial wheel bronze E=110 nu=0.34 yield=150 density=8.8",
     );
     let alpha = 20.0_f64.to_radians();
     close(reading(&outcome, "mesh.turn.torque"), 12.0, 1.0e-6);
     let tangential = 12.0 / 0.040;
-    close(reading(&outcome, "mesh.turn.tangential"), tangential, 1.0e-6);
-    close(reading(&outcome, "mesh.turn.radial"), tangential * alpha.tan(), 1.0e-6);
+    close(
+        reading(&outcome, "mesh.turn.tangential"),
+        tangential,
+        1.0e-6,
+    );
+    close(
+        reading(&outcome, "mesh.turn.radial"),
+        tangential * alpha.tan(),
+        1.0e-6,
+    );
     assert!(outcome.reading("mesh.turn.axial").is_none());
     let compliance = (1.0 - 0.34_f64.powi(2)) / 110.0e3 + (1.0 - 0.29_f64.powi(2)) / 200.0e3;
     let curvature = 1.0 / (40.0 * alpha.sin()) + 1.0 / (20.0 * alpha.sin());
-    let contact = (tangential / alpha.cos() / (std::f64::consts::PI * 12.0) * curvature
-        / compliance)
-        .sqrt();
+    let contact =
+        (tangential / alpha.cos() / (std::f64::consts::PI * 12.0) * curvature / compliance).sqrt();
     close(reading(&outcome, "mesh.turn.contact"), contact, 1.0e-6);
 }
 
@@ -299,7 +345,10 @@ fn couple_geometry_needs_module_and_face() {
         .find_map(|(_, r)| r.as_ref().err())
         .map(|e| format!("{e:#}"))
         .unwrap_or_default();
-    assert!(failed.contains("give `module=` and `face=` together"), "{failed}");
+    assert!(
+        failed.contains("give `module=` and `face=` together"),
+        "{failed}"
+    );
 }
 
 #[test]
@@ -455,7 +504,10 @@ fn small_part_keeps_its_own_stress_band() {
                 "post.gcad",
                 "rect 6 6\nextrude 10\nmaterial aluminium E=70 nu=0.33 yield=50\n",
             ),
-            ("post.gasm", "part slab slab.gcad\npart post post.gcad\nmove post 0,0,20\n"),
+            (
+                "post.gasm",
+                "part slab slab.gcad\npart post post.gcad\nmove post 0,0,20\n",
+            ),
         ],
         "sim static\npart post.gasm\nfix slab:<Z\nload post:>Z force=100,0,0",
     );
@@ -1292,9 +1344,17 @@ fn parts_kept_apart_do_not_bond_across_a_clearance() {
     let sim = "sim static\npart stack.gasm\nfix a:<Z\nfix b:>Z\nload a:>Z force=0,0,-100\nmesh 3";
     let files = [("block.gcad", SLAB), ("stack.gasm", stack)];
     let close = simulated("parts_close_bond", &files, sim);
-    assert!(close.notes.iter().any(|n| n.contains("bonded a to b")), "{:?}", close.notes);
+    assert!(
+        close.notes.iter().any(|n| n.contains("bonded a to b")),
+        "{:?}",
+        close.notes
+    );
     let apart = simulated("parts_kept_apart", &files, &format!("{sim}\napart a b"));
-    assert!(!apart.notes.iter().any(|n| n.contains("bonded")), "{:?}", apart.notes);
+    assert!(
+        !apart.notes.iter().any(|n| n.contains("bonded")),
+        "{:?}",
+        apart.notes
+    );
 }
 
 #[test]
@@ -1431,7 +1491,8 @@ fn bearings_carry_force_and_no_moment() {
     assert!(reading(&pinned, "left.moment") > 10.0, "{}", pinned.table());
 }
 
-const HOUSING: &str = "rect 40 40\nh: extrude 20\nplane h.end\nbore: hole 20.04 0,0\nmaterial steel\n";
+const HOUSING: &str =
+    "rect 40 40\nh: extrude 20\nplane h.end\nbore: hole 20.04 0,0\nmaterial steel\n";
 
 const SPINDLE: &str =
     "circle 20\ns: extrude 300\nplane s.end\nrect 14 14\nsq: extrude 10\nmaterial steel\n";
@@ -2116,6 +2177,176 @@ fn material_library_is_found() {
         error.contains("`E11`") && error.contains("E1, E2, E3"),
         "{error}"
     );
+}
+
+#[test]
+fn material_library_sets_how_a_body_looks() {
+    let dir = PathBuf::from(scratch("material_library_sets_how_a_body_looks"));
+    std::fs::create_dir_all(dir.join(".git")).expect("dir");
+    std::fs::write(
+        dir.join("materials.toml"),
+        "[steel]\ncolor = \"#3a3f44\"\nroughness = 0.45\nclearcoat = 0.3\n\n[float-glass]\ndensity = 2.5\ncolor = [0.9, 0.95, 0.93]\ntransmission = 1\nior = 1.52\nroughness = 0.02\n",
+    )
+    .expect("library");
+    let part = |name: &str, text: &str| {
+        let path = dir.join(name);
+        std::fs::write(&path, format!("rect 10 10\nextrude 10\n{text}")).expect("part");
+        spec_of(&path)
+    };
+    let clad = part("clad.gcad", "material steel\n");
+    let steel = &clad.materials["main"];
+    assert_eq!((steel.density, steel.mechanics.young), (7.85, Some(200.0)));
+    let finish = steel.finish.as_ref().expect("a finish");
+    assert_eq!(
+        (finish.roughness, finish.clearcoat, finish.metallic),
+        (Some(0.45), Some(0.3), Some(1.0))
+    );
+    let grey = clad.colours["main"];
+    assert!((grey[0] - 0x3a as f64 / 255.0).abs() < 1.0e-9, "{grey:?}");
+    let painted = part("painted.gcad", "color red\nmaterial steel\n");
+    assert_eq!(painted.colours["main"], [0.85, 0.1, 0.1]);
+    let pane = part("pane.gcad", "material float-glass\n");
+    let glass = pane.materials["main"].finish.as_ref().expect("a finish");
+    assert_eq!((glass.transmission, glass.ior), (Some(1.0), Some(1.52)));
+    assert_eq!(pane.colours["main"], [0.9, 0.95, 0.93]);
+    std::fs::write(dir.join("materials.toml"), "[steel]\nroughness = 2\n").expect("bad library");
+    let run = gcad::model::run_path(&dir.join("clad.gcad"), &[], None).expect("runs");
+    let (_, step) = run.steps.last().expect("a step");
+    let error = format!("{:#}", step.as_ref().expect_err("out of range"));
+    assert!(
+        error.contains("roughness 2") && error.contains("0 to 1"),
+        "{error}"
+    );
+}
+
+#[test]
+fn standard_library_covers_common_materials() {
+    let library = gcad::model::materials::builtins();
+    assert!(library.len() >= 150, "{} materials", library.len());
+    for name in [
+        "aluminium-6061-t6",
+        "stainless-316",
+        "steel-s355",
+        "brass",
+        "copper",
+        "titanium-grade-5",
+        "pom",
+        "acetal",
+        "ptfe",
+        "peek",
+        "hdpe",
+        "pvc",
+        "epdm",
+        "silicone",
+        "oak",
+        "c24",
+        "plywood",
+        "osb",
+        "mdf",
+        "concrete",
+        "brick",
+        "plasterboard",
+        "glass",
+        "granite",
+        "pir",
+        "rockwool",
+        "eps",
+        "xps",
+        "carbon-fibre",
+        "fr4",
+    ] {
+        let entry = library.get(name).unwrap_or_else(|| panic!("no `{name}`"));
+        assert!(entry.density.is_some_and(|d| d > 0.0), "{name} density");
+        assert!(
+            entry.mechanics.conductivity.is_some_and(|k| k > 0.0),
+            "{name} conductivity"
+        );
+        assert!(
+            entry.finish.as_ref().and_then(|f| f.colour).is_some(),
+            "{name} colour"
+        );
+    }
+    let k = |name: &str| library[name].mechanics.conductivity.unwrap();
+    assert!(k("copper") > k("aluminium-6061-t6") && k("aluminium-6061-t6") > k("stainless-316"));
+    assert!(k("concrete") > k("oak") && k("oak") > k("rockwool") && k("rockwool") > k("pir"));
+    assert_eq!(
+        library["osb"]
+            .finish
+            .as_ref()
+            .unwrap()
+            .texture
+            .as_ref()
+            .unwrap()
+            .pattern
+            .as_deref(),
+        Some("osb")
+    );
+    assert_eq!(library["aluminum"].density, library["aluminium"].density);
+    let model = common::build("rect 10 10\nextrude 10\nmaterial stainless-316");
+    let steel = &model.materials["main"];
+    assert_eq!(
+        (steel.density, steel.mechanics.conductivity),
+        (8.03, Some(14.6))
+    );
+    assert_eq!(steel.finish.as_ref().unwrap().metallic, Some(1.0));
+}
+
+#[test]
+fn project_library_inherits_and_textures() {
+    let dir = PathBuf::from(scratch("project_library_inherits_and_textures"));
+    std::fs::create_dir_all(dir.join(".git")).expect("dir");
+    image::RgbaImage::from_pixel(4, 2, image::Rgba([200, 100, 50, 255]))
+        .save(dir.join("grain.png"))
+        .expect("png");
+    std::fs::write(
+        dir.join("materials.toml"),
+        "[oak]\nroughness = 0.3\ntexture_scale = 400\n\n[decking]\ndensity = 0.55\nk = 0.13\ncolor_map = \"grain.png\"\nroughness_map = \"grain.png\"\ntexture_rotation = 90\n",
+    )
+    .expect("library");
+    let part = |name: &str, text: &str| {
+        let path = dir.join(name);
+        std::fs::write(&path, format!("rect 10 10\nextrude 10\n{text}")).expect("part");
+        spec_of(&path)
+    };
+    let oak = part("oak.gcad", "material oak\n");
+    let oak = &oak.materials["main"];
+    assert_eq!((oak.density, oak.mechanics.conductivity), (0.7, Some(0.18)));
+    let finish = oak.finish.as_ref().expect("finish");
+    assert_eq!(finish.roughness, Some(0.3));
+    let texture = finish.texture.as_ref().expect("texture");
+    assert_eq!(
+        (texture.pattern.as_deref(), texture.scale()),
+        (Some("wood"), 400.0)
+    );
+    let deck = part("deck.gcad", "material decking\n");
+    let texture = deck.materials["main"]
+        .finish
+        .as_ref()
+        .unwrap()
+        .texture
+        .clone()
+        .unwrap();
+    let map = texture.colour.clone().expect("colour map");
+    assert_eq!(
+        (map.width, map.height, &map.rgba[..4]),
+        (4, 2, &[200, 100, 50, 255][..])
+    );
+    assert!(texture.roughness.is_some() && texture.normal.is_none());
+    assert_eq!(texture.rotation(), 90.0);
+    for (library, wanted) in [
+        ("[x]\ndensity = 1\ntexture = \"plaid\"\n", "unknown texture"),
+        ("[x]\ndensity = 1\ntexture_scale = 0\n", "texture_scale"),
+        (
+            "[x]\ndensity = 1\ncolor_map = \"missing.png\"\n",
+            "missing.png",
+        ),
+    ] {
+        std::fs::write(dir.join("materials.toml"), library).expect("bad library");
+        let run = gcad::model::run_path(&dir.join("deck.gcad"), &[], None).expect("runs");
+        let (_, step) = run.steps.last().expect("a step");
+        let error = format!("{:#}", step.as_ref().expect_err("bad texture"));
+        assert!(error.contains(wanted), "{error}");
+    }
 }
 
 #[test]
