@@ -65,3 +65,17 @@ magnetics on the tet mesh checked against TEAM problem 13.
 
 `spin` with a `heat` line bails in `src/sim/wind.rs`: rotor cells move, so the per-cell
 conductivity table in the thermal lattice would have to move with them.
+
+## `slide` on a small curved face holds every direction
+
+A support's held directions come from the triangle normals around each node, kept when they
+differ by more than 0.05 after Gram-Schmidt. On a Ø5 bore the normals splay enough that the
+axial direction is kept too, so `slide drive.shaft:dbore.side` in `~/git/rotator/sims/azdrive.gsim`
+reacted 495 N of worm thrust along the shaft. Use the face's own normal (the cylinder's radial
+direction at the node) for curved faces instead of the triangles'.
+
+## Contact on a slip-fit D-shaft never settles
+
+`contact drive.motor drive.shaft` in the same sim ran 30 rounds, 4 minutes each, with the same
+2345 pairs touching and the residual never reaching 1e-9. The D-flat is the shaft's only hold
+against turning, so each round's linear solve is near-singular about the axis.
