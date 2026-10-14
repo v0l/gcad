@@ -1424,7 +1424,7 @@ impl Model {
                     (!same_motion(*delta, Matrix4::identity())).then(|| mesh.transformed(*delta))
                 })
                 .collect();
-            let mesh_of = |i: usize| moved[i].as_ref().unwrap_or(&meshes[i]);
+            let mesh_of = |i: usize| moved[i].as_ref().unwrap_or(&*meshes[i]);
             let together = |i: usize, j: usize| same_motion(deltas[i], deltas[j]);
             let (rigid, relative): (Vec<_>, Vec<_>) =
                 pairs.iter().copied().partition(|&(i, j)| together(i, j));

@@ -672,7 +672,7 @@ impl Meshed {
     }
 }
 
-pub fn clashes(meshes: &[Meshed]) -> Vec<(usize, usize, f64)> {
+pub fn clashes(meshes: &[std::sync::Arc<Meshed>]) -> Vec<(usize, usize, f64)> {
     use rayon::prelude::*;
     let pairs: Vec<(usize, usize)> = (0..meshes.len())
         .flat_map(|i| (i + 1..meshes.len()).map(move |j| (i, j)))
@@ -684,9 +684,56 @@ pub fn clashes(meshes: &[Meshed]) -> Vec<(usize, usize, f64)> {
         .collect()
 }
 
-pub fn meshed_all(solids: &[&Solid]) -> Vec<Meshed> {
+type MeshKey = Vec<(monstertruck::topology::FaceId<Surface>, bool)>;
+
+#[derive(Default)]
+struct MeshCache {
+    entries: std::collections::HashMap<MeshKey, (Solid, std::sync::Arc<Meshed>)>,
+    triangles: usize,
+}
+
+static MESHES: std::sync::LazyLock<std::sync::Mutex<MeshCache>> =
+    std::sync::LazyLock::new(Default::default);
+
+const CACHED_TRIANGLES: usize = 8_000_000;
+
+fn mesh_key(solid: &Solid) -> MeshKey {
+    solid
+        .boundaries()
+        .iter()
+        .flat_map(|shell| shell.face_iter())
+        .map(|face| (face.id(), face.orientation()))
+        .collect()
+}
+
+pub fn meshed_all(solids: &[&Solid]) -> Vec<std::sync::Arc<Meshed>> {
     use rayon::prelude::*;
-    solids.par_iter().map(|s| Meshed::new(s)).collect()
+    use std::sync::Arc;
+    let keys: Vec<MeshKey> = solids.iter().map(|s| mesh_key(s)).collect();
+    let found: Vec<Option<Arc<Meshed>>> = {
+        let cache = MESHES.lock().unwrap_or_else(|e| e.into_inner());
+        keys.iter()
+            .map(|key| cache.entries.get(key).map(|(_, m)| m.clone()))
+            .collect()
+    };
+    let made: Vec<Arc<Meshed>> = solids
+        .par_iter()
+        .zip(found)
+        .map(|(solid, found)| found.unwrap_or_else(|| Arc::new(Meshed::new(solid))))
+        .collect();
+    let mut cache = MESHES.lock().unwrap_or_else(|e| e.into_inner());
+    for ((solid, key), mesh) in solids.iter().zip(keys).zip(&made) {
+        if key.is_empty() || cache.entries.contains_key(&key) {
+            continue;
+        }
+        if cache.triangles + mesh.triangles.len() > CACHED_TRIANGLES {
+            cache.entries.clear();
+            cache.triangles = 0;
+        }
+        cache.triangles += mesh.triangles.len();
+        cache.entries.insert(key, ((*solid).clone(), mesh.clone()));
+    }
+    made
 }
 
 impl Meshed {

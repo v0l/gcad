@@ -2126,11 +2126,11 @@ impl App {
             crate::host::spawn(move || {
                 let moved = posed(&joints, &values);
                 let bare: Vec<&Solid> = solids.iter().map(|(_, s)| s).collect();
-                let meshes: Vec<geometry::Meshed> = geometry::meshed_all(&bare)
+                let meshes: Vec<Arc<geometry::Meshed>> = geometry::meshed_all(&bare)
                     .into_iter()
                     .zip(solids.iter())
                     .map(|(mesh, (name, _))| match moved.get(name) {
-                        Some(m) => mesh.transformed(*m),
+                        Some(m) => Arc::new(mesh.transformed(*m)),
                         None => mesh,
                     })
                     .collect();
