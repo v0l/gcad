@@ -594,6 +594,25 @@ impl Model {
             .collect()
     }
 
+    pub fn named_parts(&self) -> Vec<(String, &Solid, Option<[f64; 3]>)> {
+        let current = if self.body.is_empty() {
+            "main"
+        } else {
+            self.body.as_str()
+        };
+        self.bodies
+            .iter()
+            .map(|(name, solid)| (name.clone(), solid, self.colours.get(name).copied()))
+            .chain(self.solid.as_ref().map(|solid| {
+                (
+                    current.to_string(),
+                    solid,
+                    self.colours.get(current).copied(),
+                )
+            }))
+            .collect()
+    }
+
     pub fn exploded_parts(&self, scale: f64) -> Vec<(Solid, Option<[f64; 3]>)> {
         let offsets = assembly::explode_offsets(&self.joints, &self.explode, &Default::default());
         self.named_solids()

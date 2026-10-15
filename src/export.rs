@@ -42,7 +42,14 @@ pub fn export_coloured(parts: &[(&Solid, Option<Colour>)], path: &str) -> Result
             StlType::Binary,
         )?,
         "obj" => monstertruck::mesh::obj::write(&merged_mesh(parts), std::fs::File::create(path)?)?,
-        "3mf" => std::fs::write(path, three_mf(parts))?,
+        "3mf" => {
+            let named: Vec<(String, &Solid, Option<Colour>)> = parts
+                .iter()
+                .enumerate()
+                .map(|(i, (s, c))| (format!("body{i}"), *s, *c))
+                .collect();
+            std::fs::write(path, three_mf(&named))?
+        }
         "svg" => std::fs::write(path, crate::drawing::drawing(parts))?,
         other => bail!(
             "cannot export `.{other}`, use .step, .stl, .obj, .3mf, .svg or, for sheet metal, .dxf"
@@ -218,6 +225,10 @@ pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &
         std::fs::write(path, svg)?;
         return Ok(());
     }
+    if step.ends_with(".3mf") {
+        std::fs::write(path, three_mf(&model.named_parts()))?;
+        return Ok(());
+    }
     export_coloured(&model.parts(), path)
 }
 
@@ -229,11 +240,7 @@ pub fn assembly_step(name: &str, products: &[Product], instances: &[Instance<'_>
     let parts: Vec<(&Solid, Option<Colour>)> =
         products.iter().map(|p| (&p.solid, p.colour)).collect();
     let step = step_text(&parts);
-    let breps: Vec<usize> = step
-        .lines()
-        .filter(|line| line.contains("= MANIFOLD_SOLID_BREP("))
-        .filter_map(entity_id)
-        .collect();
+    let breps = solid_reps(&step);
     let find = |kind: &str| {
         step.lines()
             .find(|line| line.contains(kind))
@@ -439,12 +446,17 @@ fn entity_id(line: &str) -> Option<usize> {
         .ok()
 }
 
-fn with_colours(step: &str, parts: &[(&Solid, Option<Colour>)]) -> String {
-    let breps: Vec<usize> = step
-        .lines()
-        .filter(|line| line.contains("= MANIFOLD_SOLID_BREP("))
+fn solid_reps(step: &str) -> Vec<usize> {
+    step.lines()
+        .filter(|line| {
+            line.contains("= MANIFOLD_SOLID_BREP(") || line.contains("= BREP_WITH_VOIDS(")
+        })
         .filter_map(entity_id)
-        .collect();
+        .collect()
+}
+
+fn with_colours(step: &str, parts: &[(&Solid, Option<Colour>)]) -> String {
+    let breps = solid_reps(step);
     let context = step
         .lines()
         .find(|line| line.contains("= ADVANCED_BREP_SHAPE_REPRESENTATION("))
@@ -500,25 +512,26 @@ fn with_colours(step: &str, parts: &[(&Solid, Option<Colour>)]) -> String {
     }
 }
 
-fn three_mf(parts: &[(&Solid, Option<Colour>)]) -> Vec<u8> {
+fn three_mf(parts: &[(String, &Solid, Option<Colour>)]) -> Vec<u8> {
     let mut model = String::from(
         "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<model unit=\"millimeter\" xml:lang=\"en-US\" xmlns=\"http://schemas.microsoft.com/3dmanufacturing/core/2015/02\">\n<resources>\n",
     );
-    let coloured = parts.iter().any(|(_, c)| c.is_some());
+    let coloured = parts.iter().any(|(_, _, c)| c.is_some());
     if coloured {
         model.push_str("<basematerials id=\"1\">\n");
-        for (i, (_, colour)) in parts.iter().enumerate() {
+        for (name, _, colour) in parts {
             let [r, g, b] = colour
                 .unwrap_or([0.7, 0.7, 0.7])
                 .map(|c| (c.clamp(0.0, 1.0) * 255.0).round() as u8);
             let _ = writeln!(
                 model,
-                "<base name=\"body{i}\" displaycolor=\"#{r:02X}{g:02X}{b:02X}\"/>"
+                "<base name=\"{}\" displaycolor=\"#{r:02X}{g:02X}{b:02X}\"/>",
+                name.replace('"', "&quot;")
             );
         }
         model.push_str("</basematerials>\n");
     }
-    for (i, (solid, _)) in parts.iter().enumerate() {
+    for (i, (name, solid, _)) in parts.iter().enumerate() {
         let (points, triangles) = geometry::welded(&fine_mesh(solid));
         let material = if coloured {
             format!(" pid=\"1\" pindex=\"{i}\"")
@@ -527,8 +540,9 @@ fn three_mf(parts: &[(&Solid, Option<Colour>)]) -> Vec<u8> {
         };
         let _ = writeln!(
             model,
-            "<object id=\"{}\" type=\"model\"{material}>\n<mesh>\n<vertices>",
-            i + 2
+            "<object id=\"{}\" name=\"{}\" type=\"model\"{material}>\n<mesh>\n<vertices>",
+            i + 2,
+            name.replace('"', "&quot;")
         );
         for p in &points {
             let _ = writeln!(model, "<vertex x=\"{}\" y=\"{}\" z=\"{}\"/>", p.x, p.y, p.z);

@@ -350,6 +350,55 @@ fn three_mf() {
 }
 
 #[test]
+fn three_mf_names_the_bodies() {
+    let model = build("body one\nrect 10 10\nextrude 5\nbody two\nrect 6 6\nextrude 3\n");
+    let path = scratch("named.3mf");
+    export::export_model(&model, std::path::Path::new("multi.gcad"), &path).expect("exports");
+    let bytes = std::fs::read(&path).expect("written");
+    let text = String::from_utf8_lossy(&bytes);
+    assert!(text.contains("name=\"one\""), "{text}");
+    assert!(text.contains("name=\"two\""), "{text}");
+    assert!(!text.contains("body0"), "objects still named by index");
+}
+
+#[test]
+fn assembly_step_keeps_multi_shell_parts() {
+    let dir = std::env::temp_dir()
+        .join("gcad-tests")
+        .join("asm_multi_shell");
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("twoshell.gcad"),
+        "body left\nrect 10 10\nextrude 5\nbody right\nplane XY offset=30\nrect 10 10\nextrude 5\ncombine into=left from=right\n",
+    )
+    .expect("write");
+    std::fs::write(dir.join("plain.gcad"), "rect 10 10\nextrude 5\n").expect("write");
+    std::fs::write(
+        dir.join("asm.gasm"),
+        "part a twoshell.gcad\npart b plain.gcad\n",
+    )
+    .expect("write");
+    let run = gcad::model::run_path(&dir.join("asm.gasm"), &[], None).expect("runs");
+    let out = dir.join("out.step");
+    export::export_model(
+        &run.model,
+        &dir.join("asm.gasm"),
+        out.to_str().expect("utf8"),
+    )
+    .expect("exports");
+    let text = std::fs::read_to_string(&out).expect("written");
+    let nauo = text.matches("NEXT_ASSEMBLY_USAGE_OCCURRENCE").count();
+    let manifold = text.matches("MANIFOLD_SOLID_BREP").count();
+    let voids = text.matches("BREP_WITH_VOIDS").count();
+    assert_eq!(nauo, 2, "assembly tree lost: {text}");
+    assert_eq!(voids, 1, "multi-shell part not a BREP_WITH_VOIDS: {text}");
+    assert_eq!(
+        manifold, 1,
+        "single-shell part not a MANIFOLD_SOLID_BREP: {text}"
+    );
+}
+
+#[test]
 fn drawing() {
     let path = scratch("plate.svg");
     export::export(&build(&part("plate")).solids(), &path).expect("exports");

@@ -91,11 +91,3 @@ shallow angle and nowhere near a rib joint, so it is not a coincident face. The 
 broke opening cuts and `split` on the shed cladding (`~/git/office-shed/parts/panel.gcad`,
 `endwall.gcad`, `portal.gcad`), which now dodge it by building strips around openings and by
 nudging row heights until the cut goes through.
-
-## Assembly exports lose the parts
-
-`gcad export ~/git/office-shed/shed.gasm x.step` writes one unnamed `PRODUCT` with 167 solids
-while the assembly has 266 bodies (the weldment members look to be missing), so OpenCascade
-sees no assembly tree and no names. `x.3mf` keeps 266 objects but names them `body0`,
-`body1`, ..., so nothing outside gcad can tell which part is which. Name 3MF objects after
-the bodies and check `export::assembly_step` against an assembly whose parts include members.
