@@ -11,13 +11,6 @@ three bodies are "not oriented and closed" and one has a wire that "is not simpl
 `~/git/rotator/board/models/V8BR-1AX1-GH.stp` (the RJ45) has a wire that "is not simple". Check
 with `part m <file>` in a `.gasm`; OpenCascade reads all of them.
 
-## Each `interference` line tessellates every part again
-
-`sweep_overlaps` (src/model/assembly.rs) calls `geometry::meshed_all` on all 151 rotator parts for
-each `interference` line: 2.8 s and 4.1 s of the 19 s `rotator.gasm` takes, against 1.5 s and
-1.2 s for the sweeps themselves. Keep the meshes on the model between lines (they only move with
-the joints). Repro: `gcad sim ~/git/rotator/sims/torque.gsim` and read the progress lines.
-
 ## Streamlined blades read badly in `sim flow`
 
 `examples/flow/caradonna/hover.gsim` (Caradonna-Tung rotor, measured CT 0.00459, 507 N) reads
