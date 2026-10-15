@@ -5,7 +5,7 @@
 Parametric CAD written like G-code: one operation per line, built for agents to write
 and check.
 It is pure Rust on the [monstertruck](https://github.com/v0l/monstertruck) B-rep
-kernel and exports STEP, STL, OBJ, 3MF and SVG drawings.
+kernel and exports STEP, STL, OBJ, 3MF, DXF flat patterns and PDF drawings.
 
 Part of the [bench suite](https://github.com/v0l/bench-suite), a launcher that installs, updates
 and starts it alongside the other bench tools.
@@ -36,6 +36,8 @@ gcad check examples/parts/plate.gcad
 gcad render examples/parts/plate.gcad plate.png
 gcad export examples/parts/plate.gcad plate.step
 gcad bom examples/assemblies/enclosure.gasm
+gcad materials
+gcad measure examples/assemblies/case.gasm box
 gcad examples/assemblies/enclosure.gasm
 gcad examples/robot/arm.gasm
 gcad docs
@@ -46,6 +48,12 @@ from part files, places them, joins them with turning and sliding joints and che
 that they do not overlap. A part file (`.gcad`) holds one part, or several parts as
 bodies when they share sizes.
 
+The format also covers sheet metal (a flat blank cut, then bent, with the flat pattern
+exportable as DXF), weldments (`member`, with the cut list in `bom`), enclosures, and
+standard screws, nuts and bearings from a built-in library. A workshop drawing is a
+`.gdwg` sheet beside the assembly: views, sections, dimension chains and a cut list,
+checked with `gcad check` and written with `gcad export sheet.gdwg sheet.pdf`.
+
 `examples/robot/arm.gasm` is a robot arm built the way industrial arms are: each
 joint has a motor on its axis under a round cover, driving a planetary reducer
 enclosed in the joint housing. The ring gear is cut into the housing, the sun sits on
@@ -54,7 +62,7 @@ reducer's output. The gripper's fingers are racks on one pinion inside its housi
 Drag the joint sliders in the viewer and every sun and planet turns at its ratio; the
 explode slider and the section tool show the gears inside.
 
-![The robot arm example in the viewer](docs/robot-arm.png)
+![The robot arm example](docs/robot-arm.png)
 ![A section through the shoulder reducer](docs/robot-arm-section.png)
 
 `examples/truck/truck.gasm` is a 1:10 scale crawler in 90 parts: carbon ladder rails, a
@@ -73,33 +81,39 @@ gcad bom examples/truck/truck.gasm
 
 `examples/robot/wind.gsim` puts the arm in a 20 m/s wind. The flow is solved on the GPU
 with a lattice Boltzmann solver (21 million cells in about two minutes), then the viewer
-plays the streamlines back through the wake and `gcad render --flow` draws slices of the air
-speed. The other simulations (torque, static, thermal, modal and buckling) are in
+plays the streamlines back through the wake and `gcad render --flow` and `--lines` draw
+slices of the air speed and the mean streamlines coloured by it. The other simulations
+(torque, static, thermal, modal, buckling, frame, conduction, acoustics and magnetic) are in
 [docs/simulation.md](docs/simulation.md).
 
 ```
 gcad sim examples/robot/wind.gsim
 gcad examples/robot/wind.gsim
 gcad render examples/robot/wind.gsim wind.png --flow
+gcad render examples/robot/wind.gsim wind.png --lines
 ```
 
 A machine without a big enough GPU can run a simulation on a paid remote worker at
 [sims.gcad.sh](https://sims.gcad.sh). gcad builds the parts here, sends the built bodies (not
-the project files) and writes the result beside the `.gsim` as if it had run locally. The viewer
-shows the balance, the runners and your recent runs, and has a `run on server` button.
+the project files) and writes the result beside the `.gsim` as if it had run locally. A runner
+takes jobs only from a gcad with the same major and minor version, and credit is bought with
+the account id from `gcad remote account` at
+<https://apexstrata.ie/shop/gcad-sim-credit/>. The viewer shows the balance, the runners and
+your recent runs, and has a `run on server` button.
 
 ```
 gcad remote signup
 gcad sim examples/robot/wind.gsim --remote
 ```
 
-![Streamlines past the robot arm, ranked by turbulence](docs/robot-arm-wind.png)
+![Mean streamlines past the arm, coloured by air speed](docs/robot-arm-wind.png)
 ![Air speed on slices through the arm and its wake](docs/robot-arm-wind-slices.png)
 
 With no command, `gcad` opens the viewer: a help card explains how it fits the agent
 workflow, and a browse button (or `cmd+o`, or dropping a file) opens a model. Open, it is a
-live view of the file that rebuilds on save, with a view cube, measuring, and sliders for an
-assembly's joints. The `?` toggle in the header brings the help back. Each part has its own
+live view of the file that rebuilds on save, with a view cube, measuring, sliders for an
+assembly's joints, and a simulation card that runs a `.gsim` in the background, lists its
+readings and colours the part by the result field. The `?` toggle in the header brings the help back. Each part has its own
 show, ghost and opacity controls, and the LINES and PARTS buttons fold away the side columns.
 
 The format, operations and selectors are in [docs/format.md](docs/format.md), which

@@ -39,12 +39,12 @@ Run `gcad --version` first. If it is missing:
 curl -fsSL https://raw.githubusercontent.com/v0l/gcad/master/install.sh | sh   # Linux, macOS
 ```
 
-On Windows take the zip from https://github.com/v0l/gcad/releases. Building from source needs
-the kernel fork checked out beside it, because `Cargo.toml` patches it in by path:
+On Windows take the zip from https://github.com/v0l/gcad/releases. Building from source is a
+plain build: `Cargo.toml` pins a commit of the kernel fork's `cad-regressions` branch through
+`[patch.crates-io]`, so cargo fetches it.
 
 ```sh
 git clone https://github.com/v0l/gcad
-git clone -b cad-regressions https://github.com/v0l/monstertruck
 cd gcad && cargo build --release
 ```
 
@@ -345,6 +345,7 @@ gcad sim x.gsim --remote --max-price 0          # free runners only, no balance 
 gcad sim x.gsim --remote --max-minutes 20 --max-price 2.50
 gcad remote jobs                     # recent runs, their time and cost
 gcad remote cancel ID                # the time it used is still charged
+gcad remote login TOKEN              # use the account on another machine
 ```
 
 - Never make an account or start a paid run without the user's yes. Start with `--max-price 0`
@@ -374,6 +375,8 @@ PDF back with `pdftoppm -png` to look at it.
 ```sh
 gcad export part.gcad part.step          # also .stl .obj .3mf
 gcad export part.gcad part.svg --section y=0   # four-view drawing with a hatched section
+gcad export part.gcad flat.dxf           # the sheet metal flat pattern
+gcad export sheet.gdwg sheet.pdf         # the drawing sheets, also .svg
 gcad export asm.gasm asm.step            # one product per part file, instances placed
 gcad bom asm.gasm --csv
 ```
