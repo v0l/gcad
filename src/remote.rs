@@ -300,14 +300,14 @@ impl Overview {
     pub fn known_on_this_build(&self) -> usize {
         self.runners
             .iter()
-            .filter(|r| r.version == Self::build())
+            .filter(|r| proto::same_line(&r.version, Self::build()))
             .count()
     }
 
     pub fn online_on_this_build(&self) -> Vec<&proto::Runner> {
         self.runners
             .iter()
-            .filter(|r| r.online && r.version == Self::build())
+            .filter(|r| r.online && proto::same_line(&r.version, Self::build()))
             .collect()
     }
 
@@ -319,7 +319,11 @@ impl Overview {
     }
 
     pub fn priciest(&self) -> Option<i64> {
-        proto::default_price(self.runners.iter().filter(|r| r.version == Self::build()))
+        proto::default_price(
+            self.runners
+                .iter()
+                .filter(|r| proto::same_line(&r.version, Self::build())),
+        )
     }
 
     pub fn active(&self) -> impl Iterator<Item = &Job> {
@@ -480,11 +484,12 @@ fn ready(client: &Client, limits: &Limits) -> Result<u64> {
     let able: Vec<&proto::Runner> = status
         .runners
         .iter()
-        .filter(|r| r.version == version)
+        .filter(|r| proto::same_line(&r.version, version))
         .collect();
     if able.is_empty() {
         bail!(
-            "no remote runner runs gcad {version}{}",
+            "no remote runner runs gcad {}{}",
+            proto::line_label(version),
             if status.versions.is_empty() {
                 String::new()
             } else {
@@ -496,7 +501,8 @@ fn ready(client: &Client, limits: &Limits) -> Result<u64> {
     let cheapest = able.iter().map(price_of).min().unwrap_or(0);
     let price = match limits.price_cents {
         Some(cap) if cap < cheapest => bail!(
-            "the cheapest runner on gcad {version} asks {} an hour, above --max-price {}; `gcad remote runners` lists them",
+            "the cheapest runner on gcad {} asks {} an hour, above --max-price {}; `gcad remote runners` lists them",
+            proto::line_label(version),
             euros(cheapest as i64),
             euros(cap as i64)
         ),

@@ -349,8 +349,8 @@ gcad remote cancel ID                # the time it used is still charged
 
 - Never make an account or start a paid run without the user's yes. Start with `--max-price 0`
   and a short `--max-minutes`, since a run holds `minutes x price` from the balance until it ends.
-- A runner takes only a job from the same gcad build (`gcad --version`); with none online on
-  that build the command says which builds they run.
+- A runner takes only a job from a gcad with the same major and minor version (`gcad --version`,
+  so 0.4.x with 0.4.x); with none online for yours the command says which versions they run.
 - Credit is the user's to add, at https://apexstrata.ie/shop/gcad-sim-credit/ with the account id from
   `gcad remote account`; an "out of credit" error prints the link. Give the user the link, never pay.
 - The model is built here first, so fix a model that fails locally before sending it. `torque`

@@ -131,6 +131,16 @@ fn the_overview_reads_account_jobs_and_runners() {
         runner("here", Overview::build(), true, 250),
         runner("also-here", Overview::build(), true, 100),
         runner("asleep", Overview::build(), false, 50),
+        runner(
+            "sibling",
+            &format!(
+                "{}.9+other",
+                gcad_sims_proto::version_line(Overview::build())
+            ),
+            true,
+            300,
+        ),
+        runner("next-minor", "99.99.0", true, 1),
     ];
     let server = serve(runners.clone(), None);
     unsafe { std::env::set_var("GCAD_SIMS_SERVER", &server) };
@@ -140,7 +150,7 @@ fn the_overview_reads_account_jobs_and_runners() {
     assert!(!signed_out.signed_in && signed_out.account.is_none() && signed_out.jobs.is_empty());
     assert_eq!(signed_out.error, None);
     assert_eq!(signed_out.queued, 3);
-    assert_eq!(signed_out.runners.len(), 4);
+    assert_eq!(signed_out.runners.len(), 6);
 
     let (made, made_on, path) = remote::create_account(None).expect("signup");
     assert_eq!(
@@ -169,10 +179,10 @@ fn the_overview_reads_account_jobs_and_runners() {
     let ids: Vec<&str> = view.jobs.iter().map(|j| j.id.as_str()).collect();
     assert_eq!(ids, ["new00000", "mid00000", "old00000"]);
     assert_eq!(view.active().count(), 1);
-    assert_eq!(view.known_on_this_build(), 3);
-    assert_eq!(view.online_on_this_build().len(), 2);
+    assert_eq!(view.known_on_this_build(), 4);
+    assert_eq!(view.online_on_this_build().len(), 3);
     assert_eq!(view.cheapest(), Some(100));
-    assert_eq!(view.priciest(), Some(250));
+    assert_eq!(view.priciest(), Some(300));
     assert_eq!(view.shop(), "https://apexstrata.ie/shop/gcad-sim-credit/");
     assert_eq!(remote::hold_cents(60, 250), 250);
     assert_eq!(remote::hold_cents(20, 250), 84);

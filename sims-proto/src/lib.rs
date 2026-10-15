@@ -203,6 +203,26 @@ fn var_name(name: &str) -> bool {
         && chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
 }
 
+fn semver_line(version: &str) -> Option<&str> {
+    let core = version.split('+').next().unwrap_or(version);
+    let mut parts = core.splitn(3, '.');
+    let (major, minor) = (parts.next()?, parts.next()?);
+    let digits = |s: &str| !s.is_empty() && s.bytes().all(|b| b.is_ascii_digit());
+    (digits(major) && digits(minor)).then(|| &core[..major.len() + 1 + minor.len()])
+}
+
+pub fn version_line(version: &str) -> &str {
+    semver_line(version).unwrap_or(version)
+}
+
+pub fn same_line(a: &str, b: &str) -> bool {
+    version_line(a) == version_line(b)
+}
+
+pub fn line_label(version: &str) -> String {
+    semver_line(version).map_or_else(|| version.to_string(), |line| format!("{line}.x"))
+}
+
 pub fn version_ok(version: &str) -> bool {
     !version.is_empty()
         && version.len() <= 32
@@ -434,6 +454,30 @@ pub struct ApiError {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn versions_match_on_major_and_minor() {
+        assert_eq!(version_line("0.4.0+abc123"), "0.4");
+        assert_eq!(version_line("0.4.17"), "0.4");
+        assert_eq!(version_line("0.4"), "0.4");
+        assert_eq!(version_line("12.30.1+x"), "12.30");
+        assert!(same_line("0.4.0+abc", "0.4.9+def"));
+        assert!(same_line("0.4.0", "0.4"));
+        assert!(!same_line("0.4.0", "0.5.0"));
+        assert!(!same_line("0.4.0", "1.4.0"));
+        assert!(!same_line("0.4.0", "0.40.0"));
+        assert!(!same_line("0.4.0", "0.41.0"));
+        assert_eq!(line_label("0.4.0+abc"), "0.4.x");
+    }
+
+    #[test]
+    fn versions_that_are_not_numbered_must_match_exactly() {
+        assert_eq!(version_line("test-ab12"), "test-ab12");
+        assert!(same_line("test-ab12", "test-ab12"));
+        assert!(!same_line("test-ab12", "test-cd34"));
+        assert!(!same_line("0.4-rc1", "0.4-rc2"));
+        assert_eq!(line_label("test-ab12"), "test-ab12");
+    }
 
     fn submit() -> Submit {
         Submit {

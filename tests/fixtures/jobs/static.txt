@@ -1,0 +1,95 @@
+{
+  "kind": "Static",
+  "file": "examples/parts/bracket.gcad",
+  "gravity": null,
+  "payloads": [],
+  "joint_torques": [],
+  "speeds": [],
+  "sweeps": [],
+  "expects": [
+    {
+      "text": "stress<40",
+      "reading": "stress",
+      "below": true,
+      "limit": 40.0
+    },
+    {
+      "text": "displacement<0.01",
+      "reading": "displacement",
+      "below": true,
+      "limit": 0.01
+    },
+    {
+      "text": "safety>5",
+      "reading": "safety",
+      "below": false,
+      "limit": 5.0
+    }
+  ],
+  "mesh": 2.0,
+  "supports": [
+    {
+      "label": "base",
+      "faces": [
+        0
+      ],
+      "hold": "Fixed"
+    }
+  ],
+  "loads": [
+    {
+      "label": "boss.end",
+      "faces": [
+        12
+      ],
+      "push": {
+        "Force": {
+          "x": 0.0,
+          "y": -200.0,
+          "z": 0.0
+        }
+      }
+    }
+  ],
+  "probes": [
+    [
+      "top",
+      {
+        "x": 18.0,
+        "y": 12.0,
+        "z": 12.0
+      }
+    ]
+  ],
+  "thermal": [],
+  "source": 0.0,
+  "modes": null,
+  "warming": null,
+  "contacts": [],
+  "seats": [],
+  "converge": null,
+  "leave": [],
+  "wind": null,
+  "air": null,
+  "average": null,
+  "half": false,
+  "ambient": null,
+  "duct": null,
+  "wind_load": null,
+  "wind_samples": null,
+  "spins": [],
+  "turn": null,
+  "stack": null,
+  "slice": null,
+  "roles": [],
+  "apart": [],
+  "absorb": [],
+  "speaker": null,
+  "rays": null,
+  "humidity": null,
+  "releases": [],
+  "buckling": null,
+  "combinations": []
+}
+body main: volume 1.38008e4
+material main: {"name":"aluminium","density":2.7,"mechanics":{"young":69.0,"poisson":0.33,"strength":240.0,"conductivity":167.0,"expansion":23.6,"heat_capacity":900.0,"printed":false},"axes":null,"finish":{"colour":[0.7490196078431373,0.7725490196078432,0.792156862745098],"roughness":0.35,"metallic":1.0,"specular":null,"clearcoat":null,"clearcoat_roughness":null,"transmission":null,"ior":null,"emission":null,"texture":null}}

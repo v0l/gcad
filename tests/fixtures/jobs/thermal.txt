@@ -1,0 +1,94 @@
+{
+  "kind": "Thermal",
+  "file": "examples/parts/heatsink.gcad",
+  "gravity": null,
+  "payloads": [],
+  "joint_torques": [],
+  "speeds": [],
+  "sweeps": [],
+  "expects": [
+    {
+      "text": "temperature<80",
+      "reading": "temperature",
+      "below": true,
+      "limit": 80.0
+    }
+  ],
+  "mesh": 2.0,
+  "supports": [],
+  "loads": [],
+  "probes": [],
+  "thermal": [
+    {
+      "Flux": {
+        "label": "chip",
+        "faces": [
+          0
+        ],
+        "watts": 5.0
+      }
+    },
+    {
+      "Convect": {
+        "label": "air",
+        "faces": [
+          1,
+          2,
+          3,
+          4,
+          6,
+          7,
+          8,
+          10,
+          11,
+          12,
+          13,
+          14,
+          16,
+          17,
+          18,
+          20,
+          21,
+          22,
+          24,
+          25,
+          26,
+          28,
+          29
+        ],
+        "film": 10.0,
+        "ambient": 25.0
+      }
+    }
+  ],
+  "source": 0.0,
+  "modes": null,
+  "warming": null,
+  "contacts": [],
+  "seats": [],
+  "converge": null,
+  "leave": [],
+  "wind": null,
+  "air": null,
+  "average": null,
+  "half": false,
+  "ambient": null,
+  "duct": null,
+  "wind_load": null,
+  "wind_samples": null,
+  "spins": [],
+  "turn": null,
+  "stack": null,
+  "slice": null,
+  "roles": [],
+  "apart": [],
+  "absorb": [],
+  "speaker": null,
+  "rays": null,
+  "humidity": null,
+  "releases": [],
+  "buckling": null,
+  "combinations": []
+}
+body main: volume 1.53600e4
+material main: {"name":"aluminium","density":2.7,"mechanics":{"young":69.0,"poisson":0.33,"strength":240.0,"conductivity":167.0,"expansion":23.6,"heat_capacity":900.0,"printed":false},"axes":null,"finish":{"colour":[0.7490196078431373,0.7725490196078432,0.792156862745098],"roughness":0.35,"metallic":1.0,"specular":null,"clearcoat":null,"clearcoat_roughness":null,"transmission":null,"ior":null,"emission":null,"texture":null}}

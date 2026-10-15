@@ -218,13 +218,16 @@ impl RemotePanel {
         let online = view.online_on_this_build();
         if online.is_empty() {
             let text = if view.known_on_this_build() > 0 {
-                "runners on this build are offline".to_string()
+                "runners for this version are offline".to_string()
             } else if view.versions.is_empty() {
-                format!("no runner runs gcad {}", Overview::build())
+                format!(
+                    "no runner runs gcad {}",
+                    proto::line_label(Overview::build())
+                )
             } else {
                 format!(
                     "no runner runs gcad {}, they run {}",
-                    Overview::build(),
+                    proto::line_label(Overview::build()),
                     view.versions.join(", ")
                 )
             };
@@ -234,7 +237,7 @@ impl RemotePanel {
         let cheapest = view.cheapest().unwrap_or(0);
         Line::new()
             .legend("runners")
-            .value(format!("{} on this build", online.len()))
+            .value(format!("{} compatible", online.len()))
             .note(format!(
                 "from {}, {} queued",
                 proto::price_label(cheapest),

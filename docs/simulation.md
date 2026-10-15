@@ -79,11 +79,15 @@ already selected, every body as compressed B-rep, the materials, and the `stamp`
 files. Project files never leave the machine. A `wind flow.gsim` load goes as the flow's
 surface pressure samples, which needs a fresh local flow result, and a `warm heat.gsim`
 goes as that thermal simulation's own packed job, solved on the worker first. `torque` runs
-in seconds and stays local. Jobs are CBOR, gzipped, and only a worker on the same gcad
-build takes them (`gcad sim-job JOB OUT`, hidden, is what it runs).
+in seconds and stays local. Jobs are bitcode, gzipped, and only a worker on the same major and
+minor version takes them (`gcad sim-job JOB OUT`, hidden, is what it runs). The format has no
+field names, so a change to the job's types (a field moved, a variant inserted before another)
+needs a minor version bump; `tests/job_format.rs` decodes stored jobs and fails when one does,
+and `GCAD_UPDATE_FIXTURES=1 cargo test --test job_format` writes new ones after the bump.
 
-A run goes to the first free runner on the same gcad build (`gcad --version`: the version and
-the last commit that changed the code) asking at most `--max-price` (by default the dearest
+A run goes to the first free runner on the same major and minor gcad version (`gcad --version`:
+0.4.2 and 0.4.9 pair, 0.4.x and 0.5.x do not; a version without numbers must match exactly)
+asking at most `--max-price` (by default the dearest
 runner online, so any of them). A runner can ask nothing; a run capped at 0 needs no balance. It holds `--max-minutes` (60 by default) at
 that price from the balance while it runs, charges the seconds it used at the price of the
 runner that took it, and gives back the rest. The runner stops it at the limit.
@@ -94,7 +98,7 @@ the saved server and token.
 
 The viewer shows the same account. A simulation card has `run on server` beside the local run,
 and a `server` toggle that reads `server €12.34, 1 running` once an account exists. It opens a
-`sims server` card with the server, the runners on this gcad build with their GPU, speed and
+`sims server` card with the server, the compatible runners (same major and minor) with their GPU, speed and
 price, the account id and balance (with what running jobs hold), `buy credit` (opens the shop, https://apexstrata.ie/shop/gcad-sim-credit/ unless the server names another) and `copy id`, the
 longest time and the most a run may charge (any, free only, or up to a price) with what a run
 would hold, and the recent runs with their state, runner, time, cost and progress, each active

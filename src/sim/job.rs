@@ -98,9 +98,9 @@ pub fn pack(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Vec<u8>> {
 }
 
 fn spec_of(job: Job) -> Result<Spec> {
-    if job.gcad != env!("GCAD_BUILD_VERSION") {
+    if !gcad_sims_proto::same_line(&job.gcad, env!("GCAD_BUILD_VERSION")) {
         bail!(
-            "the job was packed by gcad {} and this is gcad {}",
+            "the job was packed by gcad {} and this is gcad {}; they must share a major and minor version",
             job.gcad,
             env!("GCAD_BUILD_VERSION")
         );

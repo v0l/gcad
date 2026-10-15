@@ -14,6 +14,9 @@ All notable changes to gcad are listed here. The format follows
   limits, recent runs and cancel. `make account`, `buy credit` and `copy id` work from it. Buying credit opens
   https://apexstrata.ie/shop/gcad-sim-credit/ when the server names no shop.
 - The skill offers the sims server on slow hardware and tells an agent to ask before spending.
+- Remote runs pair a gcad with any runner of the same major and minor version, not the same
+  commit, so a runner no longer goes stale with every code change. A test decodes stored jobs
+  and fails when the job layout changes without a minor bump.
 - A standard material library of about 210 metals, plastics, 3D printing materials, rubbers,
   timbers, boards, construction materials, stone, ground, insulation, glass and composites.
   Every entry states density, stiffness, Poisson's ratio, strength, conductivity, expansion,
