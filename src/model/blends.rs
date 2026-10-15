@@ -232,7 +232,10 @@ impl Model {
                     .iter()
                     .any(|surface| select::face_on(face, surface, tolerance))
             })
-            .for_each(|face| self.groups.record(&label, "faces", face.oriented_surface()));
+            .for_each(|face| {
+                self.groups
+                    .record(&self.body_name(), &label, "faces", face.oriented_surface())
+            });
         self.solid = Some(result);
         Ok(format!(
             "{} edge(s); {}",
@@ -418,8 +421,10 @@ impl Model {
             })
             .map(|face| face.oriented_surface())
             .collect();
-        made.into_iter()
-            .for_each(|surface| self.groups.record(&label, "faces", surface));
+        made.into_iter().for_each(|surface| {
+            self.groups
+                .record(&self.body_name(), &label, "faces", surface)
+        });
         Ok(format!(
             "{} edge(s); {}",
             edges.len(),

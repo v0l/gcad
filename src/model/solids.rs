@@ -398,9 +398,10 @@ pub(crate) fn classify(solid: &Solid, direction: Vector3) -> Vec<(&'static str, 
 
 impl Model {
     pub(crate) fn record(&mut self, label: &str, groups: Vec<(&str, Surface)>) {
+        let body = self.body_name();
         groups
             .into_iter()
-            .for_each(|(group, surface)| self.groups.record(label, group, surface));
+            .for_each(|(group, surface)| self.groups.record(&body, label, group, surface));
     }
 
     pub(crate) fn record_for(
@@ -416,9 +417,10 @@ impl Model {
     }
 
     pub(crate) fn record_inverted(&mut self, label: &str, groups: Vec<(&str, Surface)>) {
+        let body = self.body_name();
         groups.into_iter().for_each(|(group, mut surface)| {
             surface.invert();
-            self.groups.record(label, group, surface);
+            self.groups.record(&body, label, group, surface);
         });
     }
 }

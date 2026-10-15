@@ -642,6 +642,7 @@ impl Model {
                     label: label.clone(),
                     group: "bend".to_string(),
                     surface,
+                    body: self.body_name(),
                 });
             }
         }

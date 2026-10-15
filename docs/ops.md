@@ -196,7 +196,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | linear pattern | supported | `repeat h count=4 step=10,0` | `bodies::linear_pattern` |
 | circular pattern | supported | `repeat h count=6 angle=360` | `bodies::circular_pattern` |
 | move | supported | `move 10,0,0` | `bodies::translate` |
-| rotate | supported | `rotate 90 axis=z` | `bodies::rotate` |
+| rotate | supported | `rotate 90 axis=z` | `bodies::rotate`, `assembly::a_transform_in_a_later_body_keeps_earlier_bodies_groups` |
 | scale | supported | `scale 2` | `bodies::scale` |
 | split | supported | `split XY offset=5 keep=below` | `bodies::split`, `bodies::split_either_side` |
 | separate bodies | supported | `body second` | `bodies::separate_bodies` |
@@ -250,14 +250,14 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| STEP export | supported | `gcad export part.gcad part.step` | `output::step`, `output::step_opens_in_opencascade` |
+| STEP export | supported | `gcad export part.gcad part.step` | `output::step`, `output::step_opens_in_opencascade`, `output::assembly_step_keeps_multi_shell_parts` |
 | STL export | supported | `gcad export part.gcad part.stl` | `output::stl` |
 | simulation parts export | supported | `gcad export wind.gsim parts.stl` writes the parts the simulation keeps after `leave` | `output::simulation_parts_export` |
 | PNG views | supported | `gcad render part.gcad part.png` | `output::png` |
 | STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid`, `output::step_import_boxes_what_it_cannot_read`, `output::step_import_reads_a_revolved_circle`, `output::step_import_leaves_unreadable_cavities_solid` |
 | STEP instances placed | supported | `import rig.step solid=4` puts a repeated part where the file places it | `output::step_import_places_instances` |
 | OBJ export | supported | `gcad export part.gcad part.obj` | `output::obj` |
-| 3MF export | supported | `gcad export part.gcad part.3mf` | `output::three_mf` |
+| 3MF export | supported | `gcad export part.gcad part.3mf` | `output::three_mf`, `output::three_mf_names_the_bodies` |
 | SVG drawing | supported | `gcad export part.gcad part.svg` | `output::drawing` |
 | drawing dimensions and hole callouts | supported | overall sizes, `4× ⌀3.2` | `output::drawing_dimensions_and_section` |
 | section view | supported | `gcad export part.gcad part.svg --section y=0` | `output::drawing_dimensions_and_section` |

@@ -1193,9 +1193,10 @@ impl Model {
             .collect::<Result<Vec<_>>>()?;
         replane(&solid, &changes)?;
         let label = label_of(line);
+        let body = self.body_name();
         changes.iter().for_each(|&(index, _, _)| {
             self.groups
-                .record(&label, "faces", faces[index].oriented_surface())
+                .record(&body, &label, "faces", faces[index].oriented_surface())
         });
         self.solid = Some(solid);
         self.describe_solid()

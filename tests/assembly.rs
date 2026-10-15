@@ -298,6 +298,19 @@ fn holes_line_up() {
     assert!(error.contains("0.500 off"), "{error}");
 }
 
+#[test]
+fn a_transform_in_a_later_body_keeps_earlier_bodies_groups() {
+    let two = "body a\nrect 10 10\nblock: extrude 5\nplane block.end\nh: hole 2 0,0\nbody b\nrect 10 10\nother: extrude 5\nrotate 90 axis=x\n";
+    let pin = "circle 1\nshank: extrude 5\n";
+    let (model, _) = built(
+        "transform_in_a_later_body_keeps_groups",
+        "part p two.gcad body=a\npart s pin.gcad\nconcentric s:shank.side p:h.side",
+        &[("two.gcad", two), ("pin.gcad", pin)],
+    );
+    let [x, y, _] = centre(&model, "s");
+    assert!(x.abs() < 1.0e-6 && y.abs() < 1.0e-6, "{x} {y}");
+}
+
 const LID_WITH_HOLES: &str = "rect 40 40\nextrude 10\nplane XY offset=10\npilot: hole 2 15,15 depth=8\nbody lid\nplane XY offset=10\nrect 40 40\ntop: extrude 2\nplane top.end\nscrews: hole 2.5 15,15\n";
 const SCREW: &str = "circle 4\nhead: extrude 1.5\ncircle 2\nshank: extrude -10\n";
 

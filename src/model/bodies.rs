@@ -44,7 +44,7 @@ fn copy_flag(args: &Args<'_>) -> Result<bool> {
 }
 
 impl Model {
-    fn body_name(&self) -> String {
+    pub(crate) fn body_name(&self) -> String {
         if self.body.is_empty() {
             "main".to_string()
         } else {
@@ -159,9 +159,11 @@ impl Model {
             .take()
             .ok_or_else(|| anyhow!("there is no solid to move"))?;
         self.solid = Some(moved(&solid, transform));
+        let body = self.body_name();
         self.groups
             .0
             .iter_mut()
+            .filter(|entry| entry.body == body)
             .for_each(|entry| entry.surface = moved_surface(&entry.surface, transform));
         self.tools
             .values_mut()
@@ -171,15 +173,18 @@ impl Model {
     }
 
     fn copy_groups(&mut self, label: Option<&str>, transform: Matrix4, as_label: &str) {
+        let body = self.body_name();
         let copies: Vec<GroupEntry> = self
             .groups
             .0
             .iter()
+            .filter(|entry| entry.body == body)
             .filter(|entry| label.is_none_or(|l| entry.label == l))
             .map(|entry| GroupEntry {
                 label: as_label.to_string(),
                 group: entry.group.clone(),
                 surface: moved_surface(&entry.surface, transform),
+                body: entry.body.clone(),
             })
             .collect();
         self.groups.0.extend(copies);
@@ -211,15 +216,18 @@ impl Model {
         let copy = moved(self.active("mirror")?, transform);
         let label = label_of(line);
         self.copy_groups(None, transform, &label);
+        let body = self.body_name();
         let originals: Vec<GroupEntry> = self
             .groups
             .0
             .iter()
+            .filter(|e| e.body == body)
             .filter(|e| e.label != label)
             .cloned()
             .collect();
         originals.iter().for_each(|entry| {
             self.groups.record(
+                &entry.body,
                 &entry.label,
                 &entry.group,
                 moved_surface(&entry.surface, transform),
@@ -429,7 +437,8 @@ impl Model {
         if side > 0.0 {
             cut_face.invert();
         }
-        self.groups.record(&label, "cut", cut_face);
+        self.groups
+            .record(&self.body_name(), &label, "cut", cut_face);
         self.merge(&label, tool, Combine::Remove)?;
         self.describe_solid()
     }

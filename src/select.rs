@@ -6,17 +6,19 @@ pub struct GroupEntry {
     pub label: String,
     pub group: String,
     pub surface: Surface,
+    pub body: String,
 }
 
 #[derive(Clone, Debug, Default)]
 pub struct Groups(pub Vec<GroupEntry>);
 
 impl Groups {
-    pub fn record(&mut self, label: &str, group: &str, surface: Surface) {
+    pub fn record(&mut self, body: &str, label: &str, group: &str, surface: Surface) {
         self.0.push(GroupEntry {
             label: label.to_string(),
             group: group.to_string(),
             surface,
+            body: body.to_string(),
         });
     }
 

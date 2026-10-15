@@ -10,7 +10,7 @@ use std::path::{Path, PathBuf};
 type Body = PackedSolid;
 type Read = (PathBuf, Option<[u8; 32]>, bool);
 type StoredSource = (String, PathBuf, String, Vec<(String, f64)>);
-type StoredGroup = (String, String, Surface);
+type StoredGroup = (String, String, Surface, String);
 type StoredPartGroups = (String, Vec<StoredGroup>, [[f64; 4]; 4]);
 type NodeUvs = (u32, Vec<(usize, [f64; 2])>);
 
@@ -395,6 +395,7 @@ fn stored_groups(groups: &Groups) -> Vec<StoredGroup> {
                 entry.label.clone(),
                 entry.group.clone(),
                 entry.surface.clone(),
+                entry.body.clone(),
             )
         })
         .collect()
@@ -404,10 +405,11 @@ fn restored_groups(groups: Vec<StoredGroup>) -> Groups {
     Groups(
         groups
             .into_iter()
-            .map(|(label, group, surface)| GroupEntry {
+            .map(|(label, group, surface, body)| GroupEntry {
                 label,
                 group,
                 surface,
+                body,
             })
             .collect(),
     )

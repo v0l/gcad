@@ -1093,10 +1093,10 @@ impl Model {
         }
         let threaded = thread_faces(&solid, &picked, major, pitch, left, tolerance)?;
         let label = label_of(line);
-        threaded
-            .strips
-            .into_iter()
-            .for_each(|surface| self.groups.record(&label, "faces", surface));
+        threaded.strips.into_iter().for_each(|surface| {
+            self.groups
+                .record(&self.body_name(), &label, "faces", surface)
+        });
         self.solid = Some(threaded.solid);
         Ok(format!(
             "{} {} x {pitch} thread, {:.3} long; {}",
