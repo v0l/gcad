@@ -45,7 +45,8 @@ fn runner(name: &str, version: &str, online: bool, price: i64) -> Runner {
     }
 }
 
-fn serve(runners: Vec<Runner>) -> String {
+fn serve(runners: Vec<Runner>, shop: Option<&str>) -> String {
+    let shop = shop.map(str::to_string);
     let listener = TcpListener::bind("127.0.0.1:0").expect("bind");
     let address = listener.local_addr().expect("address");
     std::thread::spawn(move || {
@@ -74,7 +75,7 @@ fn serve(runners: Vec<Runner>) -> String {
                         id: "acct-7".into(),
                         balance_cents: 1234,
                         held_cents: 250,
-                        shop_url: Some("https://shop.example/top-up".into()),
+                        shop_url: shop.clone(),
                     })
                     .unwrap(),
                 ),
@@ -125,12 +126,13 @@ fn the_overview_reads_account_jobs_and_runners() {
         std::env::set_var("XDG_CONFIG_HOME", &config);
         std::env::remove_var("GCAD_SIMS_TOKEN");
     }
-    let server = serve(vec![
+    let runners = vec![
         runner("old", "0.1.0", true, 0),
         runner("here", Overview::build(), true, 250),
         runner("also-here", Overview::build(), true, 100),
         runner("asleep", Overview::build(), false, 50),
-    ]);
+    ];
+    let server = serve(runners.clone(), None);
     unsafe { std::env::set_var("GCAD_SIMS_SERVER", &server) };
 
     assert!(!remote::has_account());
@@ -171,8 +173,14 @@ fn the_overview_reads_account_jobs_and_runners() {
     assert_eq!(view.online_on_this_build().len(), 2);
     assert_eq!(view.cheapest(), Some(100));
     assert_eq!(view.priciest(), Some(250));
+    assert_eq!(view.shop(), "https://apexstrata.ie/shop/gcad-sim-credit/");
     assert_eq!(remote::hold_cents(60, 250), 250);
     assert_eq!(remote::hold_cents(20, 250), 84);
+
+    let own = serve(runners, Some("https://shop.example/top-up"));
+    unsafe { std::env::set_var("GCAD_SIMS_SERVER", &own) };
+    assert_eq!(remote::overview().shop(), "https://shop.example/top-up");
+    unsafe { std::env::set_var("GCAD_SIMS_SERVER", &server) };
 
     let cancelled = remote::cancel_job("new00000").expect("cancel");
     assert_eq!(cancelled.state, JobState::Cancelling);

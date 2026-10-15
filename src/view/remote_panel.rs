@@ -182,6 +182,12 @@ impl RemotePanel {
                     ui,
                     "no account on this machine. making one is free, runs are prepaid",
                 );
+                if toggle(ui, "buy credit", false)
+                    .on_hover_text(view.shop())
+                    .clicked()
+                {
+                    ui.ctx().open_url(egui::OpenUrl::new_tab(view.shop()));
+                }
                 let busy = self.action.is_some();
                 if !busy && toggle(ui, "make account", false).clicked() {
                     self.start(ui.ctx(), "making an account", || {
@@ -282,10 +288,11 @@ impl RemotePanel {
             .tint(if short { WARN } else { READOUT })
             .show(ui);
         ui.horizontal(|ui| {
-            if let Some(shop) = &account.shop_url
-                && toggle(ui, "top up", false).clicked()
+            if toggle(ui, "buy credit", false)
+                .on_hover_text(view.shop())
+                .clicked()
             {
-                ui.ctx().open_url(egui::OpenUrl::new_tab(shop.clone()));
+                ui.ctx().open_url(egui::OpenUrl::new_tab(view.shop()));
             }
             if toggle(ui, "copy id", false).clicked() {
                 ui.ctx().copy_text(account.id.clone());
@@ -325,7 +332,7 @@ impl RemotePanel {
                 ui,
                 if short {
                     format!(
-                        "a run holds up to {}, more than the balance. top up or lower the limits",
+                        "a run holds up to {}, more than the balance. buy credit or lower the limits",
                         remote::euros(hold)
                     )
                 } else {

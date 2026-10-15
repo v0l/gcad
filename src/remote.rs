@@ -66,11 +66,10 @@ fn explain(error: ureq::Error) -> anyhow::Error {
                 ..Default::default()
             });
             let mut out = format!("the sims server said: {}", reply.error);
-            if code == 402
-                && let Some(shop) = reply.shop_url
-            {
+            if code == 402 {
                 out.push_str(&format!(
-                    "\ntop up at {shop} with the id from `gcad remote account`"
+                    "\ntop up at {} with the id from `gcad remote account`",
+                    proto::shop_or_default(reply.shop_url.as_deref())
                 ));
             }
             anyhow!(out)
@@ -196,7 +195,10 @@ pub fn signup(server: Option<&str>) -> Result<()> {
     let (made, server, path) = create_account(server)?;
     println!("account {} on {server}", made.id);
     println!("token saved in {}", path.display());
-    println!("top it up with that account id, then run `gcad sim FILE --remote`");
+    println!(
+        "top it up at {} with that account id, then run `gcad sim FILE --remote`",
+        proto::DEFAULT_SHOP
+    );
     Ok(())
 }
 
@@ -223,9 +225,10 @@ pub fn account() -> Result<()> {
         }
     );
     println!("runners  `gcad remote runners` lists them and their prices");
-    if let Some(shop) = me.shop_url {
-        println!("top up   {shop}");
-    }
+    println!(
+        "top up   {}",
+        proto::shop_or_default(me.shop_url.as_deref())
+    );
     Ok(())
 }
 
@@ -276,10 +279,20 @@ pub struct Overview {
     pub runners: Vec<proto::Runner>,
     pub versions: Vec<String>,
     pub queued: i64,
+    pub shop_url: Option<String>,
     pub error: Option<String>,
 }
 
 impl Overview {
+    pub fn shop(&self) -> String {
+        let given = self
+            .account
+            .as_ref()
+            .and_then(|a| a.shop_url.as_deref())
+            .or(self.shop_url.as_deref());
+        proto::shop_or_default(given).to_string()
+    }
+
     pub fn build() -> &'static str {
         env!("GCAD_BUILD_VERSION")
     }
@@ -325,6 +338,7 @@ pub fn overview() -> Overview {
             out.runners = status.runners;
             out.versions = status.versions;
             out.queued = status.queued;
+            out.shop_url = status.shop_url;
         }
         Err(error) => out.error = Some(format!("{error:#}")),
     }
@@ -500,7 +514,7 @@ fn ready(client: &Client, limits: &Limits) -> Result<u64> {
             euros(price as i64),
             euros(hold),
             euros(me.balance_cents),
-            me.shop_url.as_deref().unwrap_or("the shop"),
+            proto::shop_or_default(me.shop_url.as_deref()),
             me.id
         );
     }

@@ -63,7 +63,7 @@ bandwidth (`gcad gpu-bench`, hidden, measures both), video memory and CPU.
 
 ```sh
 gcad remote signup                  # make an account, keep its token in ~/.config/gcad/remote.toml
-gcad remote account                 # its id, balance and price; top up at the shop with the id
+gcad remote account                 # its id, balance and price; buy credit at https://apexstrata.ie/shop/gcad-sim-credit/ with the id
 gcad sim wind.gsim --remote         # build here, solve there, write wind.result.bin here
 gcad sim wind.gsim --remote --max-minutes 20
 gcad sim wind.gsim --remote --max-price 2.50   # only runners asking at most €2.50 an hour
@@ -95,7 +95,7 @@ the saved server and token.
 The viewer shows the same account. A simulation card has `run on server` beside the local run,
 and a `server` toggle that reads `server €12.34, 1 running` once an account exists. It opens a
 `sims server` card with the server, the runners on this gcad build with their GPU, speed and
-price, the account id and balance (with what running jobs hold), `top up` and `copy id`, the
+price, the account id and balance (with what running jobs hold), `buy credit` (opens the shop, https://apexstrata.ie/shop/gcad-sim-credit/ unless the server names another) and `copy id`, the
 longest time and the most a run may charge (any, free only, or up to a price) with what a run
 would hold, and the recent runs with their state, runner, time, cost and progress, each active
 one with a `cancel` button. It asks the server once when a simulation opens and an account is

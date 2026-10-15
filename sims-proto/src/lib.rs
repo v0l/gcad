@@ -1,6 +1,13 @@
 use serde::{Deserialize, Serialize};
 
 pub const DEFAULT_SERVER: &str = "https://sims.gcad.sh";
+pub const DEFAULT_SHOP: &str = "https://apexstrata.ie/shop/gcad-sim-credit/";
+
+pub fn shop_or_default(given: Option<&str>) -> &str {
+    given
+        .filter(|s| !s.trim().is_empty())
+        .unwrap_or(DEFAULT_SHOP)
+}
 pub const ACCOUNT_TOKEN: &str = "gsa_";
 pub const WORKER_TOKEN: &str = "gsw_";
 pub const MAX_UPLOAD: u64 = 95 * 1024 * 1024;
