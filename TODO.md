@@ -48,9 +48,3 @@ magnetics on the tet mesh checked against TEAM problem 13.
 `heat` on a part that spins bails in `src/sim/wind.rs` (`heating`); its swept cells get air
 conductivity, so the rotor conducts like air. Carrying heat in it needs the thermal lattice's
 per-cell conductivity to move with the rotor cells (`sims-flow` rotor passes).
-
-## Contact on a slip-fit D-shaft never settles
-
-`contact drive.motor drive.shaft` in the same sim ran 30 rounds, 4 minutes each, with the same
-2345 pairs touching and the residual never reaching 1e-9. The D-flat is the shaft's only hold
-against turning, so each round's linear solve is near-singular about the axis.

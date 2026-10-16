@@ -32,15 +32,15 @@ robust = "1.2"
 faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
 ttf-parser = "0.25"
 wgpu = "29"
-sims-field = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-acoustics = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-frame = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-thermal = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-flow = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-magnetic = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-fem = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-tet = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
-sims-progress = { git = "https://github.com/v0l/sims", rev = "6bc04b6e3d65793078527c2dfd900bdf997efac9" }
+sims-field = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-acoustics = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-frame = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-thermal = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-flow = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-magnetic = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-fem = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-tet = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
+sims-progress = { git = "https://github.com/v0l/sims", rev = "ae5c5a5ead01be186c1cfbebb78c1b5f2d4d7efc" }
 pollster = "0.4"
 bytemuck = "1"
 toml = "1.1.8"
