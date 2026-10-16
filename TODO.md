@@ -45,8 +45,9 @@ magnetics on the tet mesh checked against TEAM problem 13.
 
 ## A spinning part cannot carry heat
 
-`spin` with a `heat` line bails in `src/sim/wind.rs`: rotor cells move, so the per-cell
-conductivity table in the thermal lattice would have to move with them.
+`heat` on a part that spins bails in `src/sim/wind.rs` (`heating`); its swept cells get air
+conductivity, so the rotor conducts like air. Carrying heat in it needs the thermal lattice's
+per-cell conductivity to move with the rotor cells (`sims-flow` rotor passes).
 
 ## Contact on a slip-fit D-shaft never settles
 

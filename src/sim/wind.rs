@@ -396,14 +396,6 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
         half: spec.half,
         ..Domain::new(size)
     };
-    if !setup.spins.is_empty()
-        && spec
-            .thermal
-            .iter()
-            .any(|b| matches!(b, super::fem::thermal::Boundary::Flux { .. }))
-    {
-        bail!("`heat` with a part that spins is not supported yet");
-    }
     let mut unseen = Vec::new();
     let voxelizing = crate::progress::stage(
         "placing parts in the grid",
@@ -1160,18 +1152,20 @@ pub fn run(spec: &Spec) -> Result<Outcome> {
             "K/W",
             "heated faces above the inlet air, per watt",
         ));
-        let (_, plane) = lattice.plane(WIND, size[WIND] - 2)?;
-        let capacity = air.0 * AIR_HEAT_CAPACITY;
-        let carried: f64 = plane
-            .iter()
-            .enumerate()
-            .filter(|(_, v)| v[3] > 0.0)
-            .map(|(k, v)| {
-                let cell = k + (size[WIND] - 2) * size[SIDE] * size[UP];
-                v[2] as f64 * velocity_scale * mean[cell] * capacity * dx * dx
-            })
-            .sum();
-        balance = Some((carried, watts));
+        if inflow > 0.0 {
+            let (_, plane) = lattice.plane(WIND, size[WIND] - 2)?;
+            let capacity = air.0 * AIR_HEAT_CAPACITY;
+            let carried: f64 = plane
+                .iter()
+                .enumerate()
+                .filter(|(_, v)| v[3] > 0.0)
+                .map(|(k, v)| {
+                    let cell = k + (size[WIND] - 2) * size[SIDE] * size[UP];
+                    v[2] as f64 * velocity_scale * mean[cell] * capacity * dx * dx
+                })
+                .sum();
+            balance = Some((carried, watts));
+        }
         use rayon::prelude::*;
         field = Field {
             title: "mean surface temperature".into(),
@@ -1597,7 +1591,11 @@ fn heating(
     let capacity = air.0 * AIR_HEAT_CAPACITY;
     let air_alpha = viscosity / PRANDTL;
     let mut alphas = Vec::new();
-    for part in &setup.parts {
+    for (k, part) in setup.parts.iter().enumerate() {
+        if setup.spun(k).is_some() {
+            alphas.push(air_alpha);
+            continue;
+        }
         let conductivity = model
             .materials
             .get(&part.name)
@@ -1619,6 +1617,9 @@ fn heating(
             _ => [air_alpha as f32, 0.0],
         })
         .collect();
+    for &cell in domain.rotors.iter().flat_map(|r| &r.cells) {
+        cells[cell] = [air_alpha as f32, 0.0];
+    }
     let mut sources = Vec::new();
     for (label, faces, watts) in fluxes {
         let mut weights: HashMap<usize, f64> = HashMap::new();
@@ -1628,6 +1629,11 @@ fn heating(
             let Some(k) = setup.parts.iter().position(|p| &p.name == name) else {
                 bail!("`{label}` heats `{name}`, which the simulation leaves out");
             };
+            if setup.spun(k).is_some() {
+                bail!(
+                    "`{label}` heats `{name}`, which spins; only parts that stand still can carry heat"
+                );
+            }
             let Some((_, solid)) = solids.iter().find(|(n, _)| n == name) else {
                 continue;
             };

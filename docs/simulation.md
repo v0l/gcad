@@ -214,7 +214,9 @@ expect drag<400
   `joint.flow` (m³/s through the disc its blades sweep, along the joint axis, when that axis
   lies along the box), and with a duct `flow` through its far end. Forces on a spinning part
   are summed every step, and averaging waits for its torque and flow to be known to 1% (at most
-  160 passes). A part that spins cannot carry `heat` yet.
+  160 passes). A fan can cool parts that stand still: `heat` lines on them work as with `wind`,
+  and the spinning part itself carries no heat, so its cells conduct like air. With no `wind` the
+  air leaves through every face of the box, so there is no energy balance note.
 
 Readings: `drag` along the wind, `side` across it and level, `lift` across it and up, `cda`
 (drag over the dynamic pressure, m²), `moment.x`, `.y` and `.z` about the `about` point in N·m,

@@ -2768,6 +2768,44 @@ fn a_spinning_fan_pushes_air() {
 }
 
 #[test]
+#[cfg_attr(
+    not(feature = "gpu-tests"),
+    ignore = "GPU, run with --features gpu-tests"
+)]
+fn a_spinning_fan_cools_a_heated_post() {
+    let post = format!("{FAN_POST}material aluminium\n");
+    let files = [
+        ("fan.gcad", FAN),
+        ("post.gcad", post.as_str()),
+        ("fan.gasm", FAN_GASM),
+    ];
+    let run = |name: &str, rpm: f64| {
+        simulated(
+            name,
+            &files,
+            &format!(
+                "sim flow\npart fan.gasm\nspin spin rpm={rpm}\nmesh 3\naverage 12\nchip: heat post:<Z 2"
+            ),
+        )
+    };
+    let slow = run("a_spinning_fan_cools_a_heated_post_slow", 1500.0);
+    let fast = run("a_spinning_fan_cools_a_heated_post_fast", 3000.0);
+    let (warm, cool) = (reading(&slow, "chip"), reading(&fast, "chip"));
+    assert!(
+        cool > 20.0 && cool < warm,
+        "a faster fan cools the post: {warm} °C at 1500 rpm, {cool} °C at 3000"
+    );
+    let path = written(
+        "a_spinning_fan_cannot_carry_heat",
+        &files,
+        "sim flow\npart fan.gasm\nspin spin rpm=3000\nmesh 3\nhot: heat rotor:<Z 2",
+    );
+    let error = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"))
+        .expect_err("a spinning part cannot carry heat");
+    assert!(format!("{error}").contains("spins"), "{error}");
+}
+
+#[test]
 fn a_wire_turns_a_magnet_from_parts() {
     let files = [
         ("magnet.gcad", "circle 20\nextrude 30 both\n"),
