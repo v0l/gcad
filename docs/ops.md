@@ -190,7 +190,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | operation | status | syntax | tests |
 |---|---|---|---|
 | union | supported | `extrude` onto existing material | `bodies::union`, `features::boss_glued_onto_a_face`, `features::boss_on_a_twisted_face`, `features::boss_over_an_edge_still_joins` |
-| subtract | supported | `cut` | `bodies::subtract` |
+| subtract | supported | `cut` | `bodies::subtract`, `bodies::thru_cut_across_thin_sheet_rows` |
 | intersect | supported | `extrude 10 mode=intersect` | `bodies::intersect` |
 | mirror | supported | `mirror YZ` | `bodies::mirror` |
 | linear pattern | supported | `repeat h count=4 step=10,0` | `bodies::linear_pattern` |

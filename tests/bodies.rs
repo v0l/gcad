@@ -4,6 +4,18 @@ use common::*;
 use std::f64::consts::PI;
 
 #[test]
+fn thru_cut_across_thin_sheet_rows() {
+    for z0 in [2265.0, 2300.0] {
+        let source = format!(
+            "let z0={z0}\nplane YZ offset=330\npoly -38,z0 -38,z0+60 -69.5,z0+80 -69.5,z0+120 -38,z0+140 -38,z0+200 -38.5,z0+200 -38.5,z0+140 -70,z0+120 -70,z0+80 -38.5,z0+60 -38.5,z0\nrib: extrude 4320\nrepeat rib count=2 step=0,200\nplane XZ offset=100\npoly 320,2596 4660,2488 4660,3500 320,3500\ncut thru"
+        );
+        let line_at = |x: f64| 2596.0 - 108.0 * (x - 320.0) / 4340.0;
+        let mean_height = (line_at(330.0) + line_at(4650.0)) / 2.0 - z0;
+        assert_volume(&build(&source), 0.5 * 4320.0 * mean_height, 1.0e-6);
+    }
+}
+
+#[test]
 fn union() {
     assert_volume(
         &build("rect 20 20\nextrude 10\nplane XY offset=5\nrect 20 20 at=10,10\nextrude 10"),
