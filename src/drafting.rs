@@ -1985,12 +1985,12 @@ pub(crate) fn text_width(text: &str, size: f64) -> f64 {
 
 pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
     let pt = 72.0 / 25.4;
-    let mut objects: Vec<String> = Vec::new();
-    objects.push(String::new());
-    objects.push(String::new());
+    let mut objects: Vec<Vec<u8>> = Vec::new();
+    objects.push(Vec::new());
+    objects.push(Vec::new());
     objects.push(
-        "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
-            .to_string(),
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
+            .to_vec(),
     );
     let mut pages = Vec::new();
     for sheet in sheets {
@@ -2070,20 +2070,27 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
             }
         }
         let content_id = objects.len() + 1;
-        objects.push(format!(
-            "<< /Length {} >>\nstream\n{}\nendstream",
-            content.len() + 1,
-            content
-        ));
+        let mut packed = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+        let _ = std::io::Write::write_all(&mut packed, content.as_bytes());
+        let packed = packed.finish().unwrap_or_default();
+        let mut stream = format!(
+            "<< /Length {} /Filter /FlateDecode >>\nstream\n",
+            packed.len()
+        )
+        .into_bytes();
+        stream.extend_from_slice(&packed);
+        stream.extend_from_slice(b"\nendstream");
+        objects.push(stream);
         let page_id = objects.len() + 1;
         objects.push(format!(
             "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font << /F1 3 0 R >> >> /Contents {content_id} 0 R >>",
             sheet.width * pt,
             sheet.height * pt
-        ));
+        )
+        .into_bytes());
         pages.push(page_id);
     }
-    objects[0] = "<< /Type /Catalog /Pages 2 0 R >>".to_string();
+    objects[0] = b"<< /Type /Catalog /Pages 2 0 R >>".to_vec();
     objects[1] = format!(
         "<< /Type /Pages /Kids [{}] /Count {} >>",
         pages
@@ -2092,12 +2099,15 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
             .collect::<Vec<_>>()
             .join(" "),
         pages.len()
-    );
+    )
+    .into_bytes();
     let mut out = b"%PDF-1.4\n".to_vec();
     let mut offsets = Vec::new();
     for (i, body) in objects.iter().enumerate() {
         offsets.push(out.len());
-        out.extend_from_slice(format!("{} 0 obj\n{body}\nendobj\n", i + 1).as_bytes());
+        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
+        out.extend_from_slice(body);
+        out.extend_from_slice(b"\nendobj\n");
     }
     let xref = out.len();
     let mut tail = format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1);
