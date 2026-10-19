@@ -6,6 +6,10 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Drawings: `label` points at faces, holes, edges or points and gcad places the text in a column
+  beside the view where it overlaps nothing; hole labels write their own size, count and tap.
+
 ## [0.4.0] - 2026-10-14
 
 ### Added

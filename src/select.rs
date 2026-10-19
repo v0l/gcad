@@ -75,7 +75,7 @@ fn plane_of(face: &Face) -> Option<Plane> {
     }
 }
 
-fn sample_points(face: &Face) -> Vec<Point3> {
+pub(crate) fn sample_points(face: &Face) -> Vec<Point3> {
     face.edge_iter()
         .flat_map(|edge| {
             let curve = edge.curve();

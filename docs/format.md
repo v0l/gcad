@@ -540,6 +540,7 @@ note "first line|second line" place=230,40
 | `dim` | `x,y,z x,y,z` `offset=` `text=` | one dimension between two model points in the last view, horizontal or vertical on the sheet |
 | `level` | `height "name"` | a level mark at that height beside the last elevation or section |
 | `callout` | `x,y,z "text"` `to=dx,dy` | a leader from a model point in the last view to text `dx`, `dy` mm away on the sheet |
+| `label` | `"text"` `target ...` `side=` | annotates the last view with no layout by hand. A target is `part:faces` (a hole or round face points at its rim and, with no text, is written `⌀12`, `4× ⌀3.4` or `M3 tapped (⌀2.5 drill)`), `part:a&b` (an edge) or `x,y,z`. Labels collect in a column beside the view, sorted to the order of their targets so leaders do not cross, clear of the geometry, dimensions, levels and the title block, and are laid out together when the next `view`, `section` or `sheet` starts. `side=left\|right\|top\|bottom` picks the column. `callout` with no `to=` is a `label` |
 | `note` | `"text"` `size=` `place=` | text, `|` starting a new line |
 | `cutlist` | `parts ...` `profile=` `summary=1` `place=` | a table of the weldment members among the parts, by section and length, or with `summary=1` by section with the piece count, total length and longest piece |
 

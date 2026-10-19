@@ -1,3 +1,5 @@
+mod annotate;
+
 use crate::drawing::{polylines, section_of, silhouettes};
 use crate::geometry;
 use crate::model::Model;
@@ -102,9 +104,13 @@ struct State {
     drawing: Drawing,
     frame: Option<Frame>,
     cursor: (f64, f64, f64),
+    pending: Vec<annotate::Label>,
+    label_line: Option<Line>,
+    view_geometry: Option<(usize, usize, usize)>,
+    view_box: Option<(f64, f64, f64, f64)>,
 }
 
-const MARGIN: f64 = 10.0;
+pub(crate) const MARGIN: f64 = 10.0;
 const TITLE_H: f64 = 28.0;
 const TEXT: f64 = 2.5;
 const BLACK: [f64; 3] = [0.0, 0.0, 0.0];
@@ -123,6 +129,10 @@ pub fn run(path: &Path, vars: &[(String, f64)]) -> Result<Drawing> {
         drawing: Drawing::default(),
         frame: None,
         cursor: (0.0, 0.0, 0.0),
+        pending: Vec::new(),
+        label_line: None,
+        view_geometry: None,
+        view_box: None,
     };
     let fixed: Scope = vars.iter().cloned().collect();
     for line in lines {
@@ -131,6 +141,11 @@ pub fn run(path: &Path, vars: &[(String, f64)]) -> Result<Drawing> {
         state.drawing.steps.push((line, result));
         if failed {
             break;
+        }
+    }
+    if let Err(error) = state.flush_labels() {
+        if let Some(line) = state.label_line.clone() {
+            state.drawing.steps.push((line, Err(error)));
         }
     }
     let count = state.drawing.sheets.len();
@@ -319,6 +334,9 @@ impl State {
     }
 
     fn apply(&mut self, line: &Line, fixed: &Scope) -> Result<String> {
+        if matches!(line.op.as_str(), "view" | "section" | "sheet") {
+            self.flush_labels()?;
+        }
         match line.op.as_str() {
             "let" => {
                 for (key, value) in &line.named {
@@ -364,6 +382,7 @@ impl State {
             "level" => self.op_level(line),
             "note" => self.op_note(line),
             "callout" => self.op_callout(line),
+            "label" => self.op_label(line),
             "cutlist" => self.op_cutlist(line),
             other => bail!("`{other}` is not a drawing operation; see `gcad docs`"),
         }
@@ -718,6 +737,7 @@ impl State {
                 });
             }
         }
+        let geometry_marks = marks.len();
         let label = named(line, "label")
             .map(|t| t.trim_matches('"').to_string())
             .or_else(|| line.label.clone())
@@ -737,6 +757,10 @@ impl State {
             anchor: Anchor::Start,
             angle: 0.0,
         });
+        let sheet_index = self.drawing.sheets.len().saturating_sub(1);
+        let start = self.sheet()?.marks.len();
+        self.view_geometry = Some((sheet_index, start, start + geometry_marks));
+        self.view_box = Some(frame.box_paper());
         self.sheet()?.marks.extend(marks);
         self.frame = Some(frame);
         Ok(format!(
@@ -1086,6 +1110,9 @@ impl State {
     }
 
     fn op_callout(&mut self, line: &Line) -> Result<String> {
+        if named(line, "to").is_none() {
+            return self.op_label(line);
+        }
         let at = line
             .positional
             .first()
@@ -1153,6 +1180,241 @@ impl State {
         ];
         self.sheet()?.marks.extend(marks);
         Ok(words)
+    }
+
+    fn groups_of(&self, part: &str) -> Result<crate::select::Groups> {
+        let model = self.model()?;
+        Ok(match model.part_groups.get(part) {
+            Some(groups) => groups.placed(),
+            None => crate::select::Groups(
+                model
+                    .groups
+                    .0
+                    .iter()
+                    .filter(|g| g.body == part)
+                    .cloned()
+                    .collect(),
+            ),
+        })
+    }
+
+    fn anchors_of(&self, target: &str) -> Result<(Vec<annotate::Anchor2>, Vec<(f64, String)>)> {
+        let frame = self.frame()?.clone();
+        let spot = |p: Point3, radius: f64| annotate::Anchor2 {
+            at: frame.paper(frame.uv(p)),
+            radius,
+        };
+        if !target.contains(':') {
+            return Ok((vec![spot(point3(target, &self.scope)?, 0.0)], Vec::new()));
+        }
+        let model = self.model()?;
+        let (part, selector) = target.split_once(':').unwrap_or((target, ""));
+        let solid = model.named_body(part)?;
+        let groups = self.groups_of(part)?;
+        let tolerance = (geometry::bounds(&solid).diameter() * 1.0e-6).max(1.0e-7);
+        if selector.contains('&') || selector.contains('|') {
+            let edges = crate::select::select_edges(selector, &solid, &groups, tolerance)?;
+            if edges.is_empty() {
+                bail!("`{target}` matched no edges");
+            }
+            let anchors = edges
+                .iter()
+                .map(|edge| {
+                    let curve = edge.curve();
+                    let (t0, t1) = curve.range_tuple();
+                    spot(curve.subs((t0 + t1) / 2.0), 0.0)
+                })
+                .collect();
+            return Ok((anchors, Vec::new()));
+        }
+        let picked = crate::select::select_faces(selector, &solid, &groups, tolerance)?;
+        if picked.is_empty() {
+            bail!("`{target}` matched no faces");
+        }
+        let round = crate::model::mate::cylinders(&solid, &picked);
+        if !round.is_empty() {
+            let toward = -frame.right.cross(frame.up);
+            let anchors = round
+                .iter()
+                .map(|c| {
+                    let end_on = c.axis.dot(toward).abs() > 0.999;
+                    spot(c.point, if end_on { c.radius / frame.scale } else { 0.0 })
+                })
+                .collect();
+            let sizes = round
+                .iter()
+                .map(|c| (c.radius * 2.0, self.hole_note(c.radius * 2.0)))
+                .collect();
+            return Ok((anchors, sizes));
+        }
+        let faces = crate::select::faces(&solid);
+        let anchors = picked
+            .iter()
+            .filter_map(|&i| faces.get(i))
+            .map(|face| {
+                let samples = crate::select::sample_points(face);
+                let n = samples.len().max(1) as f64;
+                spot(
+                    Point3::from_vec(samples.iter().map(|p| p.to_vec()).sum::<Vector3>() / n),
+                    0.0,
+                )
+            })
+            .collect();
+        Ok((anchors, Vec::new()))
+    }
+
+    fn hole_note(&self, diameter: f64) -> String {
+        self.model
+            .as_ref()
+            .and_then(|m| {
+                m.hole_notes
+                    .iter()
+                    .find(|n| (n.diameter - diameter).abs() < 1.0e-3)
+            })
+            .map(|n| n.note.clone())
+            .unwrap_or_default()
+    }
+
+    fn op_label(&mut self, line: &Line) -> Result<String> {
+        let frame = self.frame()?.clone();
+        let is_target = |t: &String| match t.split_once(':') {
+            Some((part, _)) => self
+                .model
+                .as_ref()
+                .is_some_and(|m| m.named_solids().iter().any(|(n, _)| n == part)),
+            None => point3(t, &self.scope).is_ok(),
+        };
+        let quoted: Vec<&String> = line.positional.iter().filter(|t| !is_target(t)).collect();
+        let targets: Vec<&String> = line.positional.iter().filter(|t| is_target(t)).collect();
+        if targets.is_empty() {
+            bail!("write `label \"text\" part:faces`, `label \"text\" a:b&c` for an edge or `label \"text\" x,y,z`");
+        }
+        let mut found_anchors: Vec<annotate::Anchor2> = Vec::new();
+        let mut diameters: Vec<(f64, String)> = Vec::new();
+        for target in &targets {
+            let (found, round) = self.anchors_of(target)?;
+            found_anchors.extend(found);
+            diameters.extend(round);
+        }
+        let text = match quoted.first() {
+            Some(t) => t.trim_matches('"').to_string(),
+            None => {
+                if diameters.is_empty() {
+                    bail!("give the label its text, `label \"text\" {}`", targets[0]);
+                }
+                let mut groups: Vec<(f64, String, usize)> = Vec::new();
+                for (d, note) in &diameters {
+                    match groups
+                        .iter_mut()
+                        .find(|(known, k, _)| (known - d).abs() < 1.0e-3 && k == note)
+                    {
+                        Some((_, _, n)) => *n += 1,
+                        None => groups.push((*d, note.clone(), 1)),
+                    }
+                }
+                groups
+                    .iter()
+                    .map(|(d, note, n)| {
+                        let size = number((d * 100.0).round() / 100.0);
+                        let body = if note.ends_with("tapped") {
+                            format!("{note} (⌀{size} drill)")
+                        } else if note.is_empty() {
+                            format!("⌀{size}")
+                        } else {
+                            format!("⌀{size} {note}")
+                        };
+                        if *n > 1 {
+                            format!("{n}× {body}")
+                        } else {
+                            body
+                        }
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            }
+        };
+        let (bx0, by0, bx1, by1) = frame.box_paper();
+        let mut anchors: Vec<annotate::Anchor2> = Vec::new();
+        for a in found_anchors {
+            if a.at.0 < bx0 - 0.5 || a.at.0 > bx1 + 0.5 || a.at.1 < by0 - 0.5 || a.at.1 > by1 + 0.5
+            {
+                continue;
+            }
+            if anchors
+                .iter()
+                .all(|k| (k.at.0 - a.at.0).hypot(k.at.1 - a.at.1) > 1.0)
+            {
+                anchors.push(a);
+            }
+        }
+        if anchors.is_empty() {
+            bail!("`{}` is outside the last view", targets[0]);
+        }
+        let side = named(line, "side").map(annotate::parse_side).transpose()?;
+        self.pending.push(annotate::Label {
+            text: text.clone(),
+            anchors,
+            side,
+        });
+        self.label_line = Some(line.clone());
+        if let Err(error) = self.laid_out_labels() {
+            self.pending.pop();
+            return Err(error);
+        }
+        Ok(text)
+    }
+
+    fn laid_out_labels(&self) -> Result<Vec<Mark>> {
+        let sheet = self
+            .drawing
+            .sheets
+            .last()
+            .ok_or_else(|| anyhow!("start a `sheet` first"))?;
+        let view = self
+            .view_box
+            .ok_or_else(|| anyhow!("draw a `view` or `section` first"))?;
+        let index = self.drawing.sheets.len() - 1;
+        let skip = self
+            .view_geometry
+            .filter(|(sheet_index, _, _)| *sheet_index == index)
+            .map(|(_, a, b)| a..b)
+            .unwrap_or(0..0);
+        let kept = || {
+            sheet
+                .marks
+                .iter()
+                .enumerate()
+                .filter(|(i, _)| !skip.contains(i))
+                .map(|(_, m)| m)
+        };
+        let texts: Vec<annotate::Rect> = kept()
+            .filter(|m| matches!(m, Mark::Text { .. }))
+            .flat_map(annotate::mark_rects)
+            .collect();
+        let mut obstacles: Vec<annotate::Rect> = kept().flat_map(annotate::mark_rects).collect();
+        obstacles.push((
+            sheet.width - MARGIN - 170.0,
+            sheet.height - MARGIN - TITLE_H,
+            sheet.width - MARGIN,
+            sheet.height - MARGIN,
+        ));
+        annotate::layout(
+            view,
+            (sheet.width, sheet.height, MARGIN),
+            &obstacles,
+            &texts,
+            &self.pending,
+        )
+    }
+
+    fn flush_labels(&mut self) -> Result<()> {
+        if self.pending.is_empty() {
+            return Ok(());
+        }
+        let marks = self.laid_out_labels();
+        self.pending.clear();
+        self.sheet()?.marks.extend(marks?);
+        Ok(())
     }
 
     fn op_note(&mut self, line: &Line) -> Result<String> {
@@ -1649,7 +1911,7 @@ fn pdf_text(text: &str) -> String {
     out
 }
 
-fn text_width(text: &str, size: f64) -> f64 {
+pub(crate) fn text_width(text: &str, size: f64) -> f64 {
     text.chars()
         .map(|c| match c {
             'i' | 'j' | 'l' | '.' | ',' | ':' | ';' | '\'' | '|' | '!' | ' ' => 0.28,

@@ -676,3 +676,30 @@ fn drawing_view_that_does_not_fit() {
     let (_, error) = drawing.failed().expect("the view is too big");
     assert!(format!("{error:#}").contains("does not fit"), "{error:#}");
 }
+
+#[test]
+fn drawing_labels_sit_clear_of_the_view() {
+    let dir = std::path::PathBuf::from(scratch("drawing_labels"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("plate.gcad"),
+        "rect 40 30\nbase: extrude 6\nplane base.end\nbig: hole 12 -10,0\nsmall: hole 4 12,8 12,-8\n",
+    )
+    .expect("part");
+    let path = dir.join("plate.gdwg");
+    std::fs::write(
+        &path,
+        "part plate.gcad\nsheet \"Plate\" size=A4 scale=2:1\nview from=+z place=100,100\nlabel main:big.side\nlabel main:small.side\nlabel \"edge\" main:base.end&base.side\n",
+    )
+    .expect("drawing");
+    let drawing = gcad::drafting::run(&path, &[]).expect("runs");
+    assert!(
+        drawing.failed().is_none(),
+        "{:?}",
+        drawing.failed().map(|(l, e)| format!("{}: {e:#}", l.text))
+    );
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    for words in [">⌀12<", ">2× ⌀4<", ">edge<"] {
+        assert!(svg.contains(words), "the sheet lacks {words}");
+    }
+}
