@@ -363,12 +363,61 @@ gcad remote login TOKEN              # use the account on another machine
 
 ## Drawings
 
-Construction or workshop drawings are a `.gdwg` file beside the assembly: `sheet` pages at a
-scale, `view` and `section` of named parts (with `window=` crops for details), `dims` chains
-or `style=ordinate` setting-out, `level`, `callout`, `note` and a member `cutlist`. Check it
-with `gcad check x.gdwg` (a view that does not fit says so) and write it with
-`gcad export x.gdwg x.pdf`. Pick members by section with `profile="bar 44x150"`; read the
-PDF back with `pdftoppm -png` to look at it.
+A `.gdwg` file is a drawing of a part or assembly: `part file` once, `title`, then for each page a
+`sheet "name" size=A3 scale=2:1`, its `view`s and `section`s, and the dimensions and notes on
+them. Check with `gcad check x.gdwg`, write with `gcad export x.gdwg x.pdf` (`.svg` writes one
+file per sheet), then `pdftoppm -png -r 70 x.pdf /tmp/x` and look at it. Read every page: a
+clean check does not mean it reads well. A second `part` line swaps the model for the next sheet.
+
+```
+part ../parts/shaft.gcad d=12 L=131
+title "El shaft, 1 off, Ø12 silver steel"
+sheet "El shaft" size=A3 scale=3:2
+view from=-y place=40,40 label="front"
+dim -6,0,0 -6,0,131 offset=14
+section from=-y at=0 place=130,40 label="section A-A"
+label main:keyway.side side=right
+label main:tap0.side
+note "Ø12 silver steel, 131 long|Break all edges 0.5" place=20,20
+```
+
+- **Sheet and scale.** `size=A4..A0` is landscape, with a title block in the bottom right that
+  nothing may overlap. `scale=2:1` enlarges, `1:25` reduces. Pick the largest scale at which
+  each view fits: a 166 mm long shaft at 2:1 needs an A3 sheet, not A4 (the error says what did
+  not fit). Give a view its own scale with `scale=` for a detail.
+- **Views.** `view from=-y|+y|-x|+x|+z|-z` (front, back, left, right, top, bottom), with part
+  patterns as in `gcad bom` (`*`, `!pv.*`, `profile=`). `section from=-y at=0` cuts square to
+  the direction it looks. `place=x,y` puts the view's lower left corner x, y mm from the
+  sheet's lower left; leave it off to flow views left to right. `window=u0,v0,u1,v1` crops.
+- **Labels, the default way to annotate.** `label "text" target ...` or `label target` points
+  at something in the last view and gcad places the text, so you never write coordinates for
+  text. A target is `body:faces` (a hole or round face gets its leader on the rim and, with no
+  text, writes its own `⌀12`, `4× ⌀3.4` or `M3 tapped (⌀2.5 drill)`), `body:a&b` (an edge) or
+  `x,y,z`. The body is a body name in the part file (`main` for a plain part, `side_b` for a
+  `body side_b` in `driveplates.gcad`) or a part in the assembly. Group names are the labels in
+  the part file (`bore.side`, `fix.side`). Several targets on one line share one text and
+  leaders to each; one target gets one leader.
+- **How labels are placed.** Collected per view and laid out when the sheet ends, so every view,
+  dimension, note and the title block on the sheet is an obstacle. They go in a column beside
+  the view, ordered so leaders do not cross, clear of the part. `side=left|right|top|bottom`
+  picks the column; use it to keep a long note off the neighbouring view. If it errors with
+  "no room beside the view", shrink the scale, `place` the views further apart or use a bigger
+  sheet. `callout x,y,z "text"` without `to=` is a `label`; with `to=dx,dy` it is the old manual leader.
+- **Dimensions.** `dim x,y,z x,y,z offset=N` between two model points in the last view, drawn
+  `N` mm outside the part: positive offset puts a horizontal dimension below and a vertical one
+  to the left. Dimension from edge points on the near side (`-4,0,0` to `-4,0,83` on a shaft along
+  z viewed from -y) and stack by raising the offset (`offset=12`, then `24`). It prints one decimal
+  (102.2) and `text="..."` overrides. `dims parts along=h|v of=ends|edges|centres` chains between
+  parts of an assembly, `style=ordinate` sets out from the first mark, `level` marks heights on an
+  elevation, `cutlist` tables structural members.
+- **Notes.** `note "line one|line two" place=x,y` for the material, finish, general tolerances
+  and anything a view cannot show. Keep a made part's drawing to one sheet: views, the
+  dimensions a machinist needs, one label per feature, a note for the rest. Say the quantity in
+  the title (`"Worm shaft, 2 off"`).
+- **Long parts.** Turn a long part lying along z so it draws horizontally: make a one-line
+  `.gasm` (`part p ../parts/x.gcad` then `rotate p 90 axis=y`) and draw that, then label with
+  `p:feature.side`.
+- PDF text is Latin-1: `Ø`, `⌀`, `×`, `°` and `±` print, other symbols become `?`.
 
 ## Output
 
