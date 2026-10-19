@@ -46,6 +46,7 @@ bytemuck = "1"
 toml = "1.1.8"
 roxmltree = "0.21.1"
 yaml-rust2 = "0.13.0"
+lopdf = { version = "0.45", default-features = false }
 
 [features]
 gpu-tests = []

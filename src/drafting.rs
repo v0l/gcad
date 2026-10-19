@@ -1951,23 +1951,17 @@ pub fn svg(sheet: &Sheet) -> String {
     out
 }
 
-fn pdf_text(text: &str) -> String {
-    let mut out = String::new();
-    for c in text.chars() {
-        match c {
-            '(' | ')' | '\\' => {
-                out.push('\\');
-                out.push(c);
-            }
-            c if (c as u32) < 128 => out.push(c),
-            '×' => out.push_str("\\327"),
-            '°' => out.push_str("\\260"),
-            '±' => out.push_str("\\261"),
-            '⌀' | 'Ø' => out.push_str("\\330"),
-            _ => out.push('?'),
-        }
-    }
-    out
+fn pdf_text(text: &str) -> Vec<u8> {
+    text.chars()
+        .map(|c| match c {
+            c if (c as u32) < 128 => c as u8,
+            '×' => 0xD7,
+            '°' => 0xB0,
+            '±' => 0xB1,
+            '⌀' | 'Ø' => 0xD8,
+            _ => b'?',
+        })
+        .collect()
 }
 
 pub(crate) fn text_width(text: &str, size: f64) -> f64 {
@@ -1984,19 +1978,24 @@ pub(crate) fn text_width(text: &str, size: f64) -> f64 {
 }
 
 pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
+    use lopdf::content::{Content, Operation};
+    use lopdf::{dictionary, Document, Object, Stream};
     let pt = 72.0 / 25.4;
-    let mut objects: Vec<Vec<u8>> = Vec::new();
-    objects.push(Vec::new());
-    objects.push(Vec::new());
-    objects.push(
-        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>"
-            .to_vec(),
-    );
-    let mut pages = Vec::new();
+    let number = |v: f64| Object::Real(((v * 1000.0).round() / 1000.0) as f32);
+    let operation = |name: &str, operands: Vec<Object>| Operation::new(name, operands);
+    let mut document = Document::with_version("1.4");
+    let pages_id = document.new_object_id();
+    let font_id = document.add_object(dictionary! {
+        "Type" => "Font",
+        "Subtype" => "Type1",
+        "BaseFont" => "Helvetica",
+        "Encoding" => "WinAnsiEncoding",
+    });
+    let mut kids = Vec::new();
     for sheet in sheets {
         let h = sheet.height;
-        let mut content = String::new();
         let y = |v: f64| (h - v) * pt;
+        let mut operations: Vec<Operation> = Vec::new();
         for mark in &sheet.marks {
             match mark {
                 Mark::Shape {
@@ -2008,36 +2007,34 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
                     dashed,
                 } => {
                     if let Some([r, g, b]) = fill {
-                        let _ = write!(content, "{r:.3} {g:.3} {b:.3} rg ");
+                        operations.push(operation("rg", vec![number(*r), number(*g), number(*b)]));
                     }
                     if let Some([r, g, b]) = stroke {
-                        let _ = write!(content, "{r:.3} {g:.3} {b:.3} RG {:.3} w ", width * pt);
+                        operations.push(operation("RG", vec![number(*r), number(*g), number(*b)]));
+                        operations.push(operation("w", vec![number(width * pt)]));
                     }
-                    content.push_str(if *dashed {
-                        "[5.67 2.83] 0 d "
-                    } else {
-                        "[] 0 d "
-                    });
+                    let pattern = if *dashed { vec![number(5.67), number(2.83)] } else { vec![] };
+                    operations.push(operation("d", vec![Object::Array(pattern), number(0.0)]));
                     for l in loops {
                         for (k, (px, py)) in l.iter().enumerate() {
-                            let _ = write!(
-                                content,
-                                "{:.2} {:.2} {} ",
-                                px * pt,
-                                y(*py),
-                                if k == 0 { "m" } else { "l" }
-                            );
+                            operations.push(operation(
+                                if k == 0 { "m" } else { "l" },
+                                vec![number(px * pt), number(y(*py))],
+                            ));
                         }
                         if *closed {
-                            content.push_str("h ");
+                            operations.push(operation("h", vec![]));
                         }
                     }
-                    content.push_str(match (fill.is_some(), stroke.is_some()) {
-                        (true, true) => "B*\n",
-                        (true, false) => "f*\n",
-                        (false, true) => "S\n",
-                        (false, false) => "n\n",
-                    });
+                    operations.push(operation(
+                        match (fill.is_some(), stroke.is_some()) {
+                            (true, true) => "B*",
+                            (true, false) => "f*",
+                            (false, true) => "S",
+                            (false, false) => "n",
+                        },
+                        vec![],
+                    ));
                 }
                 Mark::Text {
                     x,
@@ -2057,69 +2054,65 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
                     let (c, s) = (a.cos(), -a.sin());
                     let ox = x + shift * a.cos();
                     let oy = ty + shift * a.sin();
-                    let _ = writeln!(
-                        content,
-                        "0 0 0 rg BT /F1 {:.2} Tf {c:.4} {s:.4} {:.4} {c:.4} {:.2} {:.2} Tm ({}) Tj ET",
-                        size * pt,
-                        -s,
-                        ox * pt,
-                        y(oy),
-                        pdf_text(text)
-                    );
+                    operations.push(operation(
+                        "rg",
+                        vec![number(0.0), number(0.0), number(0.0)],
+                    ));
+                    operations.push(operation("BT", vec![]));
+                    operations.push(operation("Tf", vec!["F1".into(), number(size * pt)]));
+                    operations.push(operation(
+                        "Tm",
+                        vec![
+                            number(c),
+                            number(s),
+                            number(-s),
+                            number(c),
+                            number(ox * pt),
+                            number(y(oy)),
+                        ],
+                    ));
+                    operations.push(operation(
+                        "Tj",
+                        vec![Object::string_literal(pdf_text(text))],
+                    ));
+                    operations.push(operation("ET", vec![]));
                 }
             }
         }
-        let content_id = objects.len() + 1;
-        let mut packed = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
-        let _ = std::io::Write::write_all(&mut packed, content.as_bytes());
-        let packed = packed.finish().unwrap_or_default();
-        let mut stream = format!(
-            "<< /Length {} /Filter /FlateDecode >>\nstream\n",
-            packed.len()
-        )
-        .into_bytes();
-        stream.extend_from_slice(&packed);
-        stream.extend_from_slice(b"\nendstream");
-        objects.push(stream);
-        let page_id = objects.len() + 1;
-        objects.push(format!(
-            "<< /Type /Page /Parent 2 0 R /MediaBox [0 0 {:.2} {:.2}] /Resources << /Font << /F1 3 0 R >> >> /Contents {content_id} 0 R >>",
-            sheet.width * pt,
-            sheet.height * pt
-        )
-        .into_bytes());
-        pages.push(page_id);
+        let encoded = Content { operations }.encode().unwrap_or_default();
+        let mut stream = Stream::new(dictionary! {}, encoded);
+        let _ = stream.compress();
+        let content_id = document.add_object(stream);
+        let page_id = document.add_object(dictionary! {
+            "Type" => "Page",
+            "Parent" => pages_id,
+            "MediaBox" => vec![
+                0.into(),
+                0.into(),
+                number(sheet.width * pt),
+                number(sheet.height * pt),
+            ],
+            "Resources" => dictionary! { "Font" => dictionary! { "F1" => font_id } },
+            "Contents" => content_id,
+        });
+        kids.push(Object::Reference(page_id));
     }
-    objects[0] = b"<< /Type /Catalog /Pages 2 0 R >>".to_vec();
-    objects[1] = format!(
-        "<< /Type /Pages /Kids [{}] /Count {} >>",
-        pages
-            .iter()
-            .map(|p| format!("{p} 0 R"))
-            .collect::<Vec<_>>()
-            .join(" "),
-        pages.len()
-    )
-    .into_bytes();
-    let mut out = b"%PDF-1.4\n".to_vec();
-    let mut offsets = Vec::new();
-    for (i, body) in objects.iter().enumerate() {
-        offsets.push(out.len());
-        out.extend_from_slice(format!("{} 0 obj\n", i + 1).as_bytes());
-        out.extend_from_slice(body);
-        out.extend_from_slice(b"\nendobj\n");
-    }
-    let xref = out.len();
-    let mut tail = format!("xref\n0 {}\n0000000000 65535 f \n", objects.len() + 1);
-    for o in offsets {
-        let _ = writeln!(tail, "{o:010} 00000 n ");
-    }
-    let _ = write!(
-        tail,
-        "trailer\n<< /Size {} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n",
-        objects.len() + 1
+    let count = kids.len() as i64;
+    document.objects.insert(
+        pages_id,
+        Object::Dictionary(dictionary! {
+            "Type" => "Pages",
+            "Kids" => kids,
+            "Count" => count,
+        }),
     );
-    out.extend_from_slice(tail.as_bytes());
+    let catalog_id = document.add_object(dictionary! {
+        "Type" => "Catalog",
+        "Pages" => pages_id,
+    });
+    document.trailer.set("Root", catalog_id);
+    let mut out = Vec::new();
+    let _ = document.save_to(&mut out);
     out
 }
 
