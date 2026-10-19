@@ -1467,6 +1467,20 @@ impl State {
             .transpose()?;
         let (x, y) = self.place(width, height, at)?;
         let top = y - height;
+        let spot = (x - 1.0, top - 1.0, x + width + 1.0, y + 1.0);
+        let clash = self.sheet()?.marks.iter().any(|m| match m {
+            Mark::Shape { fill: Some(_), .. } => annotate::mark_rects(m)
+                .iter()
+                .any(|r| annotate::overlaps(*r, spot)),
+            _ => false,
+        });
+        if clash {
+            bail!(
+                "the note would sit on a view; move it with `place=x,y` (it is {} x {} mm)",
+                number(width),
+                number(height)
+            );
+        }
         let marks: Vec<Mark> = lines
             .iter()
             .enumerate()
