@@ -22,6 +22,14 @@ wall function, then recheck `examples/flow/cube.gsim`, the heatsink and
 `flow::square_cylinder_re22000`. Scaling it by 0.1 at the wall already moved 20 mm cells from
 110 N, 294 N·m to 173 N, 92 N·m; 0 diverges.
 
+Tried WALE (Cw 0.5, central-difference gradients with wall ghost velocities, one extra
+velocity buffer) plus a Smagorinsky floor of 0.05: `hover.gsim` at 20 mm read 129 N and
+197 N·m, but at 13 mm read 310 N and 138 N·m, the same as Smagorinsky. WALE alone goes NaN
+on the square cylinder at Cw below about 0.8, and with the floor it goes NaN at d = 24
+(`square_cylinder_re22000`) while d = 12 stayed stable (drag 1.57, Strouhal 0.152, against 2.1
+and 0.132). So the wall viscosity is not what limits 13 mm; look at resolution and the
+staircase blade first.
+
 ## Uniform lattice is too coarse for rotors
 
 The same rotor gets 15 cells on the chord and under 2 through the blade at 13 mm, and thrust
