@@ -25,6 +25,7 @@ pub struct Label {
     pub text: String,
     pub anchors: Vec<Anchor2>,
     pub side: Option<Side>,
+    pub single: bool,
 }
 
 pub fn parse_side(text: &str) -> Result<Side> {
@@ -164,7 +165,7 @@ fn preferred(view: Rect, label: &Label) -> Side {
         return side;
     }
     let (cx, _) = centre(label);
-    if cx - view.0 < view.2 - cx {
+    if (cx - view.0) + 0.05 * (view.2 - view.0) < view.2 - cx {
         Side::Left
     } else {
         Side::Right
@@ -209,6 +210,7 @@ fn column(
     page: &Page,
     taken: &[Rect],
     texts: &[Rect],
+    blocks: &[Rect],
 ) -> Option<Drawn> {
     let mut order: Vec<&Label> = labels.to_vec();
     let key = |l: &Label| {
@@ -291,7 +293,21 @@ fn column(
                 }
             };
             drawn.leaders.push(shelf);
-            for a in &label.anchors {
+            let nearest = |a: &&Anchor2| {
+                let e = a.toward(join);
+                (e.0 - join.0).hypot(e.1 - join.1)
+            };
+            let chosen: Vec<&Anchor2> = if label.single {
+                label
+                    .anchors
+                    .iter()
+                    .min_by(|a, b| nearest(a).total_cmp(&nearest(b)))
+                    .into_iter()
+                    .collect()
+            } else {
+                label.anchors.iter().collect()
+            };
+            for a in chosen {
                 let end = a.toward(join);
                 drawn.leaders.push(vec![end, join]);
                 drawn.dots.push(end);
@@ -313,7 +329,9 @@ fn column(
             && drawn
                 .leaders
                 .iter()
-                .all(|l| l.windows(2).all(|w| texts.iter().all(|t| !crosses(w[0], w[1], *t))));
+                .all(|l| l.windows(2).all(|w| {
+                    texts.iter().chain(blocks).all(|t| !crosses(w[0], w[1], *t))
+                }));
         if free {
             return Some(drawn);
         }
@@ -345,6 +363,7 @@ fn place(
     page: &Page,
     taken: &mut Vec<Rect>,
     texts: &[Rect],
+    blocks: &[Rect],
 ) -> Option<Vec<Drawn>> {
     let order = match side {
         Side::Left | Side::Right => [side, side.opposite(), Side::Bottom, Side::Top],
@@ -352,7 +371,7 @@ fn place(
     };
     let tried: Vec<Drawn> = order[..2]
         .iter()
-        .filter_map(|&s| column(s, group, view, page, taken, texts))
+        .filter_map(|&s| column(s, group, view, page, taken, texts, blocks))
         .collect();
     let best = tried
         .into_iter()
@@ -360,7 +379,7 @@ fn place(
         .or_else(|| {
             order[2..]
                 .iter()
-                .find_map(|&s| column(s, group, view, page, taken, texts))
+                .find_map(|&s| column(s, group, view, page, taken, texts, blocks))
         });
     if let Some(drawn) = best {
         taken.extend(drawn.rects.iter().copied());
@@ -376,8 +395,8 @@ fn place(
     };
     sorted.sort_by(|a, b| key(a).total_cmp(&key(b)));
     let (first, second) = sorted.split_at(sorted.len() / 2);
-    let mut out = place(side, first, view, page, taken, texts)?;
-    out.extend(place(side.opposite(), second, view, page, taken, texts)?);
+    let mut out = place(side, first, view, page, taken, texts, blocks)?;
+    out.extend(place(side.opposite(), second, view, page, taken, texts, blocks)?);
     Some(out)
 }
 
@@ -386,6 +405,7 @@ pub fn layout(
     page: (f64, f64, f64),
     obstacles: &[Rect],
     texts: &[Rect],
+    blocks: &[Rect],
     labels: &[Label],
 ) -> Result<Vec<Mark>> {
     let page = Page {
@@ -406,7 +426,7 @@ pub fn layout(
         if group.is_empty() {
             continue;
         }
-        let drawn = place(side, &group, view, &page, &mut taken, texts).ok_or_else(|| {
+        let drawn = place(side, &group, view, &page, &mut taken, texts, blocks).ok_or_else(|| {
             anyhow::anyhow!(
                 "there is no room beside the view for {} (a smaller `scale`, a `window`, or a bigger sheet)",
                 group

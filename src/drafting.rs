@@ -96,6 +96,12 @@ impl Frame {
     }
 }
 
+struct PendingView {
+    view: (f64, f64, f64, f64),
+    own: std::ops::Range<usize>,
+    labels: Vec<annotate::Label>,
+}
+
 struct State {
     dir: PathBuf,
     scope: Scope,
@@ -104,7 +110,7 @@ struct State {
     drawing: Drawing,
     frame: Option<Frame>,
     cursor: (f64, f64, f64),
-    pending: Vec<annotate::Label>,
+    pending: Vec<PendingView>,
     label_line: Option<Line>,
     view_geometry: Option<(usize, usize, usize)>,
     view_box: Option<(f64, f64, f64, f64)>,
@@ -334,7 +340,7 @@ impl State {
     }
 
     fn apply(&mut self, line: &Line, fixed: &Scope) -> Result<String> {
-        if matches!(line.op.as_str(), "view" | "section" | "sheet") {
+        if line.op == "sheet" {
             self.flush_labels()?;
         }
         match line.op.as_str() {
@@ -753,7 +759,7 @@ impl State {
             x: bx0,
             y: by0 - 4.0,
             size: 3.5,
-            text: format!("{label}  1:{}", number(scale)),
+            text: format!("{label}  {}", scale_text(scale)),
             anchor: Anchor::Start,
             angle: 0.0,
         });
@@ -1053,11 +1059,11 @@ impl State {
         };
         let words = named(line, "text")
             .map(|t| t.trim_matches('"').to_string())
-            .unwrap_or_else(|| number(value.round()));
+            .unwrap_or_else(|| number((value * 10.0).round() / 10.0));
         let mut marks = Vec::new();
         dimension(&mut marks, pa2, pb2, off, &words, false);
         self.sheet()?.marks.extend(marks);
-        Ok(format!("{} mm", number(value.round())))
+        Ok(format!("{words} mm"))
     }
 
     fn op_level(&mut self, line: &Line) -> Result<String> {
@@ -1232,23 +1238,8 @@ impl State {
             bail!("`{target}` matched no faces");
         }
         let round = crate::model::mate::cylinders(&solid, &picked);
-        if !round.is_empty() {
-            let toward = -frame.right.cross(frame.up);
-            let anchors = round
-                .iter()
-                .map(|c| {
-                    let end_on = c.axis.dot(toward).abs() > 0.999;
-                    spot(c.point, if end_on { c.radius / frame.scale } else { 0.0 })
-                })
-                .collect();
-            let sizes = round
-                .iter()
-                .map(|c| (c.radius * 2.0, self.hole_note(c.radius * 2.0)))
-                .collect();
-            return Ok((anchors, sizes));
-        }
         let faces = crate::select::faces(&solid);
-        let anchors = picked
+        let face_spots: Vec<annotate::Anchor2> = picked
             .iter()
             .filter_map(|&i| faces.get(i))
             .map(|face| {
@@ -1260,6 +1251,29 @@ impl State {
                 )
             })
             .collect();
+        if !round.is_empty() {
+            let toward = -frame.right.cross(frame.up);
+            let (bx0, by0, bx1, by1) = frame.box_paper();
+            let inside = |a: &annotate::Anchor2| {
+                a.at.0 > bx0 && a.at.0 < bx1 && a.at.1 > by0 && a.at.1 < by1
+            };
+            let rims: Vec<annotate::Anchor2> = round
+                .iter()
+                .filter(|c| c.axis.dot(toward).abs() > 0.999)
+                .map(|c| spot(c.point, c.radius / frame.scale))
+                .collect();
+            let anchors = if rims.len() == round.len() && rims.iter().all(inside) {
+                rims
+            } else {
+                face_spots
+            };
+            let sizes = round
+                .iter()
+                .map(|c| (c.radius * 2.0, self.hole_note(c.radius * 2.0)))
+                .collect();
+            return Ok((anchors, sizes));
+        }
+        let anchors = face_spots;
         Ok((anchors, Vec::new()))
     }
 
@@ -1351,69 +1365,91 @@ impl State {
             bail!("`{}` is outside the last view", targets[0]);
         }
         let side = named(line, "side").map(annotate::parse_side).transpose()?;
-        self.pending.push(annotate::Label {
+        let label = annotate::Label {
             text: text.clone(),
             anchors,
             side,
-        });
-        self.label_line = Some(line.clone());
-        if let Err(error) = self.laid_out_labels() {
-            self.pending.pop();
-            return Err(error);
+            single: targets.len() == 1,
+        };
+        let view = self
+            .view_box
+            .ok_or_else(|| anyhow!("draw a `view` or `section` first"))?;
+        let own = self
+            .view_geometry
+            .map(|(_, a, b)| a..b)
+            .unwrap_or(0..0);
+        match self.pending.last_mut() {
+            Some(last) if last.view == view && last.own == own => last.labels.push(label),
+            _ => self.pending.push(PendingView {
+                view,
+                own,
+                labels: vec![label],
+            }),
         }
+        self.label_line = Some(line.clone());
         Ok(text)
     }
 
-    fn laid_out_labels(&self) -> Result<Vec<Mark>> {
+    fn flush_labels(&mut self) -> Result<()> {
+        let pending = std::mem::take(&mut self.pending);
+        if pending.is_empty() {
+            return Ok(());
+        }
         let sheet = self
             .drawing
             .sheets
             .last()
             .ok_or_else(|| anyhow!("start a `sheet` first"))?;
-        let view = self
-            .view_box
-            .ok_or_else(|| anyhow!("draw a `view` or `section` first"))?;
-        let index = self.drawing.sheets.len() - 1;
-        let skip = self
-            .view_geometry
-            .filter(|(sheet_index, _, _)| *sheet_index == index)
-            .map(|(_, a, b)| a..b)
-            .unwrap_or(0..0);
-        let kept = || {
-            sheet
-                .marks
+        let mut added: Vec<Mark> = Vec::new();
+        for group in &pending {
+            let rects = |marks: &[Mark], skip: Option<&std::ops::Range<usize>>| {
+                marks
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| skip.is_none_or(|r| !r.contains(i)))
+                    .map(|(_, m)| m.clone())
+                    .collect::<Vec<Mark>>()
+            };
+            let mut all = rects(&sheet.marks, Some(&group.own));
+            all.extend(added.iter().cloned());
+            let texts: Vec<annotate::Rect> = all
                 .iter()
-                .enumerate()
-                .filter(|(i, _)| !skip.contains(i))
-                .map(|(_, m)| m)
-        };
-        let texts: Vec<annotate::Rect> = kept()
-            .filter(|m| matches!(m, Mark::Text { .. }))
-            .flat_map(annotate::mark_rects)
-            .collect();
-        let mut obstacles: Vec<annotate::Rect> = kept().flat_map(annotate::mark_rects).collect();
-        obstacles.push((
-            sheet.width - MARGIN - 170.0,
-            sheet.height - MARGIN - TITLE_H,
-            sheet.width - MARGIN,
-            sheet.height - MARGIN,
-        ));
-        annotate::layout(
-            view,
-            (sheet.width, sheet.height, MARGIN),
-            &obstacles,
-            &texts,
-            &self.pending,
-        )
-    }
-
-    fn flush_labels(&mut self) -> Result<()> {
-        if self.pending.is_empty() {
-            return Ok(());
+                .filter(|m| matches!(m, Mark::Text { .. }))
+                .flat_map(annotate::mark_rects)
+                .collect();
+            let blocks: Vec<annotate::Rect> = all
+                .iter()
+                .filter(|m| matches!(m, Mark::Shape { fill: Some(_), .. }))
+                .flat_map(annotate::mark_rects)
+                .collect();
+            let mut obstacles: Vec<annotate::Rect> =
+                all.iter().flat_map(annotate::mark_rects).collect();
+            obstacles.extend(
+                sheet
+                    .marks
+                    .iter()
+                    .enumerate()
+                    .filter(|(i, _)| group.own.contains(i))
+                    .filter(|(_, m)| matches!(m, Mark::Text { .. }))
+                    .flat_map(|(_, m)| annotate::mark_rects(m)),
+            );
+            obstacles.push((
+                sheet.width - MARGIN - 170.0,
+                sheet.height - MARGIN - TITLE_H,
+                sheet.width - MARGIN,
+                sheet.height - MARGIN,
+            ));
+            let marks = annotate::layout(
+                group.view,
+                (sheet.width, sheet.height, MARGIN),
+                &obstacles,
+                &texts,
+                &blocks,
+                &group.labels,
+            )?;
+            added.extend(marks);
         }
-        let marks = self.laid_out_labels();
-        self.pending.clear();
-        self.sheet()?.marks.extend(marks?);
+        self.sheet()?.marks.extend(added);
         Ok(())
     }
 
@@ -1597,6 +1633,14 @@ impl State {
     }
 }
 
+fn scale_text(scale: f64) -> String {
+    if scale < 1.0 {
+        format!("{}:1", number(1.0 / scale))
+    } else {
+        format!("1:{}", number(scale))
+    }
+}
+
 fn number(value: f64) -> String {
     let text = format!("{value:.2}");
     text.trim_end_matches('0').trim_end_matches('.').to_string()
@@ -1711,7 +1755,7 @@ fn title_block(sheet: &mut Sheet, title: &str, file: &str, index: usize, count: 
             x0 + 112.0,
             y1 - 4.0,
             3.0,
-            format!("1:{}", number(sheet.scale)),
+            scale_text(sheet.scale),
         ),
         text(x0 + 142.0, y1 - 9.0, 2.2, "sheet".to_string()),
         text(x0 + 142.0, y1 - 4.0, 3.0, format!("{index} of {count}")),
@@ -1904,6 +1948,7 @@ fn pdf_text(text: &str) -> String {
             c if (c as u32) < 128 => out.push(c),
             '×' => out.push_str("\\327"),
             '°' => out.push_str("\\260"),
+            '±' => out.push_str("\\261"),
             '⌀' | 'Ø' => out.push_str("\\330"),
             _ => out.push('?'),
         }
