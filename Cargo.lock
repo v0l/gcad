@@ -1491,7 +1491,7 @@ dependencies = [
 
 [[package]]
 name = "gcad"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "bitcode",
@@ -1549,7 +1549,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-web"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "console_error_panic_hook",
  "eframe",

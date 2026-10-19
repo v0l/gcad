@@ -6,9 +6,15 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.5.0] - 2026-10-19
+
 ### Added
 - Drawings: `label` points at faces, holes, edges or points and gcad places the text in a column
   beside the view where it overlaps nothing; hole labels write their own size, count and tap.
+
+### Changed
+- Drawing PDFs are written with lopdf and their content streams are compressed.
+- Drawing notes keep off the views.
 
 ## [0.4.0] - 2026-10-14
 
@@ -280,7 +286,8 @@ First release.
 - Release builds, install script and agent skill.
 
 [Unreleased]: https://github.com/v0l/gcad/compare/v0.4.0...HEAD
-[0.4.0]: https://github.com/v0l/gcad/compare/v0.3.1...v0.4.0
+[0.5.0]: https://github.com/v0l/gcad/compare/v0.3.1...v0.5.0
+[0.4.0]: https://github.com/v0l/gcad/compare/v0.3.1...2cb7d8f
 [0.3.1]: https://github.com/v0l/gcad/compare/v0.3.0...v0.3.1
 [0.3.0]: https://github.com/v0l/gcad/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/v0l/gcad/compare/v0.1.0...v0.2.0
