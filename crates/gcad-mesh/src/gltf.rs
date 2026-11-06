@@ -17,11 +17,11 @@ const FLOAT: u32 = 5126;
 const UNSIGNED_SHORT: u32 = 5123;
 const UNSIGNED_INT: u32 = 5125;
 
-fn y_up(p: P3) -> P3 {
+pub(crate) fn y_up(p: P3) -> P3 {
     [p[0], p[2], -p[1]]
 }
 
-fn quat_y_up(q: [f64; 4]) -> [f64; 4] {
+pub(crate) fn quat_y_up(q: [f64; 4]) -> [f64; 4] {
     [q[0], q[2], -q[1], q[3]]
 }
 
