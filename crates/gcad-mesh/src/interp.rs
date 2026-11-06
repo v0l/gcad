@@ -280,6 +280,47 @@ impl Scene {
         (size / 120.0 * self.cell_factor()).max(1.0e-6)
     }
 
+    pub fn budget(&mut self, triangles: Option<usize>, max_error: Option<f64>) -> Vec<String> {
+        if triangles.is_none() && max_error.is_none() {
+            return Vec::new();
+        }
+        let skinned: Vec<String> = self
+            .mesh_rigs
+            .iter()
+            .filter(|(_, rig)| rig.skin.is_some())
+            .map(|(name, _)| name.clone())
+            .collect();
+        let mut reports = Vec::new();
+        if self.mesh_body.rig.skin.is_none()
+            && let Ok(Some(open)) = self.current_mesh()
+        {
+            let mut mesh = (*open).clone();
+            let report = mesh.finish(&open, triangles, max_error);
+            reports.push(format!("body `{}`: {report}", self.body_name()));
+            self.mesh_body.mesh = Some(Arc::new(mesh));
+        } else if self.mesh_body.rig.skin.is_some() {
+            reports.push(format!(
+                "body `{}` is skinned, so it keeps its triangles; put `finish` before `skin` in the file",
+                self.body_name()
+            ));
+        }
+        let done: Vec<String> = self.mesh_bodies
+            .iter_mut()
+            .map(|(name, mesh)| {
+                if skinned.contains(name) {
+                    return format!(
+                        "body `{name}` is skinned, so it keeps its {} triangles; put `finish` before `skin` in the file",
+                        mesh.triangles.len()
+                    );
+                }
+                let reference = (**mesh).clone();
+                let report = Arc::make_mut(mesh).finish(&reference, triangles, max_error);
+                format!("body `{name}`: {report}")
+            })
+            .collect();
+        done.into_iter().chain(reports).collect()
+    }
+
     pub fn finish_mesh_body(&mut self) -> Result<()> {
         if let Some(mesh) = self.current_mesh()? {
             self.mesh_bodies.push((self.body_name(), mesh));

@@ -89,6 +89,12 @@ enum Command {
         /// For an .svg drawing, add a section view cut across this plane, like y=0
         #[arg(long)]
         section: Option<gcad::drawing::Section>,
+        /// For a mesh, decimate every unskinned body to this many triangles before writing it
+        #[arg(long)]
+        tris: Option<usize>,
+        /// For a mesh, decimate as far as the surface stays within this distance of the full-detail one
+        #[arg(long)]
+        max_error: Option<f64>,
     },
     /// Run a .gsim simulation, write NAME.result.bin beside it and print the readings
     Sim {
@@ -707,6 +713,8 @@ fn main() -> Result<()> {
             file,
             output,
             section,
+            tris,
+            max_error,
         } => {
             if gcad::drafting::is_drawing(std::path::Path::new(&file)) {
                 let drawing = gcad::drafting::run(std::path::Path::new(&file), &vars)?;
@@ -718,8 +726,11 @@ fn main() -> Result<()> {
                 }
                 return Ok(());
             }
-            let run = load(&file, None, &vars)?;
+            let mut run = load(&file, None, &vars)?;
             finished(&run)?;
+            for line in run.model.scene.budget(tris, max_error) {
+                eprintln!("{line}");
+            }
             if let Some(section) = section {
                 if !output.to_ascii_lowercase().ends_with(".svg") {
                     bail!("--section only applies to an .svg drawing");

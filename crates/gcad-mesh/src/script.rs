@@ -14,6 +14,8 @@ pub struct Options {
     pub detail: f64,
     pub y_up: bool,
     pub vars: Vec<(String, f64)>,
+    pub triangles: Option<usize>,
+    pub max_error: Option<f64>,
 }
 
 impl Default for Options {
@@ -22,6 +24,8 @@ impl Default for Options {
             detail: 1.0,
             y_up: true,
             vars: Vec::new(),
+            triangles: None,
+            max_error: None,
         }
     }
 }
@@ -382,6 +386,7 @@ pub fn build_with(source: &str, options: &Options) -> std::result::Result<Model,
         text: String::new(),
         message: format!("{e:#}"),
     })?;
+    run.scene.budget(options.triangles, options.max_error);
     Ok(collect(&run, options.y_up))
 }
 
