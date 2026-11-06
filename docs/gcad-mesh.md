@@ -78,6 +78,10 @@ Linux x86_64, release, one run each, cold start of the process.
 |---|---|
 | `gcad2glb` binary | 1.24 MB (1.42 MB with `parallel`) |
 | `gcad-mesh` wasm32 library | 674 KB, 223 KB gzipped |
+| `libgcad_mesh.so` aarch64-linux-android (cargo-ndk, NDK 28, release) | 1.22 MB |
+| `libgcad_mesh.dylib` aarch64-apple-ios (release, built on the M1) | 1.02 MB |
+| `libgcad_mesh.a` android / ios | 26.9 MB / 20.1 MB (unstripped archives, the linker keeps only what is used) |
+| `gcad2glb` on the M1 (aarch64-apple-darwin) | 1.11 MB, `rigged_creature` in 0.44 s wall, GLB byte-identical to the Linux build |
 | crates built for `gcad-mesh` | 7 including itself |
 | release build of the crate with dependencies cached | 1.4 s |
 | `rigged_creature.gcad` to GLB | 1814 B to 477700 B, 65 ms (16 ms `parallel`, 13 ms at `--detail 2`, 124440 B) |
@@ -90,3 +94,13 @@ loads `rigged_creature` with its two clips and 14 bones (`tools/gltf`).
 
 The hero GLB in `kids-free-games/assets/models/hero.glb` is 471748 B, so shipping the 12885 B text and
 building at load saves 97 percent of the asset bytes.
+
+`tools/gltf/load.mjs GLB clip t expected.json` loads a GLB in three.js, poses it at the clip time and
+compares sampled skinned vertices with `cargo run -p gcad-mesh --example dump_skinned`. On
+`rigged_creature` walk at 0.37 s, 2160 vertices differ by at most 3.9e-6 (rest displacement up to 2.1).
+
+![viewer frame](gcad-mesh-viewer-a.png)
+![viewer frame later](gcad-mesh-viewer-b.png)
+
+`crates/gcad-mesh-viewer` running in a headless sway: the creature is built from `rigged_creature.gcad`
+at startup (66 ms) and the walk clip is skinned on the CPU every frame.
