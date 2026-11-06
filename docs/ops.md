@@ -253,7 +253,7 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | bones in a hierarchy | supported | `bone knee parent=thigh tail=0,0,5` | `rig::bones_build_a_hierarchy`, `rig::bone_errors_name_the_bones` |
 | mirror a bone chain | supported | `mirror x of=arm_l` | `rig::mirror_bone_makes_the_other_side` |
 | list the skeleton | supported | `gcad inspect f.gcad out.png` | `rig::inspect_lists_the_skeleton`, `rig::inspect_report_lists_the_skeleton` |
-| automatic skin weights | supported | `skin auto` | `rig::skin_auto_weights_sum_to_one_with_four_influences_at_most`, `rig::skin_auto_binds_each_end_to_its_own_bone` |
+| automatic skin weights | supported | `skin auto` | `rig::skin_auto_weights_sum_to_one_with_four_influences_at_most`, `rig::skin_auto_binds_each_end_to_its_own_bone`, `rig::skin_auto_does_not_bind_the_body_to_an_arm_beside_it`, `rig::skin_auto_does_not_bind_a_leg_to_a_hand_hanging_beside_it` |
 | bind a part to a bone | supported | `skin part=upper bone=b_up` | `rig::skin_part_moves_only_with_its_bone`, `rig::skin_part_unknown_lists_the_parts` |
 | paint skin weights | supported | `skin paint bone=b sphere=0,0,10 r=4 falloff=3` | `rig::skin_paint_moves_weight_to_the_bone` |
 | pose a bone | supported | `pose bone=knee rotate=30 axis=x`, `pose reset` | `rig::an_unposed_rig_equals_the_rest_mesh`, `rig::a_bent_limb_stays_closed_and_keeps_its_volume`, `rig::pose_rotates_about_the_bone_head`, `rig::pose_names_the_bones_when_it_misses`, `rig::pose_without_skin_leaves_the_mesh_alone` |

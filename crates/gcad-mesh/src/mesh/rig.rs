@@ -145,17 +145,6 @@ pub fn slerp(a: Quat, b: Quat, t: f64) -> Quat {
     q.map(|v| v / n)
 }
 
-fn segment_distance(p: P3, a: P3, b: P3) -> f64 {
-    let ab = sub(b, a);
-    let len2 = super::dot(ab, ab);
-    let t = if len2 > 1.0e-18 {
-        (super::dot(sub(p, a), ab) / len2).clamp(0.0, 1.0)
-    } else {
-        0.0
-    };
-    length(sub(p, add(a, scale(ab, t))))
-}
-
 fn closest_on_segment(p: P3, a: P3, b: P3) -> P3 {
     let ab = sub(b, a);
     let len2 = super::dot(ab, ab);
@@ -168,6 +157,7 @@ fn closest_on_segment(p: P3, a: P3, b: P3) -> P3 {
 }
 
 const SOLID_CELLS: f64 = 320.0;
+const JITTER: f64 = 0.0137;
 
 struct Solid {
     lo: P3,
@@ -179,7 +169,10 @@ struct Solid {
 impl Solid {
     fn of(mesh: &Mesh) -> Solid {
         let (lo, hi) = mesh.bounds().unwrap_or_default();
-        let size = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max).max(1.0e-9);
+        let size = (0..3)
+            .map(|k| hi[k] - lo[k])
+            .fold(0.0, f64::max)
+            .max(1.0e-9);
         let cell = size / SOLID_CELLS;
         let lo = sub(lo, [cell; 3]);
         let dims: [usize; 3] =
@@ -187,14 +180,18 @@ impl Solid {
         let mut hits: Vec<Vec<f64>> = vec![Vec::new(); dims[0] * dims[1]];
         for t in &mesh.triangles {
             let [a, b, c] = t.map(|i| mesh.positions[i as usize]);
-            let x0 = ((a[0].min(b[0]).min(c[0]) - lo[0]) / cell - 0.5).floor().max(0.0) as usize;
+            let x0 = ((a[0].min(b[0]).min(c[0]) - lo[0]) / cell - 0.5)
+                .floor()
+                .max(0.0) as usize;
             let x1 = ((a[0].max(b[0]).max(c[0]) - lo[0]) / cell - 0.5).ceil() as usize;
-            let y0 = ((a[1].min(b[1]).min(c[1]) - lo[1]) / cell - 0.5).floor().max(0.0) as usize;
+            let y0 = ((a[1].min(b[1]).min(c[1]) - lo[1]) / cell - 0.5)
+                .floor()
+                .max(0.0) as usize;
             let y1 = ((a[1].max(b[1]).max(c[1]) - lo[1]) / cell - 0.5).ceil() as usize;
             for i in x0..=x1.min(dims[0] - 1) {
                 for j in y0..=y1.min(dims[1] - 1) {
-                    let x = lo[0] + (i as f64 + 0.5) * cell;
-                    let y = lo[1] + (j as f64 + 0.5) * cell;
+                    let x = lo[0] + (i as f64 + 0.5 + JITTER) * cell;
+                    let y = lo[1] + (j as f64 + 0.5 + JITTER * 0.618) * cell;
                     if let Some(z) = column_hit(a, b, c, x, y) {
                         hits[i * dims[1] + j].push(z);
                     }
@@ -224,7 +221,8 @@ impl Solid {
     }
 
     fn at(&self, p: P3) -> bool {
-        let idx: [isize; 3] = std::array::from_fn(|k| ((p[k] - self.lo[k]) / self.cell).floor() as isize);
+        let idx: [isize; 3] =
+            std::array::from_fn(|k| ((p[k] - self.lo[k]) / self.cell).floor() as isize);
         if (0..3).any(|k| idx[k] < 0 || idx[k] as usize >= self.dims[k]) {
             return false;
         }
@@ -235,19 +233,19 @@ impl Solid {
     fn reaches(&self, from: P3, to: P3) -> bool {
         let steps = (length(sub(to, from)) / (self.cell * 0.5)).ceil().max(1.0) as usize;
         let mut entered = false;
-        let mut left = false;
+        let mut exit: Option<P3> = None;
         for s in 0..=steps {
             let p = add(from, scale(sub(to, from), s as f64 / steps as f64));
             if self.at(p) {
-                if left {
+                if exit.is_some() {
                     return false;
                 }
                 entered = true;
-            } else if entered {
-                left = true;
+            } else if entered && exit.is_none() {
+                exit = Some(p);
             }
         }
-        true
+        exit.is_none_or(|e| length(sub(to, e)) <= self.cell * 4.0)
     }
 }
 

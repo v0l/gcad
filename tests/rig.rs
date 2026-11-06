@@ -102,6 +102,25 @@ fn skin_auto_does_not_bind_the_body_to_an_arm_beside_it() {
 }
 
 #[test]
+fn skin_auto_does_not_bind_a_leg_to_a_hand_hanging_beside_it() {
+    let model = build(
+        "leg_l: limb 6,0,40 6,0,0 r=4\narm_l: limb 14,0,70 14,0,44 r=2\nremesh 0.5\nbone thigh head=6,0,40 tail=6,0,0\nbone arm head=14,0,70 tail=14,0,44\nbone hand parent=arm tail=14,0,38\nskin auto",
+    );
+    let rig = rig_of(&model);
+    let mesh = rest_of(&model);
+    let skin = rig.skin.as_ref().unwrap();
+    let leg = mesh.parts.iter().position(|p| p == "leg_l").unwrap() as u16;
+    let worst = mesh
+        .labels
+        .iter()
+        .zip(skin)
+        .filter(|(l, _)| **l == leg)
+        .map(|(_, w)| w.iter().filter(|(b, _)| *b != 0).map(|(_, w)| *w).sum::<f64>())
+        .fold(0.0, f64::max);
+    assert!(worst < 0.02, "leg vertices carry {worst:.2} of the arm and hand");
+}
+
+#[test]
 fn skin_auto_binds_each_end_to_its_own_bone() {
     let model = build(&format!("{ARM}skin auto"));
     let rest = rest_of(&model);
