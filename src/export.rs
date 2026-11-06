@@ -360,6 +360,9 @@ fn export_meshes(model: &crate::model::Model, path: &str) -> Result<()> {
 }
 
 pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &str) -> Result<()> {
+    if !model.assembly && path.to_ascii_lowercase().ends_with(".glb") {
+        return std::fs::write(path, glb_of(model)?).map_err(Into::into);
+    }
     if !model.meshes().is_empty() {
         return export_meshes(model, path);
     }

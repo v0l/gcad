@@ -422,6 +422,19 @@ fn glb_carries_solid_bodies_in_their_colours() {
 }
 
 #[test]
+fn a_solid_part_file_exports_to_glb() {
+    let dir = std::path::PathBuf::from(scratch("solid_glb"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("plate.gcad");
+    std::fs::write(&source, "rect 20 10\nextrude 4\ncolor #ff0000\n").unwrap();
+    let run = gcad::model::run_path(&source, &[], None).expect("runs");
+    let out = dir.join("plate.glb");
+    gcad::export::export_model(&run.model, &source, out.to_str().unwrap()).expect("glb");
+    let (json, _) = glb_json(&std::fs::read(&out).unwrap());
+    assert_eq!(json["meshes"][0]["name"], "main");
+}
+
+#[test]
 fn glb_without_a_rig_has_no_skin() {
     let model = build(LIMB);
     let (json, _) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
