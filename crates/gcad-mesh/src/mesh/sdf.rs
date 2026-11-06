@@ -260,14 +260,14 @@ pub fn remesh(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
         mesh.merge(&remesh_field(&[own], fine)?);
     }
     if mesh.triangles.is_empty() {
-        bail!("there is nothing to mesh: add a `blob` or `limb` first");
+        bail!("there is nothing to mesh: add a `blob`, `limb` or `block` first");
     }
     Ok(mesh)
 }
 
 fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
     if primitives.iter().all(|p| p.combine != Combine::Add) {
-        bail!("there is nothing to mesh: add a `blob` or `limb` first");
+        bail!("there is nothing to mesh: add a `blob`, `limb` or `block` first");
     }
     if cell <= 0.0 {
         bail!("the cell size must be positive, got {cell}");

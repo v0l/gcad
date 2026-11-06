@@ -8,7 +8,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub const MESH_OPERATIONS: &[&str] = &[
-    "blob", "limb", "remesh", "select", "inflate", "smooth", "refine", "crease", "pinch",
+    "blob", "limb", "block", "remesh", "select", "inflate", "smooth", "refine", "crease", "pinch",
     "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key",
 ];
 
@@ -369,6 +369,38 @@ impl Scene {
         self.add_primitive(scope, line, shape, &args)
     }
 
+    pub fn op_block(&mut self, scope: &Scope, line: &Line) -> Result<String> {
+        self.start_mesh("block")?;
+        let args = Args::new(
+            line,
+            &["at"],
+            &["size", "round", "blend", "mode", "rx", "ry", "rz"],
+            false,
+        )?;
+        let centre = point3(args.text("at")?, scope)?;
+        let size = numbers(args.text("size")?, scope)?;
+        let size = match size[..] {
+            [s] => [s; 3],
+            [x, y, z] => [x, y, z],
+            _ => bail!("`size` is one edge or x,y,z sizes"),
+        };
+        size.iter()
+            .try_for_each(|s| positive(*s, "size").map(|_| ()))?;
+        let half = size.map(|s| s / 2.0);
+        let round = args.optional_number("round", scope)?.unwrap_or(0.0);
+        let most = half.iter().cloned().fold(f64::INFINITY, f64::min);
+        if !(0.0..=most).contains(&round) {
+            bail!("`round` is 0 up to half the smallest size ({most}), got {round}");
+        }
+        let shape = Shape::Box {
+            centre,
+            half,
+            round,
+            rotation: self.rotation_of(scope, &args)?,
+        };
+        self.add_primitive(scope, line, shape, &args)
+    }
+
     pub fn op_limb(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         self.start_mesh("limb")?;
         let args = Args::new(line, &[], &["r", "blend", "mode"], true)?;
@@ -399,7 +431,7 @@ impl Scene {
         let args = Args::new(line, &["cell"], &[], false)?;
         if self.mesh_body.blockout.is_empty() {
             bail!(
-                "`remesh` turns a blockout of `blob` and `limb` lines into a mesh; there is none"
+                "`remesh` turns a blockout of `blob`, `limb` and `block` lines into a mesh; there is none"
             );
         }
         if self.mesh_body.mesh.is_some() {

@@ -225,9 +225,9 @@ struct Run {
 }
 
 const SUBSET: &[&str] = &[
-    "let", "if", "blob", "limb", "remesh", "select", "inflate", "smooth", "refine", "crease",
-    "pinch", "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key",
-    "move", "rotate", "scale", "mirror", "body", "color",
+    "let", "if", "blob", "limb", "block", "remesh", "select", "inflate", "smooth", "refine",
+    "crease", "pinch", "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip",
+    "key", "move", "rotate", "scale", "mirror", "body", "color",
 ];
 
 impl Run {
@@ -282,6 +282,7 @@ impl Run {
             }
             "blob" => scene.op_blob(scope, line),
             "limb" => scene.op_limb(scope, line),
+            "block" => scene.op_block(scope, line),
             "remesh" => scene.op_remesh(scope, line),
             "select" => scene.op_select(scope, line),
             "inflate" => scene.op_inflate(scope, line),
