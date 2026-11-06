@@ -35,6 +35,7 @@ impl MeshBody {
 #[derive(Clone, Default)]
 pub struct Scene {
     pub body: String,
+    pub cell_scale: f64,
     pub mesh_body: MeshBody,
     pub mesh_bodies: Vec<(String, Arc<Mesh>)>,
     pub mesh_rigs: Vec<(String, crate::mesh::rig::Rig)>,
@@ -72,6 +73,10 @@ fn numbers(text: &str, scope: &crate::parse::Scope) -> Result<Vec<f64>> {
 }
 
 impl Scene {
+    pub fn cell_factor(&self) -> f64 {
+        if self.cell_scale > 0.0 { self.cell_scale } else { 1.0 }
+    }
+
     pub fn body_name(&self) -> String {
         if self.body.is_empty() {
             "main".to_string()
@@ -255,7 +260,7 @@ impl Scene {
                 },
             );
         let size = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max);
-        (size / 120.0).max(1.0e-6)
+        (size / 120.0 * self.cell_factor()).max(1.0e-6)
     }
 
     pub fn finish_mesh_body(&mut self) -> Result<()> {
@@ -383,7 +388,7 @@ impl Scene {
             bail!("the blockout is already a mesh");
         }
         let cell = match args.optional_number("cell", scope)? {
-            Some(cell) => positive(cell, "cell")?,
+            Some(cell) => positive(cell, "cell")? * self.cell_factor(),
             None => self.default_cell(),
         };
         self.mesh_body.cell = Some(cell);

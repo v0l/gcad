@@ -95,7 +95,7 @@ fn flat(points: impl Iterator<Item = P3>) -> Vec<f32> {
     points.flat_map(|p| p.map(|v| v as f32)).collect()
 }
 
-fn float_weights(rig: &Rig, vertices: usize) -> (Vec<u16>, Vec<f32>) {
+pub(crate) fn float_weights(rig: &Rig, vertices: usize) -> (Vec<u16>, Vec<f32>) {
     let skin = rig.skin.as_ref().expect("skinned");
     let mut joints = vec![0u16; vertices * 4];
     let mut weights = vec![0f32; vertices * 4];
