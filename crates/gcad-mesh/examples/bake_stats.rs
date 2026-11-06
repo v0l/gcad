@@ -24,7 +24,10 @@ fn main() {
     let mut ratios = Vec::new();
     for (f, t) in mesh.triangles.iter().enumerate() {
         let c = layout.corners[f];
-        let ua = ((c[1][0] - c[0][0]) * (c[2][1] - c[0][1]) - (c[2][0] - c[0][0]) * (c[1][1] - c[0][1])).abs() / 2.0;
+        let ua = ((c[1][0] - c[0][0]) * (c[2][1] - c[0][1])
+            - (c[2][0] - c[0][0]) * (c[1][1] - c[0][1]))
+            .abs()
+            / 2.0;
         let [a, b, d] = mesh.corners(*t);
         let area = length(cross(sub(b, a), sub(d, a))) / 2.0;
         uv_area += ua;
@@ -37,7 +40,8 @@ fn main() {
     let median = ratios[ratios.len() / 2];
     let stretch = |r: f64| (median / r).max(r / median);
     let worst = ratios.iter().map(|r| stretch(*r)).fold(0.0, f64::max);
-    let p99 = stretch(ratios[(ratios.len() as f64 * 0.01) as usize]).max(stretch(ratios[(ratios.len() as f64 * 0.99) as usize]));
+    let p99 = stretch(ratios[(ratios.len() as f64 * 0.01) as usize])
+        .max(stretch(ratios[(ratios.len() as f64 * 0.99) as usize]));
     println!("triangles {}", mesh.triangles.len());
     println!("charts {}", layout.chart_count);
     println!("uv area used {:.1}% of the square", uv_area * 100.0);
@@ -45,7 +49,12 @@ fn main() {
     println!("area stretch vs median: p99 {p99:.2}x worst {worst:.2}x");
     let high = mesh.clone();
     let baked = bake_normals(&mesh, &high, size);
-    println!("pixels covered by triangles {:.1}% ({} of {})", baked.covered as f64 * 100.0 / (size * size) as f64, baked.covered, size * size);
+    println!(
+        "pixels covered by triangles {:.1}% ({} of {})",
+        baked.covered as f64 * 100.0 / (size * size) as f64,
+        baked.covered,
+        size * size
+    );
     if let Some(out) = args.get(3) {
         std::fs::write(out, baked.png()).expect("png");
     }

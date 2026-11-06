@@ -1036,3 +1036,23 @@ fn finish_keep_creases_holds_the_edges_of_a_cube_sharper() {
     );
     assert!(failure(&format!("{BALL}\nfinish decimate=500 keep=bevels")).contains("uv"));
 }
+
+#[test]
+fn skin_weights_and_uvs_survive_finish_in_the_same_primitive() {
+    let source = format!(
+        "{WRINKLED}\nfinish decimate=2000 keep=parts,creases,uv\nbone b head=0,0,-10 tail=0,0,10\nskin auto\nbake normals size=64\nlod 800"
+    );
+    let json = glb_json(&glb_of_source(&source));
+    let a = &json["meshes"][0]["primitives"][0]["attributes"];
+    assert!(a["JOINTS_0"].is_u64() && a["WEIGHTS_0"].is_u64() && a["TEXCOORD_0"].is_u64());
+    let a1 = &json["meshes"][1]["primitives"][0]["attributes"];
+    assert!(a1["JOINTS_0"].is_u64() && a1["WEIGHTS_0"].is_u64());
+    assert_eq!(json["skins"].as_array().unwrap().len(), 1);
+    let lod = json["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["name"] == "main_LOD1")
+        .unwrap();
+    assert_eq!(lod["skin"], 0);
+}

@@ -135,7 +135,14 @@ fn tightest_turn(points: &[[f64; 2]]) -> f64 {
         let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
         let area = w * h;
         if area < best.0 - 1.0e-12 {
-            best = (area, if w >= h { angle } else { angle + std::f64::consts::FRAC_PI_2 });
+            best = (
+                area,
+                if w >= h {
+                    angle
+                } else {
+                    angle + std::f64::consts::FRAC_PI_2
+                },
+            );
         }
     }
     best.1
