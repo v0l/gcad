@@ -622,6 +622,33 @@ pub fn build(
     marked: &[Edge],
     marked_colour: V3,
 ) -> Scene {
+    build_lod(model, highlights, marked, marked_colour, None)
+}
+
+fn coarse(
+    mesh: &Arc<crate::mesh::Mesh>,
+    colours: &[[f64; 3]],
+    budget: usize,
+) -> (Arc<crate::mesh::Mesh>, Vec<[f64; 3]>) {
+    if mesh.triangles.len() <= budget {
+        return (mesh.clone(), colours.to_vec());
+    }
+    let (lod, source) = mesh.cluster(budget);
+    let colours = if colours.len() == mesh.positions.len() {
+        source.iter().map(|&i| colours[i as usize]).collect()
+    } else {
+        Vec::new()
+    };
+    (Arc::new(lod), colours)
+}
+
+pub fn build_lod(
+    model: &Model,
+    highlights: &[Highlight<'_>],
+    marked: &[Edge],
+    marked_colour: V3,
+    budget: Option<usize>,
+) -> Scene {
     let mut scene = build_solids(model, highlights, marked, marked_colour);
     let meshes = model.mesh_shading();
     if meshes.is_empty() {
@@ -638,7 +665,12 @@ pub fn build(
     let mut textures = super::textures::Library::with_images(solid_mesh.images);
     let rests = model.rest_meshes();
     let mut bounds: Option<(crate::mesh::P3, crate::mesh::P3)> = None;
-    for (name, mesh, colours, _) in &meshes {
+    for (name, full, full_colours, _) in &meshes {
+        let (mesh, colours) = match budget {
+            Some(budget) => coarse(full, full_colours, budget),
+            None => (full.clone(), full_colours.clone()),
+        };
+        let (mesh, colours, full) = (&mesh, &colours, full);
         let body = scene.parts.len();
         let tints: Vec<V3> = tinted
             .iter()
@@ -673,7 +705,8 @@ pub fn build(
                 }
             }
         }
-        if let Some(rig) = model.rig_of(name)
+        if Arc::ptr_eq(mesh, full)
+            && let Some(rig) = model.rig_of(name)
             && let Some((_, rest)) = rests.iter().find(|(n, _)| n == name)
             && rig.skin_fits(rest)
         {
@@ -683,7 +716,7 @@ pub fn build(
                 slots,
             });
         }
-        if let Some((lo, hi)) = mesh.bounds() {
+        if let Some((lo, hi)) = full.bounds() {
             bounds = Some(match bounds {
                 None => (lo, hi),
                 Some((a, b)) => (
@@ -692,12 +725,12 @@ pub fn build(
                 ),
             });
         }
-        let (lo, hi) = mesh.bounds().unwrap_or_default();
+        let (lo, hi) = full.bounds().unwrap_or_default();
         scene.parts.push(Part {
             name: name.clone(),
             colour,
             opacity: model.opacities.get(name).map_or(1.0, |o| *o as f32),
-            volume: mesh.volume(),
+            volume: full.volume(),
             current: is_current,
             source: None,
             material: model

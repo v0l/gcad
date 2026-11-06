@@ -56,7 +56,11 @@ struct SceneKey {
     generation: u64,
     line: usize,
     query: String,
+    full: bool,
 }
+
+const EDIT_LOD_TRIANGLES: usize = 60_000;
+const EDIT_SETTLE: Duration = Duration::from_millis(1500);
 
 struct Shown {
     key: SceneKey,
@@ -1279,11 +1283,21 @@ impl App {
         }
     }
 
+    fn settled(&self, ctx: &egui::Context) -> bool {
+        let busy = self.dirty.is_some() || self.loading.is_some();
+        let wait = EDIT_SETTLE.saturating_sub(self.loaded.elapsed());
+        if !busy && !wait.is_zero() {
+            ctx.request_repaint_after(wait);
+        }
+        !busy && wait.is_zero()
+    }
+
     fn refresh_scene(&mut self, ctx: &egui::Context) {
         let key = SceneKey {
             generation: self.generation,
             line: self.selected,
             query: self.query.trim().to_string(),
+            full: self.settled(ctx),
         };
         if self.shown.as_ref().is_some_and(|s| s.key == key)
             || self.building.as_ref().is_some_and(|(k, _)| *k == key)
@@ -4220,7 +4234,8 @@ fn mesh_shown(model: &crate::model::Model, key: SceneKey, line: &SourceLine) -> 
         colour: rgb(TRACE),
     }];
     let highlights: &[Highlight<'_>] = if editing { &highlights } else { &[] };
-    let scene = scene::build(model, highlights, &[], rgb(TRACE));
+    let budget = (!key.full).then_some(EDIT_LOD_TRIANGLES);
+    let scene = scene::build_lod(model, highlights, &[], rgb(TRACE), budget);
     let bounds = model
         .meshes()
         .iter()
@@ -4549,6 +4564,34 @@ mod tests {
     use std::sync::{Arc, Mutex};
 
     #[test]
+    fn editing_a_dense_sculpt_draws_a_light_lod() {
+        let source = std::fs::read_to_string("examples/mesh/hero.gcad").expect("hero");
+        let lines = crate::parse::parse_program(&source).expect("parses");
+        let vars = [("budget".to_string(), 0.0)];
+        let snapshots = crate::model::run_snapshots_full(None, &vars, &lines);
+        let last = snapshots.len() - 1;
+        let shown = |full: bool| {
+            let key = super::SceneKey {
+                generation: 0,
+                line: last,
+                query: String::new(),
+                full,
+            };
+            let started = std::time::Instant::now();
+            let shown = super::build_shown(&snapshots[last], key, &vars).expect("a scene");
+            (shown, started.elapsed())
+        };
+        let (full, _) = shown(true);
+        let (lod, took) = shown(false);
+        assert!(full.scene.mesh.triangles() > 200_000);
+        assert!(lod.scene.mesh.triangles() <= super::EDIT_LOD_TRIANGLES * 5 / 4);
+        assert!(lod.scene.mesh.triangles() > super::EDIT_LOD_TRIANGLES / 4);
+        assert_eq!(lod.faces, full.faces);
+        assert_eq!(lod.bounds.0.map(|v| v.round()), full.bounds.0.map(|v| v.round()));
+        eprintln!("lod scene in {took:?}");
+    }
+
+    #[test]
     fn a_finished_mesh_is_not_tinted_by_its_last_select() {
         let source = "body: blob 0,0,0 r=4\nhead: blob 0,0,6 r=2 blend=1\nremesh 0.5\nselect head\ninflate 0.2\ncolor #c85a1a";
         let lines = crate::parse::parse_program(source).expect("parses");
@@ -4562,6 +4605,7 @@ mod tests {
                 generation: 0,
                 line: index,
                 query: String::new(),
+                full: true,
             };
             let shown = super::build_shown(&snapshots[index], key, &[]).expect("a scene");
             shown.scene.mesh.surfaces.iter().any(|s| s.colour == trace)

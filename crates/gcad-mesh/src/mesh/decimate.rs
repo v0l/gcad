@@ -269,3 +269,114 @@ impl Mesh {
         start - self.triangles.len()
     }
 }
+
+impl Mesh {
+    pub fn cluster(&self, target: usize) -> (Mesh, Vec<u32>) {
+        if self.triangles.len() <= target || self.positions.is_empty() {
+            let same = (0..self.positions.len() as u32).collect();
+            return (self.clone(), same);
+        }
+        let (lo, hi) = self.bounds().expect("vertices");
+        let extent = (0..3).map(|k| hi[k] - lo[k]).fold(0.0f64, f64::max);
+        let mut cell = (self.area() * 2.0 / target.max(1) as f64).sqrt().max(extent * 1.0e-6);
+        let mut result = self.clustered(cell, lo);
+        for _ in 0..6 {
+            let count = result.0.triangles.len();
+            if count <= target + target / 4 {
+                break;
+            }
+            cell *= (count as f64 / target as f64).sqrt().max(1.05);
+            result = self.clustered(cell, lo);
+        }
+        result
+    }
+
+    fn clustered(&self, cell: f64, origin: P3) -> (Mesh, Vec<u32>) {
+        let mut index: HashMap<(i64, i64, i64, u16), u32> = HashMap::new();
+        let mut sums: Vec<(P3, f64)> = Vec::new();
+        let mut representative: Vec<u32> = Vec::new();
+        let mut labels: Vec<u16> = Vec::new();
+        let mut owner = vec![u32::MAX; self.positions.len()];
+        let mut assign = |i: u32| -> u32 {
+            if owner[i as usize] != u32::MAX {
+                return owner[i as usize];
+            }
+            let p = self.positions[i as usize];
+            let label = self.labels[i as usize];
+            let key = (
+                ((p[0] - origin[0]) / cell).floor() as i64,
+                ((p[1] - origin[1]) / cell).floor() as i64,
+                ((p[2] - origin[2]) / cell).floor() as i64,
+                label,
+            );
+            let id = *index.entry(key).or_insert_with(|| {
+                sums.push(([0.0; 3], 0.0));
+                representative.push(i);
+                labels.push(label);
+                (sums.len() - 1) as u32
+            });
+            let slot = &mut sums[id as usize];
+            slot.0 = add(slot.0, p);
+            slot.1 += 1.0;
+            owner[i as usize] = id;
+            id
+        };
+        let mut triangles = Vec::new();
+        for &t in &self.triangles {
+            let [a, b, c] = t.map(&mut assign);
+            if a != b && b != c && a != c {
+                triangles.push([a, b, c]);
+            }
+        }
+        let positions = sums.iter().map(|(s, n)| scale(*s, 1.0 / n)).collect();
+        let mesh = Mesh {
+            positions,
+            triangles,
+            labels,
+            parts: self.parts.clone(),
+        };
+        (mesh, representative)
+    }
+}
+
+#[cfg(test)]
+mod cluster_tests {
+    use super::*;
+
+    fn grid(n: u32) -> Mesh {
+        let mut mesh = Mesh::default();
+        mesh.parts.push("a".into());
+        for y in 0..=n {
+            for x in 0..=n {
+                mesh.positions.push([x as f64, y as f64, 0.0]);
+                mesh.labels.push(0);
+            }
+        }
+        for y in 0..n {
+            for x in 0..n {
+                let i = y * (n + 1) + x;
+                mesh.triangles.push([i, i + 1, i + n + 2]);
+                mesh.triangles.push([i, i + n + 2, i + n + 1]);
+            }
+        }
+        mesh
+    }
+
+    #[test]
+    fn cluster_reaches_the_budget_and_keeps_the_extent() {
+        let mesh = grid(200);
+        let (lod, rep) = mesh.cluster(2000);
+        assert!(lod.triangles.len() <= 2500, "{}", lod.triangles.len());
+        assert!(lod.triangles.len() >= 500, "{}", lod.triangles.len());
+        assert_eq!(rep.len(), lod.positions.len());
+        assert!(lod.triangles.iter().flatten().all(|&i| (i as usize) < lod.positions.len()));
+        let (lo, hi) = lod.bounds().unwrap();
+        assert!(lo[0] < 8.0 && hi[0] > 192.0);
+    }
+
+    #[test]
+    fn cluster_leaves_a_small_mesh_alone() {
+        let mesh = grid(4);
+        assert_eq!(mesh.cluster(1000).0, mesh);
+    }
+}

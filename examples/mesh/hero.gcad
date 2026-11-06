@@ -1,0 +1,168 @@
+let budget=14000
+hips: blob 0,0.5,63 r=12.5,8.5,9
+torso: blob 0,0.5,79 r=12.2,9,14 blend=4
+chest: blob 0,-1,84 r=11.8,8.4,8.6 blend=3
+band: blob 0,0.5,67.5 r=13,9.2,2.6 blend=1.5
+collar: blob 0,0.5,91 r=8.5,7.5,2.6 blend=2
+neck: limb 0,0.5,89 0,0.5,101 r=5 blend=2
+head: blob 0,-1,111 r=13.5,13,14 blend=2.5
+jaw: blob 0,-4,104.5 r=10.5,9.5,8 blend=4
+hair: blob 0,4,110 r=13.9,10.5,9 blend=0.5
+cap: blob 0,0.5,118 r=14.6,14.4,9.4 blend=0.4
+button: blob 0,0.5,127.1 r=1.7,1.7,1 blend=0.3
+brim: blob 0,-14.5,116.4 r=10.5,8,1.8 rx=8 blend=1.5
+ear_l: blob 13.4,0.5,108 r=1.8,2.6,3.6 blend=1.2
+mirror x of=ear_l
+nose: blob 0,-13.9,105.5 r=1.9,1.5,1.6 blend=1
+shoulder_l: blob 12.6,0.5,86.5 r=4.6 blend=2.5
+mirror x of=shoulder_l
+arm_l: limb 14.5,0.5,86 19,0.5,74 21.5,-1.5,62 r=4.4,4,3.6 blend=1.2
+mirror x of=arm_l
+cuff_l: limb 21.3,-1.2,63 21.9,-1.7,59 r=4 blend=0.8
+mirror x of=cuff_l
+hand_l: blob 22.4,-2.3,53 r=3.6,3.3,4.8 blend=1.4
+mirror x of=hand_l
+thumb_l: limb 20.9,-4.6,55.5 20.4,-5.6,52 r=1.5,1.2 blend=0.8
+mirror x of=thumb_l
+leg_l: limb 6.8,0,60 8.2,-0.5,34 8.4,0.5,14 r=6.6,5.6,5 blend=1.2
+mirror x of=leg_l
+hem_l: limb 8.4,0.4,17 8.4,0.5,12.5 r=5.8 blend=0.8
+mirror x of=hem_l
+shoe_l: blob 8.4,-2.5,6.4 r=6.3,10.8,5.2 blend=1.5
+mirror x of=shoe_l
+toe_l: blob 8.4,-9.5,4.6 r=5.5,5,3.8 blend=1.5
+mirror x of=toe_l
+heel_l: blob 8.4,7.6,7 r=3.4,1.6,3.4 blend=0.6
+mirror x of=heel_l
+sole_l: blob 8.4,-2.7,2.2 r=6.5,11.3,2.3 blend=1
+mirror x of=sole_l
+eye_l: blob 5.3,-12.4,109.5 r=3.5,2,4.3 mode=shell
+mirror x of=eye_l
+pupil_l: blob 5.5,-14,109.2 r=2.3,1,2.9 mode=shell
+mirror x of=pupil_l
+shine_l: blob 6.4,-14.8,110.9 r=0.8,0.5,0.9 mode=shell
+mirror x of=shine_l
+remesh 0.4
+bighead: select head,jaw,hair,cap,brim,button,ear_l,ear_r,nose,eye_l,eye_r,pupil_l,pupil_r,shine_l,shine_r falloff=3
+scale 1.2 about=0,0,97
+hide eye_l,eye_r,pupil_l,pupil_r,shine_l,shine_r
+dyntopo on detail=0.12
+brush clay type=clay size=2.2 strength=0.5 falloff=smooth mirror=x
+brush lip type=draw size=0.7 strength=0.25 falloff=smooth edge=0.6 mirror=x
+brush dam type=dam_standard size=0.35 strength=0.3 lazy=0.4 mirror=x
+brush fold type=dam_standard size=0.6 strength=0.35 falloff=smooth lazy=0.5
+brush soft type=smooth size=1.5 strength=1
+brush stitch type=stamp size=0.35 strength=0.12 alpha=stitch(0.7) spacing=0.3
+brush strand type=stamp size=1.2 strength=0.18 alpha=hair(0.5,4) spacing=0.2
+brush pore type=stamp size=2 strength=0.04 alpha=pores(0.3,7)
+cheek: stroke clay from=8.6,-13.4,104.6 to=9.4,-12.6,103.4
+brow: stroke clay 2.9,-16.4,117.4 5,-16,117.9 7.2,-15.2,117.3 pressure=0.4,1,0.4
+stroke dam -1.6,-14.9,101.4 0,-15,101 1.6,-14.9,101.4
+stroke lip -1.3,-14.9,100.4 0,-15,100.2 1.3,-14.9,100.4 pressure=0.5,1,0.5
+stroke dam -2.2,-14.6,102.1 -1.8,-14.8,101.6
+dab soft at=0,-15,101
+dimple: stroke dam from=8.2,-13.4,103 to=8.6,-13.1,102.2
+dab pore at=8.8,-13.3,104
+dab pore at=-8.8,-13.3,104
+brush pore mirror=x
+dab pore at=4,-15.4,104
+layer hair_strands
+stroke strand 3.1,16,108.2 3.3,15.4,106.6 3.2,14.4,105.3
+stroke strand 0,16.2,108.2 0,15.3,106.5 0,14,105.2
+stroke strand -2.8,16,108.2 -2.9,15.4,106.6 -2.8,14.3,105.3
+layer hair_strands amount=0.8
+stitches: stroke stitch -9,-14,118.2 -4.5,-16.4,117.9 0,-17.2,117.8 4.5,-16.4,117.9 9,-14,118.2
+sleeve: stroke fold 18.6,-3.9,67.4 20,-4.5,66 21.1,-4.9,64.9
+stroke fold 18.2,-3.8,70 19.6,-4.4,68.8 20.6,-4.8,67.6
+brush fold mirror=x
+knee: stroke fold 6,-5.7,34.6 8,-6.1,34 9.7,-5.9,34.6
+stroke fold 6.2,-5.6,31.6 8,-6,31.2 9.5,-5.8,31.6
+dyntopo off
+select all
+color #f4b98f part=head
+color #f4b98f part=jaw
+color #f4b98f part=neck
+color #f4b98f part=ear_l
+color #f4b98f part=ear_r
+color #ee9884 part=nose
+color #4a2a18 part=hair
+color #e63a3a part=cap
+color #e63a3a part=brim
+color #ffffff part=button
+color #ffcf2e part=torso
+color #ffcf2e part=chest
+color #ffcf2e part=arm_l
+color #ffcf2e part=arm_r
+color #ffcf2e part=shoulder_l
+color #ffcf2e part=shoulder_r
+color #f2f2f2 part=collar
+color #f2f2f2 part=band
+color #f2f2f2 part=cuff_l
+color #f2f2f2 part=cuff_r
+color #f4b98f part=hand_l
+color #f4b98f part=hand_r
+color #f4b98f part=thumb_l
+color #f4b98f part=thumb_r
+color #3b6fc4 part=hips
+color #3b6fc4 part=leg_l
+color #3b6fc4 part=leg_r
+color #2f5aa6 part=hem_l
+color #2f5aa6 part=hem_r
+color #2fb8e8 part=shoe_l
+color #2fb8e8 part=shoe_r
+color #ffffff part=toe_l
+color #ffffff part=toe_r
+color #ffffff part=heel_l
+color #ffffff part=heel_r
+color #ffffff part=sole_l
+color #ffffff part=sole_r
+color #ffffff part=eye_l gloss=0.8
+color #ffffff part=eye_r gloss=0.8
+color #2a1a10 part=pupil_l gloss=0.8
+color #2a1a10 part=pupil_r gloss=0.8
+color #ffffff part=shine_l gloss=0.9
+color #ffffff part=shine_r gloss=0.9
+if budget>0 finish decimate=budget focus=head,jaw,nose,hair,cap weight=30
+bone hips_b head=0,0.5,62 tail=0,0.5,72
+bone chest parent=hips_b tail=0,0.5,90
+bone head_b parent=chest head=0,0.5,93 tail=0,0,136
+bone arm_l parent=chest head=13.5,0.5,86.5 tail=19,0.5,74
+bone forearm_l parent=arm_l tail=21.5,-1.5,62
+bone hand_b_l parent=forearm_l tail=22.6,-2.5,47.5
+mirror x of=arm_l
+bone thigh_l parent=hips_b head=7,0,57 tail=8.2,-0.5,34
+bone shin_l parent=thigh_l tail=8.4,0.5,9
+bone foot_l parent=shin_l tail=8.4,-12,3
+mirror x of=thigh_l
+skin auto
+skin part=torso bone=chest
+skin part=chest bone=chest
+skin part=band bone=hips_b
+skin part=hips bone=hips_b
+skin part=head bone=head_b
+skin part=jaw bone=head_b
+skin part=hair bone=head_b
+skin part=cap bone=head_b
+skin part=brim bone=head_b
+skin part=button bone=head_b
+skin part=ear_l bone=head_b
+skin part=ear_r bone=head_b
+skin part=nose bone=head_b
+skin part=eye_l bone=head_b
+skin part=eye_r bone=head_b
+skin part=pupil_l bone=head_b
+skin part=pupil_r bone=head_b
+skin part=shine_l bone=head_b
+skin part=shine_r bone=head_b
+skin part=hand_l bone=hand_b_l
+skin part=thumb_l bone=hand_b_l
+skin part=shoe_l bone=foot_l
+skin part=toe_l bone=foot_l
+skin part=heel_l bone=foot_l
+skin part=sole_l bone=foot_l
+skin part=hand_r bone=hand_b_r
+skin part=thumb_r bone=hand_b_r
+skin part=shoe_r bone=foot_r
+skin part=toe_r bone=foot_r
+skin part=heel_r bone=foot_r
+skin part=sole_r bone=foot_r
