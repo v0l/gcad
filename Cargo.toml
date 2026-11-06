@@ -7,7 +7,7 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/v0l/gcad"
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-mesh"]
+members = [".", "web", "sims-proto", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
 
 [dependencies]
 gcad-sims-proto = { path = "sims-proto" }

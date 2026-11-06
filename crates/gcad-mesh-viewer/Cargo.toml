@@ -1,0 +1,11 @@
+[package]
+name = "gcad-mesh-viewer"
+version = "0.6.1"
+edition = "2024"
+description = "Minimal macroquad viewer that builds a gcad model at startup and plays a clip"
+license = "GPL-3.0-or-later"
+publish = false
+
+[dependencies]
+gcad-mesh = { path = "../gcad-mesh" }
+macroquad = { version = "0.4", default-features = false }
