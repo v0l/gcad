@@ -2,6 +2,7 @@
 //! Pose samples must contain the original vertex order, in millimetres.
 use super::{Mesh, cross, dot, sub};
 use anyhow::{Result, ensure};
+use gcad_mesh::mesh::quadric;
 use std::collections::{BTreeMap, BTreeSet};
 
 pub struct Options {
@@ -535,6 +536,7 @@ fn simplify_with_basis(
         }
     }
     let threshold = options.max_angle_degrees.to_radians().cos();
+    let mut quadrics = quadric::vertex_quadrics(&mesh.positions, &mesh.triangles);
     let mut representatives: Vec<_> = (0..mesh.positions.len() as u32).collect();
     let mut triangles = mesh.triangles.clone();
     let mut trials = 0;
@@ -557,8 +559,11 @@ fn simplify_with_basis(
                     && !locked.contains(&(*b as usize))
             })
             .map(|(&(a, b), _)| {
+                let q = quadric::plus(&quadrics[a as usize], &quadrics[b as usize]);
                 (
-                    length(sub(mesh.positions[a as usize], mesh.positions[b as usize])),
+                    quadric::error(&q, mesh.positions[a as usize])
+                        .max(quadric::error(&q, mesh.positions[b as usize]))
+                        .max(0.0),
                     a,
                     b,
                 )
@@ -731,6 +736,8 @@ fn simplify_with_basis(
                 *rejection_counts.entry("topology_result").or_insert(0) += 1;
                 continue;
             }
+            quadrics[keep as usize] =
+                quadric::plus(&quadrics[keep as usize], &quadrics[remove as usize]);
             representatives = map;
             mapping_validated = true;
             triangles = next;
