@@ -192,13 +192,18 @@ fn as_mesh(solid: &Solid, name: &str) -> crate::mesh::Mesh {
 pub fn glb_of(model: &crate::model::Model) -> Result<Vec<u8>> {
     let rest = model.rest_meshes();
     let tints = model.mesh_tints();
-    let solids: Vec<(String, crate::mesh::Mesh, Colour)> = model
-        .named_parts()
+    let parts = model.named_parts();
+    let size = parts
+        .iter()
+        .map(|(_, solid, _)| geometry::bounds(solid).diameter())
+        .fold(0.0, f64::max);
+    let tolerance = (size * GLB_TOLERANCE).max(1.0e-4);
+    let solids: Vec<(String, crate::mesh::Mesh, Colour)> = parts
         .into_iter()
         .map(|(name, solid, colour)| {
             (
                 name.clone(),
-                faceted_mesh(solid, &name),
+                faceted_mesh(solid, &name, tolerance),
                 colour.unwrap_or([0.7, 0.7, 0.7]),
             )
         })
@@ -230,8 +235,10 @@ pub fn glb_of(model: &crate::model::Model) -> Result<Vec<u8>> {
     crate::gltf::glb(&bodies)
 }
 
-fn faceted_mesh(solid: &Solid, name: &str) -> crate::mesh::Mesh {
-    let polygons = fine_mesh(solid);
+const GLB_TOLERANCE: f64 = 3e-3;
+
+fn faceted_mesh(solid: &Solid, name: &str, tolerance: f64) -> crate::mesh::Mesh {
+    let polygons = geometry::mesh(solid, tolerance);
     let positions = polygons.positions();
     let corners: Vec<[f64; 3]> = polygons
         .faces()
