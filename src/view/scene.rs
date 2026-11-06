@@ -493,6 +493,23 @@ pub struct Rigged {
     pub slots: Vec<(usize, Vec<u32>)>,
 }
 
+pub fn posed_scene(scene: &Scene, playback: &super::anim::Playback) -> Arc<viewer3d::Scene<Ink>> {
+    let base = &scene.mesh;
+    let mut surfaces = base.surfaces.clone();
+    for rigged in &scene.rigged {
+        let mesh = playback.posed(&rigged.rig, &rigged.rest);
+        pose_surfaces(&mut surfaces, &rigged.slots, &mesh);
+    }
+    Arc::new(viewer3d::Scene {
+        surfaces,
+        lines: base.lines.clone(),
+        images: base.images.clone(),
+        centre: base.centre,
+        radius: base.radius,
+        ..Default::default()
+    })
+}
+
 pub fn pose_surfaces(
     surfaces: &mut [Surface],
     slots: &[(usize, Vec<u32>)],

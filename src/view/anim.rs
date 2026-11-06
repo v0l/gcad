@@ -76,6 +76,16 @@ impl Playback {
         }
     }
 
+    pub fn refit(&mut self, rig: &Rig) {
+        if self.clip.is_some() && self.clip_index(rig).is_none() {
+            self.clip = None;
+            self.playing = false;
+            self.time = 0.0;
+        }
+        self.time = self.time.clamp(0.0, self.duration(rig).max(0.0));
+        self.turns.retain(|(b, _)| rig.bone_index(b).is_some());
+    }
+
     pub fn reset(&mut self) {
         self.clip = None;
         self.time = 0.0;
@@ -228,6 +238,38 @@ mod tests {
         );
         playback.reset();
         assert!(!playback.active());
+    }
+
+    #[test]
+    fn a_reload_keeps_the_clip_and_time_while_the_clip_is_there() {
+        let model = model();
+        let (name, _) = model.rest_meshes().pop().expect("a mesh");
+        let rig = model.rig_of(&name).expect("a rig");
+        let mut playback = Playback {
+            clip: Some("idle".to_string()),
+            time: 1.25,
+            playing: true,
+            ..Default::default()
+        };
+        playback.set_turn("tail1", [0.0, 0.0, 10.0]);
+        playback.set_turn("gone", [5.0, 0.0, 0.0]);
+        let kept = {
+            let mut p = playback.clone();
+            p.refit(rig);
+            p
+        };
+        assert_eq!(kept.clip.as_deref(), Some("idle"));
+        assert_eq!((kept.time, kept.playing), (1.25, true));
+        assert_eq!(kept.turns, vec![("tail1".to_string(), [0.0, 0.0, 10.0])]);
+        let edited = CREATURE.replace("clip idle", "clip rest");
+        let lines = crate::parse::parse_program(&edited).expect("parses");
+        let model = crate::model::run(&lines).model;
+        let rig = model.rig_of(&name).expect("a rig");
+        playback.refit(rig);
+        assert_eq!(
+            (playback.clip, playback.playing, playback.time),
+            (None, false, 0.0)
+        );
     }
 
     #[test]

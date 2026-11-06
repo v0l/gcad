@@ -290,6 +290,8 @@ pub struct App {
     lines_open: bool,
     parts_open: bool,
     flow: Flow,
+    playback: super::anim::Playback,
+    posed: Option<(u64, super::anim::Playback, Arc<viewer3d::Scene<Ink>>)>,
     reels: Vec<Option<(usize, egui::TextureHandle)>>,
     opacity: f32,
     focus: Option<Focus>,
@@ -973,6 +975,8 @@ impl App {
             lines_open: true,
             parts_open: true,
             flow: Flow::default(),
+            playback: super::anim::Playback::default(),
+            posed: None,
             reels: Vec::new(),
             opacity: 0.25,
             focus: None,
@@ -1051,6 +1055,8 @@ impl App {
         self.clashes = None;
         self.follow = true;
         self.cam = Camera::default();
+        self.playback = super::anim::Playback::default();
+        self.posed = None;
         #[cfg(not(target_arch = "wasm32"))]
         {
             self.watching = None;
@@ -1246,6 +1252,9 @@ impl App {
         if names != self.joint_key {
             self.joint_values = shown.joints.iter().map(|j| j.value).collect();
             self.joint_key = names;
+        }
+        if let Some(rigged) = shown.scene.rigged.first() {
+            self.playback.refit(&rigged.rig);
         }
         self.shown = Some(shown);
     }
@@ -2573,11 +2582,150 @@ impl App {
                     self.flow_card(ui);
                 } else {
                     self.parts_card(ui);
+                    self.animation_card(ui);
                 }
                 if !self.shown.as_ref().is_some_and(|s| s.assembly) {
                     self.select_card(ui);
                 }
             });
+    }
+
+    fn animation_card(&mut self, ui: &mut Ui) {
+        let Some(rigged) = self
+            .shown
+            .as_ref()
+            .and_then(|s| s.scene.rigged.first().cloned())
+        else {
+            return;
+        };
+        let rig = &rigged.rig;
+        let playback = &mut self.playback;
+        let mut skeleton = playback.skeleton;
+        card(
+            ui,
+            None,
+            |ui| {
+                Line::new().legend("animation").show(ui);
+                ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                    if toggle(ui, "skeleton", skeleton).clicked() {
+                        skeleton = !skeleton;
+                    }
+                });
+            },
+            |ui| {
+                Line::new()
+                    .legend("bones")
+                    .measured(rig.bones.len().to_string())
+                    .legend("clips")
+                    .measured(rig.clips.len().to_string())
+                    .size(11.0)
+                    .show(ui);
+                ui.horizontal_wrapped(|ui| {
+                    if toggle(ui, "as file", playback.clip.is_none()).clicked() {
+                        playback.clip = None;
+                        playback.playing = false;
+                        playback.time = 0.0;
+                    }
+                    for clip in &rig.clips {
+                        let on = playback.clip.as_deref() == Some(clip.name.as_str());
+                        if toggle(ui, &clip.name, on).clicked() && !on {
+                            playback.clip = Some(clip.name.clone());
+                            playback.time = 0.0;
+                            playback.playing = true;
+                        }
+                    }
+                });
+                if let Some(index) = playback.clip_index(rig) {
+                    let clip = &rig.clips[index];
+                    let duration = clip.duration().max(1.0e-6);
+                    ui.horizontal(|ui| {
+                        let label = if playback.playing { "pause" } else { "play" };
+                        if toggle(ui, label, playback.playing).clicked() {
+                            if !playback.playing && !playback.looping && playback.time >= duration {
+                                playback.time = 0.0;
+                            }
+                            playback.playing = !playback.playing;
+                        }
+                        if toggle(ui, "loop", playback.looping).clicked() {
+                            playback.looping = !playback.looping;
+                        }
+                        let frame = 1.0 / clip.fps.max(1.0);
+                        if toggle(ui, "back", false).clicked() {
+                            playback.playing = false;
+                            playback.time = (playback.time - frame).max(0.0);
+                        }
+                        if toggle(ui, "next", false).clicked() {
+                            playback.playing = false;
+                            playback.time = (playback.time + frame).min(duration);
+                        }
+                    });
+                    ui.spacing_mut().slider_width = ui.available_width() - 10.0;
+                    if ui
+                        .add(
+                            egui::Slider::new(&mut playback.time, 0.0..=duration).show_value(false),
+                        )
+                        .on_hover_text("time")
+                        .changed()
+                    {
+                        playback.playing = false;
+                    }
+                    ui.horizontal(|ui| {
+                        ui.spacing_mut().slider_width = 110.0;
+                        ui.add(
+                            egui::Slider::new(&mut playback.speed, 0.1..=4.0)
+                                .logarithmic(true)
+                                .show_value(false),
+                        )
+                        .on_hover_text("playback speed");
+                        Line::new()
+                            .measured(format!("{:.2}x", playback.speed))
+                            .size(11.0)
+                            .show(ui);
+                    });
+                    Line::new()
+                        .legend("time")
+                        .measured(format!("{:.3} / {:.3} s", playback.time, duration))
+                        .legend("frame")
+                        .measured(format!(
+                            "{} at {} fps",
+                            (playback.time * clip.fps).round() as i64,
+                            clip.fps
+                        ))
+                        .size(11.0)
+                        .show(ui);
+                }
+                ui.add_space(4.0);
+                egui::CollapsingHeader::new("pose bones")
+                    .id_salt("pose bones")
+                    .show(ui, |ui| {
+                        for bone in &rig.bones {
+                            let mut turn = playback.turn_of(&bone.name);
+                            Line::new().legend(&bone.name).size(11.0).show(ui);
+                            let mut changed = false;
+                            ui.horizontal(|ui| {
+                                ui.spacing_mut().slider_width = 64.0;
+                                for (axis, value) in ["x", "y", "z"].iter().zip(turn.iter_mut()) {
+                                    changed |= ui
+                                        .add(
+                                            egui::Slider::new(value, -180.0..=180.0)
+                                                .show_value(false),
+                                        )
+                                        .on_hover_text(format!("turn about {axis}: {value:.0}°"))
+                                        .changed();
+                                }
+                            });
+                            if changed {
+                                playback.set_turn(&bone.name, turn);
+                            }
+                        }
+                    });
+                if toggle(ui, "reset pose", false).clicked() {
+                    playback.reset();
+                }
+            },
+        );
+        self.playback.skeleton = skeleton;
+        ui.add_space(8.0);
     }
 
     fn cut(&self) -> Option<Cut> {
@@ -2676,8 +2824,35 @@ impl App {
         self.section = Some((axis, at, flip));
     }
 
+    fn shown_scene(&mut self) -> Option<Arc<viewer3d::Scene<Ink>>> {
+        let shown = self.shown.as_ref()?;
+        if shown.scene.rigged.is_empty() || !self.playback.active() {
+            return Some(shown.scene.mesh.clone());
+        }
+        let key = shown.scene.mesh.id;
+        if let Some((k, p, scene)) = &self.posed
+            && *k == key
+            && *p == self.playback
+        {
+            return Some(scene.clone());
+        }
+        let scene = scene::posed_scene(&shown.scene, &self.playback);
+        self.posed = Some((key, self.playback.clone(), scene.clone()));
+        Some(scene)
+    }
+
     fn viewer(&self, shown: &Shown) -> Viewer<Ink> {
-        Viewer::new(shown.scene.mesh.clone(), self.cam)
+        let scene = match &self.posed {
+            Some((key, playback, scene))
+                if *key == shown.scene.mesh.id
+                    && *playback == self.playback
+                    && self.playback.active() =>
+            {
+                scene.clone()
+            }
+            _ => shown.scene.mesh.clone(),
+        };
+        Viewer::new(scene, self.cam)
             .looks(self.looks())
             .cut(self.cut())
             .lighting(self.lighting)
@@ -3177,9 +3352,21 @@ impl App {
         };
         let scene = shown.scene.clone();
         let built = shown.built;
+        if let Some(rigged) = scene.rigged.first() {
+            let dt = ui.input(|i| i.stable_dt) as f64;
+            self.playback.advance(&rigged.rig, dt);
+            if self.playback.playing {
+                ui.ctx().request_repaint();
+            }
+        }
+        self.shown_scene();
+        let Some(shown) = &self.shown else { return };
         let mut viewer = self.viewer(shown);
         self.painted = viewer.paint(ui, rect);
         let projector = viewer.projector(rect);
+        if self.playback.skeleton {
+            skeleton(&p, &projector, &scene.rigged, &self.playback);
+        }
         if let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
             && is_flow(&field)
         {
@@ -3671,6 +3858,25 @@ fn moving_lines(
         }
     }
     p.add(egui::Shape::mesh(mesh));
+}
+
+fn skeleton(
+    p: &egui::Painter,
+    projector: &Projector,
+    rigged: &[scene::Rigged],
+    playback: &super::anim::Playback,
+) {
+    let f = |v: [f64; 3]| v.map(|c| c as f32);
+    for r in rigged {
+        for [head, tail] in playback.bones(&r.rig) {
+            let (Some(a), Some(b)) = (projector.project(f(head)), projector.project(f(tail)))
+            else {
+                continue;
+            };
+            p.line_segment([a, b], Stroke::new(3.0, Color32::from_rgb(255, 200, 60)));
+            p.circle_filled(a, 3.5, Color32::from_rgb(255, 120, 40));
+        }
+    }
 }
 
 fn is_flow(field: &crate::sim::statics::FieldView) -> bool {
