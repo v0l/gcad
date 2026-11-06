@@ -201,6 +201,32 @@ fn axis_name(dir: P3) -> String {
     )
 }
 
+pub fn sidecar(file: &std::path::Path) -> std::path::PathBuf {
+    let mut name = file.as_os_str().to_os_string();
+    name.push(".view");
+    name.into()
+}
+
+pub fn record_view(file: &std::path::Path, frame: &Frame) -> std::io::Result<()> {
+    std::fs::write(
+        sidecar(file),
+        format!(
+            "view centre={},{},{} span={} pixels={}\n",
+            frame.centre[0], frame.centre[1], frame.centre[2], frame.span, frame.pixels
+        ),
+    )
+}
+
+pub fn recorded_pixel(file: &std::path::Path) -> Option<f64> {
+    let text = crate::host::read_to_string(&sidecar(file)).ok()?;
+    let pixels: f64 = text
+        .split_whitespace()
+        .find_map(|w| w.strip_prefix("pixels="))?
+        .parse()
+        .ok()?;
+    (pixels > 0.0 && pixels.is_finite()).then(|| 1.0 / pixels)
+}
+
 pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
     let surface = gather(model);
     if surface.triangles.is_empty() {

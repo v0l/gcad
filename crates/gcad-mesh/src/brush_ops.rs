@@ -96,6 +96,21 @@ impl Scene {
             })
     }
 
+    fn brush_size(&self, args: &Args<'_>, scope: &Scope) -> Result<Option<f64>> {
+        let Some(text) = args.values.get("size") else {
+            return Ok(None);
+        };
+        let Some(pixels) = text.strip_suffix("px") else {
+            return args.optional_number("size", scope);
+        };
+        let Some(unit) = self.pixel else {
+            bail!(
+                "`size={text}` is in pixels of the last `gcad inspect` view, and there is none: run `gcad inspect` on this file first"
+            );
+        };
+        Ok(Some(eval(pixels.trim(), scope)? * unit))
+    }
+
     pub fn op_brush(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         let args = Args::new(line, &["name"], BRUSH_ARGS, false)?;
         let name = args.text("name")?.to_string();
@@ -110,7 +125,7 @@ impl Scene {
             (_, Some(text)) => {
                 let kind = Kind::parse(text)
                     .ok_or_else(|| anyhow!("brush type is {KINDS}, got `{text}`"))?;
-                let size = match args.optional_number("size", scope)? {
+                let size = match self.brush_size(&args, scope)? {
                     Some(s) => positive(s, "size")?,
                     None => bail!("a new brush needs `size=`, its radius in model units"),
                 };
@@ -121,7 +136,7 @@ impl Scene {
                 "a new brush needs `type=` ({KINDS}) and `size=`, like `brush {name} type=clay size=0.4`"
             ),
         };
-        if let Some(size) = args.optional_number("size", scope)? {
+        if let Some(size) = self.brush_size(&args, scope)? {
             let old = brush.size;
             brush.size = positive(size, "size")?;
             if !args.has("strength") && !args.has("type") {
@@ -158,6 +173,11 @@ impl Scene {
         if let Some(text) = args.values.get("alpha") {
             brush.alpha = match *text {
                 "none" => None,
+                text if crate::mesh::alpha::is_image_name(text) => {
+                    Some(Alpha::stamp(text, self.stamp_loader.as_ref(), |v| {
+                        eval(v, scope)
+                    })?)
+                }
                 text => Some(Alpha::parse(text, |v| eval(v, scope))?),
             };
         }

@@ -666,6 +666,7 @@ fn main() -> Result<()> {
                 },
             )?;
             picture.canvas.save(&output)?;
+            gcad::inspect::record_view(std::path::Path::new(&file), &picture.frame)?;
             print!("{}", picture.report);
             Ok(())
         }

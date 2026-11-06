@@ -456,7 +456,7 @@ strokes, decimate once at the very end. Never ship the blockout resolution.
   Types: `draw` (standard), `clay` (buildup to a level), `inflate`, `smooth`, `pinch`,
   `dam_standard` (a sharp v groove for lids, lips, nails, wrinkles), `slash`, `planar`, `trim`,
   `polish`, `move`, `snake_hook` (pulls out horns, ears, fingers; add `detail=` so it grows
-  triangles), `nudge`, `stamp` with `alpha=` pores, scales, wrinkles, stitch, hair, dots or noise.
+  triangles), `nudge`, `stamp` with `alpha=` pores, scales, wrinkles, stitch, hair, dots or noise, or a greyscale image `alpha=stamp.png(size)` next to the file. A brush `size=40px` is a radius in pixels of the last `gcad inspect` view of that file.
   `size=` is the radius in model units, `strength=` the height (or the share for smooth, pinch,
   planar and move), `falloff=smooth|linear|sharp|flat|curve(0,0.3,1)`, `edge=` the soft share of
   the radius (0.2 gives a hard rim), `focal=-1..1` the ZBrush focal shift, `spacing=` dabs per

@@ -1,8 +1,33 @@
 use super::sculpt::fbm;
 use anyhow::{Result, bail};
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
+pub struct Grid {
+    pub width: usize,
+    pub height: usize,
+    pub values: Vec<f64>,
+}
+
+impl Grid {
+    pub fn sample(&self, x: f64, y: f64) -> f64 {
+        let (fx, fy) = (
+            x.rem_euclid(1.0) * self.width as f64,
+            y.rem_euclid(1.0) * self.height as f64,
+        );
+        let (x0, y0) = (fx.floor() as usize, fy.floor() as usize);
+        let (tx, ty) = (fx - x0 as f64, fy - y0 as f64);
+        let at = |i: usize, j: usize| self.values[(j % self.height) * self.width + i % self.width];
+        let top = at(x0, y0) * (1.0 - tx) + at(x0 + 1, y0) * tx;
+        let bottom = at(x0, y0 + 1) * (1.0 - tx) + at(x0 + 1, y0 + 1) * tx;
+        top * (1.0 - ty) + bottom * ty
+    }
+}
+
+pub type StampLoader = std::sync::Arc<dyn Fn(&str) -> Result<Grid> + Send + Sync>;
+
+#[derive(Clone, Debug, PartialEq)]
 pub enum Pattern {
+    Image(std::sync::Arc<Grid>),
     Noise,
     Pores,
     Scales,
@@ -12,7 +37,7 @@ pub enum Pattern {
     Dots,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Alpha {
     pub pattern: Pattern,
     pub size: f64,
@@ -21,7 +46,41 @@ pub struct Alpha {
 
 const PATTERNS: &str = "noise, pores, scales, wrinkles, stitch, hair or dots";
 
+pub fn is_image_name(text: &str) -> bool {
+    let name = text.split('(').next().unwrap_or(text).to_ascii_lowercase();
+    [".png", ".jpg", ".jpeg", ".webp"]
+        .iter()
+        .any(|e| name.ends_with(e))
+}
+
 impl Alpha {
+    pub fn stamp(
+        text: &str,
+        loader: Option<&StampLoader>,
+        number: impl Fn(&str) -> Result<f64>,
+    ) -> Result<Alpha> {
+        let Some(loader) = loader else {
+            bail!("alpha `{text}` is an image, but this build cannot read files");
+        };
+        let (name, inner) = match text.split_once('(') {
+            Some((name, rest)) => match rest.strip_suffix(')') {
+                Some(inner) => (name, Some(inner)),
+                None => bail!("`{text}` misses its closing bracket"),
+            },
+            None => (text, None),
+        };
+        let size = inner.map(|i| number(i.trim())).transpose()?.unwrap_or(0.0);
+        if size < 0.0 {
+            bail!("alpha size must be positive, got {size}");
+        }
+        let grid = loader(name)?;
+        Ok(Alpha {
+            pattern: Pattern::Image(std::sync::Arc::new(grid)),
+            size,
+            seed: 1,
+        })
+    }
+
     pub fn parse(text: &str, number: impl Fn(&str) -> Result<f64>) -> Result<Alpha> {
         let (name, inner) = match text.split_once('(') {
             Some((name, rest)) => match rest.strip_suffix(')') {
@@ -62,7 +121,8 @@ impl Alpha {
     pub fn value(&self, u: f64, v: f64, world: [f64; 3], fallback: f64) -> f64 {
         let s = if self.size > 0.0 { self.size } else { fallback };
         let (x, y) = (u / s, v / s);
-        match self.pattern {
+        match &self.pattern {
+            Pattern::Image(grid) => grid.sample(x, y),
             Pattern::Noise => fbm(world.map(|c| c / s), self.seed),
             Pattern::Pores => -cells(x, y, self.seed, 0.35).0.powi(2),
             Pattern::Dots => cells(x, y, self.seed, 0.45).0.powi(2),
@@ -154,6 +214,24 @@ mod tests {
                 assert_eq!(x, a.value(u, v, [u, v, 0.3], 1.0));
             }
         }
+    }
+
+    #[test]
+    fn image_stamp_tiles_and_blends() {
+        let grid = Grid {
+            width: 2,
+            height: 1,
+            values: vec![0.0, 1.0],
+        };
+        assert_eq!(grid.sample(0.0, 0.0), 0.0);
+        assert!((grid.sample(0.25, 0.0) - 0.5).abs() < 1.0e-12);
+        assert_eq!(grid.sample(1.0, 0.0), grid.sample(0.0, 0.0));
+        let loader: StampLoader = std::sync::Arc::new(move |_| Ok(grid.clone()));
+        let a = Alpha::stamp("s.png(2)", Some(&loader), n).unwrap();
+        assert!((a.value(0.5, 0.0, [0.0; 3], 1.0) - 0.5).abs() < 1.0e-12);
+        assert!(Alpha::stamp("s.png", None, n).is_err());
+        assert!(is_image_name("a/b.PNG(1)"));
+        assert!(!is_image_name("pores(1)"));
     }
 
     #[test]

@@ -689,3 +689,84 @@ fn a_dab_off_the_surface_lands_on_it_and_says_how_far() {
         1.0e-3,
     );
 }
+
+fn stamp_dir(name: &str) -> std::path::PathBuf {
+    let dir = std::env::temp_dir().join("gcad-tests").join(name);
+    std::fs::create_dir_all(&dir).expect("dir");
+    dir
+}
+
+fn run_file(path: &std::path::Path) -> gcad::model::Run {
+    gcad::model::run_path(path, &[], None).expect("runs")
+}
+
+#[test]
+fn png_alpha_stamp_dents_like_a_procedural_one() {
+    let dir = stamp_dir("png_stamp");
+    let mut img = image::GrayImage::new(8, 8);
+    for (x, y, p) in img.enumerate_pixels_mut() {
+        p.0[0] = if (x + y) % 2 == 0 { 255 } else { 0 };
+    }
+    img.save(dir.join("dots.png")).expect("png");
+    let file = dir.join("p.gcad");
+    std::fs::write(
+        &file,
+        format!(
+            "{BALL}\nbrush s type=stamp size=2 strength=0.1 alpha=dots.png(0.8)\ndab s at=0,0,10\n"
+        ),
+    )
+    .expect("write");
+    let run = run_file(&file);
+    assert!(
+        run.steps.iter().all(|(_, r)| r.is_ok()),
+        "{:?}",
+        run.steps.last()
+    );
+    let before = mesh_of(&build(BALL));
+    let after = mesh_of(&run.model);
+    let moved = moves(&before, &after);
+    assert!(moved.iter().filter(|(_, m)| *m > 0.005).count() > 20);
+    assert!(moved.iter().all(|(_, m)| *m <= 0.1 + 1.0e-9));
+}
+
+#[test]
+fn missing_png_names_the_file() {
+    let e = failure(&format!("{BALL}\nbrush s type=stamp size=2 alpha=nope.png"));
+    assert!(e.contains("nope.png"), "{e}");
+}
+
+#[test]
+fn px_size_needs_an_inspect_view_then_uses_it() {
+    let dir = stamp_dir("px_size");
+    let file = dir.join("q.gcad");
+    let _ = std::fs::remove_file(gcad::inspect::sidecar(&file));
+    std::fs::write(
+        &file,
+        format!("{BALL}\nbrush b type=draw size=40px strength=0.2\ndab b at=0,0,10\n"),
+    )
+    .expect("write");
+    let run = run_file(&file);
+    let e = format!("{:#}", run.steps.last().unwrap().1.as_ref().unwrap_err());
+    assert!(e.contains("gcad inspect"), "{e}");
+    std::fs::write(
+        gcad::inspect::sidecar(&file),
+        "view centre=0,0,0 span=100 pixels=10\n",
+    )
+    .expect("sidecar");
+    let run = run_file(&file);
+    assert!(
+        run.steps.iter().all(|(_, r)| r.is_ok()),
+        "{:?}",
+        run.steps.last()
+    );
+    let after = mesh_of(&run.model);
+    let before = mesh_of(&build(BALL));
+    let reach = before
+        .positions
+        .iter()
+        .zip(&after.positions)
+        .filter(|(p, q)| length(sub(**q, **p)) > 1.0e-6)
+        .map(|(p, _)| length(sub(*p, TOP)))
+        .fold(0.0, f64::max);
+    assert!(reach > 3.0 && reach <= 4.2, "reach {reach}");
+}

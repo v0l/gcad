@@ -527,7 +527,10 @@ impl Mesh {
                 let pull = sub(t.on, p);
                 sub(pull, scale(n, dot(pull, n)))
             };
-            let alpha = brush.alpha.map_or(1.0, |a| a.value(t.u, t.v, p, fallback));
+            let alpha = brush
+                .alpha
+                .as_ref()
+                .map_or(1.0, |a| a.value(t.u, t.v, p, fallback));
             let moved = match brush.kind {
                 Kind::Draw => add(p, scale(n, h * w * alpha)),
                 Kind::Inflate => add(p, scale(normals[i], h * w * alpha)),

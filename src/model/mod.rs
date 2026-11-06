@@ -1018,10 +1018,12 @@ pub struct Snapshot {
 }
 
 fn start(dir: Option<PathBuf>) -> Model {
-    Model {
-        dir,
+    let mut model = Model {
+        dir: dir.clone(),
         ..Default::default()
-    }
+    };
+    model.scene.stamp_loader = Some(stamp_loader(dir));
+    model
 }
 
 pub fn is_assembly(path: &std::path::Path) -> bool {
@@ -1041,7 +1043,31 @@ pub(crate) fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: u
         }));
     }
     model.depth = depth;
+    model.scene.pixel = crate::inspect::recorded_pixel(path);
     model
+}
+
+fn stamp_loader(dir: Option<PathBuf>) -> gcad_mesh::mesh::alpha::StampLoader {
+    std::sync::Arc::new(move |name: &str| {
+        let path = match &dir {
+            Some(dir) => dir.join(name),
+            None => PathBuf::from(name),
+        };
+        let bytes = crate::host::read(&path)
+            .map_err(|e| anyhow!("reading alpha stamp {}: {e}", path.display()))?;
+        let image = image::load_from_memory(&bytes)
+            .map_err(|e| anyhow!("decoding alpha stamp {}: {e}", path.display()))?
+            .into_luma_alpha8();
+        let values = image
+            .pixels()
+            .map(|p| p.0[0] as f64 / 255.0 * p.0[1] as f64 / 255.0 * 2.0 - 1.0)
+            .collect();
+        Ok(gcad_mesh::mesh::alpha::Grid {
+            width: image.width() as usize,
+            height: image.height() as usize,
+            values,
+        })
+    })
 }
 
 pub(crate) fn read_lines(path: &std::path::Path) -> Result<Vec<Line>> {

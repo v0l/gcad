@@ -8,6 +8,7 @@ All notable changes to gcad are listed here. The format follows
 
 ### Added
 - Rigging for mesh bodies: `bone`, `skin auto|part|paint`, `pose`, `clip` and `key`, linear blend skinning, and GLB export with skin and animations.
+- Brush `alpha=file.png` greyscale stamps (relative to the part file) and `size=40px` radii in pixels of the last `gcad inspect` view, recorded in a `<file>.view` sidecar.
 
 ## [0.6.1] - 2026-11-03
 
