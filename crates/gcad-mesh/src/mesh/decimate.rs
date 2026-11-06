@@ -282,7 +282,7 @@ impl Mesh {
         let mut result = self.clustered(cell, lo);
         for _ in 0..6 {
             let count = result.0.triangles.len();
-            if count <= target + target / 4 {
+            if count <= target + target / 10 {
                 break;
             }
             cell *= (count as f64 / target as f64).sqrt().max(1.05);
@@ -372,6 +372,36 @@ mod cluster_tests {
         assert!(lod.triangles.iter().flatten().all(|&i| (i as usize) < lod.positions.len()));
         let (lo, hi) = lod.bounds().unwrap();
         assert!(lo[0] < 8.0 && hi[0] > 192.0);
+    }
+
+    #[test]
+    fn cluster_keeps_part_labels_and_colours_at_two_million_triangles() {
+        let mut mesh = grid(1000);
+        mesh.parts.push("b".into());
+        let width = 1001;
+        for (i, label) in mesh.labels.iter_mut().enumerate() {
+            *label = u16::from(i % width >= width / 2);
+        }
+        let colours: Vec<[f64; 3]> = mesh
+            .labels
+            .iter()
+            .map(|&l| if l == 0 { [1.0, 0.0, 0.0] } else { [0.0, 0.0, 1.0] })
+            .collect();
+        assert!(mesh.triangles.len() >= 2_000_000);
+        let started = std::time::Instant::now();
+        let (lod, source) = mesh.cluster(20_000);
+        eprintln!("cluster 2M -> {} in {:?}", lod.triangles.len(), started.elapsed());
+        assert!(lod.triangles.len() <= 22_000);
+        assert!(lod.triangles.len() >= 5_000);
+        assert_eq!(lod.parts, mesh.parts);
+        assert_eq!(lod.labels.len(), lod.positions.len());
+        for (i, &label) in lod.labels.iter().enumerate() {
+            assert_eq!(label, mesh.labels[source[i] as usize]);
+            assert_eq!(colours[source[i] as usize][0] == 1.0, label == 0);
+            let x = lod.positions[i][0];
+            assert_eq!(label == 1, x > 499.5, "vertex {i} at x={x}");
+        }
+        assert!(lod.labels.contains(&0) && lod.labels.contains(&1));
     }
 
     #[test]

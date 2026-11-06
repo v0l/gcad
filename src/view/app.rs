@@ -59,7 +59,7 @@ struct SceneKey {
     full: bool,
 }
 
-const EDIT_LOD_TRIANGLES: usize = 60_000;
+const EDIT_LOD_TRIANGLES: usize = 20_000;
 const EDIT_SETTLE: Duration = Duration::from_millis(1500);
 
 struct Shown {
