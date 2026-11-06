@@ -218,14 +218,15 @@ impl Mesh {
                 if let Some(ids) = &keep.colours {
                     border |= ids[la as usize] != ids[lb as usize];
                 }
-                if !border && let Some(shared) = edges.get(&(a.min(b), a.max(b))) {
-                    if let [f, g] = shared[..] {
-                        if let Some(limit) = keep.crease_cos {
-                            border |= dot(normal_of(f), normal_of(g)) < limit;
-                        }
-                        if let Some(charts) = &keep.charts {
-                            border |= charts[f as usize] != charts[g as usize];
-                        }
+                if !border
+                    && let Some(shared) = edges.get(&(a.min(b), a.max(b)))
+                    && let [f, g] = shared[..]
+                {
+                    if let Some(limit) = keep.crease_cos {
+                        border |= dot(normal_of(f), normal_of(g)) < limit;
+                    }
+                    if let Some(charts) = &keep.charts {
+                        border |= charts[f as usize] != charts[g as usize];
                     }
                 }
                 if border {

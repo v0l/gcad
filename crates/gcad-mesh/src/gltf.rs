@@ -138,6 +138,8 @@ fn weights_of(skin: &Weights, vertices: usize) -> (Vec<u16>, Vec<f32>) {
     (joints, weights)
 }
 
+type Flattened<'a> = (Vec<P3>, Vec<P3>, Vec<u16>, &'a [[u32; 3]], Vec<u32>);
+
 struct Level {
     mesh: Mesh,
     skin: Option<Weights>,
@@ -229,13 +231,7 @@ fn emit_level(
 ) -> Value {
     let mesh = &level.mesh;
     let smooth;
-    let (positions, normals, labels, triangles, source): (
-        Vec<P3>,
-        Vec<P3>,
-        Vec<u16>,
-        &[[u32; 3]],
-        Vec<u32>,
-    ) = match &level.expanded {
+    let (positions, normals, labels, triangles, source): Flattened = match &level.expanded {
         Some(e) => (
             e.positions.clone(),
             e.normals.clone(),

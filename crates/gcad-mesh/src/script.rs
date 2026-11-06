@@ -468,6 +468,7 @@ fn collect(run: &Run, y_up: bool) -> Model {
     Model { bodies }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn body_of(
     name: String,
     mesh: Arc<Mesh>,
