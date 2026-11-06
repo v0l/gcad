@@ -3,8 +3,8 @@ use crate::interp::Scene;
 use crate::mesh::rig::{Pose, Rig, Xf};
 use crate::mesh::{Mesh, P3};
 use crate::ops;
-use crate::solid_ops::{self, Solids};
 use crate::parse::{Line, Scope, eval, parse_program};
+use crate::solid_ops::{self, Solids};
 use anyhow::{Result, anyhow, bail};
 use std::collections::HashMap;
 use std::fmt;
@@ -316,7 +316,12 @@ impl Run {
             bail!(
                 "`{}` is not a mesh operation; gcad-mesh runs {}",
                 line.op,
-                SUBSET.iter().chain(solid_ops::OPS).copied().collect::<Vec<_>>().join(", ")
+                SUBSET
+                    .iter()
+                    .chain(solid_ops::OPS)
+                    .copied()
+                    .collect::<Vec<_>>()
+                    .join(", ")
             );
         }
         if solid_ops::OPS.contains(&line.op.as_str()) {

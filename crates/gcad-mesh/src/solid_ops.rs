@@ -6,7 +6,9 @@ use crate::solid::{self, Extrude, Frame, P2};
 use anyhow::{Result, anyhow, bail};
 use std::sync::Arc;
 
-pub const OPS: &[&str] = &["plane", "rect", "circle", "poly", "array", "extrude", "fillet", "repeat"];
+pub const OPS: &[&str] = &[
+    "plane", "rect", "circle", "poly", "array", "extrude", "fillet", "repeat",
+];
 
 pub struct Solids {
     frame: Frame,
@@ -49,13 +51,14 @@ impl Solids {
 
     fn plane(&mut self, scope: &Scope, line: &Line) -> Result<()> {
         if !self.sketch.is_empty() {
-            bail!("`plane` must come before the profiles it holds, or after `extrude` empties them");
+            bail!(
+                "`plane` must come before the profiles it holds, or after `extrude` empties them"
+            );
         }
         let args = Args::new(line, &["on"], &["offset"], false)?;
         let name = args.text("on")?;
-        let frame = Frame::named(name).ok_or_else(|| {
-            anyhow!("gcad-mesh planes are XY, XZ or YZ, got `{name}`")
-        })?;
+        let frame = Frame::named(name)
+            .ok_or_else(|| anyhow!("gcad-mesh planes are XY, XZ or YZ, got `{name}`"))?;
         let offset = args.optional_number("offset", scope)?.unwrap_or(0.0);
         self.frame = frame.offset(offset);
         Ok(())
@@ -124,10 +127,8 @@ impl Solids {
             (None, Some((sx, sy))) => {
                 for i in 1..count {
                     let k = i as f64;
-                    self.sketch.push(solid::placed(
-                        &last,
-                        [1.0, 0.0, 0.0, 1.0, sx * k, sy * k],
-                    ));
+                    self.sketch
+                        .push(solid::placed(&last, [1.0, 0.0, 0.0, 1.0, sx * k, sy * k]));
                 }
             }
             (Some(angle), None) => {
@@ -152,7 +153,9 @@ impl Solids {
 
     fn require_solid_body(&self, scene: &Scene) -> Result<()> {
         if self.extrudes.is_empty() && scene.has_mesh() {
-            bail!("`extrude` adds to a body of extrusions; this body already holds a sculpted mesh");
+            bail!(
+                "`extrude` adds to a body of extrusions; this body already holds a sculpted mesh"
+            );
         }
         Ok(())
     }
@@ -218,7 +221,10 @@ impl Solids {
             _ => bail!("a fillet rounds `{label}.start` or `{label}.end` against its side"),
         }
         if extrude.start_round + extrude.end_round > extrude.depth.abs() * (1.0 + 1.0e-9) {
-            bail!("fillet r={radius} does not fit in an extrude {} thick", extrude.depth.abs());
+            bail!(
+                "fillet r={radius} does not fit in an extrude {} thick",
+                extrude.depth.abs()
+            );
         }
         self.publish(scene);
         Ok(())

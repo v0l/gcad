@@ -37,7 +37,8 @@ fn compare(name: &str, vars: &[(&str, f64)]) {
             .indices
             .chunks(3)
             .map(|t| {
-                let [a, b, c] = [t[0], t[1], t[2]].map(|i| body.positions[i as usize].map(f64::from));
+                let [a, b, c] =
+                    [t[0], t[1], t[2]].map(|i| body.positions[i as usize].map(f64::from));
                 a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
                     + a[2] * (b[0] * c[1] - b[1] * c[0])
             })
@@ -48,8 +49,18 @@ fn compare(name: &str, vars: &[(&str, f64)]) {
     let reference = kernel_model(name, vars);
     let (rlo, rhi) = common::bounds(&reference);
     for k in 0..3 {
-        assert!((lo[k] - rlo[k]).abs() < 0.05, "{name} min[{k}] {} vs {}", lo[k], rlo[k]);
-        assert!((hi[k] - rhi[k]).abs() < 0.05, "{name} max[{k}] {} vs {}", hi[k], rhi[k]);
+        assert!(
+            (lo[k] - rlo[k]).abs() < 0.05,
+            "{name} min[{k}] {} vs {}",
+            lo[k],
+            rlo[k]
+        );
+        assert!(
+            (hi[k] - rhi[k]).abs() < 0.05,
+            "{name} max[{k}] {} vs {}",
+            hi[k],
+            rhi[k]
+        );
     }
     let expected = common::volume(&reference);
     assert!(
@@ -72,19 +83,33 @@ fn kernel_model(name: &str, vars: &[(&str, f64)]) -> gcad::model::Model {
 }
 
 #[test]
-fn barrier_matches_kernel() { compare("barrier", &[]); }
+fn barrier_matches_kernel() {
+    compare("barrier", &[]);
+}
 #[test]
-fn hurdle_matches_kernel() { compare("hurdle", &[]); }
+fn hurdle_matches_kernel() {
+    compare("hurdle", &[]);
+}
 #[test]
-fn gate_matches_kernel() { compare("gate", &[]); }
+fn gate_matches_kernel() {
+    compare("gate", &[]);
+}
 #[test]
-fn train_matches_kernel() { compare("train", &[]); }
+fn train_matches_kernel() {
+    compare("train", &[]);
+}
 #[test]
-fn coin_matches_kernel() { compare("coin", &[]); }
+fn coin_matches_kernel() {
+    compare("coin", &[]);
+}
 #[test]
-fn arch_matches_kernel() { compare("arch", &[]); }
+fn arch_matches_kernel() {
+    compare("arch", &[]);
+}
 #[test]
-fn road_matches_kernel() { compare("road", &[]); }
+fn road_matches_kernel() {
+    compare("road", &[]);
+}
 #[test]
 fn buildings_match_kernel() {
     for (style, floors) in [(1.0, 2.0), (2.0, 3.0), (3.0, 4.0), (4.0, 5.0), (5.0, 3.0)] {
@@ -116,7 +141,10 @@ fn profile_inside_another_is_a_hole() {
         .sum::<f64>()
         / 6.0;
     let expected = (1600.0 - 24.0 * 25.0 * (std::f64::consts::TAU / 24.0).sin() / 2.0 * 1.0) * 5.0;
-    assert!((volume - expected).abs() < expected * 0.01, "{volume} vs {expected}");
+    assert!(
+        (volume - expected).abs() < expected * 0.01,
+        "{volume} vs {expected}"
+    );
 }
 
 #[test]

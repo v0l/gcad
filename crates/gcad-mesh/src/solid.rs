@@ -180,7 +180,7 @@ pub fn regions(loops: &[Vec<P2>]) -> Vec<Region> {
         .collect();
     let mut out: Vec<(usize, Region)> = Vec::new();
     for (i, l) in loops.iter().enumerate() {
-        if containers[i].len() % 2 == 0 {
+        if containers[i].len().is_multiple_of(2) {
             out.push((
                 i,
                 Region {
@@ -194,7 +194,7 @@ pub fn regions(loops: &[Vec<P2>]) -> Vec<Region> {
         if containers[i].len() % 2 == 1 {
             let parent = containers[i]
                 .iter()
-                .filter(|j| containers[**j].len() % 2 == 0)
+                .filter(|j| containers[**j].len().is_multiple_of(2))
                 .min_by(|a, b| {
                     signed_area(&loops[**a])
                         .abs()
@@ -326,7 +326,11 @@ pub fn triangulate(outer: &[P2], holes: &[Vec<P2>]) -> (Vec<P2>, Vec<[u32; 3]>) 
 
 fn unit(v: P2) -> P2 {
     let l = v.0.hypot(v.1);
-    if l < EPS { (0.0, 0.0) } else { (v.0 / l, v.1 / l) }
+    if l < EPS {
+        (0.0, 0.0)
+    } else {
+        (v.0 / l, v.1 / l)
+    }
 }
 
 struct Corner {
@@ -426,10 +430,14 @@ fn emit(mesh: &mut Mesh, e: &Extrude, frame: Frame) {
                         levels
                             .iter()
                             .map(|&(by, z)| {
-                                let flat = inset(&[points[i]], &[Corner {
-                                    inward: around[i].inward,
-                                    sharp: false,
-                                }], by)[0];
+                                let flat = inset(
+                                    &[points[i]],
+                                    &[Corner {
+                                        inward: around[i].inward,
+                                        sharp: false,
+                                    }],
+                                    by,
+                                )[0];
                                 push(mesh, part, frame.at(flat, sign * z))
                             })
                             .collect()

@@ -156,4 +156,26 @@ add boundary quadrics on creased edges and chart borders, `keep=colours` on colo
 
 ## Flat solid profiles
 
-gcad-mesh also runs a kernel-free subset for crisp props: `plane XY|XZ|YZ offset=`, `rect w h at= r=`, `circle d at=`, `poly x,y ...`, `array count= step=` (or `angle=`), `extrude d` (negative goes the other way), `repeat label count= step=` and `fillet r label.end&label.side` (or `.start`). A profile inside another is a hole. Fillets are four bevel rings. Each `body` holds its own extrusions; there are no booleans between them.
+gcad-mesh also runs a kernel-free subset for crisp, flat-sided props (the kids-free-games runner props):
+
+| line | notes |
+|---|---|
+| `plane XY`, `XZ`, `YZ` with `offset=` | world planes only, same axes as the kernel |
+| `rect w h at= r=` | rounded corners become short arcs |
+| `circle d at=` | 24 segments, 32 above 20 mm radius |
+| `poly x,y ...` | no `r=` or `c=` corner rounding |
+| `array count= step=` or `angle= at=` | copies the last profile |
+| `extrude d` | negative goes the other way; a profile inside another is a hole |
+| `repeat label count= step=` | repeats an extrude along the plane |
+| `fillet r label.end&label.side` | also `.start`; the rim only |
+
+Each `body` holds its own extrusions, and bodies are never combined: no booleans. Normals are flat per face; a fillet is four bevel rings that follow the arc.
+
+Measured against the kernel on the eight kids-free-games props (`tests/solid_silhouette.rs`, release):
+
+- Silhouettes from front, side and top at 256 px: XOR over union at most 0.58% (coin front), most views under 0.1%. The test limit is 2%.
+- Face normals on the coin and barrier agree with the kernel within 3% of area per axis bin (coin 0.359 vs 0.360 on each of the two big faces).
+- Fillet rim: largest distance from the true arc is 0.019 mm at r=1 and 0.058 mm at r=3. The kernel's own tessellation is 0.0003 mm and 0.001 mm.
+- Triangles, gcad-mesh against the kernel GLB: barrier 2608 / 1884, hurdle 1484 / 932, gate 2104 / 1072, train 3144 / 848, coin 284 / 1444, arch 2328 / 1712, road 636 / 636, building (style 4, 5 floors) 1188 / 1188.
+- `gcad_mesh::build`, median of 20, release: barrier 0.24 ms, hurdle 0.14, gate 0.20, train 0.39, coin 0.05, arch 0.26, road 0.17, building 0.44. All eight: 1.9 ms.
+- wasm32 `gcad_mesh.wasm` (release, no wasm-opt): 1,051,538 B before, 1,107,810 B after, +56,272 B (+5.4%).

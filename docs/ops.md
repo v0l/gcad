@@ -294,6 +294,25 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | inspect close-ups, wireframe and stroke preview | supported | `gcad inspect f.gcad out.png --zoom x,y,z,r --wire --path x,y,z --path x,y,z` | `inspect_view::zoom_frames_a_region_and_wire_draws_the_triangles`, `inspect_view::stroke_path_overlay_lands_on_the_surface` |
 | pick curvature | supported | `--pick x,y` prints curvature and bump/hollow/flat | `inspect_view::pick_reports_the_curvature_of_the_surface` |
 
+## Flat solids in gcad-mesh
+
+`gcad_mesh::build` runs these without the kernel: polygon triangulation and straight extrusion,
+flat-shaded, rim fillets as bevel rings. Each prop in `tests/fixtures/props` is checked against
+the kernel build.
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| world plane | supported | `plane XZ offset=-t/2` | `solid_props::coin_matches_kernel`, `solid_props::negative_extrude_goes_below_the_plane` |
+| mesh rect with rounded corners | supported | `rect 26 26 at=10,0 r=4` | `solid_props::barrier_matches_kernel`, `solid_props::repro_builds_a_closed_flat_shaded_part`, `solid_silhouette::barrier_silhouette_matches_kernel` |
+| mesh circle | supported | `circle 18 at=60,0` | `solid_props::gate_matches_kernel`, `solid_silhouette::coin_silhouette_matches_kernel` |
+| mesh poly | supported | `poly 0,0 10,0 5,8` | `solid_props::hurdle_matches_kernel`, `solid_silhouette::gate_silhouette_matches_kernel` |
+| profile array | supported | `array count=4 step=180,0` | `solid_props::buildings_match_kernel`, `solid_silhouette::building_silhouettes_match_kernel` |
+| profile inside a profile is a hole | supported | `rect 40 40` then `circle 10` | `solid_props::profile_inside_another_is_a_hole`, `solid_props::arch_matches_kernel` |
+| mesh extrude | supported | `extrude 8`, `extrude -4` | `solid_props::train_matches_kernel`, `solid_props::road_matches_kernel`, `solid_silhouette::road_silhouette_matches_kernel` |
+| mesh repeat | supported | `repeat frame count=2 step=0,250` | `solid_silhouette::train_silhouette_matches_kernel`, `solid_silhouette::hurdle_silhouette_matches_kernel` |
+| mesh extrude rim fillet | supported | `fillet 2 foot.end&foot.side` | `solid_silhouette::fillet_rim_stays_close_to_the_kernel_arc`, `solid_silhouette::coin_face_normals_match_kernel`, `solid_silhouette::barrier_face_normals_match_kernel`, `solid_silhouette::arch_silhouette_matches_kernel` |
+| solid props build fast and small | supported | `gcad_mesh::build` on a prop file | `solid_silhouette::props_stay_within_five_times_the_kernel_glb_triangles`, `solid_silhouette::building_all_props_is_fast` |
+
 ## Assemblies
 
 Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and join them.
