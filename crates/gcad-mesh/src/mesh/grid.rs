@@ -117,6 +117,25 @@ pub struct Hit {
 }
 
 impl<'a> Surface<'a> {
+    pub fn signed(&self, p: P3, normals: &[P3]) -> Option<(f64, Hit)> {
+        let hit = self.closest(p)?;
+        let t = self.triangles[hit.triangle as usize];
+        let [a, b, c] = t.map(|i| self.positions[i as usize]);
+        let face = super::cross(sub(b, a), sub(c, a));
+        let corner = [a, b, c]
+            .iter()
+            .position(|v| length(sub(*v, hit.point)) < 1.0e-9 * (1.0 + length(*v)));
+        let n = match corner {
+            Some(k) => normals[t[k] as usize],
+            None => face,
+        };
+        let side = dot(sub(p, hit.point), n);
+        let d = if side < 0.0 { -hit.distance } else { hit.distance };
+        Some((d, hit))
+    }
+}
+
+impl<'a> Surface<'a> {
     pub fn new(mesh: &'a Mesh) -> Surface<'a> {
         let (sum, count) = mesh.triangles.iter().take(5000).fold((0.0, 0.0), |(s, n), t| {
             let [a, b, _] = mesh.corners(*t);

@@ -401,6 +401,20 @@ impl Scene {
     }
 
     pub fn op_remesh(&mut self, scope: &Scope, line: &Line) -> Result<String> {
+        if line.positional.first().map(String::as_str) == Some("dynamesh") {
+            let args = Args::new(line, &["mode", "cell"], &[], false)?;
+            let cell = positive(args.number("cell", scope)?, "cell")? * self.cell_factor();
+            let before = self.sculpted("remesh dynamesh")?.clone();
+            let mut even = before.dynamesh(cell)?;
+            even.hidden = before.hidden.clone();
+            self.mesh_body.mesh = Some(Arc::new(even));
+            self.mesh_body.levels.clear();
+            return Ok(format!(
+                "{} (was {} triangles)",
+                self.describe_mesh()?,
+                before.triangles.len()
+            ));
+        }
         let args = Args::new(line, &["cell"], &[], false)?;
         if self.mesh_body.blockout.is_empty() {
             bail!(

@@ -450,6 +450,69 @@ fn layer_amount_dials_its_strokes() {
 }
 
 #[test]
+fn finish_decimates_to_a_budget_and_reports_the_error() {
+    let text = summary(&format!("{BALL}\nsubdivide 1\nfinish decimate=4000"));
+    assert!(text.starts_with("4000 triangles") || text.starts_with("399"), "{text}");
+    assert!(text.contains("surface moved"), "{text}");
+    let mesh = mesh_of(&build(&format!("{BALL}\nsubdivide 1\nfinish decimate=4000")));
+    assert_eq!(mesh.open_edges(), 0);
+    let worst = mesh
+        .positions
+        .iter()
+        .map(|p| (length(*p) - 10.0).abs())
+        .fold(0.0, f64::max);
+    assert!(worst < 0.1, "{worst}");
+}
+
+#[test]
+fn finish_to_an_error_bound_stays_within_it() {
+    let full = mesh_of(&build(BALL));
+    let model = build(&format!("{BALL}\nfinish max_error=0.02"));
+    let done = mesh_of(&model);
+    assert!(done.triangles.len() < full.triangles.len() / 3, "{}", done.triangles.len());
+    let (worst, _) = done.error_from(&full);
+    assert!(worst <= 0.02, "{worst}");
+    let bumpy = format!("{BALL}\nnoise 0.3 size=1");
+    let coarse = mesh_of(&build(&format!("{bumpy}\nfinish max_error=0.02")));
+    assert!(coarse.triangles.len() > done.triangles.len(), "detail keeps triangles");
+}
+
+#[test]
+fn finish_keeps_fine_brush_detail_better_than_a_coarse_build() {
+    let detail = "brush w type=dam_standard size=0.3 strength=0.15\nstroke w from=-3,0,9.6 to=3,0,9.6\nstroke w from=-3,1,9.5 to=3,1,9.5";
+    let fine = mesh_of(&build(&format!("ball: blob 0,0,0 r=10\nremesh 0.1\n{detail}")));
+    let finished = mesh_of(&build(&format!(
+        "ball: blob 0,0,0 r=10\nremesh 0.1\n{detail}\nfinish decimate=20000"
+    )));
+    let coarse = mesh_of(&build(&format!("ball: blob 0,0,0 r=10\nremesh 0.6\n{detail}")));
+    assert!(coarse.triangles.len() <= finished.triangles.len() * 2);
+    let (kept, _) = finished.error_from(&fine);
+    let (lost, _) = coarse.error_from(&fine);
+    assert!(kept < lost / 2.0, "finished {kept}, coarse {lost}");
+}
+
+#[test]
+fn dynamesh_remeshes_a_sculpt_evenly_and_keeps_its_shape() {
+    let source = format!("{BALL}\nselect sphere=0,0,10 r=2 falloff=2\nmove 0,0,6");
+    let stretched = mesh_of(&build(&source));
+    let model = build(&format!("{source}\nremesh dynamesh 0.25"));
+    let even = mesh_of(&model);
+    assert_eq!(even.open_edges(), 0);
+    let rel = (even.volume() - stretched.volume()).abs() / stretched.volume();
+    assert!(rel < 0.01, "{rel}");
+    let long = |m: &Mesh| {
+        m.triangles
+            .iter()
+            .flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3])))
+            .map(|(a, b)| length(sub(m.positions[a as usize], m.positions[b as usize])))
+            .fold(0.0, f64::max)
+    };
+    assert!(long(&stretched) > 1.0, "{}", long(&stretched));
+    assert!(long(&even) < 0.25 * 2.0, "{}", long(&even));
+    assert_eq!(even.parts, stretched.parts);
+}
+
+#[test]
 fn brush_errors_name_the_choices() {
     let error = failure(&format!("{BALL}\nbrush b type=sponge size=1"));
     assert!(error.contains("dam_standard"), "{error}");
