@@ -224,6 +224,7 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | operation | status | syntax | tests |
 |---|---|---|---|
 | ellipsoid blob | supported | `head: blob 0,0,30 r=5,4,6 rz=20` | `mesh::blob_sphere`, `mesh::blob_ellipsoid_turned` |
+| rounded box block | supported | `plank: block 0,0,5 size=20,4,2 round=0.5 rz=30` | `mesh::block_is_a_rounded_box`, `mesh::block_turns_and_blends` |
 | limb through joints | supported | `arm: limb 0,0,0 0,0,20 r=3,2` | `mesh::limb_capsule` |
 | smooth blend between primitives | supported | `blob ... blend=2` | `mesh::blend_fills_the_join` |
 | carve a blob out | supported | `blob ... mode=cut` | `mesh::blob_cut` |
