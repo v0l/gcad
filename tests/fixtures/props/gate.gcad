@@ -1,0 +1,36 @@
+let pole=70 top=240 sign=170 t=8
+foot: rect 26 26 at=pole,0 r=4
+rect 26 26 at=-pole,0 r=4
+foot: extrude 8
+fillet 2 foot.end&foot.side
+color #5b6478
+body poles
+plane XY offset=8
+circle 11 at=pole,0
+circle 11 at=-pole,0
+poles: extrude top-8
+color #8d97ad
+body knobs
+plane XY offset=top
+circle 16 at=pole,0
+circle 16 at=-pole,0
+knobs: extrude 8
+fillet 4 knobs.end&knobs.side
+color #ffd23a
+body board
+plane XZ offset=-t/2
+rect 150 62 at=0,sign r=8
+board: extrude t
+fillet 2 board.end&board.side
+fillet 2 board.start&board.side
+color #2f9e5a
+body face
+plane XZ offset=-t/2-0.8
+rect 134 48 at=0,sign r=5
+face: extrude t+1.6
+color #46c477
+body arrow
+plane XZ offset=-t/2-1.6
+poly -26,165 6,165 6,156 30,170 6,184 6,175 -26,175
+arrow: extrude t+3.2
+color #ffffff

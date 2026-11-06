@@ -42,7 +42,7 @@ int main(int argc, char **argv) {
     gcad_glb_free(glb, len);
     gcad_free(m);
 
-    GcadModel *bad = gcad_build("a: blob 0,0,0 r=2\nrect 1 1\n", 1.0, 1);
+    GcadModel *bad = gcad_build("a: blob 0,0,0 r=2\nhole 1 0,0\n", 1.0, 1);
     const char *e = gcad_error(bad);
     if (!e || !strstr(e, "line 2")) return fail("error text");
     if (gcad_body_count(bad) != 0) return fail("bad bodies");

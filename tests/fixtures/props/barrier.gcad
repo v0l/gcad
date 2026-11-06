@@ -1,0 +1,43 @@
+let w=136 h=26 bar=78 t=9 post=58 pr=6
+rect 26 26 at=post,0 r=4
+rect 26 26 at=-post,0 r=4
+foot: extrude 8
+fillet 2 foot.end&foot.side
+color #5b6478
+body posts
+plane XY offset=8
+circle 2*pr at=post,0
+circle 2*pr at=-post,0
+pole: extrude 112
+color #8d97ad
+body caps
+plane XY offset=120
+circle 18 at=post,0
+circle 18 at=-post,0
+cap: extrude 6
+fillet 2 cap.end&cap.side
+color #f04a3a
+body lamps
+plane XY offset=126
+circle 13 at=post,0
+circle 13 at=-post,0
+lamp: extrude 9
+fillet 4 lamp.end&lamp.side
+color #ffd23a
+body board
+plane XZ offset=-t/2
+rect w h at=0,bar r=5
+board: extrude t
+fillet 1.5 board.end&board.side
+fillet 1.5 board.start&board.side
+color #f04a3a
+body stripes
+plane XZ offset=-t/2-0.5
+poly -64.00,70.50 -48.00,90.50 -62.00,90.50 -64.00,88.00
+poly -54.00,65.50 -40.00,65.50 -20.00,90.50 -34.00,90.50
+poly -26.00,65.50 -12.00,65.50 8.00,90.50 -6.00,90.50
+poly 2.00,65.50 16.00,65.50 36.00,90.50 22.00,90.50
+poly 30.00,65.50 44.00,65.50 64.00,90.50 50.00,90.50
+poly 58.00,65.50 64.00,65.50 64.00,73.00
+stripe: extrude t+1
+color #ffffff

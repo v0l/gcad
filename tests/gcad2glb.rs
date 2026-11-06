@@ -47,9 +47,9 @@ fn same_spec_gives_identical_bytes() {
 
 #[test]
 fn solid_operations_are_refused_with_the_line_number() {
-    let error = gcad_mesh::build("a: blob 0,0,0 r=2\nremesh 0.5\nrect 10 10\n").unwrap_err();
+    let error = gcad_mesh::build("a: blob 0,0,0 r=2\nremesh 0.5\nhole 3 0,0\n").unwrap_err();
     assert_eq!(error.line, 3);
-    assert!(error.message.contains("rect"), "{error}");
+    assert!(error.message.contains("hole"), "{error}");
 }
 
 #[test]

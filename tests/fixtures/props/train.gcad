@@ -1,0 +1,72 @@
+let L=900 W=130 H=190 base=24 fr=-(L-40)/2
+plane XY offset=base
+rect W L-60 at=0,10 r=10
+body: extrude H-base-20
+fillet 6 body.end&body.side
+color #3b80e0
+body roof
+plane XY offset=H-22
+rect W-6 L-76 at=0,10 r=12
+roof: extrude 18
+fillet 7 roof.end&roof.side
+color #f5f5f5
+body nose
+plane YZ offset=-W/2
+poly -418,24 -436,24 -450,46 -450,146 -436,170 -418,170
+nose: extrude W
+fillet 5 nose.side&nose.end
+fillet 5 nose.side&nose.start
+color #3b80e0
+body skirt
+plane XY offset=10
+rect W-10 L-40 at=0,10 r=8
+skirt: extrude 16
+color #2a3348
+body stripe
+plane XY offset=82
+rect W+3 L-58 at=0,10 r=11
+stripe: extrude 12
+color #ffd23a
+body windows
+plane XY offset=112
+rect W+2 70 at=0,-330 r=6
+rect W+2 70 at=0,-220 r=6
+rect W+2 70 at=0,-110 r=6
+rect W+2 70 at=0,0 r=6
+rect W+2 70 at=0,110 r=6
+rect W+2 70 at=0,220 r=6
+rect W+2 70 at=0,330 r=6
+win: extrude 46
+color #bfefff
+body screen
+plane XZ offset=450
+rect 100 44 at=0,116 r=10
+screen: extrude 3
+color #bfefff
+body face
+plane XZ offset=450
+rect 46 10 at=0,82 r=4
+face: extrude 3
+color #ffffff
+body lamps
+plane XZ offset=450
+circle 22 at=-38,56
+circle 22 at=38,56
+lamp: extrude 4
+color #fff3a0
+body wheels
+plane YZ offset=-W/2+8
+circle 40 at=-300,22
+circle 40 at=-200,22
+circle 40 at=200,22
+circle 40 at=300,22
+wheel: extrude 16
+color #2a3348
+body wheels_r
+plane YZ offset=W/2-24
+circle 40 at=-300,22
+circle 40 at=-200,22
+circle 40 at=200,22
+circle 40 at=300,22
+wheelr: extrude 16
+color #2a3348

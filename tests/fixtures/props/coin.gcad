@@ -1,0 +1,15 @@
+let r=50 t=12
+plane XZ offset=-t/2
+circle 2*r at=0,r
+coin: extrude t
+color #f2a900
+body face
+plane XZ offset=-t/2-1.5
+circle 2*r-16 at=0,r
+face: extrude t+3
+color #ffc21a
+body stars
+plane XZ offset=-t/2-2
+poly 0,82 7.6,60.5 30.4,59.9 12.3,46.1 18.8,24.1 0,37 -18.8,24.1 -12.3,46.1 -30.4,59.9 -7.6,60.5
+stars: extrude t+4
+color #fff07a

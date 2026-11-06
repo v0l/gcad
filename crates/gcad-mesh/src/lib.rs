@@ -8,6 +8,8 @@ pub mod ops;
 pub mod parse;
 pub mod rig_ops;
 pub mod script;
+pub mod solid;
+pub mod solid_ops;
 
 pub use script::{
     Body, Clip, Error, Joint, Matrix, Model, MoveTrack, Options, Part, Track, build, build_with,

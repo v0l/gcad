@@ -1,0 +1,72 @@
+let floors=3 style=1 W=520 D=760 F=250
+let H=floors*F
+walls: rect W D
+walls: extrude H
+if style==1 color #f6b8a8
+if style==2 color #a9d2f5
+if style==3 color #f8dd8a
+if style==4 color #ade8c4
+if style==5 color #d6c2f2
+body trim
+plinth: rect W+8 D+8
+plinth: extrude 30
+plane XY offset=F-8
+band: rect W+10 D+10
+band: extrude 16
+plane XY offset=H
+cornice: rect W+24 D+24
+cornice: extrude 26
+color #ffffff
+body roof
+plane XY offset=H+26
+roof: rect W-10 D-10
+roof: extrude 6
+color #8a8f9c
+body frames
+plane YZ offset=W/2
+rect 120 150 at=-270,F+60
+array count=4 step=180,0
+rect 96 126 at=-270,F+60
+array count=4 step=180,0
+frame: extrude 7
+if floors>2 repeat frame count=floors-1 step=0,F
+plane XZ offset=D/2
+rect 120 150 at=-120,F+60
+array count=2 step=240,0
+rect 96 126 at=-120,F+60
+array count=2 step=240,0
+front: extrude 7
+if floors>2 repeat front count=floors-1 step=0,F
+color #ffffff
+body glass
+plane YZ offset=W/2
+rect 96 126 at=-270,F+60
+array count=4 step=180,0
+glass: extrude 3
+if floors>2 repeat glass count=floors-1 step=0,F
+plane XZ offset=D/2
+rect 96 126 at=-120,F+60
+array count=2 step=240,0
+fglass: extrude 3
+if floors>2 repeat fglass count=floors-1 step=0,F
+plane YZ offset=W/2
+rect 200 150 at=-200,100
+rect 200 150 at=200,100
+shop: extrude 3
+color #7fc8ee
+body door
+plane YZ offset=W/2
+rect 90 180 at=0,90
+door: extrude 5
+color #8a5a34
+body awning
+plane YZ offset=W/2
+rect 220 26 at=-200,196
+rect 220 26 at=200,196
+rect 120 22 at=0,196
+awning: extrude 34
+if style==1 color #e8504a
+if style==2 color #3a7bd5
+if style==3 color #ef8a2a
+if style==4 color #2f9e5a
+if style==5 color #8a5ad5

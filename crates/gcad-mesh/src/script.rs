@@ -3,6 +3,7 @@ use crate::interp::Scene;
 use crate::mesh::rig::{Pose, Rig, Xf};
 use crate::mesh::{Mesh, P3};
 use crate::ops;
+use crate::solid_ops::{self, Solids};
 use crate::parse::{Line, Scope, eval, parse_program};
 use anyhow::{Result, anyhow, bail};
 use std::collections::HashMap;
@@ -224,6 +225,7 @@ impl Model {
 }
 
 struct Run {
+    solids: Solids,
     scene: Scene,
     scope: Scope,
     fixed: Scope,
@@ -305,16 +307,20 @@ impl Run {
         }
         scene.finish_mesh_body()?;
         scene.body = name.clone();
+        self.solids.new_body();
         Ok(())
     }
 
     fn apply(&mut self, line: &Line) -> Result<()> {
-        if !SUBSET.contains(&line.op.as_str()) {
+        if !SUBSET.contains(&line.op.as_str()) && !solid_ops::OPS.contains(&line.op.as_str()) {
             bail!(
                 "`{}` is not a mesh operation; gcad-mesh runs {}",
                 line.op,
-                SUBSET.join(", ")
+                SUBSET.iter().chain(solid_ops::OPS).copied().collect::<Vec<_>>().join(", ")
             );
+        }
+        if solid_ops::OPS.contains(&line.op.as_str()) {
+            return self.solids.apply(&mut self.scene, &self.scope, line);
         }
         let scope = &self.scope;
         let scene = &mut self.scene;
@@ -414,6 +420,7 @@ pub fn build_with(source: &str, options: &Options) -> std::result::Result<Model,
     })?;
     let fixed: Scope = options.vars.iter().cloned().collect();
     let mut run = Run {
+        solids: Solids::default(),
         scene: Scene {
             cell_scale: options.detail,
             ..Default::default()

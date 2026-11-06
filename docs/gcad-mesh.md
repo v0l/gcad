@@ -153,3 +153,7 @@ normal), packs them in shelves, and writes a tangent-space normal map of the ful
 (or `lod 40% 10%`, shares of the full-detail mesh) writes `NAME_LOD1`, `NAME_LOD2` meshes and links
 them with `MSFT_lod` on the body's node. `finish keep=creases crease=40` and `keep=uv`
 add boundary quadrics on creased edges and chart borders, `keep=colours` on colour borders.
+
+## Flat solid profiles
+
+gcad-mesh also runs a kernel-free subset for crisp props: `plane XY|XZ|YZ offset=`, `rect w h at= r=`, `circle d at=`, `poly x,y ...`, `array count= step=` (or `angle=`), `extrude d` (negative goes the other way), `repeat label count= step=` and `fillet r label.end&label.side` (or `.start`). A profile inside another is a hole. Fillets are four bevel rings. Each `body` holds its own extrusions; there are no booleans between them.

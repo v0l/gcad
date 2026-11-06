@@ -1,0 +1,49 @@
+let L=900 road=540 walk=200 kerb=16 lane=160
+plane XY
+rect road L
+asphalt: extrude 4
+color #5d6170
+body dashes
+plane XY offset=4
+rect 12 300 at=-lane/2,-225
+rect 12 300 at=lane/2,-225
+rect 12 300 at=-lane/2,225
+rect 12 300 at=lane/2,225
+dashes: extrude 0.6
+color #ffffff
+body edges
+plane XY offset=4
+rect 14 L at=-road/2+20,0
+rect 14 L at=road/2-20,0
+edges: extrude 0.6
+color #ffd23a
+body kerbs
+plane XY
+rect 22 L at=-road/2-11,0
+rect 22 L at=road/2+11,0
+kerbs: extrude kerb+8
+color #d9dbe2
+body walks
+plane XY
+rect walk-24 L at=-road/2-22-(walk-24)/2,0
+rect walk-24 L at=road/2+22+(walk-24)/2,0
+walks: extrude kerb+6
+color #c9a77a
+body slabs
+plane XY offset=kerb+2
+rect 84 84 at=-road/2-22-44,-405
+array count=10 step=0,90
+rect 84 84 at=-road/2-22-132,-405
+array count=10 step=0,90
+rect 84 84 at=road/2+22+44,-405
+array count=10 step=0,90
+rect 84 84 at=road/2+22+132,-405
+array count=10 step=0,90
+slabs: extrude 3
+color #f2d9a8
+body drains
+plane XY
+rect 30 60 at=-road/2+10,300
+rect 30 60 at=road/2-10,-300
+drains: extrude 4.6
+color #3c404b

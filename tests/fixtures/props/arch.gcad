@@ -1,0 +1,55 @@
+let leg=102 top=262 t=24
+foot: rect 36 40 at=leg,0 r=6
+rect 36 40 at=-leg,0 r=6
+foot: extrude 16
+fillet 4 foot.end&foot.side
+color #3a7bd5
+body legs
+plane XY offset=16
+circle 26 at=leg,0
+circle 26 at=-leg,0
+legs: extrude top-16
+color #ff5a4a
+body banner
+plane XZ offset=-t/2
+rect 2*leg+30 50 at=0,top+10 r=12
+banner: extrude t
+fillet 3 banner.end&banner.side
+fillet 3 banner.start&banner.side
+color #f5f5f5
+body checks
+plane XZ offset=-t/2-0.8
+rect 13.6 22.6 at=-84,top+21.5
+rect 13.6 22.6 at=-70,top-1.5
+rect 13.6 22.6 at=-56,top+21.5
+rect 13.6 22.6 at=-42,top-1.5
+rect 13.6 22.6 at=-28,top+21.5
+rect 13.6 22.6 at=-14,top-1.5
+rect 13.6 22.6 at=0,top+21.5
+rect 13.6 22.6 at=14,top-1.5
+rect 13.6 22.6 at=28,top+21.5
+rect 13.6 22.6 at=42,top-1.5
+rect 13.6 22.6 at=56,top+21.5
+rect 13.6 22.6 at=70,top-1.5
+rect 13.6 22.6 at=84,top+21.5
+checks: extrude t+1.6
+color #262a33
+body flagpoles
+plane XY offset=top+35
+circle 5 at=leg,0
+circle 5 at=-leg,0
+flagpoles: extrude 50
+color #8d97ad
+body flags
+plane XZ offset=-1
+poly 104,342 150,330 104,316
+poly -104,342 -58,330 -104,316
+flags: extrude 2
+color #ffd23a
+body balls
+plane XY offset=top+85
+circle 10 at=leg,0
+circle 10 at=-leg,0
+balls: extrude 8
+fillet 3.9 balls.end&balls.side
+color #ffd23a

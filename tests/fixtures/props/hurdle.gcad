@@ -1,0 +1,27 @@
+let w=150 bar=78 t=12 leg=66
+foot: rect 18 56 at=leg,0 r=5
+rect 18 56 at=-leg,0 r=5
+foot: extrude 10
+fillet 3 foot.end&foot.side
+color #5b6478
+body legs
+plane XY offset=10
+rect 9 9 at=leg,0 r=3
+rect 9 9 at=-leg,0 r=3
+legs: extrude 58
+color #e9eef5
+body rail
+plane XZ offset=-t/2
+rect w 22 at=0,bar r=6
+rail: extrude t
+fillet 1.5 rail.end&rail.side
+fillet 1.5 rail.start&rail.side
+color #ff8a1f
+body bands
+plane XZ offset=-t/2-0.6
+rect 14 22.4 at=-54,bar
+rect 14 22.4 at=-18,bar
+rect 14 22.4 at=18,bar
+rect 14 22.4 at=54,bar
+bands: extrude t+1.2
+color #ffffff
