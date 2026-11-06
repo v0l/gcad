@@ -264,6 +264,27 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | build a mesh and rig without the CAD kernel | supported | `gcad2glb in.gcad out.glb`, `gcad_mesh::build(source)` | `gcad2glb::rigged_creature_matches_gcad_export_byte_for_byte`, `gcad2glb::creature_matches_gcad_export_byte_for_byte`, `gcad2glb::fox_matches_gcad_export_byte_for_byte`, `gcad2glb::same_spec_gives_identical_bytes`, `gcad2glb::bone_matrices_bend_the_skinned_positions` |
 | solid operations are refused with a line number in the mesh library | supported | `gcad_mesh::build("rect 1 1")` | `gcad2glb::solid_operations_are_refused_with_the_line_number`, `gcad2glb::bad_arguments_name_their_line` |
 | lower remesh detail for slow devices | supported | `gcad2glb --detail 3 in.gcad out.glb` | `gcad2glb::lower_detail_gives_fewer_triangles` |
+| define a brush | supported | `brush clay type=clay size=0.4 strength=0.1 falloff=smooth focal=0.3 edge=0.5 spacing=0.2 lazy=0.5 mirror=x` | `brush::dab_draw_raises_by_strength_with_a_linear_falloff`, `brush::brush_edge_keeps_a_flat_core`, `brush::brush_errors_name_the_choices` |
+| one brush dab on the surface | supported | `dab clay at=x,y,z` | `brush::dab_draw_raises_by_strength_with_a_linear_falloff`, `brush::a_dab_off_the_surface_lands_on_it_and_says_how_far` |
+| a stroke along a path | supported | `stroke clay from=a to=b`, `stroke clay x,y,z x,y,z ... pressure=0,1` | `brush::stroke_lays_a_ridge_along_its_path`, `brush::stroke_pressure_ramps_the_ridge`, `brush::stroke_points_and_lazy_smooth_a_shaky_path` |
+| draw, clay, crease, pinch, flatten, smooth brushes | supported | `type=draw`, `clay`, `dam_standard`, `pinch`, `planar`, `smooth` | `brush::clay_builds_up_to_a_plane_above_the_surface`, `brush::crease_brush_cuts_a_groove_of_its_strength`, `brush::pinch_brush_draws_vertices_to_the_stroke`, `brush::flatten_brush_planes_the_top`, `brush::smooth_brush_calms_noise_only_under_it` |
+| move and snake hook brushes | supported | `type=move`, `type=snake_hook detail=0.25` | `brush::move_brush_drags_a_region_by_the_stroke`, `brush::snake_hook_pulls_out_a_spike` |
+| alpha stamps | supported | `type=stamp alpha=pores(0.8,2)`, `scales`, `wrinkles`, `stitch`, `hair`, `dots`, `noise` | `brush::alpha_stamp_dents_and_raises_within_its_strength` |
+| mirrored and geodesic brushes | supported | `brush ... mirror=x geodesic=on` | `brush::mirrored_brush_raises_both_sides_alike`, `brush::geodesic_brush_stays_on_its_side_of_a_thin_shell` |
+| mask vertices | supported | `mask sphere=x,y,z r=`, `mask part=`, `mask by=height axis=z from= to=`, `mask by=cavity r=1` | `brush::masked_vertices_stay_still`, `brush::mask_by_height_ramps_between_two_levels`, `brush::mask_by_cavity_finds_a_groove` |
+| change the mask | supported | `mask invert`, `mask clear`, `mask blur 3`, `mask grow 0.5`, `mask shrink 0.5` | `brush::brushes_respect_the_mask_and_invert_and_clear_it`, `brush::mask_grow_widens_and_shrink_narrows` |
+| hold parts still | supported | `hide ear_l`, `isolate head`, `show` | `brush::isolate_and_hide_keep_other_parts_still` |
+| polygroups | supported | `group cap sphere=x,y,z r=2` then `select cap` | `brush::group_makes_a_polygroup_to_select` |
+| selection falloff shape and strength | supported | `select sphere=... falloff=2 profile=linear strength=0.5` | `brush::select_profile_and_strength_shape_the_falloff` |
+| soften the seam between parts | supported | `join arm body blend=1.5` | `brush::join_softens_the_seam_between_parts` |
+| dynamic topology under brushes | supported | `dyntopo on detail=0.05` | `brush::dyntopo_refines_under_the_brush` |
+| subdivide and project to a stored level | supported | `level base`, `subdivide 2`, `project base` | `brush::subdivide_quadruples_the_triangles`, `brush::project_returns_a_selection_to_a_stored_level` |
+| sculpt layers | supported | `layer wrinkles`, then `layer wrinkles amount=0.5` | `brush::layer_amount_dials_its_strokes` |
+| even remesh of a sculpt | supported | `remesh dynamesh 0.25` | `brush::dynamesh_remeshes_a_sculpt_evenly_and_keeps_its_shape` |
+| finish at full detail, then decimate | supported | `finish decimate=20000`, `finish decimate=10%`, `finish max_error=0.02` | `brush::finish_decimates_to_a_budget_and_reports_the_error`, `brush::finish_to_an_error_bound_stays_within_it`, `brush::finish_keeps_fine_brush_detail_better_than_a_coarse_build` |
+| export budget | supported | `gcad export f.gcad f.glb --tris 20000`, `--max-error 0.02`, `gcad2glb --tris 20000` | `gcad2glb::a_triangle_budget_finishes_every_body_at_export`, `gcad2glb::an_error_bound_keeps_the_surface_within_it`, `gcad2glb::export_tris_flag_matches_gcad2glb` |
+| inspect close-ups, wireframe and stroke preview | supported | `gcad inspect f.gcad out.png --zoom x,y,z,r --wire --path x,y,z --path x,y,z` | `inspect_view::zoom_frames_a_region_and_wire_draws_the_triangles`, `inspect_view::stroke_path_overlay_lands_on_the_surface` |
+| pick curvature | supported | `--pick x,y` prints curvature and bump/hollow/flat | `inspect_view::pick_reports_the_curvature_of_the_surface` |
 
 ## Assemblies
 
