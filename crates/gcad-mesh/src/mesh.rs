@@ -1,4 +1,5 @@
 pub mod brush;
+pub mod channels;
 pub mod decimate;
 pub mod rig;
 pub mod sculpt;
@@ -15,6 +16,8 @@ pub struct Mesh {
     pub triangles: Vec<[u32; 3]>,
     pub labels: Vec<u16>,
     pub parts: Vec<String>,
+    pub mask: Vec<f64>,
+    pub layers: Vec<channels::Layer>,
 }
 
 pub fn add(a: P3, b: P3) -> P3 {
@@ -138,6 +141,7 @@ impl Mesh {
     pub fn merge(&mut self, other: &Mesh) {
         let base = self.positions.len() as u32;
         let remap: Vec<u16> = other.parts.iter().map(|p| self.part_index(p)).collect();
+        self.merge_channels(other, base as usize);
         self.positions.extend(&other.positions);
         self.labels.extend(
             other
@@ -150,7 +154,7 @@ impl Mesh {
     }
 
     pub fn transformed(&self, f: impl Fn(P3) -> P3, flips: bool) -> Mesh {
-        Mesh {
+        let mut out = Mesh {
             positions: self.positions.iter().map(|&p| f(p)).collect(),
             triangles: if flips {
                 self.triangles.iter().map(|t| [t[0], t[2], t[1]]).collect()
@@ -159,7 +163,10 @@ impl Mesh {
             },
             labels: self.labels.clone(),
             parts: self.parts.clone(),
-        }
+            ..Default::default()
+        };
+        self.transform_channels(&mut out, &f);
+        out
     }
 
     pub fn summary(&self) -> String {

@@ -456,6 +456,7 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
         triangles,
         labels,
         parts,
+        ..Default::default()
     })
 }
 

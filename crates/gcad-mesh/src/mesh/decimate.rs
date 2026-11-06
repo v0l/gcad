@@ -230,7 +230,7 @@ impl Mesh {
             }
             around[b as usize].clear();
             gone[b as usize] = true;
-            self.positions[a as usize] = p;
+            self.moved_to(a as usize, p);
             quadric[a as usize] = q;
             stamp[a as usize] += 1;
             let neighbours: HashSet<u32> = ring(a, &around, &self.triangles);
@@ -248,8 +248,7 @@ impl Mesh {
             }
         }
         let mut remap: HashMap<u32, u32> = HashMap::new();
-        let mut positions = Vec::new();
-        let mut labels = Vec::new();
+        let mut keep = Vec::new();
         let mut triangles = Vec::new();
         for (f, t) in self.triangles.iter().enumerate() {
             if !alive[f] {
@@ -257,14 +256,12 @@ impl Mesh {
             }
             triangles.push(t.map(|i| {
                 *remap.entry(i).or_insert_with(|| {
-                    positions.push(self.positions[i as usize]);
-                    labels.push(self.labels[i as usize]);
-                    (positions.len() - 1) as u32
+                    keep.push(i);
+                    (keep.len() - 1) as u32
                 })
             }));
         }
-        self.positions = positions;
-        self.labels = labels;
+        self.keep_vertices(&keep);
         self.triangles = triangles;
         start - self.triangles.len()
     }
