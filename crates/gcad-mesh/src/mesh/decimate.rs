@@ -71,6 +71,73 @@ fn optimum(q: &Quadric, a: P3, b: P3) -> P3 {
 }
 
 impl Mesh {
+    pub fn error_from(&self, reference: &Mesh) -> (f64, f64) {
+        let there = super::grid::Surface::new(reference);
+        let here = super::grid::Surface::new(self);
+        let one = |from: &Mesh, to: &super::grid::Surface| {
+            from.positions
+                .iter()
+                .filter_map(|&p| to.closest(p))
+                .fold((0.0f64, 0.0f64, 0usize), |(m, s, n), h| {
+                    (m.max(h.distance), s + h.distance, n + 1)
+                })
+        };
+        let (a, sa, na) = one(self, &there);
+        let (b, sb, nb) = one(reference, &here);
+        (a.max(b), (sa + sb) / (na + nb).max(1) as f64)
+    }
+
+    pub fn finish(&mut self, reference: &Mesh, target: Option<usize>, max_error: Option<f64>) -> String {
+        let before = self.triangles.len();
+        let all = Selection::new(self, vec![super::Region::All], 0.0, None)
+            .expect("a mesh has vertices");
+        let unmasked = Selection {
+            weights: vec![1.0; self.positions.len()],
+            ..all
+        };
+        match (target, max_error) {
+            (Some(target), None) => {
+                self.decimate(&unmasked, target);
+            }
+            (target, Some(limit)) => {
+                let floor = target.unwrap_or(4).max(4);
+                let (mut lo, mut hi) = (floor, before);
+                let mut best = reference.clone();
+                while hi > lo + (before / 200).max(16) {
+                    let mid = (lo + hi) / 2;
+                    let mut trial = reference.clone();
+                    let every = Selection {
+                        weights: vec![1.0; trial.positions.len()],
+                        ..unmasked.clone()
+                    };
+                    trial.decimate(&every, mid);
+                    if trial.error_from(reference).0 <= limit {
+                        hi = trial.triangles.len().min(mid);
+                        best = trial;
+                    } else {
+                        lo = mid;
+                    }
+                }
+                *self = best;
+            }
+            (None, None) => {}
+        }
+        let (worst, mean) = self.error_from(reference);
+        let (lo, hi) = reference.bounds().unwrap_or_default();
+        let size = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max).max(1.0e-12);
+        let open = match self.open_edges() {
+            0 => String::new(),
+            n => format!(", {n} open edges"),
+        };
+        format!(
+            "{} triangles (was {before}); surface moved {worst:.4} at most ({:.3}% of the size), {mean:.4} on average; volume {:.3} (was {:.3}){open}",
+            self.triangles.len(),
+            worst / size * 100.0,
+            self.volume(),
+            reference.volume()
+        )
+    }
+
     pub fn decimate(&mut self, selection: &Selection, target: usize) -> usize {
         let start = self.triangles.len();
         if target >= start {

@@ -160,18 +160,28 @@ fn resample(path: &[P3], step: f64) -> Vec<P3> {
     out
 }
 
-fn lazy(points: &[P3], amount: f64) -> Vec<P3> {
+fn lazy(points: &[P3], amount: f64, size: f64) -> Vec<P3> {
     if amount <= 0.0 || points.len() < 3 {
         return points.to_vec();
     }
-    let keep = amount.clamp(0.0, 0.95);
-    let mut out = Vec::with_capacity(points.len());
+    let string = amount.clamp(0.0, 1.0) * 2.0 * size;
+    let mut out = vec![points[0]];
     let mut q = points[0];
-    for &p in points {
-        q = add(q, scale(sub(p, q), 1.0 - keep));
-        out.push(q);
+    for &p in &points[1..] {
+        let d = length(sub(p, q));
+        if d > string {
+            q = add(q, scale(sub(p, q), (d - string) / d));
+            out.push(q);
+        }
     }
-    *out.last_mut().expect("points") = *points.last().expect("points");
+    let end = *points.last().expect("points");
+    if length(sub(end, q)) > 1.0e-9 {
+        let tail = length(sub(end, q));
+        let steps = (tail / (size * 0.25)).ceil().max(1.0) as usize;
+        for k in 1..=steps {
+            out.push(add(q, scale(sub(end, q), k as f64 / steps as f64)));
+        }
+    }
     out
 }
 
@@ -255,7 +265,7 @@ impl Mesh {
             return outcome;
         }
         let step = (brush.spacing * brush.size).max(brush.size * 0.02);
-        let raw = lazy(&resample(&stroke.path, step), brush.lazy);
+        let raw = lazy(&resample(&stroke.path, step), brush.lazy, brush.size);
         if let Some(detail) = brush.detail {
             outcome.added += self.refine_under(&raw, brush, detail);
         }
@@ -286,7 +296,7 @@ impl Mesh {
                 if let Some(to) = to {
                     hook.push(to);
                 }
-                let hook = lazy(&resample(&hook, step), brush.lazy);
+                let hook = lazy(&resample(&hook, step), brush.lazy, brush.size);
                 let mut hooks = vec![hook.clone()];
                 if paths.len() > 1 {
                     let axis = brush.mirror.expect("mirrored");

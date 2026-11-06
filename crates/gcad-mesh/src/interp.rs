@@ -454,7 +454,7 @@ impl Scene {
         let args = Args::new(
             line,
             &[],
-            &["sphere", "r", "box", "falloff", "mirror"],
+            &["sphere", "r", "box", "falloff", "mirror", "profile", "strength"],
             true,
         )?;
         let mut regions = Vec::new();
@@ -495,7 +495,17 @@ impl Scene {
             .map(|t| axis_index(t))
             .transpose()?;
         let mesh = self.sculpted("select")?.clone();
-        let selection = Selection::new(&mesh, regions.clone(), falloff, mirror)?;
+        let mut weighting = mesh::Weighting::default();
+        if let Some(text) = args.values.get("profile") {
+            weighting.profile = crate::brush_ops::falloff_of(text, scope)?;
+        }
+        if let Some(s) = args.optional_number("strength", scope)? {
+            if !(-4.0..=4.0).contains(&s) {
+                bail!("`strength` goes from -4 to 4, got {s}");
+            }
+            weighting.strength = s;
+        }
+        let selection = Selection::weighted(&mesh, regions.clone(), falloff, mirror, weighting)?;
         let count = selection.count();
         let full = selection.weights.iter().filter(|&&w| w >= 1.0).count();
         let centre = selection.centre;

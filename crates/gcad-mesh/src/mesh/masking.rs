@@ -135,23 +135,36 @@ impl Mesh {
                 }
             })
             .collect();
-        let passes = 12;
         let around = self.neighbours();
+        let picked: Vec<usize> = (0..self.positions.len()).filter(|&i| weights[i] > 0.0).collect();
+        let edge = {
+            let (sum, n) = picked.iter().take(2000).fold((0.0, 0.0), |(s, n), &i| {
+                around[i].first().map_or((s, n), |&j| {
+                    (s + length(sub(self.positions[i], self.positions[j as usize])), n + 1.0)
+                })
+            });
+            (sum / f64::max(n, 1.0)).max(1.0e-9)
+        };
+        let passes = ((blend / edge).powi(2)).ceil().clamp(4.0, 400.0) as usize;
         for _ in 0..passes {
+            let normals = self.vertex_normals();
             let before = self.positions.clone();
-            for (i, p) in self.positions.iter_mut().enumerate() {
+            for &i in &picked {
                 let w = weights[i];
-                if w <= 0.0 || around[i].is_empty() {
+                if around[i].is_empty() {
                     continue;
                 }
                 let sum = around[i]
                     .iter()
                     .fold([0.0; 3], |s, &j| add(s, before[j as usize]));
-                let mean = scale(sum, 1.0 / around[i].len() as f64);
-                *p = add(*p, scale(sub(mean, *p), 0.5 * w));
+                let p = before[i];
+                let step = sub(scale(sum, 1.0 / around[i].len() as f64), p);
+                if dot(step, normals[i]) > 0.0 {
+                    self.positions[i] = add(p, scale(step, 0.5 * w));
+                }
             }
         }
-        weights.iter().filter(|&&w| w > 0.0).count()
+        picked.len()
     }
 
     pub fn project_onto(&mut self, target: &Mesh, selection: &Selection) -> (usize, f64) {
