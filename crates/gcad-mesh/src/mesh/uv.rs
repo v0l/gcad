@@ -115,6 +115,32 @@ fn shelves(sizes: &[[f64; 2]], order: &[usize], s: f64, gutter: f64) -> Option<V
     Some(at)
 }
 
+fn rotated(q: [f64; 2], angle: f64) -> [f64; 2] {
+    let (s, c) = angle.sin_cos();
+    [q[0] * c - q[1] * s, q[0] * s + q[1] * c]
+}
+
+fn tightest_turn(points: &[[f64; 2]]) -> f64 {
+    let mut best = (f64::INFINITY, 0.0);
+    for step in 0..90 {
+        let angle = (step as f64 * 2.0).to_radians();
+        let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+        for &p in points {
+            let q = rotated(p, angle);
+            for k in 0..2 {
+                lo[k] = lo[k].min(q[k]);
+                hi[k] = hi[k].max(q[k]);
+            }
+        }
+        let (w, h) = (hi[0] - lo[0], hi[1] - lo[1]);
+        let area = w * h;
+        if area < best.0 - 1.0e-12 {
+            best = (area, if w >= h { angle } else { angle + std::f64::consts::FRAC_PI_2 });
+        }
+    }
+    best.1
+}
+
 pub fn unwrap(mesh: &Mesh, size: usize) -> Layout {
     let (chart, axes) = charts(mesh);
     let count = axes.len();
@@ -124,15 +150,24 @@ pub fn unwrap(mesh: &Mesh, size: usize) -> Layout {
             size: [0.0; 2],
         })
         .collect();
-    let mut max = vec![[f64::NEG_INFINITY; 2]; count];
-    let flat = |c: usize, p: P3| {
-        let (u, v) = basis(axes[c]);
-        [dot(p, u), dot(p, v)]
-    };
+    let mut points: Vec<Vec<[f64; 2]>> = vec![Vec::new(); count];
     for (f, t) in mesh.triangles.iter().enumerate() {
         let c = chart[f] as usize;
+        let (u, v) = basis(axes[c]);
         for p in mesh.corners(*t) {
-            let q = flat(c, p);
+            points[c].push([dot(p, u), dot(p, v)]);
+        }
+    }
+    let turn: Vec<f64> = points.iter().map(|pts| tightest_turn(pts)).collect();
+    let flat = |c: usize, p: P3| {
+        let (u, v) = basis(axes[c]);
+        let q = [dot(p, u), dot(p, v)];
+        rotated(q, turn[c])
+    };
+    let mut max = vec![[f64::NEG_INFINITY; 2]; count];
+    for c in 0..count {
+        for &q in &points[c] {
+            let q = rotated(q, turn[c]);
             for k in 0..2 {
                 placed[c].min[k] = placed[c].min[k].min(q[k]);
                 max[c][k] = max[c][k].max(q[k]);

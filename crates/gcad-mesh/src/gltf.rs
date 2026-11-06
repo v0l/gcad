@@ -2,7 +2,7 @@ use crate::interp::Detail;
 use crate::mesh::bake::bake_normals;
 use crate::mesh::rig::{IDENTITY_QUAT, Rig, Weights};
 use crate::mesh::uv::Expanded;
-use crate::mesh::{Mesh, P3};
+use crate::mesh::{Mesh, P3, length};
 use anyhow::Result;
 use serde_json::{Value, json};
 
@@ -250,6 +250,10 @@ fn emit_level(
             )
         }
     };
+    let normals: Vec<P3> = normals
+        .into_iter()
+        .map(|n| if length(n) < 0.5 { [0.0, 0.0, 1.0] } else { n })
+        .collect();
     let position = b.floats(
         &flat(positions.iter().map(|p| y_up(*p))),
         3,
