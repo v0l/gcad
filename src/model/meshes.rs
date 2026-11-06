@@ -8,7 +8,7 @@ use std::sync::Arc;
 
 pub const MESH_OPERATIONS: &[&str] = &[
     "blob", "limb", "remesh", "select", "inflate", "smooth", "refine", "crease", "pinch",
-    "flatten", "noise", "relax", "decimate",
+    "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key",
 ];
 
 type Named = (String, Vec<Region>, f64, Option<usize>);
@@ -20,12 +20,14 @@ pub struct MeshBody {
     pub mesh: Option<Arc<Mesh>>,
     pub selection: Option<Selection>,
     pub selections: Vec<Named>,
+    pub rig: crate::mesh::rig::Rig,
+    pub clip: Option<usize>,
     preview: std::sync::OnceLock<std::result::Result<Arc<Mesh>, String>>,
 }
 
 impl MeshBody {
     pub fn is_empty(&self) -> bool {
-        self.blockout.is_empty() && self.mesh.is_none()
+        self.blockout.is_empty() && self.mesh.is_none() && self.rig.is_empty()
     }
 }
 
@@ -72,7 +74,7 @@ impl Model {
         Ok(())
     }
 
-    fn start_mesh(&self, op: &str) -> Result<()> {
+    pub(super) fn start_mesh(&self, op: &str) -> Result<()> {
         if self.solid.is_some() {
             bail!(
                 "`{op}` makes a mesh and body `{}` is a solid; start a mesh with `body name`",
@@ -82,12 +84,25 @@ impl Model {
         self.require_empty_sketch(op)
     }
 
-    pub fn meshes(&self) -> Vec<(String, Arc<Mesh>)> {
+    pub fn rest_meshes(&self) -> Vec<(String, Arc<Mesh>)> {
         let mut out = self.mesh_bodies.clone();
         if let Some(mesh) = self.current_mesh().ok().flatten() {
             out.push((self.body_name(), mesh));
         }
         out
+    }
+
+    pub fn meshes(&self) -> Vec<(String, Arc<Mesh>)> {
+        self.rest_meshes()
+            .into_iter()
+            .map(|(name, mesh)| match self.rig_of(&name) {
+                Some(rig) if rig.is_posed() && rig.skin_fits(&mesh) => {
+                    let posed = rig.posed(&mesh, &rig.pose);
+                    (name, Arc::new(posed))
+                }
+                _ => (name, mesh),
+            })
+            .collect()
     }
 
     pub(crate) fn colour_mesh_part(
@@ -242,6 +257,10 @@ impl Model {
     pub(crate) fn finish_mesh_body(&mut self) -> Result<()> {
         if let Some(mesh) = self.current_mesh()? {
             self.mesh_bodies.push((self.body_name(), mesh));
+            if !self.mesh_body.rig.is_empty() {
+                self.mesh_rigs
+                    .push((self.body_name(), self.mesh_body.rig.clone()));
+            }
         }
         self.mesh_body = MeshBody::default();
         Ok(())
@@ -369,7 +388,7 @@ impl Model {
         self.describe_mesh()
     }
 
-    fn sculpted(&mut self, op: &str) -> Result<&mut Mesh> {
+    pub(super) fn sculpted(&mut self, op: &str) -> Result<&mut Mesh> {
         if self.mesh_body.mesh.is_none() {
             if self.mesh_body.blockout.is_empty() {
                 bail!(
@@ -741,6 +760,11 @@ impl Model {
     }
 
     pub(crate) fn mesh_mirror(&mut self, axis: usize, at: f64, of: Option<&str>) -> Result<String> {
+        if let Some(name) = of
+            && self.mesh_body.rig.bone_index(name).is_some()
+        {
+            return self.mirror_bone(axis, at, name);
+        }
         if self.mesh_body.mesh.is_none() {
             let picked: Vec<Primitive> = self
                 .mesh_body
@@ -835,7 +859,7 @@ impl Model {
     }
 }
 
-fn mirrored_name(name: &str, axis: usize) -> Option<String> {
+pub(super) fn mirrored_name(name: &str, axis: usize) -> Option<String> {
     const SIDES: [(&str, &str); 4] = [
         ("_l", "_r"),
         ("_r", "_l"),

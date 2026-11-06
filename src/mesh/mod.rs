@@ -1,4 +1,5 @@
 pub mod decimate;
+pub mod rig;
 pub mod sculpt;
 pub mod sdf;
 
