@@ -1,3 +1,4 @@
+pub mod brush;
 pub mod decimate;
 pub mod rig;
 pub mod sculpt;
