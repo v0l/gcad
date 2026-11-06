@@ -1,4 +1,5 @@
 pub mod args;
+pub mod ffi;
 pub mod gltf;
 pub mod interp;
 pub mod mesh;
