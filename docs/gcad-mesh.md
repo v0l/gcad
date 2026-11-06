@@ -144,3 +144,12 @@ their size. The same head blocked out the old way (`remesh 0.3`, `refine`, `crea
 `examples/mesh/hero.gcad` is the kids-free-games hero rebuilt this way: 436k triangles of brush
 work (mouth, lips, dimples, pores, brow, cap stitches, hair strands on a layer, sleeve and knee
 folds) finished to 14000 with `focus=` on the face, then rigged.
+
+## Normal map and LODs
+
+`bake normals size=1024` unwraps the finished mesh into charts (faces within 60 degrees of a seed
+normal), packs them in shelves, and writes a tangent-space normal map of the full-detail sculpt
+(the mesh before `finish`) into the GLB, with `TEXCOORD_0` and `TANGENT`. `lod 8000 3000 1000`
+(or `lod 40% 10%`, shares of the full-detail mesh) writes `NAME_LOD1`, `NAME_LOD2` meshes and links
+them with `MSFT_lod` on the body's node. `finish keep=creases crease=40` and `keep=uv`
+add boundary quadrics on creased edges and chart borders, `keep=colours` on colour borders.

@@ -10,6 +10,7 @@ repository = "https://github.com/v0l/gcad"
 anyhow = "1.0.104"
 serde_json = "1.0.151"
 rayon = { version = "1.12", optional = true }
+miniz_oxide = "0.8"
 
 [features]
 default = []

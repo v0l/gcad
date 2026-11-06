@@ -880,3 +880,159 @@ fn ramp_png_stamp_dent_profile() {
     println!("ramp displacement {deepest:.3} .. {highest:.3}");
     assert!(deepest < -0.1 && highest > 0.1 && deepest >= -0.5 - 1.0e-9 && highest <= 0.5 + 1.0e-9);
 }
+
+fn glb_json(glb: &[u8]) -> serde_json::Value {
+    let len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    serde_json::from_slice(&glb[20..20 + len]).expect("json chunk")
+}
+
+fn glb_bin(glb: &[u8]) -> &[u8] {
+    let len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    &glb[20 + len + 8..]
+}
+
+fn glb_of_source(source: &str) -> Vec<u8> {
+    let model = build(source);
+    gcad::export::glb_of(&model).expect("exports")
+}
+
+fn mesh_triangles(json: &serde_json::Value, mesh: usize) -> usize {
+    json["meshes"][mesh]["primitives"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            json["accessors"][p["indices"].as_u64().unwrap() as usize]["count"]
+                .as_u64()
+                .unwrap() as usize
+                / 3
+        })
+        .sum()
+}
+
+const WRINKLED: &str = "ball: blob 0,0,0 r=10\nremesh 0.15\nbrush w type=dam_standard size=0.5 strength=0.3\nstroke w from=-4,0,9.2 to=4,0,9.2\nlevel full";
+
+#[test]
+fn bake_normals_writes_a_tangent_space_map_that_tilts_on_the_wrinkle() {
+    let glb = glb_of_source(&format!(
+        "{WRINKLED}\nfinish decimate=3000\nbake normals size=256"
+    ));
+    let json = glb_json(&glb);
+    assert_eq!(json["images"].as_array().unwrap().len(), 1);
+    let primitive = &json["meshes"][0]["primitives"][0];
+    assert!(primitive["attributes"]["TEXCOORD_0"].is_u64());
+    assert!(primitive["attributes"]["TANGENT"].is_u64());
+    let material = &json["materials"][primitive["material"].as_u64().unwrap() as usize];
+    assert_eq!(material["normalTexture"]["index"], 0);
+    let view = &json["bufferViews"][json["images"][0]["bufferView"].as_u64().unwrap() as usize];
+    let at = view["byteOffset"].as_u64().unwrap() as usize;
+    let png = &glb_bin(&glb)[at..at + view["byteLength"].as_u64().unwrap() as usize];
+    assert_eq!(&png[..8], b"\x89PNG\r\n\x1a\n");
+    assert_eq!(u32::from_be_bytes(png[16..20].try_into().unwrap()), 256);
+
+    let high = mesh_of(&build(WRINKLED));
+    let low = mesh_of(&build(&format!("{WRINKLED}\nfinish decimate=3000")));
+    let baked = gcad::mesh::bake::bake_normals(&low, &high, 128);
+    assert!(baked.covered > 128 * 128 / 5, "{}", baked.covered);
+    let mut tilted = 0;
+    let mut total = 0;
+    for y in 0..128 {
+        for x in 0..128 {
+            if baked.pixels[y * 128 + x] == gcad::mesh::bake::FLAT {
+                continue;
+            }
+            total += 1;
+            if baked.tilt_at(x, y) > 10f64.to_radians() {
+                tilted += 1;
+            }
+        }
+    }
+    assert!(
+        tilted > 20,
+        "pixels tilted past 10 degrees: {tilted} of {total}"
+    );
+    assert!(
+        tilted * 5 < total,
+        "most of the sphere stays near flat: {tilted} of {total}"
+    );
+}
+
+#[test]
+fn a_file_without_bake_has_no_uvs_or_images() {
+    let json = glb_json(&glb_of_source(&format!("{WRINKLED}\nfinish decimate=3000")));
+    assert!(json.get("images").is_none());
+    assert!(json["meshes"][0]["primitives"][0]["attributes"]["TEXCOORD_0"].is_null());
+}
+
+#[test]
+fn lod_writes_three_meshes_with_the_asked_triangle_counts() {
+    let glb = glb_of_source(&format!("{WRINKLED}\nfinish decimate=6000\nlod 3000 1000"));
+    let json = glb_json(&glb);
+    let meshes = json["meshes"].as_array().unwrap();
+    assert_eq!(meshes.len(), 3);
+    assert_eq!(meshes[1]["name"], "main_LOD1");
+    assert_eq!(meshes[2]["name"], "main_LOD2");
+    assert_eq!(mesh_triangles(&json, 0), 6000);
+    for (mesh, wanted) in [(1, 3000), (2, 1000)] {
+        let got = mesh_triangles(&json, mesh);
+        assert!(
+            got.abs_diff(wanted) <= 2,
+            "LOD{mesh} has {got}, wanted {wanted}"
+        );
+    }
+    let lod0 = json["nodes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|n| n["name"] == "main")
+        .unwrap();
+    assert_eq!(
+        lod0["extensions"]["MSFT_lod"]["ids"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    assert_eq!(json["extensionsUsed"][0], "MSFT_lod");
+}
+
+#[test]
+fn lod_shares_count_from_the_full_detail_mesh() {
+    let full = mesh_of(&build(WRINKLED)).triangles.len();
+    let json = glb_json(&glb_of_source(&format!(
+        "{WRINKLED}\nfinish decimate=4000\nlod 10%"
+    )));
+    let got = mesh_triangles(&json, 1);
+    let wanted = full / 10;
+    assert!(got.abs_diff(wanted) <= 2, "{got} vs {wanted}");
+}
+
+#[test]
+fn lod_and_bake_refuse_nonsense() {
+    assert!(failure(&format!("{BALL}\nlod")).contains("lower levels"));
+    assert!(failure(&format!("{BALL}\nlod 150%")).contains("0% and 100%"));
+    assert!(failure(&format!("{BALL}\nbake colours")).contains("normals"));
+    assert!(failure(&format!("{BALL}\nbake normals size=5")).contains("16 to 8192"));
+}
+
+#[test]
+fn finish_keep_creases_holds_the_edges_of_a_cube_sharper() {
+    let source = "box: block 0,0,0 size=10,10,10 round=0.4\nremesh 0.25";
+    let full = mesh_of(&build(source));
+    let target = full.triangles.len() / 20;
+    let plain = mesh_of(&build(&format!("{source}\nfinish decimate={target}")));
+    let creased = mesh_of(&build(&format!(
+        "{source}\nfinish decimate={target} keep=creases"
+    )));
+    let (plain_worst, plain_mean) = plain.error_from(&full);
+    let (kept_worst, kept_mean) = creased.error_from(&full);
+    assert!(
+        kept_mean <= plain_mean * 1.05,
+        "mean {kept_mean} vs {plain_mean}"
+    );
+    assert!(
+        kept_worst <= plain_worst * 1.05,
+        "worst {kept_worst} vs {plain_worst}"
+    );
+    assert!(failure(&format!("{BALL}\nfinish decimate=500 keep=bevels")).contains("uv"));
+}

@@ -42,14 +42,36 @@ pub const MESH_OPERATIONS: &[&str] = &[
     "project",
     "layer",
     "finish",
+    "bake",
+    "lod",
 ];
 
 pub type Shaded = (String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>);
 
 type Named = (String, Vec<Region>, f64, Option<usize>);
 
+#[derive(Clone, Debug, Default)]
+pub struct Detail {
+    pub full: Option<Arc<Mesh>>,
+    pub bake: Option<usize>,
+    pub lods: Vec<LodSize>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum LodSize {
+    Triangles(usize),
+    Share(f64),
+}
+
+impl Detail {
+    pub fn is_empty(&self) -> bool {
+        self.bake.is_none() && self.lods.is_empty()
+    }
+}
+
 #[derive(Clone, Default)]
 pub struct MeshBody {
+    pub detail: Detail,
     pub blockout: Vec<Primitive>,
     pub cell: Option<f64>,
     pub mesh: Option<Arc<Mesh>>,
@@ -79,6 +101,7 @@ pub struct Scene {
     pub mesh_body: MeshBody,
     pub mesh_bodies: Vec<(String, Arc<Mesh>)>,
     pub mesh_rigs: Vec<(String, crate::mesh::rig::Rig)>,
+    pub details: Vec<(String, Detail)>,
     pub part_colours: HashMap<(String, String), [f64; 3]>,
     pub part_gloss: HashMap<(String, String), f64>,
     pub part_soft: HashMap<(String, String), f64>,
@@ -329,6 +352,7 @@ impl Scene {
         {
             let mut mesh = (*open).clone();
             let report = mesh.finish(&open, triangles, max_error);
+            self.mesh_body.detail.full.get_or_insert(open.clone());
             reports.push(format!("body `{}`: {report}", self.body_name()));
             self.mesh_body.mesh = Some(Arc::new(mesh));
         } else if self.mesh_body.rig.skin.is_some() {
@@ -337,6 +361,7 @@ impl Scene {
                 self.body_name()
             ));
         }
+        let details = &mut self.details;
         let done: Vec<String> = self.mesh_bodies
             .iter_mut()
             .map(|(name, mesh)| {
@@ -348,10 +373,21 @@ impl Scene {
                 }
                 let reference = (**mesh).clone();
                 let report = Arc::make_mut(mesh).finish(&reference, triangles, max_error);
+                if let Some((_, d)) = details.iter_mut().find(|(n, _)| n == name) {
+                    d.full.get_or_insert_with(|| Arc::new(reference));
+                }
                 format!("body `{name}`: {report}")
             })
             .collect();
         done.into_iter().chain(reports).collect()
+    }
+
+    pub fn detail_of(&self, body: &str) -> Option<Detail> {
+        if let Some((_, d)) = self.details.iter().find(|(n, _)| n == body) {
+            return Some(d.clone());
+        }
+        (body == self.body_name() && !self.mesh_body.detail.is_empty())
+            .then(|| self.mesh_body.detail.clone())
     }
 
     pub fn finish_mesh_body(&mut self) -> Result<()> {
@@ -360,6 +396,10 @@ impl Scene {
             if !self.mesh_body.rig.is_empty() {
                 self.mesh_rigs
                     .push((self.body_name(), self.mesh_body.rig.clone()));
+            }
+            if !self.mesh_body.detail.is_empty() {
+                self.details
+                    .push((self.body_name(), self.mesh_body.detail.clone()));
             }
         }
         self.mesh_body = MeshBody::default();

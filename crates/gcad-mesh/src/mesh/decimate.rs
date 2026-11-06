@@ -70,6 +70,25 @@ fn optimum(q: &Quadric, a: P3, b: P3) -> P3 {
         .expect("three candidates")
 }
 
+#[derive(Clone, Debug)]
+pub struct Keep {
+    pub parts: bool,
+    pub crease_cos: Option<f64>,
+    pub colours: Option<Vec<u32>>,
+    pub charts: Option<Vec<u32>>,
+}
+
+impl Default for Keep {
+    fn default() -> Keep {
+        Keep {
+            parts: true,
+            crease_cos: None,
+            colours: None,
+            charts: None,
+        }
+    }
+}
+
 impl Mesh {
     pub fn error_from(&self, reference: &Mesh) -> (f64, f64) {
         let there = super::grid::Surface::new(reference);
@@ -103,6 +122,17 @@ impl Mesh {
         max_error: Option<f64>,
         importance: &[f64],
     ) -> String {
+        self.finish_kept(reference, target, max_error, importance, &Keep::default())
+    }
+
+    pub fn finish_kept(
+        &mut self,
+        reference: &Mesh,
+        target: Option<usize>,
+        max_error: Option<f64>,
+        importance: &[f64],
+        keep: &Keep,
+    ) -> String {
         let before = self.triangles.len();
         let all =
             Selection::new(self, vec![super::Region::All], 0.0, None).expect("a mesh has vertices");
@@ -112,7 +142,7 @@ impl Mesh {
         };
         match (target, max_error) {
             (Some(target), None) => {
-                self.decimate_weighted(&unmasked, target, importance);
+                self.decimate_kept(&unmasked, target, importance, keep);
             }
             (target, Some(limit)) => {
                 let floor = target.unwrap_or(4).max(4);
@@ -125,7 +155,7 @@ impl Mesh {
                         weights: vec![1.0; trial.positions.len()],
                         ..unmasked.clone()
                     };
-                    trial.decimate_weighted(&every, mid, importance);
+                    trial.decimate_kept(&every, mid, importance, keep);
                     if trial.error_from(reference).0 <= limit {
                         hi = trial.triangles.len().min(mid);
                         best = trial;
@@ -166,6 +196,53 @@ impl Mesh {
         target: usize,
         importance: &[f64],
     ) -> usize {
+        self.decimate_kept(selection, target, importance, &Keep::default())
+    }
+
+    fn border_edges(&self, keep: &Keep) -> Vec<[u32; 3]> {
+        let mut out = Vec::new();
+        let edges = if keep.crease_cos.is_some() || keep.charts.is_some() {
+            super::uv::edge_triangles(self)
+        } else {
+            HashMap::new()
+        };
+        let normal_of = |f: u32| {
+            let [a, b, c] = self.corners(self.triangles[f as usize]);
+            normalized(cross(sub(b, a), sub(c, a)))
+        };
+        for t in &self.triangles {
+            for k in 0..3 {
+                let (a, b, c) = (t[k], t[(k + 1) % 3], t[(k + 2) % 3]);
+                let (la, lb) = (self.labels[a as usize], self.labels[b as usize]);
+                let mut border = keep.parts && la != lb;
+                if let Some(ids) = &keep.colours {
+                    border |= ids[la as usize] != ids[lb as usize];
+                }
+                if !border && let Some(shared) = edges.get(&(a.min(b), a.max(b))) {
+                    if let [f, g] = shared[..] {
+                        if let Some(limit) = keep.crease_cos {
+                            border |= dot(normal_of(f), normal_of(g)) < limit;
+                        }
+                        if let Some(charts) = &keep.charts {
+                            border |= charts[f as usize] != charts[g as usize];
+                        }
+                    }
+                }
+                if border {
+                    out.push([a, b, c]);
+                }
+            }
+        }
+        out
+    }
+
+    pub fn decimate_kept(
+        &mut self,
+        selection: &Selection,
+        target: usize,
+        importance: &[f64],
+        keep: &Keep,
+    ) -> usize {
         let importance_of = |i: u32| importance.get(i as usize).copied().unwrap_or(1.0);
         let start = self.triangles.len();
         if target >= start {
@@ -188,21 +265,15 @@ impl Mesh {
                 quadric[i as usize] = plus(&quadric[i as usize], &scaled);
             }
         }
-        for &t in &self.triangles {
-            for k in 0..3 {
-                let (a, b, c) = (t[k], t[(k + 1) % 3], t[(k + 2) % 3]);
-                if self.labels[a as usize] == self.labels[b as usize] {
-                    continue;
-                }
-                let [pa, pb, pc] = [a, b, c].map(|i| self.positions[i as usize]);
-                let face = cross(sub(pb, pa), sub(pc, pa));
-                let edge = sub(pb, pa);
-                let side = normalized(cross(edge, face));
-                let weight = dot(edge, edge) * 4.0;
-                let q = plane_quadric(side, -dot(side, pa), weight);
-                for i in [a, b] {
-                    quadric[i as usize] = plus(&quadric[i as usize], &q);
-                }
+        for [a, b, c] in self.border_edges(keep) {
+            let [pa, pb, pc] = [a, b, c].map(|i| self.positions[i as usize]);
+            let face = cross(sub(pb, pa), sub(pc, pa));
+            let edge = sub(pb, pa);
+            let side = normalized(cross(edge, face));
+            let weight = dot(edge, edge) * 4.0;
+            let q = plane_quadric(side, -dot(side, pa), weight);
+            for i in [a, b] {
+                quadric[i as usize] = plus(&quadric[i as usize], &q);
             }
         }
         let mut around: Vec<HashSet<u32>> = vec![HashSet::new(); n];
@@ -529,5 +600,97 @@ mod cluster_tests {
     fn cluster_leaves_a_small_mesh_alone() {
         let mesh = grid(4);
         assert_eq!(mesh.cluster(1000).0, mesh);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn fold(n: usize, angle: f64) -> Mesh {
+        let mut mesh = Mesh {
+            parts: vec!["a".into(), "b".into()],
+            ..Default::default()
+        };
+        for ix in 0..=2 * n {
+            let x = ix as f64 - n as f64;
+            for iy in 0..=n {
+                let z = if x < 0.0 { 0.0 } else { x * angle.tan() };
+                mesh.positions.push([x, iy as f64, z]);
+                mesh.labels.push(0);
+            }
+        }
+        let at = |ix: usize, iy: usize| (ix * (n + 1) + iy) as u32;
+        for ix in 0..2 * n {
+            for iy in 0..n {
+                mesh.triangles
+                    .push([at(ix, iy), at(ix + 1, iy), at(ix + 1, iy + 1)]);
+                mesh.triangles
+                    .push([at(ix, iy), at(ix + 1, iy + 1), at(ix, iy + 1)]);
+            }
+        }
+        mesh
+    }
+
+    fn weighted_edges(mesh: &Mesh, keep: &Keep) -> usize {
+        mesh.border_edges(keep).len()
+    }
+
+    #[test]
+    fn crease_edges_are_the_ones_over_the_angle() {
+        let n = 12;
+        let mesh = fold(n, 60f64.to_radians());
+        let over = Keep {
+            parts: false,
+            crease_cos: Some(40f64.to_radians().cos()),
+            ..Default::default()
+        };
+        assert_eq!(weighted_edges(&mesh, &over), 2 * n);
+        let under = Keep {
+            crease_cos: Some(70f64.to_radians().cos()),
+            ..over.clone()
+        };
+        assert_eq!(weighted_edges(&mesh, &under), 0);
+    }
+
+    #[test]
+    fn colour_borders_are_the_edges_between_different_colours() {
+        let n = 12;
+        let mut mesh = fold(n, 0.0);
+        for (i, label) in mesh.labels.iter_mut().enumerate() {
+            *label = u16::from(i >= (n + 1) * (n + 1));
+        }
+        let parts_only = Keep::default();
+        let seam = weighted_edges(&mesh, &parts_only);
+        assert_eq!(seam, 4 * n);
+        let same_colour = Keep {
+            parts: false,
+            colours: Some(vec![0, 0]),
+            ..Default::default()
+        };
+        assert_eq!(weighted_edges(&mesh, &same_colour), 0);
+        let two_colours = Keep {
+            parts: false,
+            colours: Some(vec![0, 1]),
+            ..Default::default()
+        };
+        assert_eq!(weighted_edges(&mesh, &two_colours), seam);
+    }
+
+    #[test]
+    fn chart_borders_are_the_edges_between_charts() {
+        let n = 12;
+        let mesh = fold(n, 0.0);
+        let charts: Vec<u32> = mesh
+            .triangles
+            .iter()
+            .map(|t| u32::from(mesh.positions[t[0] as usize][0] >= 0.0))
+            .collect();
+        let keep = Keep {
+            parts: false,
+            charts: Some(charts),
+            ..Default::default()
+        };
+        assert_eq!(weighted_edges(&mesh, &keep), 2 * n);
     }
 }

@@ -1,5 +1,5 @@
 use crate::args::{Args, direction, point3, positive};
-use crate::interp::Scene;
+use crate::interp::{LodSize, Scene};
 use crate::mesh::alpha::Alpha;
 use crate::mesh::brush::Falloff;
 use crate::mesh::stroke::{Aim, Brush, KINDS, Kind, Stroke};
@@ -656,7 +656,7 @@ impl Scene {
         let args = Args::new(
             line,
             &[],
-            &["decimate", "max_error", "focus", "weight"],
+            &["decimate", "max_error", "keep", "focus", "weight", "crease"],
             false,
         )?;
         let mesh = self.sculpted("finish")?;
@@ -691,6 +691,23 @@ impl Scene {
                 "say how far to go: `finish decimate=20000`, `finish decimate=10%` or `finish max_error=0.01`"
             );
         }
+        let keep_words: Vec<&str> = args
+            .values
+            .get("keep")
+            .copied()
+            .unwrap_or("parts")
+            .split(',')
+            .map(str::trim)
+            .collect();
+        for k in &keep_words {
+            if !matches!(*k, "parts" | "creases" | "colours" | "colors" | "uv") {
+                bail!("`keep` lists parts, creases, colours or uv, got `{k}`");
+            }
+        }
+        let crease = args.optional_number("crease", scope)?.unwrap_or(40.0);
+        if !(0.0..180.0).contains(&crease) || crease == 0.0 {
+            bail!("`crease` is an angle from 0 to 180 degrees, got {crease}");
+        }
         if self.mesh_body.rig.skin.is_some() {
             bail!(
                 "`finish` goes before `skin`: decimate first, then bind the skin to the final triangles"
@@ -709,6 +726,27 @@ impl Scene {
             bail!("`weight=` goes with `focus=parts`, the parts to keep finest");
         }
         let ids = self.part_ids("finish", &focus)?;
+        let body = self.body_name();
+        let colour_ids: Vec<u32> = {
+            let parts = self.sculpted("finish")?.parts.clone();
+            let mut seen: Vec<Option<[u64; 3]>> = Vec::new();
+            parts
+                .iter()
+                .map(|p| {
+                    let key = self
+                        .part_colours
+                        .get(&(body.clone(), p.clone()))
+                        .map(|c| c.map(f64::to_bits));
+                    match seen.iter().position(|k| *k == key) {
+                        Some(i) => i as u32,
+                        None => {
+                            seen.push(key);
+                            (seen.len() - 1) as u32
+                        }
+                    }
+                })
+                .collect()
+        };
         let mesh = self.sculpted("finish")?;
         let importance: Vec<f64> = if ids.is_empty() {
             Vec::new()
@@ -719,7 +757,22 @@ impl Scene {
                 .collect()
         };
         let reference = mesh.clone();
-        Ok(mesh.finish_weighted(&reference, target, max_error, &importance))
+        let mut keep = crate::mesh::decimate::Keep {
+            parts: keep_words.contains(&"parts"),
+            ..Default::default()
+        };
+        if keep_words.contains(&"creases") {
+            keep.crease_cos = Some(crease.to_radians().cos());
+        }
+        if keep_words.contains(&"uv") {
+            keep.charts = Some(crate::mesh::uv::charts(&reference).0);
+        }
+        if keep_words.contains(&"colours") || keep_words.contains(&"colors") {
+            keep.colours = Some(colour_ids);
+        }
+        self.mesh_body.detail.full = Some(Arc::new(reference.clone()));
+        let mesh = self.sculpted("finish")?;
+        Ok(mesh.finish_kept(&reference, target, max_error, &importance, &keep))
     }
 
     fn selection_for_brush(&mut self, op: &str) -> Result<Selection> {
@@ -728,5 +781,58 @@ impl Scene {
             Some(s) => s.again(&mesh),
             None => Selection::new(&mesh, vec![Region::All], 0.0, None),
         }
+    }
+
+    pub fn op_bake(&mut self, scope: &Scope, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["what"], &["size"], false)?;
+        if args.text("what")? != "normals" {
+            bail!("`bake` writes `normals`, got `{}`", args.text("what")?);
+        }
+        let size = args.optional_number("size", scope)?.unwrap_or(1024.0);
+        if !(16.0..=8192.0).contains(&size) || size.fract() != 0.0 {
+            bail!("`size` is a whole number of pixels from 16 to 8192, got {size}");
+        }
+        self.sculpted("bake")?;
+        self.mesh_body.detail.bake = Some(size as usize);
+        Ok(format!(
+            "normal map {size}x{size} will be baked from the full-detail sculpt into the GLB"
+        ))
+    }
+
+    pub fn op_lod(&mut self, scope: &Scope, line: &Line) -> Result<String> {
+        let args = Args::new(line, &[], &[], true)?;
+        if args.rest.is_empty() || args.rest.len() > 3 {
+            bail!(
+                "say the triangles of one to three lower levels, like `lod 8000 3000 1000` or `lod 40% 15%`"
+            );
+        }
+        let mut sizes = Vec::new();
+        for text in &args.rest {
+            let size = match text.strip_suffix('%') {
+                Some(share) => {
+                    let share = eval(share, scope)?;
+                    if !(share > 0.0 && share < 100.0) {
+                        bail!("a level keeps between 0% and 100% of the triangles, got {share}%");
+                    }
+                    LodSize::Share(share / 100.0)
+                }
+                None => {
+                    let n = eval(text, scope)?;
+                    if n < 4.0 || n.fract() != 0.0 {
+                        bail!(
+                            "a level is a whole number of triangles or a share like 10%, got `{text}`"
+                        );
+                    }
+                    LodSize::Triangles(n as usize)
+                }
+            };
+            sizes.push(size);
+        }
+        self.sculpted("lod")?;
+        self.mesh_body.detail.lods = sizes;
+        Ok(format!(
+            "{} lower levels of detail will be written with the GLB",
+            args.rest.len()
+        ))
     }
 }

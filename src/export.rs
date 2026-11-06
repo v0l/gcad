@@ -217,6 +217,7 @@ pub fn glb_of(model: &crate::model::Model) -> Result<Vec<u8>> {
             rig: None,
             colours: vec![*colour],
             gloss: vec![0.0],
+            detail: None,
         })
         .collect();
     bodies.extend(rest.iter().map(|(name, mesh)| {
@@ -231,6 +232,7 @@ pub fn glb_of(model: &crate::model::Model) -> Result<Vec<u8>> {
             rig: model.rig_of(name),
             colours,
             gloss: model.part_gloss_of(name, mesh),
+            detail: model.scene.detail_of(name),
         }
     }));
     crate::gltf::glb(&bodies)

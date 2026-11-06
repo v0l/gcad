@@ -1,4 +1,7 @@
-use crate::mesh::rig::{IDENTITY_QUAT, Rig};
+use crate::interp::Detail;
+use crate::mesh::bake::bake_normals;
+use crate::mesh::rig::{IDENTITY_QUAT, Rig, Weights};
+use crate::mesh::uv::Expanded;
 use crate::mesh::{Mesh, P3};
 use anyhow::Result;
 use serde_json::{Value, json};
@@ -9,6 +12,7 @@ pub struct Body<'a> {
     pub rig: Option<&'a Rig>,
     pub colours: Vec<[f64; 3]>,
     pub gloss: Vec<f64>,
+    pub detail: Option<Detail>,
 }
 
 const ARRAY_BUFFER: u32 = 34962;
@@ -104,7 +108,10 @@ fn flat(points: impl Iterator<Item = P3>) -> Vec<f32> {
 }
 
 pub(crate) fn float_weights(rig: &Rig, vertices: usize) -> (Vec<u16>, Vec<f32>) {
-    let skin = rig.skin.as_ref().expect("skinned");
+    weights_of(rig.skin.as_ref().expect("skinned"), vertices)
+}
+
+fn weights_of(skin: &Weights, vertices: usize) -> (Vec<u16>, Vec<f32>) {
     let mut joints = vec![0u16; vertices * 4];
     let mut weights = vec![0f32; vertices * 4];
     for (i, influences) in skin.iter().enumerate().take(vertices) {
@@ -131,6 +138,216 @@ pub(crate) fn float_weights(rig: &Rig, vertices: usize) -> (Vec<u16>, Vec<f32>) 
     (joints, weights)
 }
 
+struct Level {
+    mesh: Mesh,
+    skin: Option<Weights>,
+    map: Option<Vec<u8>>,
+    expanded: Option<Expanded>,
+}
+
+fn size_of(spec: crate::interp::LodSize, full: usize) -> usize {
+    match spec {
+        crate::interp::LodSize::Triangles(n) => n,
+        crate::interp::LodSize::Share(share) => (full as f64 * share).round() as usize,
+    }
+    .max(4)
+}
+
+pub fn lod_meshes(base: &Mesh, detail: &Detail) -> Vec<Mesh> {
+    let source = detail.full.as_deref().unwrap_or(base);
+    detail
+        .lods
+        .iter()
+        .map(|spec| {
+            let mut level = source.clone();
+            let target = size_of(*spec, source.triangles.len());
+            level.finish(source, Some(target), None);
+            level
+        })
+        .collect()
+}
+
+fn nearest_weights(skin: &Weights, from: &Mesh, to: &Mesh) -> Weights {
+    let grid = crate::mesh::grid::Grid::new(&from.positions, 1.0);
+    let cell = from
+        .bounds()
+        .map(|(lo, hi)| (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max) / 64.0)
+        .unwrap_or(1.0);
+    let grid = if cell > 0.0 {
+        crate::mesh::grid::Grid::new(&from.positions, cell)
+    } else {
+        grid
+    };
+    to.positions
+        .iter()
+        .map(|p| {
+            grid.nearest(&from.positions, *p)
+                .map(|(i, _)| skin[i as usize].clone())
+                .unwrap_or_default()
+        })
+        .collect()
+}
+
+fn levels_of(body: &Body<'_>, rig: Option<&Rig>) -> Vec<Level> {
+    let skin = rig.and_then(|r| r.skin.clone());
+    let mut first = Level {
+        mesh: body.mesh.clone(),
+        skin: skin.clone(),
+        map: None,
+        expanded: None,
+    };
+    let detail = body.detail.as_ref();
+    if let Some(size) = detail.and_then(|d| d.bake) {
+        let high = detail.and_then(|d| d.full.as_deref()).unwrap_or(body.mesh);
+        let baked = bake_normals(body.mesh, high, size);
+        first.map = Some(baked.png());
+        first.expanded = Some(baked.expanded);
+    }
+    let mut out = vec![first];
+    if let Some(detail) = detail {
+        for mesh in lod_meshes(body.mesh, detail) {
+            let weights = skin.as_ref().map(|s| nearest_weights(s, body.mesh, &mesh));
+            out.push(Level {
+                mesh,
+                skin: weights,
+                map: None,
+                expanded: None,
+            });
+        }
+    }
+    out
+}
+
+fn emit_level(
+    b: &mut Builder,
+    materials: &mut Vec<Value>,
+    images: &mut Vec<Value>,
+    textures: &mut Vec<Value>,
+    body: &Body<'_>,
+    level: &Level,
+    name: &str,
+) -> Value {
+    let mesh = &level.mesh;
+    let smooth;
+    let (positions, normals, labels, triangles, source): (
+        Vec<P3>,
+        Vec<P3>,
+        Vec<u16>,
+        &[[u32; 3]],
+        Vec<u32>,
+    ) = match &level.expanded {
+        Some(e) => (
+            e.positions.clone(),
+            e.normals.clone(),
+            e.source.iter().map(|&i| mesh.labels[i as usize]).collect(),
+            &e.triangles,
+            e.source.clone(),
+        ),
+        None => {
+            smooth = mesh.vertex_normals();
+            (
+                mesh.positions.clone(),
+                smooth,
+                mesh.labels.clone(),
+                &mesh.triangles,
+                (0..mesh.positions.len() as u32).collect(),
+            )
+        }
+    };
+    let position = b.floats(
+        &flat(positions.iter().map(|p| y_up(*p))),
+        3,
+        "VEC3",
+        Some(ARRAY_BUFFER),
+        true,
+    );
+    let normal = b.floats(
+        &flat(normals.iter().map(|p| y_up(*p))),
+        3,
+        "VEC3",
+        Some(ARRAY_BUFFER),
+        false,
+    );
+    let mut attributes = json!({"POSITION": position, "NORMAL": normal});
+    let mut normal_texture = None;
+    if let (Some(e), Some(png)) = (&level.expanded, &level.map) {
+        let uvs: Vec<f32> = e
+            .uvs
+            .iter()
+            .flat_map(|q| [q[0] as f32, q[1] as f32])
+            .collect();
+        attributes["TEXCOORD_0"] = json!(b.floats(&uvs, 2, "VEC2", Some(ARRAY_BUFFER), false));
+        let tangents: Vec<f32> = e
+            .tangents
+            .iter()
+            .flat_map(|t| {
+                let v = y_up([t[0], t[1], t[2]]);
+                [v[0] as f32, v[1] as f32, v[2] as f32, t[3] as f32]
+            })
+            .collect();
+        attributes["TANGENT"] = json!(b.floats(&tangents, 4, "VEC4", Some(ARRAY_BUFFER), false));
+        let view = b.view(png, None);
+        images.push(json!({"name": format!("{}.normal", body.name), "bufferView": view, "mimeType": "image/png"}));
+        textures.push(json!({"sampler": 0, "source": images.len() - 1}));
+        normal_texture = Some(textures.len() - 1);
+    }
+    if let Some(skin) = &level.skin {
+        let per_vertex: Weights = source.iter().map(|&i| skin[i as usize].clone()).collect();
+        let (joints, weights) = weights_of(&per_vertex, per_vertex.len());
+        let jbytes: Vec<u8> = joints.iter().flat_map(|v| v.to_le_bytes()).collect();
+        attributes["JOINTS_0"] = json!(b.accessor(
+            &jbytes,
+            Some(ARRAY_BUFFER),
+            UNSIGNED_SHORT,
+            joints.len() / 4,
+            "VEC4",
+            None
+        ));
+        attributes["WEIGHTS_0"] = json!(b.floats(&weights, 4, "VEC4", Some(ARRAY_BUFFER), false));
+    }
+    let mut primitives = Vec::new();
+    for (part, part_name) in mesh.parts.iter().enumerate() {
+        let indices: Vec<u32> = triangles
+            .iter()
+            .filter(|t| labels[t[0] as usize] as usize == part)
+            .flat_map(|t| *t)
+            .collect();
+        if indices.is_empty() {
+            continue;
+        }
+        let bytes: Vec<u8> = indices.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let accessor = b.accessor(
+            &bytes,
+            Some(ELEMENT_ARRAY_BUFFER),
+            UNSIGNED_INT,
+            indices.len(),
+            "SCALAR",
+            None,
+        );
+        let colour = body.colours.get(part).copied().unwrap_or([0.7, 0.7, 0.7]);
+        let gloss = body.gloss.get(part).copied().unwrap_or(0.0);
+        let mut material = json!({
+            "name": format!("{name}.{part_name}"),
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [linear(colour[0]), linear(colour[1]), linear(colour[2]), 1.0],
+                "metallicFactor": 0.0,
+                "roughnessFactor": 1.0 - gloss * 0.8,
+            },
+        });
+        if let Some(t) = normal_texture {
+            material["normalTexture"] = json!({"index": t});
+        }
+        materials.push(material);
+        primitives.push(json!({
+            "attributes": attributes,
+            "indices": accessor,
+            "material": materials.len() - 1,
+            "mode": 4,
+        }));
+    }
+    json!({"name": name, "primitives": primitives})
+}
+
 pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
     let mut b = Builder::default();
     let mut nodes: Vec<Value> = Vec::new();
@@ -139,68 +356,36 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
     let mut skins: Vec<Value> = Vec::new();
     let mut materials: Vec<Value> = Vec::new();
     let mut animations: Vec<Value> = Vec::new();
+    let mut images: Vec<Value> = Vec::new();
+    let mut textures: Vec<Value> = Vec::new();
     for body in bodies {
-        let mesh = body.mesh;
-        let positions = flat(mesh.positions.iter().map(|p| y_up(*p)));
-        let normals = flat(mesh.vertex_normals().into_iter().map(y_up));
-        let position = b.floats(&positions, 3, "VEC3", Some(ARRAY_BUFFER), true);
-        let normal = b.floats(&normals, 3, "VEC3", Some(ARRAY_BUFFER), false);
-        let mut attributes = json!({"POSITION": position, "NORMAL": normal});
-        let rig = body.rig.filter(|r| r.skin_fits(mesh));
-        if let Some(rig) = rig {
-            let (joints, weights) = float_weights(rig, mesh.positions.len());
-            let jbytes: Vec<u8> = joints.iter().flat_map(|v| v.to_le_bytes()).collect();
-            attributes["JOINTS_0"] = json!(b.accessor(
-                &jbytes,
-                Some(ARRAY_BUFFER),
-                UNSIGNED_SHORT,
-                joints.len() / 4,
-                "VEC4",
-                None
-            ));
-            attributes["WEIGHTS_0"] =
-                json!(b.floats(&weights, 4, "VEC4", Some(ARRAY_BUFFER), false));
-        }
-        let mut primitives = Vec::new();
-        for (part, name) in mesh.parts.iter().enumerate() {
-            let indices: Vec<u32> = mesh
-                .triangles
-                .iter()
-                .filter(|t| mesh.labels[t[0] as usize] as usize == part)
-                .flat_map(|t| *t)
-                .collect();
-            if indices.is_empty() {
-                continue;
-            }
-            let bytes: Vec<u8> = indices.iter().flat_map(|v| v.to_le_bytes()).collect();
-            let accessor = b.accessor(
-                &bytes,
-                Some(ELEMENT_ARRAY_BUFFER),
-                UNSIGNED_INT,
-                indices.len(),
-                "SCALAR",
-                None,
+        let rig = body.rig.filter(|r| r.skin_fits(body.mesh));
+        let levels = levels_of(body, rig);
+        let mut mesh_indices = Vec::new();
+        for (k, level) in levels.iter().enumerate() {
+            let name = if k == 0 {
+                body.name.clone()
+            } else {
+                format!("{}_LOD{k}", body.name)
+            };
+            let json = emit_level(
+                &mut b,
+                &mut materials,
+                &mut images,
+                &mut textures,
+                body,
+                level,
+                &name,
             );
-            let colour = body.colours.get(part).copied().unwrap_or([0.7, 0.7, 0.7]);
-            let gloss = body.gloss.get(part).copied().unwrap_or(0.0);
-            materials.push(json!({
-                "name": format!("{}.{name}", body.name),
-                "pbrMetallicRoughness": {
-                    "baseColorFactor": [linear(colour[0]), linear(colour[1]), linear(colour[2]), 1.0],
-                    "metallicFactor": 0.0,
-                    "roughnessFactor": 1.0 - gloss * 0.8,
-                },
-            }));
-            primitives.push(json!({
-                "attributes": attributes,
-                "indices": accessor,
-                "material": materials.len() - 1,
-                "mode": 4,
-            }));
+            meshes.push(json);
+            mesh_indices.push(meshes.len() - 1);
         }
-        meshes.push(json!({"name": body.name, "primitives": primitives}));
-        let mesh_index = meshes.len() - 1;
+        let mesh_index = mesh_indices[0];
         let mut node = json!({"name": body.name, "mesh": mesh_index});
+        let mut lod_nodes = Vec::new();
+        for (k, mesh_index) in mesh_indices.iter().enumerate().skip(1) {
+            lod_nodes.push((format!("{}_LOD{k}", body.name), *mesh_index));
+        }
         if let Some(rig) = rig {
             let base = nodes.len();
             for (i, bone) in rig.bones.iter().enumerate() {
@@ -305,8 +490,21 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
                 }
             }
         }
+        if !lod_nodes.is_empty() {
+            let first = nodes.len() + 1;
+            let ids: Vec<usize> = (0..lod_nodes.len()).map(|k| first + k).collect();
+            node["extensions"] = json!({"MSFT_lod": {"ids": ids}});
+            node["extras"] = json!({"lod": 0});
+        }
         nodes.push(node);
         scene.push(nodes.len() - 1);
+        for (k, (name, mesh_index)) in lod_nodes.iter().enumerate() {
+            let mut lod = json!({"name": name, "mesh": mesh_index, "extras": {"lod": k + 1}});
+            if let Some(skin) = nodes[nodes.len() - 1 - k]["skin"].as_u64() {
+                lod["skin"] = json!(skin);
+            }
+            nodes.push(lod);
+        }
     }
     let mut root = json!({
         "asset": {"version": "2.0", "generator": "gcad"},
@@ -319,6 +517,15 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
         "bufferViews": b.views,
         "accessors": b.accessors,
     });
+    if !images.is_empty() {
+        root["images"] = json!(images);
+        root["textures"] = json!(textures);
+        root["samplers"] =
+            json!([{"magFilter": 9729, "minFilter": 9987, "wrapS": 33071, "wrapT": 33071}]);
+    }
+    if nodes.iter().any(|n| n.get("extensions").is_some()) {
+        root["extensionsUsed"] = json!(["MSFT_lod"]);
+    }
     if !skins.is_empty() {
         root["skins"] = json!(skins);
     }

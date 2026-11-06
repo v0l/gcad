@@ -1,4 +1,5 @@
 pub mod alpha;
+pub mod bake;
 pub mod brush;
 pub mod channels;
 pub mod decimate;
@@ -8,6 +9,7 @@ pub mod rig;
 pub mod sculpt;
 pub mod sdf;
 pub mod stroke;
+pub mod uv;
 
 use anyhow::{Context, Result, anyhow, bail};
 use std::collections::HashMap;

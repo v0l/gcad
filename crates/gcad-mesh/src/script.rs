@@ -108,6 +108,7 @@ pub struct Body {
     rig: Option<Rig>,
     tints: Vec<[f64; 3]>,
     gloss: Vec<f64>,
+    detail: Option<crate::interp::Detail>,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -215,6 +216,7 @@ impl Model {
                 rig: b.rig.as_ref(),
                 colours: b.tints.clone(),
                 gloss: b.gloss.clone(),
+                detail: b.detail.clone(),
             })
             .collect();
         gltf::glb(&bodies)
@@ -271,6 +273,8 @@ const SUBSET: &[&str] = &[
     "project",
     "layer",
     "finish",
+    "bake",
+    "lod",
 ];
 
 impl Run {
@@ -355,6 +359,8 @@ impl Run {
             "project" => scene.op_project(scope, line),
             "layer" => scene.op_layer(scope, line),
             "finish" => scene.op_finish(scope, line),
+            "bake" => scene.op_bake(scope, line),
+            "lod" => scene.op_lod(scope, line),
             "move" => scene.op_move(scope, line),
             "rotate" => scene.op_rotate(scope, line, |_| None),
             "scale" => scene.op_scale(scope, line),
@@ -454,6 +460,7 @@ fn collect(run: &Run, y_up: bool) -> Model {
                 part_tints,
                 gloss,
                 vertex_colours,
+                scene.detail_of(&name),
                 y_up,
             )
         })
@@ -468,6 +475,7 @@ fn body_of(
     tints: Vec<[f64; 3]>,
     gloss: Vec<f64>,
     colours: Vec<[f32; 3]>,
+    detail: Option<crate::interp::Detail>,
     y_up: bool,
 ) -> Body {
     let positions = mesh.positions.iter().map(|p| f3(to_up(*p, y_up))).collect();
@@ -584,5 +592,6 @@ fn body_of(
         rig: active,
         tints,
         gloss,
+        detail,
     }
 }

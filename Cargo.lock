@@ -1698,6 +1698,7 @@ name = "gcad-mesh"
 version = "0.6.1"
 dependencies = [
  "anyhow",
+ "miniz_oxide 0.8.9",
  "rayon",
  "serde_json",
 ]

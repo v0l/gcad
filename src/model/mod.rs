@@ -597,6 +597,8 @@ pub const OPERATIONS: &[&str] = &[
     "project",
     "layer",
     "finish",
+    "bake",
+    "lod",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -842,6 +844,8 @@ impl Model {
             "project" => self.scene.op_project(&self.scope, line),
             "layer" => self.scene.op_layer(&self.scope, line),
             "finish" => self.scene.op_finish(&self.scope, line),
+            "bake" => self.scene.op_bake(&self.scope, line),
+            "lod" => self.scene.op_lod(&self.scope, line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",
                 OPERATIONS.join(", ")

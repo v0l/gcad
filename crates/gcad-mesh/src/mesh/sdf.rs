@@ -227,13 +227,16 @@ fn gradient(primitives: &[Primitive], p: P3, h: f64) -> P3 {
 pub const MAX_CELLS: usize = 400;
 
 #[cfg(feature = "parallel")]
-fn collect_indexed<T: Send>(count: usize, f: impl Fn(usize) -> T + Sync + Send) -> Vec<T> {
+pub(crate) fn collect_indexed<T: Send>(
+    count: usize,
+    f: impl Fn(usize) -> T + Sync + Send,
+) -> Vec<T> {
     use rayon::prelude::*;
     (0..count).into_par_iter().map(f).collect()
 }
 
 #[cfg(not(feature = "parallel"))]
-fn collect_indexed<T>(count: usize, f: impl Fn(usize) -> T) -> Vec<T> {
+pub(crate) fn collect_indexed<T>(count: usize, f: impl Fn(usize) -> T) -> Vec<T> {
     (0..count).map(f).collect()
 }
 
