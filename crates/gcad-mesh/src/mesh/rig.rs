@@ -156,6 +156,112 @@ fn segment_distance(p: P3, a: P3, b: P3) -> f64 {
     length(sub(p, add(a, scale(ab, t))))
 }
 
+fn closest_on_segment(p: P3, a: P3, b: P3) -> P3 {
+    let ab = sub(b, a);
+    let len2 = super::dot(ab, ab);
+    let t = if len2 > 1.0e-18 {
+        (super::dot(sub(p, a), ab) / len2).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    add(a, scale(ab, t))
+}
+
+const SOLID_CELLS: f64 = 320.0;
+
+struct Solid {
+    lo: P3,
+    cell: f64,
+    dims: [usize; 3],
+    inside: Vec<bool>,
+}
+
+impl Solid {
+    fn of(mesh: &Mesh) -> Solid {
+        let (lo, hi) = mesh.bounds().unwrap_or_default();
+        let size = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max).max(1.0e-9);
+        let cell = size / SOLID_CELLS;
+        let lo = sub(lo, [cell; 3]);
+        let dims: [usize; 3] =
+            std::array::from_fn(|k| ((hi[k] - lo[k]) / cell).ceil() as usize + 2);
+        let mut hits: Vec<Vec<f64>> = vec![Vec::new(); dims[0] * dims[1]];
+        for t in &mesh.triangles {
+            let [a, b, c] = t.map(|i| mesh.positions[i as usize]);
+            let x0 = ((a[0].min(b[0]).min(c[0]) - lo[0]) / cell - 0.5).floor().max(0.0) as usize;
+            let x1 = ((a[0].max(b[0]).max(c[0]) - lo[0]) / cell - 0.5).ceil() as usize;
+            let y0 = ((a[1].min(b[1]).min(c[1]) - lo[1]) / cell - 0.5).floor().max(0.0) as usize;
+            let y1 = ((a[1].max(b[1]).max(c[1]) - lo[1]) / cell - 0.5).ceil() as usize;
+            for i in x0..=x1.min(dims[0] - 1) {
+                for j in y0..=y1.min(dims[1] - 1) {
+                    let x = lo[0] + (i as f64 + 0.5) * cell;
+                    let y = lo[1] + (j as f64 + 0.5) * cell;
+                    if let Some(z) = column_hit(a, b, c, x, y) {
+                        hits[i * dims[1] + j].push(z);
+                    }
+                }
+            }
+        }
+        let mut inside = vec![false; dims[0] * dims[1] * dims[2]];
+        for (col, zs) in hits.iter_mut().enumerate() {
+            zs.sort_by(f64::total_cmp);
+            for pair in zs.chunks_exact(2) {
+                let k0 = ((pair[0] - lo[2]) / cell - 0.5).ceil().max(0.0) as usize;
+                let k1 = ((pair[1] - lo[2]) / cell - 0.5).floor();
+                if k1 < 0.0 {
+                    continue;
+                }
+                for k in k0..=(k1 as usize).min(dims[2] - 1) {
+                    inside[col * dims[2] + k] = true;
+                }
+            }
+        }
+        Solid {
+            lo,
+            cell,
+            dims,
+            inside,
+        }
+    }
+
+    fn at(&self, p: P3) -> bool {
+        let idx: [isize; 3] = std::array::from_fn(|k| ((p[k] - self.lo[k]) / self.cell).floor() as isize);
+        if (0..3).any(|k| idx[k] < 0 || idx[k] as usize >= self.dims[k]) {
+            return false;
+        }
+        let [i, j, k] = idx.map(|v| v as usize);
+        self.inside[(i * self.dims[1] + j) * self.dims[2] + k]
+    }
+
+    fn reaches(&self, from: P3, to: P3) -> bool {
+        let steps = (length(sub(to, from)) / (self.cell * 0.5)).ceil().max(1.0) as usize;
+        let mut entered = false;
+        let mut left = false;
+        for s in 0..=steps {
+            let p = add(from, scale(sub(to, from), s as f64 / steps as f64));
+            if self.at(p) {
+                if left {
+                    return false;
+                }
+                entered = true;
+            } else if entered {
+                left = true;
+            }
+        }
+        true
+    }
+}
+
+fn column_hit(a: P3, b: P3, c: P3, x: f64, y: f64) -> Option<f64> {
+    let area = (b[0] - a[0]) * (c[1] - a[1]) - (c[0] - a[0]) * (b[1] - a[1]);
+    if area.abs() < 1.0e-12 {
+        return None;
+    }
+    let u = ((b[0] - x) * (c[1] - y) - (c[0] - x) * (b[1] - y)) / area;
+    let v = ((c[0] - x) * (a[1] - y) - (a[0] - x) * (c[1] - y)) / area;
+    let w = 1.0 - u - v;
+    (u >= 0.0 && v >= 0.0 && w >= 0.0).then(|| u * a[2] + v * b[2] + w * c[2])
+}
+
 fn trim(mut weights: Vec<(usize, f64)>) -> Vec<(usize, f64)> {
     weights.retain(|(_, w)| *w > 0.0);
     weights.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
@@ -336,13 +442,25 @@ impl Rig {
         let (lo, hi) = mesh.bounds().unwrap_or_default();
         let eps = (length(sub(hi, lo)) * 1.0e-3).max(1.0e-9);
         let bones = self.bones.clone();
+        let solid = Solid::of(mesh);
+        let normals = mesh.vertex_normals();
         let weights = mesh
             .positions
             .iter()
-            .map(|&p| {
-                let d: Vec<f64> = bones
+            .zip(&normals)
+            .map(|(&p, &n)| {
+                let start = sub(p, scale(n, solid.cell * 0.75));
+                let reach: Vec<(f64, bool)> = bones
                     .iter()
-                    .map(|b| segment_distance(p, b.head, b.tail) + eps)
+                    .map(|b| {
+                        let q = closest_on_segment(p, b.head, b.tail);
+                        (length(sub(p, q)) + eps, solid.reaches(start, q))
+                    })
+                    .collect();
+                let any_inside = reach.iter().any(|(_, ok)| *ok);
+                let d: Vec<f64> = reach
+                    .iter()
+                    .map(|&(d, ok)| if ok || !any_inside { d } else { f64::INFINITY })
                     .collect();
                 let nearest = d.iter().copied().fold(f64::INFINITY, f64::min);
                 trim(

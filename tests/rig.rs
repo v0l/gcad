@@ -81,6 +81,27 @@ fn skin_auto_weights_sum_to_one_with_four_influences_at_most() {
 }
 
 #[test]
+fn skin_auto_does_not_bind_the_body_to_an_arm_beside_it() {
+    let model = build(
+        "torso: blob 0,0,20 r=6,4,12\narm_l: limb 8.5,0,30 8.5,0,10 r=2 blend=0.5\nremesh 0.5\nbone spine head=0,0,8 tail=0,0,32\nbone arm_l head=8.5,0,30 tail=8.5,0,10\nskin auto",
+    );
+    let rig = rig_of(&model);
+    let mesh = rest_of(&model);
+    let skin = rig.skin.as_ref().unwrap();
+    let torso = mesh.parts.iter().position(|p| p == "torso").unwrap() as u16;
+    let worst = mesh
+        .labels
+        .iter()
+        .zip(skin)
+        .filter(|(l, _)| **l == torso)
+        .zip(&mesh.positions)
+        .filter(|(_, p)| p[0] < 4.0)
+        .map(|((_, w), _)| w.iter().filter(|(b, _)| *b == 1).map(|(_, w)| *w).sum::<f64>())
+        .fold(0.0, f64::max);
+    assert!(worst < 0.05, "torso vertices carry {worst:.2} of the arm");
+}
+
+#[test]
 fn skin_auto_binds_each_end_to_its_own_bone() {
     let model = build(&format!("{ARM}skin auto"));
     let rest = rest_of(&model);

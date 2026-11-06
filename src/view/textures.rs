@@ -41,6 +41,13 @@ impl Library {
         }
     }
 
+    pub fn continuing(images: Vec<Image>) -> Self {
+        Self {
+            images,
+            entries: Vec::new(),
+        }
+    }
+
     fn add(&mut self, image: Image) -> usize {
         let index = self.images.len();
         self.images.push(image);

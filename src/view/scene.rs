@@ -46,6 +46,15 @@ impl Finish {
         Finish(values.map(f32::to_bits))
     }
 
+    pub fn gloss(gloss: f64) -> Finish {
+        let finish = crate::model::materials::Finish {
+            roughness: Some(1.0 - gloss * 0.8),
+            metallic: Some(0.0),
+            ..Default::default()
+        };
+        Finish::new(&finish, [0.0; 3])
+    }
+
     fn pbr(&self) -> Pbr {
         let [
             roughness,
@@ -464,10 +473,25 @@ fn describe_source(source: &crate::model::Source) -> String {
     text
 }
 
+pub struct Posing {
+    pub meshes: std::collections::HashMap<String, Arc<crate::mesh::Mesh>>,
+    pub colours: std::collections::HashMap<String, Arc<Vec<[f64; 3]>>>,
+}
+
+struct MeshLook<'a> {
+    vertex_colours: &'a [[f64; 3]],
+    gloss: &'a [f64],
+    finish: Option<&'a crate::model::materials::Finish>,
+}
+
+fn quantised(c: [f64; 3]) -> [u8; 3] {
+    c.map(|v| (v.clamp(0.0, 1.0) * 255.0).round() as u8)
+}
+
 fn mesh_surfaces(
     mesh: &crate::mesh::Mesh,
     body: usize,
-    tints: &[V3],
+    look: &MeshLook<'_>,
     selected: Option<(&[f64], V3)>,
     out: &mut Vec<Surface>,
     info: &mut Vec<FaceInfo>,
@@ -484,6 +508,16 @@ fn mesh_surfaces(
         selected.is_some_and(|(weights, _)| {
             t.iter().map(|&i| weights[i as usize]).sum::<f64>() / 3.0 >= 0.5
         })
+    };
+    let triangle_colour = |t: &[u32; 3]| -> [u8; 3] {
+        let mut sum = [0.0; 3];
+        for &i in t {
+            let c = look.vertex_colours.get(i as usize).copied().unwrap_or([0.7; 3]);
+            for k in 0..3 {
+                sum[k] += c[k] / 3.0;
+            }
+        }
+        quantised(sum)
     };
     for (part, triangles) in by_part.iter().enumerate() {
         if triangles.is_empty() {
@@ -504,29 +538,36 @@ fn mesh_surfaces(
             mesh.parts.get(part).map_or("mesh", |p| p.as_str()),
             triangles.len()
         );
-        let colour = tints.get(part).copied().unwrap_or(BODY);
-        for (highlit, tint) in [(false, colour), (true, selected.map_or(colour, |(_, c)| c))] {
-            let mut surface = Surface {
-                colour: tint,
-                material: Ink::Body,
-                group: body,
-                ..Default::default()
-            };
+        let ink = match look.finish {
+            Some(f) => Ink::Finished(Finish::new(f, BODY)),
+            None => Ink::Finished(Finish::gloss(look.gloss.get(part).copied().unwrap_or(0.0))),
+        };
+        for highlit in [false, true] {
+            let mut groups: std::collections::BTreeMap<[u8; 3], Surface> = Default::default();
             for t in triangles.iter().filter(|t| picked(t) == highlit) {
+                let key = triangle_colour(t);
+                let surface = groups.entry(key).or_insert_with(|| Surface {
+                    colour: match (highlit, selected) {
+                        (true, Some((_, c))) => c,
+                        _ => key.map(|v| v as f32 / 255.0),
+                    },
+                    material: ink,
+                    group: body,
+                    ..Default::default()
+                });
                 for &i in t {
                     surface.positions.push(point(mesh.positions[i as usize]));
                     surface.normals.push(point(normals[i as usize]));
                 }
             }
-            if surface.positions.is_empty() {
-                continue;
+            for (_, surface) in groups {
+                out.push(surface);
+                info.push(FaceInfo {
+                    body,
+                    kind: kind.clone(),
+                    area,
+                });
             }
-            out.push(surface);
-            info.push(FaceInfo {
-                body,
-                kind: kind.clone(),
-                area,
-            });
         }
     }
 }
@@ -537,9 +578,27 @@ pub fn build(
     marked: &[Edge],
     marked_colour: V3,
 ) -> Scene {
+    build_with(model, highlights, marked, marked_colour, None)
+}
+
+pub fn vertex_colours(model: &Model) -> std::collections::HashMap<String, Arc<Vec<[f64; 3]>>> {
+    model
+        .mesh_shading()
+        .into_iter()
+        .map(|(name, _, colours, _)| (name, Arc::new(colours)))
+        .collect()
+}
+
+pub fn build_with(
+    model: &Model,
+    highlights: &[Highlight<'_>],
+    marked: &[Edge],
+    marked_colour: V3,
+    posing: Option<&Posing>,
+) -> Scene {
     let mut scene = build_solids(model, highlights, marked, marked_colour);
-    let meshes = model.mesh_tints();
-    if meshes.is_empty() {
+    let shading = model.mesh_shading();
+    if shading.is_empty() {
         return scene;
     }
     let current = model.current_body();
@@ -549,14 +608,23 @@ pub fn build(
     let had_solids = !model.solids().is_empty();
     let (solid_centre, solid_radius) = (solid_mesh.centre, solid_mesh.radius);
     let mut surfaces = solid_mesh.surfaces;
+    let mut textures = super::textures::Library::continuing(solid_mesh.images);
     let mut bounds: Option<(crate::mesh::P3, crate::mesh::P3)> = None;
-    for (name, mesh, tints) in &meshes {
+    for (name, shaded, vertex, _) in &shading {
         let body = scene.parts.len();
-        let tints: Vec<V3> = tints.iter().map(|c| c.map(|v| v as f32)).collect();
+        let mesh = posing
+            .and_then(|p| p.meshes.get(name))
+            .unwrap_or(shaded)
+            .clone();
+        let vertex = posing
+            .and_then(|p| p.colours.get(name))
+            .map_or_else(|| vertex.clone(), |c| (**c).clone());
+        let gloss = model.part_gloss_of(name, &mesh);
         let colour = model
             .colours
             .get(name)
             .map_or(BODY, |c| c.map(|v| v as f32));
+        let finish = model.materials.get(name).and_then(|m| m.finish.as_ref());
         let is_current = *name == current;
         let selected = selection
             .filter(|s| is_current && s.weights.len() == mesh.positions.len())
@@ -566,14 +634,27 @@ pub fn build(
                     highlights.last().map_or(BODY, |h| h.colour),
                 )
             });
+        let first = surfaces.len();
         mesh_surfaces(
-            mesh,
+            &mesh,
             body,
-            &tints,
+            &MeshLook {
+                vertex_colours: &vertex,
+                gloss: &gloss,
+                finish,
+            },
             selected,
             &mut surfaces,
             &mut scene.faces,
         );
+        if let Some(binding) = finish.and_then(|f| textures.binding(f, colour)) {
+            let placement = model
+                .placements
+                .get(name)
+                .copied()
+                .unwrap_or_else(Matrix4::identity);
+            super::textures::apply(&mut surfaces[first..], binding, placement);
+        }
         if let Some((lo, hi)) = mesh.bounds() {
             bounds = Some(match bounds {
                 None => (lo, hi),
@@ -610,7 +691,7 @@ pub fn build(
     scene.mesh = Arc::new(viewer3d::Scene {
         surfaces,
         lines: solid_mesh.lines,
-        images: solid_mesh.images,
+        images: textures.images,
         centre: std::array::from_fn(|k| ((lo[k] + hi[k]) / 2.0) as f32),
         radius: (crate::mesh::length(crate::mesh::sub(hi, lo)) / 2.0).max(1.0e-3) as f32,
         ..Default::default()
@@ -1018,6 +1099,38 @@ mod tests {
                 ]
             })
             .collect()
+    }
+
+    fn built(source: &str) -> super::Scene {
+        let lines = crate::parse::parse_program(source).expect("parses");
+        let model = crate::model::run(&lines).model;
+        super::build(&model, &[], &[], [1.0, 0.0, 0.0])
+    }
+
+    #[test]
+    fn a_mesh_body_carries_part_colours_and_gloss() {
+        let scene = built(
+            "a: blob 0,0,0 r=5\nb: blob 6,0,0 r=3\nremesh 1\ncolor #ff0000 part=a gloss=0.8\ncolor #0000ff part=b",
+        );
+        let surfaces = &scene.mesh.surfaces;
+        assert!(surfaces.iter().any(|s| s.colour[0] > 0.9 && s.colour[2] < 0.1));
+        assert!(surfaces.iter().any(|s| s.colour[2] > 0.9 && s.colour[0] < 0.1));
+        let rough: Vec<f32> = surfaces.iter().map(|s| s.material.pbr().roughness).collect();
+        assert!(rough.iter().any(|r| *r < 0.5) && rough.iter().any(|r| *r > 0.9), "{rough:?}");
+    }
+
+    #[test]
+    fn soft_borders_give_blended_colours() {
+        let scene = built(
+            "a: blob 0,0,0 r=5\nb: blob 6,0,0 r=3\nremesh 0.5\ncolor #ff0000 part=a soft=2\ncolor #0000ff part=b",
+        );
+        let blended = scene
+            .mesh
+            .surfaces
+            .iter()
+            .filter(|s| s.colour[0] > 0.15 && s.colour[2] > 0.15)
+            .count();
+        assert!(blended > 0);
     }
 
     #[test]
