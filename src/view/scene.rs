@@ -486,8 +486,6 @@ fn mesh_inks(model: &Model, name: &str, mesh: &crate::mesh::Mesh, tints: &[V3]) 
 
 #[derive(Clone, Default)]
 pub struct Rigged {
-    pub name: String,
-    pub group: usize,
     pub rest: Arc<crate::mesh::Mesh>,
     pub rig: crate::mesh::rig::Rig,
     pub slots: Vec<(usize, Vec<u32>)>,
@@ -680,8 +678,6 @@ pub fn build(
             && rig.skin_fits(rest)
         {
             scene.rigged.push(Rigged {
-                name: name.clone(),
-                group: body,
                 rest: rest.clone(),
                 rig: rig.clone(),
                 slots,
