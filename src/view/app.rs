@@ -4211,13 +4211,16 @@ fn series_traces(ui: &mut Ui, series: &crate::sim::Series) {
     }
 }
 
-fn mesh_shown(model: &crate::model::Model, key: SceneKey) -> Option<Shown> {
+fn mesh_shown(model: &crate::model::Model, key: SceneKey, line: &SourceLine) -> Option<Shown> {
     let rgb = |c: Color32| [c.r(), c.g(), c.b()].map(|v| v as f32 / 255.0);
+    let editing = crate::model::MESH_OPERATIONS.contains(&line.op.as_str())
+        && !matches!(line.op.as_str(), "bone" | "skin" | "pose" | "clip" | "key");
     let highlights = [Highlight {
         faces: &[],
         colour: rgb(TRACE),
     }];
-    let scene = scene::build(model, &highlights, &[], rgb(TRACE));
+    let highlights: &[Highlight<'_>] = if editing { &highlights } else { &[] };
+    let scene = scene::build(model, highlights, &[], rgb(TRACE));
     let bounds = model
         .meshes()
         .iter()
@@ -4302,7 +4305,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey, vars: &[(String, f64)]) -> Op
         return None;
     }
     if model.solids().is_empty() {
-        return mesh_shown(model, key);
+        return mesh_shown(model, key, &snapshot.line);
     }
     let tolerance = model.tolerance();
     let own: Vec<usize> = model
@@ -4544,6 +4547,28 @@ fn locked_joints(rig: &Rig, values: &[f64]) -> Vec<Option<String>> {
 mod tests {
     use monstertruck::modeling::*;
     use std::sync::{Arc, Mutex};
+
+    #[test]
+    fn a_finished_mesh_is_not_tinted_by_its_last_select() {
+        let source = "body: blob 0,0,0 r=4\nhead: blob 0,0,6 r=2 blend=1\nremesh 0.5\nselect head\ninflate 0.2\ncolor #c85a1a";
+        let lines = crate::parse::parse_program(source).expect("parses");
+        let snapshots = crate::model::run_snapshots(&lines);
+        let trace = {
+            let c = super::TRACE;
+            [c.r(), c.g(), c.b()].map(|v| v as f32 / 255.0)
+        };
+        let tinted = |index: usize| {
+            let key = super::SceneKey {
+                generation: 0,
+                line: index,
+                query: String::new(),
+            };
+            let shown = super::build_shown(&snapshots[index], key, &[]).expect("a scene");
+            shown.scene.mesh.surfaces.iter().any(|s| s.colour == trace)
+        };
+        assert!(tinted(4), "the inflate line shows what it moved");
+        assert!(!tinted(5), "the colour line shows the mesh as it is");
+    }
 
     #[test]
     fn run_writes_a_fresh_result() {

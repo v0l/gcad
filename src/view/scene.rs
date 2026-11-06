@@ -654,12 +654,8 @@ pub fn build(
         let is_current = *name == current;
         let selected = selection
             .filter(|s| is_current && s.weights.len() == mesh.positions.len())
-            .map(|s| {
-                (
-                    s.weights.as_slice(),
-                    highlights.last().map_or(BODY, |h| h.colour),
-                )
-            });
+            .zip(highlights.last())
+            .map(|(s, h)| (s.weights.as_slice(), h.colour));
         let inks = mesh_inks(model, name, mesh, &tints);
         let look = MeshLook {
             colours,
