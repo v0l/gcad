@@ -387,7 +387,7 @@ impl Mesh {
             let mut across: Vec<Option<[f64; 3]>> = (0..self.positions.len())
                 .map(|i| {
                     if border[i] {
-                        let other = if inside(i) {
+                        if inside(i) {
                             around[i]
                                 .iter()
                                 .map(|&j| j as usize)
@@ -395,8 +395,7 @@ impl Mesh {
                                 .map(own)
                         } else {
                             Some(own(i))
-                        };
-                        other
+                        }
                     } else {
                         None
                     }

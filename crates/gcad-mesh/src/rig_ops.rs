@@ -181,9 +181,7 @@ impl Scene {
                 if falloff < 0.0 {
                     bail!("falloff must be 0 or more, got {falloff}");
                 }
-                let strength = args
-                    .optional_number("strength", scope)?
-                    .unwrap_or(1.0);
+                let strength = args.optional_number("strength", scope)?.unwrap_or(1.0);
                 let touched = rig.paint(&mesh, bone, c, r, falloff, strength);
                 Ok(format!(
                     "painted {touched} vertices; {}",
@@ -278,10 +276,7 @@ impl Scene {
         self.start_mesh("clip")?;
         let args = Args::new(line, &["name"], &["fps"], false)?;
         let name = args.text("name")?.to_string();
-        let fps = positive(
-            args.optional_number("fps", scope)?.unwrap_or(24.0),
-            "fps",
-        )?;
+        let fps = positive(args.optional_number("fps", scope)?.unwrap_or(24.0), "fps")?;
         let rig = &mut self.mesh_body.rig;
         if rig.clips.iter().any(|c| c.name == name) {
             bail!("there is already a clip called `{name}`");

@@ -5,7 +5,7 @@ use std::process::Command;
 fn c_program_builds_and_reads_a_model() {
     let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
     let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
-    let mut deps = PathBuf::from(std::env::current_exe().expect("exe"));
+    let mut deps = std::env::current_exe().expect("exe");
     deps.pop();
     let lib_dir = deps.parent().expect("profile dir").to_path_buf();
     let static_lib = lib_dir.join("libgcad_mesh.a");

@@ -418,23 +418,23 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
     }
     let positions: Vec<P3> = {
         collect_indexed(positions.len(), |index| {
-                let p = positions[index];
-                let mut q = p;
-                for _ in 0..3 {
-                    let d = field(primitives, q);
-                    let g = gradient(primitives, q, cell * 0.05);
-                    let gg = dot(g, g);
-                    if gg < 1.0e-18 {
-                        break;
-                    }
-                    q = sub(q, scale(g, d / gg));
+            let p = positions[index];
+            let mut q = p;
+            for _ in 0..3 {
+                let d = field(primitives, q);
+                let g = gradient(primitives, q, cell * 0.05);
+                let gg = dot(g, g);
+                if gg < 1.0e-18 {
+                    break;
                 }
-                if length(sub(q, p)) > cell {
-                    add(p, scale(normalized(sub(q, p)), cell))
-                } else {
-                    q
-                }
-            })
+                q = sub(q, scale(g, d / gg));
+            }
+            if length(sub(q, p)) > cell {
+                add(p, scale(normalized(sub(q, p)), cell))
+            } else {
+                q
+            }
+        })
     };
     let mut parts: Vec<String> = Vec::new();
     let part_of: Vec<u16> = primitives
@@ -587,7 +587,10 @@ mod tests {
             match line.op.as_str() {
                 "let" => {
                     for (name, value) in &line.named {
-                        scope.insert(name.clone(), crate::parse::eval(value, &scope).expect("let"));
+                        scope.insert(
+                            name.clone(),
+                            crate::parse::eval(value, &scope).expect("let"),
+                        );
                     }
                 }
                 "blob" => {

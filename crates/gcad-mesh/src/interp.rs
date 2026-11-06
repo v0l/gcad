@@ -1,8 +1,8 @@
 use crate::args::{Args, label_of, point3, positive};
-use crate::parse::Scope;
 use crate::mesh::sdf::{self, Combine, Primitive, Shape};
 use crate::mesh::{self, Mesh, Region, Selection};
 use crate::parse::Line;
+use crate::parse::Scope;
 use anyhow::{Result, anyhow, bail};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -11,6 +11,8 @@ pub const MESH_OPERATIONS: &[&str] = &[
     "blob", "limb", "remesh", "select", "inflate", "smooth", "refine", "crease", "pinch",
     "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key",
 ];
+
+pub type Shaded = (String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>);
 
 type Named = (String, Vec<Region>, f64, Option<usize>);
 
@@ -74,7 +76,11 @@ fn numbers(text: &str, scope: &crate::parse::Scope) -> Result<Vec<f64>> {
 
 impl Scene {
     pub fn cell_factor(&self) -> f64 {
-        if self.cell_scale > 0.0 { self.cell_scale } else { 1.0 }
+        if self.cell_scale > 0.0 {
+            self.cell_scale
+        } else {
+            1.0
+        }
     }
 
     pub fn body_name(&self) -> String {
@@ -169,7 +175,7 @@ impl Scene {
             .collect()
     }
 
-    pub fn mesh_shading(&self, colours: &HashMap<String, [f64; 3]>) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>)> {
+    pub fn mesh_shading(&self, colours: &HashMap<String, [f64; 3]>) -> Vec<Shaded> {
         self.mesh_tints(colours)
             .into_iter()
             .map(|(name, mesh, tints)| {
@@ -195,7 +201,10 @@ impl Scene {
             .collect()
     }
 
-    pub fn mesh_tints(&self, colours: &HashMap<String, [f64; 3]>) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>)> {
+    pub fn mesh_tints(
+        &self,
+        colours: &HashMap<String, [f64; 3]>,
+    ) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>)> {
         self.coloured_meshes(colours)
             .into_iter()
             .map(|(name, mesh, colour)| {
@@ -210,7 +219,10 @@ impl Scene {
             .collect()
     }
 
-    pub fn coloured_meshes(&self, colours: &HashMap<String, [f64; 3]>) -> Vec<(String, Arc<Mesh>, Option<[f64; 3]>)> {
+    pub fn coloured_meshes(
+        &self,
+        colours: &HashMap<String, [f64; 3]>,
+    ) -> Vec<(String, Arc<Mesh>, Option<[f64; 3]>)> {
         self.meshes()
             .into_iter()
             .map(|(name, mesh)| {
@@ -282,7 +294,13 @@ impl Scene {
         Ok(mesh.summary())
     }
 
-    fn add_primitive(&mut self, scope: &Scope, line: &Line, shape: Shape, args: &Args<'_>) -> Result<String> {
+    fn add_primitive(
+        &mut self,
+        scope: &Scope,
+        line: &Line,
+        shape: Shape,
+        args: &Args<'_>,
+    ) -> Result<String> {
         if self.mesh_body.mesh.is_some() {
             bail!(
                 "`{}` adds to the blockout, which `remesh` has already turned into a mesh; sculpt it with `select` and the mesh ops",
@@ -344,7 +362,7 @@ impl Scene {
             .iter()
             .try_for_each(|r| positive(*r, "radius").map(|_| ()))?;
         let shape = Shape::Ellipsoid {
-            centre: centre,
+            centre,
             radii,
             rotation: self.rotation_of(scope, &args)?,
         };
@@ -538,11 +556,7 @@ impl Scene {
         self.sculpt_summary(moved, &before)
     }
 
-    pub fn mesh_scale(
-        &mut self,
-        factors: mesh::P3,
-        about: Option<mesh::P3>,
-    ) -> Result<String> {
+    pub fn mesh_scale(&mut self, factors: mesh::P3, about: Option<mesh::P3>) -> Result<String> {
         let selection = self.selection_for("scale")?;
         let centre = about.unwrap_or(selection.centre);
         let before = self.sculpted("scale")?.clone();
@@ -639,12 +653,9 @@ impl Scene {
         let selection = self.selection_for("crease")?;
         let note = self.coarse_note(&selection, width);
         let before = self.sculpted("crease")?.clone();
-        let moved = self.sculpted("crease")?.crease(
-            &selection,
-            (a, b),
-            depth,
-            width,
-        );
+        let moved = self
+            .sculpted("crease")?
+            .crease(&selection, (a, b), depth, width);
         Ok(self.sculpt_summary(moved, &before)? + &note)
     }
 
@@ -656,9 +667,7 @@ impl Scene {
         }
         let selection = self.selection_for("pinch")?;
         let toward = match args.values.get("toward") {
-            Some(text) => {
-                point3(text, scope)?
-            }
+            Some(text) => point3(text, scope)?,
             None => selection.centre,
         };
         let before = self.sculpted("pinch")?.clone();
@@ -701,10 +710,7 @@ impl Scene {
     pub fn op_noise(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         let args = Args::new(line, &["amplitude"], &["size", "seed"], false)?;
         let amplitude = args.number("amplitude", scope)?;
-        let size = positive(
-            args.optional_number("size", scope)?.unwrap_or(1.0),
-            "size",
-        )?;
+        let size = positive(args.optional_number("size", scope)?.unwrap_or(1.0), "size")?;
         let seed = args.optional_number("seed", scope)?.unwrap_or(1.0);
         if seed < 0.0 || seed.fract() != 0.0 {
             bail!("`seed` is a whole number, got {seed}");

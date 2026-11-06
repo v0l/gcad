@@ -1,3 +1,4 @@
+#![allow(clippy::missing_safety_doc)]
 use crate::{Model, Options, build_with};
 use std::ffi::{CStr, CString, c_char, c_int};
 
@@ -14,7 +15,11 @@ fn handle(error: &str) -> *mut Handle {
 }
 
 #[unsafe(no_mangle)]
-pub unsafe extern "C" fn gcad_build(source: *const c_char, detail: f64, y_up: c_int) -> *mut Handle {
+pub unsafe extern "C" fn gcad_build(
+    source: *const c_char,
+    detail: f64,
+    y_up: c_int,
+) -> *mut Handle {
     if source.is_null() {
         return handle("null source");
     }

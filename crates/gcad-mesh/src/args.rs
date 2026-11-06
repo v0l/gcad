@@ -1,6 +1,6 @@
+use crate::mesh::P3;
 use crate::parse::{Line, Scope, eval, eval_point};
 use anyhow::{Context, Result, anyhow, bail};
-use crate::mesh::P3;
 use std::collections::HashMap;
 
 pub struct Args<'a> {
@@ -157,7 +157,6 @@ pub fn colour_text(text: &str) -> Option<[f64; 3]> {
         _ => return None,
     })
 }
-
 
 pub fn colour_of(text: &str, scope: &Scope) -> Result<[f64; 3]> {
     let colour = if text.starts_with('#') {

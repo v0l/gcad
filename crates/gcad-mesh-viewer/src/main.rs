@@ -24,8 +24,7 @@ fn mesh_of(body: &gcad_mesh::Body, positions: &[[f32; 3]]) -> Mesh {
                 (c[1] * 255.0) as u8,
                 (c[2] * 255.0) as u8,
                 255,
-            ]
-            .into(),
+            ],
             normal: vec4(n[0], n[1], n[2], 0.0),
         })
         .collect();
@@ -58,7 +57,13 @@ async fn main() {
         });
         draw_mesh(&mesh_of(body, &posed));
         set_default_camera();
-        draw_text("walk clip, CPU skinned from gcad_mesh bone matrices", 20.0, 30.0, 24.0, WHITE);
+        draw_text(
+            "walk clip, CPU skinned from gcad_mesh bone matrices",
+            20.0,
+            30.0,
+            24.0,
+            WHITE,
+        );
         next_frame().await;
     }
 }

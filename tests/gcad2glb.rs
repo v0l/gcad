@@ -21,13 +21,19 @@ fn example(name: &str) -> String {
 #[test]
 fn rigged_creature_matches_gcad_export_byte_for_byte() {
     let source = example("rigged_creature");
-    assert_eq!(gcad_mesh::to_glb(&source).expect("builds"), exported(&source));
+    assert_eq!(
+        gcad_mesh::to_glb(&source).expect("builds"),
+        exported(&source)
+    );
 }
 
 #[test]
 fn creature_matches_gcad_export_byte_for_byte() {
     let source = example("creature");
-    assert_eq!(gcad_mesh::to_glb(&source).expect("builds"), exported(&source));
+    assert_eq!(
+        gcad_mesh::to_glb(&source).expect("builds"),
+        exported(&source)
+    );
 }
 
 #[test]
@@ -72,7 +78,10 @@ fn lower_detail_gives_fewer_triangles() {
 #[test]
 fn fox_matches_gcad_export_byte_for_byte() {
     let source = example("fox");
-    assert_eq!(gcad_mesh::to_glb(&source).expect("builds"), exported(&source));
+    assert_eq!(
+        gcad_mesh::to_glb(&source).expect("builds"),
+        exported(&source)
+    );
 }
 
 #[test]
