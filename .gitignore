@@ -2,3 +2,4 @@
 *.result.bin
 .wrangler
 *.frames.bin
+*.view

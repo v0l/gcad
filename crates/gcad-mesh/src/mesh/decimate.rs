@@ -372,7 +372,9 @@ impl Mesh {
         }
         let (lo, hi) = self.bounds().expect("vertices");
         let extent = (0..3).map(|k| hi[k] - lo[k]).fold(0.0f64, f64::max);
-        let mut cell = (self.area() * 2.0 / target.max(1) as f64).sqrt().max(extent * 1.0e-6);
+        let mut cell = (self.area() * 2.0 / target.max(1) as f64)
+            .sqrt()
+            .max(extent * 1.0e-6);
         let mut result = self.clustered(cell, lo);
         for _ in 0..6 {
             let count = result.0.triangles.len();
@@ -429,7 +431,10 @@ impl Mesh {
             labels,
             parts: self.parts.clone(),
             mask: if self.mask.len() == self.positions.len() {
-                representative.iter().map(|&i| self.mask[i as usize]).collect()
+                representative
+                    .iter()
+                    .map(|&i| self.mask[i as usize])
+                    .collect()
             } else {
                 Vec::new()
             },
@@ -470,7 +475,12 @@ mod cluster_tests {
         assert!(lod.triangles.len() <= 2500, "{}", lod.triangles.len());
         assert!(lod.triangles.len() >= 500, "{}", lod.triangles.len());
         assert_eq!(rep.len(), lod.positions.len());
-        assert!(lod.triangles.iter().flatten().all(|&i| (i as usize) < lod.positions.len()));
+        assert!(
+            lod.triangles
+                .iter()
+                .flatten()
+                .all(|&i| (i as usize) < lod.positions.len())
+        );
         let (lo, hi) = lod.bounds().unwrap();
         assert!(lo[0] < 8.0 && hi[0] > 192.0);
     }
@@ -486,12 +496,22 @@ mod cluster_tests {
         let colours: Vec<[f64; 3]> = mesh
             .labels
             .iter()
-            .map(|&l| if l == 0 { [1.0, 0.0, 0.0] } else { [0.0, 0.0, 1.0] })
+            .map(|&l| {
+                if l == 0 {
+                    [1.0, 0.0, 0.0]
+                } else {
+                    [0.0, 0.0, 1.0]
+                }
+            })
             .collect();
         assert!(mesh.triangles.len() >= 2_000_000);
         let started = std::time::Instant::now();
         let (lod, source) = mesh.cluster(20_000);
-        eprintln!("cluster 2M -> {} in {:?}", lod.triangles.len(), started.elapsed());
+        eprintln!(
+            "cluster 2M -> {} in {:?}",
+            lod.triangles.len(),
+            started.elapsed()
+        );
         assert!(lod.triangles.len() <= 22_000);
         assert!(lod.triangles.len() >= 5_000);
         assert_eq!(lod.parts, mesh.parts);

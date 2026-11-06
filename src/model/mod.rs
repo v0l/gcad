@@ -1044,6 +1044,7 @@ pub(crate) fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: u
     }
     model.depth = depth;
     model.scene.pixel = crate::inspect::recorded_pixel(path);
+    model.scene.pixel_stale = crate::inspect::view_is_stale(path);
     model
 }
 

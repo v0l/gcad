@@ -217,6 +217,11 @@ pub fn record_view(file: &std::path::Path, frame: &Frame) -> std::io::Result<()>
     )
 }
 
+pub fn view_is_stale(file: &std::path::Path) -> bool {
+    let changed = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    matches!((changed(file), changed(&sidecar(file))), (Some(f), Some(v)) if f > v)
+}
+
 pub fn recorded_pixel(file: &std::path::Path) -> Option<f64> {
     let text = crate::host::read_to_string(&sidecar(file)).ok()?;
     let pixels: f64 = text

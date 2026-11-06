@@ -73,6 +73,7 @@ impl MeshBody {
 pub struct Scene {
     pub stamp_loader: Option<crate::mesh::alpha::StampLoader>,
     pub pixel: Option<f64>,
+    pub pixel_stale: bool,
     pub body: String,
     pub cell_scale: f64,
     pub mesh_body: MeshBody,

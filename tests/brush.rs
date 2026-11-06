@@ -770,3 +770,113 @@ fn px_size_needs_an_inspect_view_then_uses_it() {
         .fold(0.0, f64::max);
     assert!(reach > 3.0 && reach <= 4.2, "reach {reach}");
 }
+
+fn set_age(path: &std::path::Path, seconds_ago: u64) {
+    let when = std::time::SystemTime::now() - std::time::Duration::from_secs(seconds_ago);
+    std::fs::File::options()
+        .write(true)
+        .open(path)
+        .expect("open")
+        .set_modified(when)
+        .expect("mtime");
+}
+
+#[test]
+fn px_size_is_pixels_times_units_per_pixel_from_the_sidecar() {
+    let dir = stamp_dir("px_exact");
+    let file = dir.join("e.gcad");
+    std::fs::write(&file, format!("{BALL}\nbrush b type=draw size=40px\n")).expect("write");
+    std::fs::write(
+        gcad::inspect::sidecar(&file),
+        "view centre=0,0,0 span=102.4 pixels=6.25\n",
+    )
+    .expect("sidecar");
+    set_age(&file, 100);
+    let run = run_file(&file);
+    let said = run.steps.last().unwrap().1.as_ref().unwrap();
+    assert!(said.contains("size 6.400"), "{said}");
+    assert!(!said.contains("warning"), "{said}");
+    let brush = run.model.scene.mesh_body.brushes.last().unwrap();
+    assert!((brush.1.size - 6.4).abs() < 1.0e-12, "{}", brush.1.size);
+}
+
+#[test]
+fn px_size_warns_when_the_file_changed_after_the_inspect() {
+    let dir = stamp_dir("px_stale");
+    let file = dir.join("s.gcad");
+    std::fs::write(&file, format!("{BALL}\nbrush b type=draw size=40px\n")).expect("write");
+    std::fs::write(
+        gcad::inspect::sidecar(&file),
+        "view centre=0,0,0 span=100 pixels=10\n",
+    )
+    .expect("sidecar");
+    set_age(&gcad::inspect::sidecar(&file), 100);
+    let run = run_file(&file);
+    let said = run.steps.last().unwrap().1.as_ref().unwrap();
+    assert!(said.contains("size 4.000"), "{said}");
+    assert!(
+        said.contains("changed since the last gcad inspect"),
+        "{said}"
+    );
+}
+
+#[test]
+fn ramp_png_stamp_dent_profile() {
+    let dir = stamp_dir("ramp");
+    let mut img = image::GrayImage::new(64, 64);
+    for (x, _, p) in img.enumerate_pixels_mut() {
+        p.0[0] = (x * 255 / 63) as u8;
+    }
+    img.save(dir.join("ramp.png")).expect("png");
+    let file = dir.join("r.gcad");
+    std::fs::write(
+        &file,
+        format!("{BALL}\nbrush s type=stamp size=3 strength=0.5 falloff=smooth alpha=ramp.png(6)\ndab s at=0,0,10\n"),
+    )
+    .expect("write");
+    let run = run_file(&file);
+    assert!(
+        run.steps.iter().all(|(_, r)| r.is_ok()),
+        "{:?}",
+        run.steps.last()
+    );
+    let before = mesh_of(&build(BALL));
+    let after = mesh_of(&run.model);
+    let mut rows: Vec<(f64, f64)> = Vec::new();
+    for (p, q) in before.positions.iter().zip(&after.positions) {
+        if length(sub(*p, TOP)) < 1.5 {
+            rows.push((p[0] * 1.0e3 + p[1] * 1.0e-3, length(*q) - length(*p)));
+        }
+    }
+    let by = |axis: usize| {
+        let pts: Vec<(f64, f64)> = before
+            .positions
+            .iter()
+            .zip(&after.positions)
+            .filter(|(p, _)| length(sub(**p, TOP)) < 1.5)
+            .map(|(p, q)| (p[axis], length(*q) - length(*p)))
+            .collect();
+        let n = pts.len() as f64;
+        let (mx, my) = (
+            pts.iter().map(|a| a.0).sum::<f64>() / n,
+            pts.iter().map(|a| a.1).sum::<f64>() / n,
+        );
+        let cov: f64 = pts.iter().map(|a| (a.0 - mx) * (a.1 - my)).sum();
+        let vx: f64 = pts.iter().map(|a| (a.0 - mx).powi(2)).sum();
+        let vy: f64 = pts.iter().map(|a| (a.1 - my).powi(2)).sum();
+        cov / (vx * vy).sqrt()
+    };
+    let (cx, cy) = (by(0), by(1));
+    println!(
+        "ramp correlation x {cx:.3} y {cy:.3} over {} vertices",
+        rows.len()
+    );
+    let strongest = cx.abs().max(cy.abs());
+    let weakest = cx.abs().min(cy.abs());
+    assert!(strongest > 0.6, "x {cx} y {cy}");
+    assert!(weakest < 0.3, "x {cx} y {cy}");
+    let deepest = rows.iter().map(|r| r.1).fold(f64::INFINITY, f64::min);
+    let highest = rows.iter().map(|r| r.1).fold(f64::NEG_INFINITY, f64::max);
+    println!("ramp displacement {deepest:.3} .. {highest:.3}");
+    assert!(deepest < -0.1 && highest > 0.1 && deepest >= -0.5 - 1.0e-9 && highest <= 0.5 + 1.0e-9);
+}

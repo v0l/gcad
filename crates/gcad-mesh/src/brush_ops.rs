@@ -214,6 +214,15 @@ impl Scene {
             brush.kind, brush.size, brush.strength
         )
         .to_lowercase();
+        let summary = if self.pixel_stale
+            && args.values.get("size").is_some_and(|t| t.ends_with("px"))
+        {
+            format!(
+                "{summary} (warning: the file changed since the last gcad inspect, so the px size may be off; run gcad inspect again)"
+            )
+        } else {
+            summary
+        };
         self.mesh_body.brushes.push((name, brush));
         Ok(summary)
     }

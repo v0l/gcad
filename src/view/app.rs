@@ -4587,7 +4587,10 @@ mod tests {
         assert!(lod.scene.mesh.triangles() <= super::EDIT_LOD_TRIANGLES * 5 / 4);
         assert!(lod.scene.mesh.triangles() > super::EDIT_LOD_TRIANGLES / 4);
         assert_eq!(lod.faces, full.faces);
-        assert_eq!(lod.bounds.0.map(|v| v.round()), full.bounds.0.map(|v| v.round()));
+        assert_eq!(
+            lod.bounds.0.map(|v| v.round()),
+            full.bounds.0.map(|v| v.round())
+        );
         eprintln!("lod scene in {took:?}");
     }
 
