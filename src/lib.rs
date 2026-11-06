@@ -5,6 +5,7 @@ pub mod drawing;
 pub mod export;
 pub mod flow;
 pub mod geometry;
+pub mod gltf;
 pub mod host;
 pub mod inspect;
 pub mod mesh;

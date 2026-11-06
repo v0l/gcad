@@ -4,6 +4,11 @@ All notable changes to gcad are listed here. The format follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and versions follow
 [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+- Rigging for mesh bodies: `bone`, `skin auto|part|paint`, `pose`, `clip` and `key`, linear blend skinning, and GLB export with skin and animations.
+
 ## [0.6.1] - 2026-11-03
 
 ### Added

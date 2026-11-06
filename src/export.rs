@@ -189,12 +189,38 @@ fn as_mesh(solid: &Solid, name: &str) -> crate::mesh::Mesh {
     }
 }
 
+pub fn glb_of(model: &crate::model::Model) -> Result<Vec<u8>> {
+    let rest = model.rest_meshes();
+    let tints = model.mesh_tints();
+    let bodies: Vec<crate::gltf::Body<'_>> = rest
+        .iter()
+        .map(|(name, mesh)| {
+            let colours = tints
+                .iter()
+                .find(|(n, ..)| n == name)
+                .map(|(_, _, t)| t.clone())
+                .unwrap_or_default();
+            crate::gltf::Body {
+                name: name.clone(),
+                mesh,
+                rig: model.rig_of(name),
+                colours,
+                gloss: model.part_gloss_of(name, mesh),
+            }
+        })
+        .collect();
+    crate::gltf::glb(&bodies)
+}
+
 fn export_meshes(model: &crate::model::Model, path: &str) -> Result<()> {
     let extension = path
         .rsplit('.')
         .next()
         .unwrap_or_default()
         .to_ascii_lowercase();
+    if extension == "glb" {
+        return std::fs::write(path, glb_of(model)?).map_err(Into::into);
+    }
     let mut bodies: Vec<(String, crate::mesh::Mesh, Option<Colour>)> = model
         .named_parts()
         .into_iter()
@@ -289,7 +315,9 @@ fn export_meshes(model: &crate::model::Model, path: &str) -> Result<()> {
             std::fs::write(path, out)?
         }
         "3mf" => std::fs::write(path, three_mf_meshes(&bodies))?,
-        other => bail!("a file with mesh bodies exports as .obj, .stl or .3mf, not `.{other}`"),
+        other => {
+            bail!("a file with mesh bodies exports as .obj, .stl, .3mf or .glb, not `.{other}`")
+        }
     }
     Ok(())
 }

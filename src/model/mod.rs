@@ -20,6 +20,7 @@ mod oring;
 mod path;
 mod pattern;
 mod rib;
+mod rigging;
 mod round;
 mod sheet;
 mod simulate;
@@ -129,6 +130,7 @@ pub struct Model {
     pub sim: Option<Box<crate::sim::Spec>>,
     pub mesh_body: MeshBody,
     pub mesh_bodies: Vec<(String, std::sync::Arc<crate::mesh::Mesh>)>,
+    pub mesh_rigs: Vec<(String, crate::mesh::rig::Rig)>,
     pub part_colours: HashMap<(String, String), [f64; 3]>,
     pub part_gloss: HashMap<(String, String), f64>,
     pub part_soft: HashMap<(String, String), f64>,
@@ -581,6 +583,10 @@ pub const OPERATIONS: &[&str] = &[
     "noise",
     "relax",
     "decimate",
+    "bone",
+    "skin",
+    "clip",
+    "key",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -786,6 +792,7 @@ impl Model {
             "thicken" => self.op_thicken(line),
             "wrap" => self.op_wrap(line),
             "rib" => self.op_rib(line),
+            "pose" if self.has_mesh() => self.op_mesh_pose(line),
             "joint" | "pose" | "couple" | "explode" | "interference" | "part" | "concentric"
             | "flush" | "aligned" | "distance" | "tangent" => {
                 bail!(
@@ -807,6 +814,10 @@ impl Model {
             "noise" => self.op_noise(line),
             "relax" => self.op_relax(line),
             "decimate" => self.op_decimate(line),
+            "bone" => self.op_bone(line),
+            "skin" => self.op_skin(line),
+            "clip" => self.op_clip(line),
+            "key" => self.op_key(line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",
                 OPERATIONS.join(", ")

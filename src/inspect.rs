@@ -678,6 +678,9 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
         }
         hits.push(hit);
     }
+    for (body, rig) in model.rigs() {
+        let _ = write!(report, "body {body}: {}", rig.describe());
+    }
     Ok(Picture {
         canvas,
         frame,

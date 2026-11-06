@@ -464,6 +464,14 @@ side view and a three-quarter view all look right.
   (`if budget>0 decimate budget`) so full detail stays available for renders.
 - Export with `gcad export file.gcad out.obj`: each part is its own `g` group with an `.mtl`.
 
+### Rigging a mesh
+
+Bones, skin weights, poses and clips are one line each, after `remesh` and all sculpting
+(see `docs/format.md` "Rigging"). Order: `bone` lines (`parent=`, `head=`, `tail=`; `mirror x of=arm_l`
+for the other side), `skin auto` then `skin part=head bone=head_b` for rigid parts, `clip name fps=`
+with `key t= bone= rotate= axis=` lines, `pose clip=name t=` to look at a frame and `gcad render`
+it, `gcad export f.gcad f.glb` for the game asset. Example: `examples/mesh/rigged_creature.gcad`.
+
 ## Output
 
 ```sh
