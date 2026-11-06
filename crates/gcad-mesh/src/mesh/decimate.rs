@@ -88,6 +88,16 @@ impl Mesh {
     }
 
     pub fn finish(&mut self, reference: &Mesh, target: Option<usize>, max_error: Option<f64>) -> String {
+        self.finish_weighted(reference, target, max_error, &[])
+    }
+
+    pub fn finish_weighted(
+        &mut self,
+        reference: &Mesh,
+        target: Option<usize>,
+        max_error: Option<f64>,
+        importance: &[f64],
+    ) -> String {
         let before = self.triangles.len();
         let all = Selection::new(self, vec![super::Region::All], 0.0, None)
             .expect("a mesh has vertices");
@@ -97,7 +107,7 @@ impl Mesh {
         };
         match (target, max_error) {
             (Some(target), None) => {
-                self.decimate(&unmasked, target);
+                self.decimate_weighted(&unmasked, target, importance);
             }
             (target, Some(limit)) => {
                 let floor = target.unwrap_or(4).max(4);
@@ -110,7 +120,7 @@ impl Mesh {
                         weights: vec![1.0; trial.positions.len()],
                         ..unmasked.clone()
                     };
-                    trial.decimate(&every, mid);
+                    trial.decimate_weighted(&every, mid, importance);
                     if trial.error_from(reference).0 <= limit {
                         hi = trial.triangles.len().min(mid);
                         best = trial;
@@ -139,6 +149,11 @@ impl Mesh {
     }
 
     pub fn decimate(&mut self, selection: &Selection, target: usize) -> usize {
+        self.decimate_weighted(selection, target, &[])
+    }
+
+    pub fn decimate_weighted(&mut self, selection: &Selection, target: usize, importance: &[f64]) -> usize {
+        let importance_of = |i: u32| importance.get(i as usize).copied().unwrap_or(1.0);
         let start = self.triangles.len();
         if target >= start {
             return 0;
@@ -155,7 +170,9 @@ impl Mesh {
             let normal = normalized(raw);
             let q = plane_quadric(normal, -dot(normal, a), area);
             for i in t {
-                quadric[i as usize] = plus(&quadric[i as usize], &q);
+                let k = importance_of(i);
+                let scaled = q.map(|v| v * k);
+                quadric[i as usize] = plus(&quadric[i as usize], &scaled);
             }
         }
         for &t in &self.triangles {

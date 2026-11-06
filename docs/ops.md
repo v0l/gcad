@@ -282,6 +282,8 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | sculpt layers | supported | `layer wrinkles`, then `layer wrinkles amount=0.5` | `brush::layer_amount_dials_its_strokes` |
 | even remesh of a sculpt | supported | `remesh dynamesh 0.25` | `brush::dynamesh_remeshes_a_sculpt_evenly_and_keeps_its_shape` |
 | finish at full detail, then decimate | supported | `finish decimate=20000`, `finish decimate=10%`, `finish max_error=0.02` | `brush::finish_decimates_to_a_budget_and_reports_the_error`, `brush::finish_to_an_error_bound_stays_within_it`, `brush::finish_keeps_fine_brush_detail_better_than_a_coarse_build` |
+| keep more triangles where they matter | supported | `finish decimate=14000 focus=head,jaw weight=30` | `brush::finish_focus_spends_the_budget_on_the_named_parts` |
+| a sculpted, rigged hero | supported | `examples/mesh/hero.gcad` | `brush::hero_example_sculpts_at_full_detail_and_finishes_to_its_budget` |
 | export budget | supported | `gcad export f.gcad f.glb --tris 20000`, `--max-error 0.02`, `gcad2glb --tris 20000` | `gcad2glb::a_triangle_budget_finishes_every_body_at_export`, `gcad2glb::an_error_bound_keeps_the_surface_within_it`, `gcad2glb::export_tris_flag_matches_gcad2glb` |
 | inspect close-ups, wireframe and stroke preview | supported | `gcad inspect f.gcad out.png --zoom x,y,z,r --wire --path x,y,z --path x,y,z` | `inspect_view::zoom_frames_a_region_and_wire_draws_the_triangles`, `inspect_view::stroke_path_overlay_lands_on_the_surface` |
 | pick curvature | supported | `--pick x,y` prints curvature and bump/hollow/flat | `inspect_view::pick_reports_the_curvature_of_the_surface` |

@@ -492,6 +492,40 @@ fn finish_keeps_fine_brush_detail_better_than_a_coarse_build() {
 }
 
 #[test]
+fn finish_focus_spends_the_budget_on_the_named_parts() {
+    let two = "face: blob 0,0,0 r=5\nback: blob 12,0,0 r=5\nremesh 0.1\nbrush w type=dam_standard size=0.3 strength=0.15\nstroke w from=-2,-4.5,0 to=2,-4.5,0";
+    let full = mesh_of(&build(two));
+    let error_on = |m: &Mesh, part: &str| {
+        let id = full.parts.iter().position(|p| p == part).unwrap() as u16;
+        let picked: Vec<P3> = (0..full.positions.len())
+            .filter(|&i| full.labels[i] == id)
+            .map(|i| full.positions[i])
+            .collect();
+        let surface = gcad::mesh::grid::Surface::new(m);
+        picked
+            .iter()
+            .map(|p| surface.closest(*p).unwrap().distance)
+            .fold(0.0, f64::max)
+    };
+    let even = mesh_of(&build(&format!("{two}\nfinish decimate=3000")));
+    let focused = mesh_of(&build(&format!("{two}\nfinish decimate=3000 focus=face weight=20")));
+    assert_eq!(focused.triangles.len(), 3000);
+    let on_face = |m: &Mesh| {
+        let id = m.parts.iter().position(|p| p == "face").unwrap() as u16;
+        m.triangles.iter().filter(|t| m.labels[t[0] as usize] == id).count()
+    };
+    assert!(
+        on_face(&focused) * 10 > on_face(&even) * 14,
+        "face triangles focused {} even {}",
+        on_face(&focused),
+        on_face(&even)
+    );
+    assert!(error_on(&focused, "face") < error_on(&even, "face"));
+    let error = failure(&format!("{two}\nfinish decimate=3000 focus=nose"));
+    assert!(error.contains("face, back"), "{error}");
+}
+
+#[test]
 fn dynamesh_remeshes_a_sculpt_evenly_and_keeps_its_shape() {
     let source = format!("{BALL}\nselect sphere=0,0,10 r=2 falloff=2\nmove 0,0,6");
     let stretched = mesh_of(&build(&source));
@@ -510,6 +544,36 @@ fn dynamesh_remeshes_a_sculpt_evenly_and_keeps_its_shape() {
     assert!(long(&stretched) > 1.0, "{}", long(&stretched));
     assert!(long(&even) < 0.25 * 2.0, "{}", long(&even));
     assert_eq!(even.parts, stretched.parts);
+}
+
+#[test]
+fn hero_example_sculpts_at_full_detail_and_finishes_to_its_budget() {
+    let source = std::fs::read_to_string(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/examples/mesh/hero.gcad"
+    ))
+    .expect("example");
+    let model = build(&source);
+    let mesh = mesh_of(&model);
+    assert_eq!(mesh.triangles.len(), 14000);
+    let rig = model.rigs();
+    assert!(rig[0].1.skin_fits(&mesh));
+    let lines = gcad::parse::parse_program(&source.replace("budget=14000", "budget=0")).unwrap();
+    let result = gcad::model::run(&lines);
+    let sculpted = result
+        .steps
+        .iter()
+        .filter_map(|(line, out)| (line.op == "stroke").then(|| out.as_ref().unwrap().clone()))
+        .collect::<Vec<_>>();
+    assert!(sculpted.len() >= 12, "{}", sculpted.len());
+    assert!(sculpted.iter().all(|s| !s.contains("nothing moved")), "{sculpted:?}");
+    let worst_start = sculpted
+        .iter()
+        .filter_map(|s| s.split("started ").nth(1)?.split(' ').next()?.parse::<f64>().ok())
+        .fold(0.0, f64::max);
+    assert!(worst_start < 1.0, "{worst_start}");
+    let full = result.model.meshes().last().unwrap().1.clone();
+    assert!(full.triangles.len() > 400_000, "{}", full.triangles.len());
 }
 
 #[test]

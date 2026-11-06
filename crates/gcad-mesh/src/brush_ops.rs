@@ -612,7 +612,7 @@ impl Scene {
     }
 
     pub fn op_finish(&mut self, scope: &Scope, line: &Line) -> Result<String> {
-        let args = Args::new(line, &[], &["decimate", "max_error", "keep"], false)?;
+        let args = Args::new(line, &[], &["decimate", "max_error", "keep", "focus", "weight"], false)?;
         let mesh = self.sculpted("finish")?;
         let before = mesh.triangles.len();
         let target = match args.values.get("decimate") {
@@ -650,9 +650,30 @@ impl Scene {
         if self.mesh_body.rig.skin.is_some() {
             bail!("`finish` goes before `skin`: decimate first, then bind the skin to the final triangles");
         }
+        let focus: Vec<&str> = args
+            .values
+            .get("focus")
+            .map(|t| vec![*t])
+            .unwrap_or_default();
+        let weight = args.optional_number("weight", scope)?.unwrap_or(10.0);
+        if !(1.0..=1000.0).contains(&weight) {
+            bail!("`weight` goes from 1 to 1000, got {weight}");
+        }
+        if args.has("weight") && focus.is_empty() {
+            bail!("`weight=` goes with `focus=parts`, the parts to keep finest");
+        }
+        let ids = self.part_ids("finish", &focus)?;
         let mesh = self.sculpted("finish")?;
+        let importance: Vec<f64> = if ids.is_empty() {
+            Vec::new()
+        } else {
+            mesh.labels
+                .iter()
+                .map(|l| if ids.contains(l) { weight } else { 1.0 })
+                .collect()
+        };
         let reference = mesh.clone();
-        Ok(mesh.finish(&reference, target, max_error))
+        Ok(mesh.finish_weighted(&reference, target, max_error, &importance))
     }
 
     fn selection_for_brush(&mut self, op: &str) -> Result<Selection> {
