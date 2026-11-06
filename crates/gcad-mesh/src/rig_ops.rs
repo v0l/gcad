@@ -1,6 +1,6 @@
 use crate::args::{Args, direction, point3, positive};
 use crate::interp::{Scene, mirrored_name};
-use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, Quat, Rig};
+use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, MoveKey, Quat, Rig};
 use crate::mesh::{self, P3};
 use crate::parse::{Line, Scope};
 use anyhow::{Result, anyhow, bail};
@@ -233,6 +233,7 @@ impl Scene {
         match args.values.get("mode").copied() {
             Some("reset") => {
                 self.mesh_body.rig.pose.clear();
+                self.mesh_body.rig.moved.clear();
                 return self.pose_summary("pose reset");
             }
             Some(other) => bail!("`pose` takes `reset`, `bone=`, or `clip=`, got `{other}`"),
@@ -243,6 +244,7 @@ impl Scene {
             let clip = rig.clip(name)?;
             let t = args.optional_number("t", scope)?.unwrap_or(0.0);
             rig.pose = rig.sample(clip, t);
+            rig.moved = rig.sample_moves(clip, t);
             return self.pose_summary(&format!("pose of clip `{name}` at {t} s"));
         }
         let name = args.text("bone")?;
@@ -285,6 +287,7 @@ impl Scene {
             name: name.clone(),
             fps,
             keys: Vec::new(),
+            moves: Vec::new(),
         });
         self.mesh_body.clip = Some(rig.clips.len() - 1);
         Ok(format!(
@@ -294,7 +297,7 @@ impl Scene {
 
     pub fn op_key(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         self.start_mesh("key")?;
-        let args = Args::new(line, &[], &["t", "bone", "rotate", "axis"], false)?;
+        let args = Args::new(line, &[], &["t", "bone", "rotate", "axis", "move"], false)?;
         let Some(clip) = self.mesh_body.clip else {
             bail!("`key` adds to a clip; start one with `clip name fps=24`");
         };
@@ -303,19 +306,35 @@ impl Scene {
             bail!("a key's time is 0 or more, got {t}");
         }
         let bone = self.mesh_body.rig.bone(args.text("bone")?)?;
-        let rotation = if args.has("rotate") {
-            self.rotation_quat(scope, &args)?
+        let offset = args
+            .values
+            .get("move")
+            .map(|m| point3(m, scope))
+            .transpose()?;
+        let rotation = if args.has("rotate") || offset.is_none() {
+            Some(if args.has("rotate") {
+                self.rotation_quat(scope, &args)?
+            } else {
+                IDENTITY_QUAT
+            })
         } else {
-            IDENTITY_QUAT
+            None
         };
         let clip = &mut self.mesh_body.rig.clips[clip];
-        clip.keys
-            .retain(|k| !(k.bone == bone && (k.t - t).abs() < 1.0e-9));
-        clip.keys.push(Key { t, bone, rotation });
+        if let Some(rotation) = rotation {
+            clip.keys
+                .retain(|k| !(k.bone == bone && (k.t - t).abs() < 1.0e-9));
+            clip.keys.push(Key { t, bone, rotation });
+        }
+        if let Some(offset) = offset {
+            clip.moves
+                .retain(|k| !(k.bone == bone && (k.t - t).abs() < 1.0e-9));
+            clip.moves.push(MoveKey { t, bone, offset });
+        }
         Ok(format!(
             "clip `{}` has {} key(s), {} s long",
             clip.name,
-            clip.keys.len(),
+            clip.keys.len() + clip.moves.len(),
             clip.duration()
         ))
     }

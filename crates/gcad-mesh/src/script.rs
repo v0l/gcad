@@ -72,11 +72,19 @@ pub struct Track {
 }
 
 #[derive(Clone, Debug)]
+pub struct MoveTrack {
+    pub joint: usize,
+    pub times: Vec<f32>,
+    pub offsets: Vec<[f32; 3]>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Clip {
     pub name: String,
     pub fps: f32,
     pub duration: f32,
     pub tracks: Vec<Track>,
+    pub moves: Vec<MoveTrack>,
 }
 
 #[derive(Clone, Debug)]
@@ -145,11 +153,20 @@ impl Body {
         let Some(rig) = &self.rig else {
             return Vec::new();
         };
-        let pose: Pose = match clip {
-            Some(c) if c < rig.clips.len() => rig.sample(c, t),
-            _ => Pose::new(),
-        };
-        rig.skin_transforms(&pose)
+        let mut posed = rig.clone();
+        match clip {
+            Some(c) if c < rig.clips.len() => {
+                posed.pose = rig.sample(c, t);
+                posed.moved = rig.sample_moves(c, t);
+            }
+            _ => {
+                posed.pose = Pose::new();
+                posed.moved.clear();
+            }
+        }
+        let pose = posed.pose.clone();
+        posed
+            .skin_transforms(&pose)
             .iter()
             .map(|xf| matrix_of(xf, self.y_up))
             .collect()
@@ -469,6 +486,23 @@ fn body_of(
                                     let n = if n > 0.0 { n } else { 1.0 };
                                     q.map(|v| (v / n) as f32)
                                 })
+                                .collect(),
+                        })
+                    })
+                    .collect(),
+                moves: (0..rig.bones.len())
+                    .filter_map(|bone| {
+                        let keys = clip.bone_moves(bone);
+                        if keys.is_empty() {
+                            return None;
+                        }
+                        let rest = rig.local_offset(bone);
+                        Some(MoveTrack {
+                            joint: bone,
+                            times: keys.iter().map(|k| k.t as f32).collect(),
+                            offsets: keys
+                                .iter()
+                                .map(|k| f3(to_up(crate::mesh::add(rest, k.offset), y_up)))
                                 .collect(),
                         })
                     })

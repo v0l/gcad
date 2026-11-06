@@ -219,6 +219,34 @@ fn clip_keys_are_sampled_between_keyframes() {
 }
 
 #[test]
+fn move_keys_shift_a_bone_and_reach_the_glb() {
+    let model = build(&format!(
+        "{ARM}skin auto\nclip hop fps=30\nkey t=0 bone=b_up move=0,0,0\nkey t=1 bone=b_up move=0,0,10\nkey t=1 bone=b_low rotate=30 axis=x\npose clip=hop t=0.5"
+    ));
+    let rig = rig_of(&model);
+    assert_eq!(rig.clips[0].moves.len(), 2);
+    assert_eq!(rig.clips[0].keys.len(), 1);
+    assert_eq!(rig.moved[&0], [0.0, 0.0, 5.0]);
+    let lift = |m: &Mesh| {
+        m.positions
+            .iter()
+            .map(|p| p[2])
+            .fold(f64::INFINITY, f64::min)
+    };
+    let rise = lift(&posed_of(&model)) - lift(&rest_of(&model));
+    assert!((rise - 5.0).abs() < 1.0e-2, "rose {rise}");
+    let (json, bin) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
+    let channels = json["animations"][0]["channels"].as_array().unwrap();
+    let moved = channels
+        .iter()
+        .find(|c| c["target"]["path"] == "translation")
+        .expect("a translation channel");
+    let sampler = &json["animations"][0]["samplers"][moved["sampler"].as_u64().unwrap() as usize];
+    let out = floats(&json, &bin, sampler["output"].as_u64().unwrap() as usize);
+    assert_eq!(out, [0.0, 0.0, 0.0, 0.0, 10.0, 0.0]);
+}
+
+#[test]
 fn key_without_a_clip_is_refused() {
     let message = failure(&format!("{ARM}key t=0 bone=b_low rotate=3 axis=x"));
     assert!(message.contains("clip"), "{message}");
@@ -305,6 +333,16 @@ fn glb_carries_skin_weights_and_animations() {
     let sampler = &animation["samplers"][0];
     let times = floats(&json, &bin, sampler["input"].as_u64().unwrap() as usize);
     assert_eq!(times, [0.0, 1.0]);
+}
+
+#[test]
+fn glb_colours_are_linear() {
+    let model = build(&format!("{LIMB}color #808080\n"));
+    let (json, _) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
+    let base = json["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"][0]
+        .as_f64()
+        .unwrap();
+    assert!((base - 0.2158).abs() < 1.0e-3, "{base}");
 }
 
 #[test]

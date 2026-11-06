@@ -9,7 +9,7 @@ pub mod rig_ops;
 pub mod script;
 
 pub use script::{
-    Body, Clip, Error, Joint, Matrix, Model, Options, Part, Track, build, build_with,
+    Body, Clip, Error, Joint, Matrix, Model, MoveTrack, Options, Part, Track, build, build_with,
 };
 
 pub fn to_glb(source: &str) -> Result<Vec<u8>, Error> {

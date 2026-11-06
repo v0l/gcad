@@ -21,6 +21,14 @@ pub(crate) fn y_up(p: P3) -> P3 {
     [p[0], p[2], -p[1]]
 }
 
+fn linear(c: f64) -> f64 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 pub(crate) fn quat_y_up(q: [f64; 4]) -> [f64; 4] {
     [q[0], q[2], -q[1], q[3]]
 }
@@ -178,7 +186,7 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
             materials.push(json!({
                 "name": format!("{}.{name}", body.name),
                 "pbrMetallicRoughness": {
-                    "baseColorFactor": [colour[0], colour[1], colour[2], 1.0],
+                    "baseColorFactor": [linear(colour[0]), linear(colour[1]), linear(colour[2]), 1.0],
                     "metallicFactor": 0.0,
                     "roughnessFactor": 1.0 - gloss * 0.8,
                 },
@@ -200,7 +208,7 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
                 let n = (q.iter().map(|v| v * v).sum::<f64>()).sqrt();
                 let mut joint = json!({
                     "name": bone.name,
-                    "translation": y_up(rig.local_offset(i)),
+                    "translation": y_up(rig.posed_offset(i)),
                     "rotation": q.map(|v| v / n),
                 });
                 let children: Vec<usize> = rig.children(i).into_iter().map(|c| base + c).collect();
@@ -266,6 +274,26 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
                     channels.push(json!({
                         "sampler": samplers.len() - 1,
                         "target": {"node": base + bone, "path": "rotation"},
+                    }));
+                }
+                for bone in 0..rig.bones.len() {
+                    let keys = clip.bone_moves(bone);
+                    if keys.is_empty() {
+                        continue;
+                    }
+                    let times: Vec<f32> = keys.iter().map(|k| k.t as f32).collect();
+                    let rest = rig.local_offset(bone);
+                    let offsets: Vec<f32> = keys
+                        .iter()
+                        .flat_map(|k| y_up(crate::mesh::add(rest, k.offset)).map(|v| v as f32))
+                        .collect();
+                    let input = b.floats(&times, 1, "SCALAR", None, true);
+                    let output = b.floats(&offsets, 3, "VEC3", None, false);
+                    samplers
+                        .push(json!({"input": input, "output": output, "interpolation": "LINEAR"}));
+                    channels.push(json!({
+                        "sampler": samplers.len() - 1,
+                        "target": {"node": base + bone, "path": "translation"},
                     }));
                 }
                 if !channels.is_empty() {

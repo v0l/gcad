@@ -9,6 +9,7 @@ pub const MAX_INFLUENCES: usize = 4;
 
 pub type Weights = Vec<Vec<(usize, f64)>>;
 pub type Pose = HashMap<usize, Quat>;
+pub type Moves = HashMap<usize, P3>;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Bone {
@@ -26,15 +27,33 @@ pub struct Key {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct MoveKey {
+    pub t: f64,
+    pub bone: usize,
+    pub offset: P3,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Clip {
     pub name: String,
     pub fps: f64,
     pub keys: Vec<Key>,
+    pub moves: Vec<MoveKey>,
 }
 
 impl Clip {
     pub fn duration(&self) -> f64 {
-        self.keys.iter().map(|k| k.t).fold(0.0, f64::max)
+        self.keys
+            .iter()
+            .map(|k| k.t)
+            .chain(self.moves.iter().map(|k| k.t))
+            .fold(0.0, f64::max)
+    }
+
+    pub fn bone_moves(&self, bone: usize) -> Vec<&MoveKey> {
+        let mut keys: Vec<&MoveKey> = self.moves.iter().filter(|k| k.bone == bone).collect();
+        keys.sort_by(|a, b| a.t.total_cmp(&b.t));
+        keys
     }
 
     pub fn bone_keys(&self, bone: usize) -> Vec<&Key> {
@@ -49,6 +68,7 @@ pub struct Rig {
     pub bones: Vec<Bone>,
     pub skin: Option<Weights>,
     pub pose: Pose,
+    pub moved: Moves,
     pub clips: Vec<Clip>,
 }
 
@@ -199,6 +219,7 @@ impl Rig {
 
     pub fn is_posed(&self) -> bool {
         self.pose.values().any(|q| *q != IDENTITY_QUAT)
+            || self.moved.values().any(|m| *m != [0.0; 3])
     }
 
     pub fn local_offset(&self, bone: usize) -> P3 {
@@ -209,12 +230,19 @@ impl Rig {
         }
     }
 
+    pub fn posed_offset(&self, bone: usize) -> P3 {
+        add(
+            self.local_offset(bone),
+            self.moved.get(&bone).copied().unwrap_or([0.0; 3]),
+        )
+    }
+
     pub fn world(&self, pose: &Pose) -> Vec<Xf> {
         let mut out: Vec<Xf> = Vec::with_capacity(self.bones.len());
         for (i, b) in self.bones.iter().enumerate() {
             let local = Xf {
                 r: quat_matrix(pose.get(&i).copied().unwrap_or(IDENTITY_QUAT)),
-                t: self.local_offset(i),
+                t: self.posed_offset(i),
             };
             out.push(match b.parent {
                 Some(p) => out[p].then(&local),
@@ -274,6 +302,29 @@ impl Rig {
             pose.insert(bone, q);
         }
         pose
+    }
+
+    pub fn sample_moves(&self, clip: usize, t: f64) -> Moves {
+        let clip = &self.clips[clip];
+        let mut moved = Moves::new();
+        for bone in 0..self.bones.len() {
+            let keys = clip.bone_moves(bone);
+            let (Some(first), Some(last)) = (keys.first(), keys.last()) else {
+                continue;
+            };
+            let m = if t <= first.t {
+                first.offset
+            } else if t >= last.t {
+                last.offset
+            } else {
+                let next = keys.iter().position(|k| k.t > t).unwrap_or(keys.len() - 1);
+                let (a, b) = (keys[next - 1], keys[next]);
+                let f = (t - a.t) / (b.t - a.t);
+                add(a.offset, scale(sub(b.offset, a.offset), f))
+            };
+            moved.insert(bone, m);
+        }
+        moved
     }
 
     pub fn ensure_skin(&mut self, vertices: usize) -> &mut Weights {
