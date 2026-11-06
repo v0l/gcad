@@ -175,17 +175,20 @@ impl Rig {
     }
 
     pub fn clip(&self, name: &str) -> Result<usize> {
-        self.clips.iter().position(|c| c.name == name).ok_or_else(|| {
-            let names: Vec<&str> = self.clips.iter().map(|c| c.name.as_str()).collect();
-            anyhow::anyhow!(
-                "no clip called `{name}`; the clips are {}",
-                if names.is_empty() {
-                    "none yet".to_string()
-                } else {
-                    names.join(", ")
-                }
-            )
-        })
+        self.clips
+            .iter()
+            .position(|c| c.name == name)
+            .ok_or_else(|| {
+                let names: Vec<&str> = self.clips.iter().map(|c| c.name.as_str()).collect();
+                anyhow::anyhow!(
+                    "no clip called `{name}`; the clips are {}",
+                    if names.is_empty() {
+                        "none yet".to_string()
+                    } else {
+                        names.join(", ")
+                    }
+                )
+            })
     }
 
     pub fn skin_fits(&self, mesh: &Mesh) -> bool {
@@ -233,7 +236,11 @@ impl Rig {
     }
 
     pub fn posed(&self, mesh: &Mesh, pose: &Pose) -> Mesh {
-        let Some(skin) = self.skin.as_ref().filter(|s| s.len() == mesh.positions.len()) else {
+        let Some(skin) = self
+            .skin
+            .as_ref()
+            .filter(|s| s.len() == mesh.positions.len())
+        else {
             return mesh.clone();
         };
         let xf = self.skin_transforms(pose);
@@ -270,7 +277,8 @@ impl Rig {
     }
 
     pub fn ensure_skin(&mut self, vertices: usize) -> &mut Weights {
-        self.skin.get_or_insert_with(|| vec![vec![(0, 1.0)]; vertices])
+        self.skin
+            .get_or_insert_with(|| vec![vec![(0, 1.0)]; vertices])
     }
 
     pub fn auto_skin(&mut self, mesh: &Mesh, power: f64) {

@@ -31,7 +31,10 @@ fn bones_build_a_hierarchy() {
 #[test]
 fn bone_errors_name_the_bones() {
     let message = failure(&format!("{ARM}bone hand parent=elbow tail=0,0,50"));
-    assert!(message.contains("b_up") && message.contains("b_low"), "{message}");
+    assert!(
+        message.contains("b_up") && message.contains("b_low"),
+        "{message}"
+    );
     let twice = failure(&format!("{ARM}bone b_up head=0,0,0 tail=0,0,1"));
     assert!(twice.contains("already"), "{twice}");
 }
@@ -53,7 +56,10 @@ fn mirror_bone_makes_the_other_side() {
 fn inspect_lists_the_skeleton() {
     let model = build(ARM);
     let text = rig_of(&model).describe();
-    assert!(text.contains("2 bone(s)") && text.contains("b_low (parent b_up)"), "{text}");
+    assert!(
+        text.contains("2 bone(s)") && text.contains("b_low (parent b_up)"),
+        "{text}"
+    );
 }
 
 #[test]
@@ -112,7 +118,10 @@ fn skin_part_moves_only_with_its_bone() {
 #[test]
 fn skin_part_unknown_lists_the_parts() {
     let message = failure(&format!("{ARM}skin part=head bone=b_up"));
-    assert!(message.contains("upper") && message.contains("lower"), "{message}");
+    assert!(
+        message.contains("upper") && message.contains("lower"),
+        "{message}"
+    );
 }
 
 #[test]
@@ -141,18 +150,16 @@ fn skin_paint_moves_weight_to_the_bone() {
 #[test]
 fn an_unposed_rig_equals_the_rest_mesh() {
     let model = build(&format!("{ARM}skin auto"));
-    assert_eq!(*rest_of(&model), *posed_of(&model));
+    assert!(*rest_of(&model) == *posed_of(&model));
     let reset = build(&format!(
         "{ARM}skin auto\npose bone=b_low rotate=40 axis=x\npose reset"
     ));
-    assert_eq!(*rest_of(&reset), *posed_of(&reset));
+    assert!(*rest_of(&reset) == *posed_of(&reset));
 }
 
 #[test]
 fn a_bent_limb_stays_closed_and_keeps_its_volume() {
-    let bent = build(&format!(
-        "{ARM}skin auto\npose bone=b_low rotate=60 axis=x"
-    ));
+    let bent = build(&format!("{ARM}skin auto\npose bone=b_low rotate=60 axis=x"));
     let before = rest_of(&bent);
     let after = posed_of(&bent);
     assert_eq!(after.open_edges(), 0);
@@ -176,15 +183,22 @@ fn pose_rotates_about_the_bone_head() {
 
 #[test]
 fn pose_names_the_bones_when_it_misses() {
-    let message = failure(&format!("{LIMB}bone a head=0,0,0 tail=0,0,20\npose bone=zz rotate=3 axis=x"));
-    assert!(message.contains("`zz`") && message.contains('a'), "{message}");
+    let message = failure(&format!(
+        "{LIMB}bone a head=0,0,0 tail=0,0,20\npose bone=zz rotate=3 axis=x"
+    ));
+    assert!(
+        message.contains("`zz`") && message.contains('a'),
+        "{message}"
+    );
 }
 
 #[test]
 fn pose_without_skin_leaves_the_mesh_alone() {
-    let model = build(&format!("{LIMB}bone a head=0,0,0 tail=0,0,20\npose bone=a rotate=30 axis=x"));
+    let model = build(&format!(
+        "{LIMB}bone a head=0,0,0 tail=0,0,20\npose bone=a rotate=30 axis=x"
+    ));
     assert!(rig_of(&model).skin.is_none());
-    assert_eq!(*rest_of(&model), *posed_of(&model));
+    assert!(*rest_of(&model) == *posed_of(&model));
 }
 
 #[test]
@@ -198,12 +212,149 @@ fn clip_keys_are_sampled_between_keyframes() {
     assert_eq!(rig.clips[0].keys.len(), 2);
     let q = rig.pose[&1];
     let expected = (20.0_f64.to_radians()).sin();
-    assert!((q[0] - expected).abs() < 1.0e-9 && (q[3] - 20.0_f64.to_radians().cos()).abs() < 1.0e-9);
-    assert_ne!(*rest_of(&model), *posed_of(&model));
+    assert!(
+        (q[0] - expected).abs() < 1.0e-9 && (q[3] - 20.0_f64.to_radians().cos()).abs() < 1.0e-9
+    );
+    assert!(*rest_of(&model) != *posed_of(&model));
 }
 
 #[test]
 fn key_without_a_clip_is_refused() {
     let message = failure(&format!("{ARM}key t=0 bone=b_low rotate=3 axis=x"));
     assert!(message.contains("clip"), "{message}");
+}
+
+#[test]
+fn inspect_report_lists_the_skeleton() {
+    let model = build(ARM);
+    let picture = gcad::inspect::inspect(
+        &model,
+        &gcad::inspect::Options {
+            view: gcad::inspect::view("front").unwrap(),
+            centre: None,
+            span: None,
+            part: None,
+            grid: None,
+            marks: vec![],
+            picks: vec![],
+        },
+    )
+    .unwrap();
+    assert!(
+        picture.report.contains("skeleton of 2 bone(s)"),
+        "{}",
+        picture.report
+    );
+    assert!(picture.report.contains("b_low (parent b_up)"));
+}
+
+fn glb_json(bytes: &[u8]) -> (serde_json::Value, Vec<u8>) {
+    assert_eq!(&bytes[0..4], b"glTF");
+    assert_eq!(
+        u32::from_le_bytes(bytes[8..12].try_into().unwrap()) as usize,
+        bytes.len()
+    );
+    let json_len = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    let json = serde_json::from_slice(&bytes[20..20 + json_len]).expect("json chunk");
+    let bin = bytes[28 + json_len..].to_vec();
+    (json, bin)
+}
+
+fn floats(json: &serde_json::Value, bin: &[u8], accessor: usize) -> Vec<f32> {
+    let a = &json["accessors"][accessor];
+    let v = &json["bufferViews"][a["bufferView"].as_u64().unwrap() as usize];
+    let width = match a["type"].as_str().unwrap() {
+        "SCALAR" => 1,
+        "VEC3" => 3,
+        "VEC4" => 4,
+        "MAT4" => 16,
+        other => panic!("{other}"),
+    };
+    let start = v["byteOffset"].as_u64().unwrap() as usize;
+    let n = a["count"].as_u64().unwrap() as usize * width;
+    (0..n)
+        .map(|k| f32::from_le_bytes(bin[start + 4 * k..start + 4 * k + 4].try_into().unwrap()))
+        .collect()
+}
+
+#[test]
+fn glb_carries_skin_weights_and_animations() {
+    let model = build(&format!(
+        "{ARM}skin auto\nclip bend fps=30\nkey t=0 bone=b_low rotate=0 axis=x\nkey t=1 bone=b_low rotate=80 axis=x"
+    ));
+    let bytes = gcad::export::glb_of(&model).expect("glb");
+    let (json, bin) = glb_json(&bytes);
+    assert_eq!(json["asset"]["version"], "2.0");
+    let skin = &json["skins"][0];
+    assert_eq!(skin["joints"].as_array().unwrap().len(), 2);
+    let ibm = floats(
+        &json,
+        &bin,
+        skin["inverseBindMatrices"].as_u64().unwrap() as usize,
+    );
+    assert_eq!(ibm.len(), 32);
+    assert_eq!(&ibm[12..15], &[0.0, 0.0, 0.0]);
+    assert_eq!(&ibm[28..31], &[0.0, -20.0, 0.0]);
+    let prim = &json["meshes"][0]["primitives"][0]["attributes"];
+    let weights = floats(&json, &bin, prim["WEIGHTS_0"].as_u64().unwrap() as usize);
+    for w in weights.chunks(4) {
+        assert!((w.iter().sum::<f32>() - 1.0).abs() < 1.0e-6);
+    }
+    let animation = &json["animations"][0];
+    assert_eq!(animation["name"], "bend");
+    let sampler = &animation["samplers"][0];
+    let times = floats(&json, &bin, sampler["input"].as_u64().unwrap() as usize);
+    assert_eq!(times, [0.0, 1.0]);
+}
+
+#[test]
+fn glb_without_a_rig_has_no_skin() {
+    let model = build(LIMB);
+    let (json, _) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
+    assert!(json.get("skins").is_none() && json.get("animations").is_none());
+}
+
+#[test]
+fn glb_exports_from_a_file_and_obj_is_posed() {
+    let dir = std::path::PathBuf::from(scratch("rig_export"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("rig.gcad");
+    std::fs::write(
+        &source,
+        format!("{ARM}skin auto\npose bone=b_low rotate=60 axis=x\n"),
+    )
+    .unwrap();
+    let run = gcad::model::run_path(&source, &[], None).expect("runs");
+    let out = dir.join("rig.glb");
+    gcad::export::export_model(&run.model, &source, out.to_str().unwrap()).expect("glb");
+    assert!(std::fs::read(&out).unwrap().starts_with(b"glTF"));
+    let obj = dir.join("rig.obj");
+    gcad::export::export_model(&run.model, &source, obj.to_str().unwrap()).expect("obj");
+    let text = std::fs::read_to_string(&obj).unwrap();
+    let posed = gcad::mesh::read_obj(&text).expect("obj reads");
+    assert_eq!(posed.positions.len(), rest_of(&run.model).positions.len());
+    assert!(posed.bounds().unwrap().0[1] < -10.0);
+}
+
+#[test]
+fn rigged_creature_example_poses_and_exports() {
+    let path = std::path::PathBuf::from(format!(
+        "{}/examples/mesh/rigged_creature.gcad",
+        env!("CARGO_MANIFEST_DIR")
+    ));
+    let run = gcad::model::run_path(&path, &[], None).expect("runs");
+    assert!(run.steps.iter().all(|(_, r)| r.is_ok()));
+    let rig = run.model.rigs().last().unwrap().1.clone();
+    assert!(rig.bones.len() >= 12 && rig.clips.len() == 2);
+    let posed = run.model.meshes().last().unwrap().1.clone();
+    assert_eq!(posed.open_edges(), 0);
+    let rest = run.model.rest_meshes().last().unwrap().1.clone();
+    assert!(*rest != *posed, "the walk pose moves the mesh");
+    let ratio = posed.volume() / rest.volume();
+    assert!((0.9..1.1).contains(&ratio), "{ratio}");
+    assert!(
+        gcad::export::glb_of(&run.model)
+            .unwrap()
+            .starts_with(b"glTF")
+    );
 }

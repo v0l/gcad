@@ -56,11 +56,7 @@ impl Model {
         if rig.bone_index(&name).is_some() {
             bail!("there is already a bone called `{name}`");
         }
-        let parent = args
-            .values
-            .get("parent")
-            .map(|p| rig.bone(p))
-            .transpose()?;
+        let parent = args.values.get("parent").map(|p| rig.bone(p)).transpose()?;
         let tail = p3(point3(args.text("tail")?, &self.scope)?);
         let head = match args.values.get("head") {
             Some(text) => p3(point3(text, &self.scope)?),
@@ -146,7 +142,7 @@ impl Model {
         let text = args.text("rotate")?;
         let parts = crate::parse::split_top_level(text, ',');
         if parts.len() == 3 {
-            let angle = |k: usize| crate::parse::eval(&parts[k], &self.scope);
+            let angle = |k: usize| crate::parse::eval(parts[k], &self.scope);
             let q = |axis: P3, deg: f64| rig::quat_axis_angle(axis, deg);
             let x = q([1.0, 0.0, 0.0], angle(0)?)?;
             let y = q([0.0, 1.0, 0.0], angle(1)?)?;
@@ -167,7 +163,9 @@ impl Model {
         let args = Args::new(
             line,
             &["mode"],
-            &["part", "bone", "sphere", "r", "falloff", "strength", "power"],
+            &[
+                "part", "bone", "sphere", "r", "falloff", "strength", "power",
+            ],
             false,
         )?;
         let mesh = self.rest_mesh_for_rig("skin")?;
@@ -299,7 +297,9 @@ impl Model {
             keys: Vec::new(),
         });
         self.mesh_body.clip = Some(rig.clips.len() - 1);
-        Ok(format!("clip `{name}` at {fps} fps; add `key t= bone= rotate=`"))
+        Ok(format!(
+            "clip `{name}` at {fps} fps; add `key t= bone= rotate=`"
+        ))
     }
 
     pub(crate) fn op_key(&mut self, line: &Line) -> Result<String> {
@@ -319,7 +319,8 @@ impl Model {
             IDENTITY_QUAT
         };
         let clip = &mut self.mesh_body.rig.clips[clip];
-        clip.keys.retain(|k| !(k.bone == bone && (k.t - t).abs() < 1.0e-9));
+        clip.keys
+            .retain(|k| !(k.bone == bone && (k.t - t).abs() < 1.0e-9));
         clip.keys.push(Key { t, bone, rotation });
         Ok(format!(
             "clip `{}` has {} key(s), {} s long",

@@ -442,6 +442,42 @@ and `body name` starts a new body of either kind in the same file. `gcad export`
 file with mesh bodies as `.obj` (each part its own `g` group), `.stl` or `.3mf`; solid
 bodies in it are tessellated alongside. Assemblies take solids only.
 
+### Rigging
+
+A mesh body can carry a skeleton, skin weights, a pose and animation clips, one line each.
+Bones are placed in rest-pose coordinates, after `remesh`.
+
+```
+bone hips head=0,8,12 tail=0,0,12
+bone spine parent=hips tail=0,-8,13
+bone fore_l parent=spine head=3,-8,10 tail=3,-8,5
+mirror x of=fore_l
+skin auto
+clip walk fps=24
+key t=0 bone=fore_l rotate=25 axis=x
+key t=0.5 bone=fore_l rotate=-25 axis=x
+pose clip=walk t=0.25
+```
+
+| operation | parameters | does |
+|---|---|---|
+| `bone` | `name` `parent=` `head=x,y,z` `tail=x,y,z` | adds a bone. A child's `head` is its parent's tail unless given. A bone turns about its head |
+| `mirror` | `x` `of=bone` | copies the bone and everything under it to the other side, `_l` names coming back `_r` |
+| `skin auto` | `power=` | weights every vertex to the bones by distance to each bone segment (`power` 4, higher is sharper), at most 4 bones per vertex, weights summing to 1 |
+| `skin` | `part=name bone=name` | binds every vertex of a blockout part rigidly to one bone, so it moves only with that bone |
+| `skin paint` | `bone=` `sphere=x,y,z` `r=` `falloff=` `strength=` | moves weight toward a bone inside the sphere, fading out over `falloff` |
+| `pose` | `bone=` `rotate=angle axis=x\|y\|z\|x,y,z` or `rotate=rx,ry,rz` | turns a bone from rest, relative to its parent; the mesh follows by linear blend skinning, so renders, `inspect` and exports show the pose |
+| `pose reset` | | back to the rest pose |
+| `clip` | `name` `fps=` | starts an animation clip |
+| `key` | `t=` `bone=` `rotate=` `axis=` | a rotation of one bone at a time in seconds, interpolated by slerp. A key without `rotate` is the rest rotation |
+| `pose clip=name t=` | | poses the rig as the clip is at time `t` |
+
+Sculpt before binding: changing the vertex count (`refine`, `decimate`) after `skin` makes `pose` fail
+until the skin is bound again. `gcad inspect` prints the skeleton and clips. `gcad export f.gcad f.glb`
+writes a GLB (Y up) with the skin, joints, inverse bind matrices, weights, one material per part and all
+clips; the GLB holds the current pose as the node pose, the skin binds the rest shape. OBJ, STL and 3MF
+export the posed mesh.
+
 ### Placing detail by eye
 
 `gcad inspect file.gcad out.png` draws one view large enough to place detail from:
