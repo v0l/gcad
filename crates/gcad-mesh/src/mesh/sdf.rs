@@ -572,17 +572,39 @@ mod tests {
     fn creature_blockout_is_closed_at_every_cell_size() {
         let text = std::fs::read_to_string(concat!(
             env!("CARGO_MANIFEST_DIR"),
-            "/examples/mesh/creature.gcad"
+            "/../../examples/mesh/creature.gcad"
         ))
         .expect("example");
-        let lines: Vec<_> = crate::parse::parse_program(&text)
-            .expect("parses")
-            .into_iter()
-            .take_while(|l| l.op != "remesh")
-            .collect();
-        let run = crate::model::run(&lines);
+        let source: String = text
+            .lines()
+            .take_while(|l| !l.starts_with("remesh"))
+            .collect::<Vec<_>>()
+            .join("\n");
+        let lines = crate::parse::parse_program(&source).expect("parses");
+        let mut scene = crate::interp::Scene::default();
+        let mut scope = crate::parse::Scope::new();
+        for line in lines {
+            match line.op.as_str() {
+                "let" => {
+                    for (name, value) in &line.named {
+                        scope.insert(name.clone(), crate::parse::eval(value, &scope).expect("let"));
+                    }
+                }
+                "blob" => {
+                    scene.op_blob(&scope, &line).expect("blob");
+                }
+                "limb" => {
+                    scene.op_limb(&scope, &line).expect("limb");
+                }
+                "mirror" => {
+                    scene.op_mirror(&scope, &line).expect("mirror");
+                }
+                _ => {}
+            }
+        }
+        let run_blockout = &scene.mesh_body.blockout;
         for cell in [0.2, 0.25, 0.3, 0.4, 0.55] {
-            let mesh = remesh(&run.model.mesh_body.blockout, cell).expect("meshes");
+            let mesh = remesh(run_blockout, cell).expect("meshes");
             assert_eq!(mesh.open_edges(), 0, "cell {cell}");
         }
     }
