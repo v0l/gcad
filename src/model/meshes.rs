@@ -96,6 +96,11 @@ impl Model {
         self.scene.op_limb(&self.scope, line)
     }
 
+    pub(crate) fn op_block(&mut self, line: &Line) -> Result<String> {
+        self.start_mesh("block")?;
+        self.scene.op_block(&self.scope, line)
+    }
+
     pub(crate) fn op_remesh(&mut self, line: &Line) -> Result<String> {
         self.scene.op_remesh(&self.scope, line)
     }

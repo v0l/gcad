@@ -224,6 +224,7 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | operation | status | syntax | tests |
 |---|---|---|---|
 | ellipsoid blob | supported | `head: blob 0,0,30 r=5,4,6 rz=20` | `mesh::blob_sphere`, `mesh::blob_ellipsoid_turned` |
+| rounded box block | supported | `plank: block 0,0,5 size=20,4,2 round=0.5 rz=30` | `mesh::block_is_a_rounded_box`, `mesh::block_turns_and_blends` |
 | limb through joints | supported | `arm: limb 0,0,0 0,0,20 r=3,2` | `mesh::limb_capsule` |
 | smooth blend between primitives | supported | `blob ... blend=2` | `mesh::blend_fills_the_join` |
 | carve a blob out | supported | `blob ... mode=cut` | `mesh::blob_cut` |
@@ -253,13 +254,13 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | bones in a hierarchy | supported | `bone knee parent=thigh tail=0,0,5` | `rig::bones_build_a_hierarchy`, `rig::bone_errors_name_the_bones` |
 | mirror a bone chain | supported | `mirror x of=arm_l` | `rig::mirror_bone_makes_the_other_side` |
 | list the skeleton | supported | `gcad inspect f.gcad out.png` | `rig::inspect_lists_the_skeleton`, `rig::inspect_report_lists_the_skeleton` |
-| automatic skin weights | supported | `skin auto` | `rig::skin_auto_weights_sum_to_one_with_four_influences_at_most`, `rig::skin_auto_binds_each_end_to_its_own_bone` |
+| automatic skin weights | supported | `skin auto` | `rig::skin_auto_weights_sum_to_one_with_four_influences_at_most`, `rig::skin_auto_binds_each_end_to_its_own_bone`, `rig::skin_auto_does_not_bind_the_body_to_an_arm_beside_it`, `rig::skin_auto_does_not_bind_a_leg_to_a_hand_hanging_beside_it` |
 | bind a part to a bone | supported | `skin part=upper bone=b_up` | `rig::skin_part_moves_only_with_its_bone`, `rig::skin_part_unknown_lists_the_parts` |
 | paint skin weights | supported | `skin paint bone=b sphere=0,0,10 r=4 falloff=3` | `rig::skin_paint_moves_weight_to_the_bone` |
 | pose a bone | supported | `pose bone=knee rotate=30 axis=x`, `pose reset` | `rig::an_unposed_rig_equals_the_rest_mesh`, `rig::a_bent_limb_stays_closed_and_keeps_its_volume`, `rig::pose_rotates_about_the_bone_head`, `rig::pose_names_the_bones_when_it_misses`, `rig::pose_without_skin_leaves_the_mesh_alone` |
 | animation clips | supported | `clip walk fps=24`, `key t=0.5 bone=hind_l rotate=25 axis=x`, `pose clip=walk t=0.25` | `rig::clip_keys_are_sampled_between_keyframes`, `rig::key_without_a_clip_is_refused` |
 | clip translation keys | supported | `key t=0.3 bone=hips move=0,0,4` | `rig::move_keys_shift_a_bone_and_reach_the_glb` |
-| glTF binary export with skin and clips | supported | `gcad export creature.gcad creature.glb` | `rig::glb_carries_skin_weights_and_animations`, `rig::glb_without_a_rig_has_no_skin`, `rig::glb_exports_from_a_file_and_obj_is_posed`, `rig::glb_colours_are_linear` |
+| glTF binary export with skin and clips | supported | `gcad export creature.gcad creature.glb` | `rig::glb_carries_skin_weights_and_animations`, `rig::glb_without_a_rig_has_no_skin`, `rig::glb_exports_from_a_file_and_obj_is_posed`, `rig::glb_colours_are_linear`, `rig::glb_carries_solid_bodies_in_their_colours`, `rig::a_solid_part_file_exports_to_glb` |
 | a rigged creature with two clips | supported | `examples/mesh/rigged_creature.gcad` | `rig::rigged_creature_example_poses_and_exports` |
 | build a mesh and rig without the CAD kernel | supported | `gcad2glb in.gcad out.glb`, `gcad_mesh::build(source)` | `gcad2glb::rigged_creature_matches_gcad_export_byte_for_byte`, `gcad2glb::creature_matches_gcad_export_byte_for_byte`, `gcad2glb::fox_matches_gcad_export_byte_for_byte`, `gcad2glb::same_spec_gives_identical_bytes`, `gcad2glb::bone_matrices_bend_the_skinned_positions` |
 | solid operations are refused with a line number in the mesh library | supported | `gcad_mesh::build("rect 1 1")` | `gcad2glb::solid_operations_are_refused_with_the_line_number`, `gcad2glb::bad_arguments_name_their_line` |

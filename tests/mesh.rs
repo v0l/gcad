@@ -25,6 +25,31 @@ fn extent(model: &Model) -> ([f64; 3], [f64; 3]) {
 }
 
 #[test]
+fn block_is_a_rounded_box() {
+    let model = build("slab: block 0,0,5 size=20,10,4 round=1\nremesh 0.2");
+    let (lo, hi) = extent(&model);
+    near(hi[0] - lo[0], 20.0, 0.02);
+    near(hi[1] - lo[1], 10.0, 0.02);
+    near(hi[2] - lo[2], 4.0, 0.03);
+    near(lo[2], 3.0, 0.03);
+    let corner = (4.0 - PI) * 1.0 * 1.0 * (20.0 - 2.0 + 10.0 - 2.0 + 4.0 - 2.0) * 1.0;
+    let sphere = 8.0 - 4.0 / 3.0 * PI;
+    near(mesh_volume(&model), 800.0 - corner - sphere, 0.02);
+    assert_eq!(mesh_of(&model).open_edges(), 0);
+}
+
+#[test]
+fn block_turns_and_blends() {
+    let model = build(
+        "post: block 0,0,10 size=2,2,20 round=0.5\nbar: block 0,0,15 size=20,2,3 round=0.5 rz=90 blend=0.5\nremesh 0.2",
+    );
+    let (lo, hi) = extent(&model);
+    near(hi[1] - lo[1], 20.0, 0.03);
+    assert!(hi[0] - lo[0] < 3.5, "{}", hi[0] - lo[0]);
+    assert_eq!(mesh_of(&model).parts, ["post", "bar"]);
+}
+
+#[test]
 fn blob_sphere() {
     let model = build("ball: blob 0,0,0 r=10\nremesh 0.4");
     near(mesh_volume(&model), 4.0 / 3.0 * PI * 1000.0, 0.01);

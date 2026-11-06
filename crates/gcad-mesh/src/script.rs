@@ -233,6 +233,7 @@ const SUBSET: &[&str] = &[
     "if",
     "blob",
     "limb",
+    "block",
     "remesh",
     "select",
     "inflate",
@@ -324,6 +325,7 @@ impl Run {
             }
             "blob" => scene.op_blob(scope, line),
             "limb" => scene.op_limb(scope, line),
+            "block" => scene.op_block(scope, line),
             "remesh" => scene.op_remesh(scope, line),
             "select" => scene.op_select(scope, line),
             "inflate" => scene.op_inflate(scope, line),

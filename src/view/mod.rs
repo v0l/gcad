@@ -1,3 +1,4 @@
+mod anim;
 mod app;
 #[cfg(not(target_arch = "wasm32"))]
 mod remote_panel;

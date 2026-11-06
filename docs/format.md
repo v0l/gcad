@@ -408,6 +408,7 @@ Blocking out, before `remesh`:
 |---|---|---|
 | `blob` | `x,y,z` `r=` `blend=` `mode=add\|cut\|intersect\|shell` `rx=` `ry=` `rz=` | an ellipsoid centred on the point, of radius `r` or radii `rx,ry,rz` along x, y and z, turned by `rx`, `ry`, `rz` degrees about x, then y, then z. `blend` is how far its surface melts into what is already there, as a smooth fillet of about that size (0, a sharp join, unless given). `mode=cut` carves it out and `mode=intersect` keeps only what it shares. `mode=shell` keeps it a closed surface of its own, meshed finer than the body so it stays crisp however small: eyeballs, pupils, noses, claws, inner ears, anything that sits on the body rather than grows out of it |
 | `limb` | `x,y,z x,y,z ...` `r=` `blend=` `mode=` | a tube through two or more joints with rounded ends, its radius `r` at every joint or one radius per joint (`r=2,1.6,1.3`), tapering smoothly between them. Arms, legs, tails, horns, necks |
+| `block` | `x,y,z` `size=` `round=` `blend=` `mode=` `rx=` `ry=` `rz=` | a box centred on the point, `size` one edge or x,y,z edges, its edges and corners rounded by `round` (0, sharp, up to half the smallest size), turned like a `blob`. Planks, posts, signs, wheels' hubs, car bodies, anything flat-sided |
 | `mirror` | `x\|y\|z` `of=label` `offset=` | adds the mirror image of one labelled blob or limb (or of every one, without `of`) across the plane through `offset` (0) square to the axis. A part named `..._l` comes back `..._r` and the other way round |
 | `remesh` | `cell` | turns the blockout into a closed mesh with triangles about `cell` across, a 120th of its size unless given. Each vertex belongs to the part (the label of the blob or limb) nearest it, so later lines can select `head` or `arm_l`. A sculpting line before any `remesh` remeshes at the default cell first |
 
@@ -491,7 +492,7 @@ pose clip=walk t=0.25
 |---|---|---|
 | `bone` | `name` `parent=` `head=x,y,z` `tail=x,y,z` | adds a bone. A child's `head` is its parent's tail unless given. A bone turns about its head |
 | `mirror` | `x` `of=bone` | copies the bone and everything under it to the other side, `_l` names coming back `_r` |
-| `skin auto` | `power=` | weights every vertex to the bones by distance to each bone segment (`power` 4, higher is sharper), at most 4 bones per vertex, weights summing to 1 |
+| `skin auto` | `power=` | weights every vertex to the bones by distance to each bone segment it can reach through the inside of the mesh, so an arm hanging beside the body or a hand beside a leg does not pull it (`power` 4, higher is sharper), at most 4 bones per vertex, weights summing to 1 |
 | `skin` | `part=name bone=name` | binds every vertex of a blockout part rigidly to one bone, so it moves only with that bone |
 | `skin paint` | `bone=` `sphere=x,y,z` `r=` `falloff=` `strength=` | moves weight toward a bone inside the sphere, fading out over `falloff` |
 | `pose` | `bone=` `rotate=angle axis=x\|y\|z\|x,y,z` or `rotate=rx,ry,rz` | turns a bone from rest, relative to its parent; the mesh follows by linear blend skinning, so renders, `inspect` and exports show the pose |
@@ -503,7 +504,7 @@ pose clip=walk t=0.25
 Sculpt before binding: changing the vertex count (`refine`, `decimate`) after `skin` makes `pose` fail
 until the skin is bound again. `gcad inspect` prints the skeleton and clips. `gcad export f.gcad f.glb`
 writes a GLB (Y up) with the skin, joints, inverse bind matrices, weights, one material per part and all
-clips; the GLB holds the current pose as the node pose, the skin binds the rest shape. OBJ, STL and 3MF
+clips, and every solid body beside them as its own mesh in its `color`, with flat faces; the GLB holds the current pose as the node pose, the skin binds the rest shape. OBJ, STL and 3MF
 export the posed mesh.
 
 ### Placing detail by eye
@@ -1018,6 +1019,18 @@ The viewer also has:
   rebuilding, follows couples and closed loops, locks joints that mates hold, and
   checks for parts that overlap at the slider positions;
 - open (or ctrl-O) to switch to another `.gcad` file.
+
+Mesh bodies show their part colours, the soft borders of `color ... soft=` and the shine of
+`gloss=` as the GLB export does, and a `material` with a texture (`material pine`) maps it onto
+the mesh. On a rigged mesh an animation card lists the bone and clip counts and every clip:
+pick one to play it, with play/pause, loop, a frame back and forward, a time slider, the
+speed, and the time and frame at the clip's fps. `pose bones` opens a slider per bone axis
+to pose it by hand on top of the clip, `skeleton` draws the bones over the mesh, and
+`reset pose` goes back to what the file says. `as file` shows the file's own `pose` lines,
+as `gcad inspect` and the exports do. Saving the file keeps the clip, time and bone sliders
+while the clip and bones still exist.
+
+![walk at 0 s](viewer-walk-0.png) ![walk at 0.5 s](viewer-walk-0.5.png)
 
 `render` lays the views out as iso (top left), top (top right), front from -Y
 (bottom left) and right from +X (bottom right), each with an axis marker: X red,

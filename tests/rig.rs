@@ -81,6 +81,59 @@ fn skin_auto_weights_sum_to_one_with_four_influences_at_most() {
 }
 
 #[test]
+fn skin_auto_does_not_bind_the_body_to_an_arm_beside_it() {
+    let model = build(
+        "torso: blob 0,0,20 r=6,4,12\narm_l: limb 8.5,0,30 8.5,0,10 r=2 blend=0.5\nremesh 0.5\nbone spine head=0,0,8 tail=0,0,32\nbone arm_l head=8.5,0,30 tail=8.5,0,10\nskin auto",
+    );
+    let rig = rig_of(&model);
+    let mesh = rest_of(&model);
+    let skin = rig.skin.as_ref().unwrap();
+    let torso = mesh.parts.iter().position(|p| p == "torso").unwrap() as u16;
+    let worst = mesh
+        .labels
+        .iter()
+        .zip(skin)
+        .filter(|(l, _)| **l == torso)
+        .zip(&mesh.positions)
+        .filter(|(_, p)| p[0] < 4.0)
+        .map(|((_, w), _)| {
+            w.iter()
+                .filter(|(b, _)| *b == 1)
+                .map(|(_, w)| *w)
+                .sum::<f64>()
+        })
+        .fold(0.0, f64::max);
+    assert!(worst < 0.05, "torso vertices carry {worst:.2} of the arm");
+}
+
+#[test]
+fn skin_auto_does_not_bind_a_leg_to_a_hand_hanging_beside_it() {
+    let model = build(
+        "leg_l: limb 6,0,40 6,0,0 r=4\narm_l: limb 14,0,70 14,0,44 r=2\nremesh 0.5\nbone thigh head=6,0,40 tail=6,0,0\nbone arm head=14,0,70 tail=14,0,44\nbone hand parent=arm tail=14,0,38\nskin auto",
+    );
+    let rig = rig_of(&model);
+    let mesh = rest_of(&model);
+    let skin = rig.skin.as_ref().unwrap();
+    let leg = mesh.parts.iter().position(|p| p == "leg_l").unwrap() as u16;
+    let worst = mesh
+        .labels
+        .iter()
+        .zip(skin)
+        .filter(|(l, _)| **l == leg)
+        .map(|(_, w)| {
+            w.iter()
+                .filter(|(b, _)| *b != 0)
+                .map(|(_, w)| *w)
+                .sum::<f64>()
+        })
+        .fold(0.0, f64::max);
+    assert!(
+        worst < 0.02,
+        "leg vertices carry {worst:.2} of the arm and hand"
+    );
+}
+
+#[test]
 fn skin_auto_binds_each_end_to_its_own_bone() {
     let model = build(&format!("{ARM}skin auto"));
     let rest = rest_of(&model);
@@ -346,6 +399,42 @@ fn glb_colours_are_linear() {
         .as_f64()
         .unwrap();
     assert!((base - 0.2158).abs() < 1.0e-3, "{base}");
+}
+
+#[test]
+fn glb_carries_solid_bodies_in_their_colours() {
+    let model = build(
+        "rect 20 10\nextrude 4\ncolor #ff0000\nbody post\nplane XY offset=4\ncircle 2\nextrude 10\ncolor #0000ff\n",
+    );
+    let (json, bin) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
+    let names: Vec<&str> = json["meshes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["main", "post"]);
+    let red = &json["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"];
+    assert_eq!(red[0].as_f64().unwrap(), 1.0);
+    assert_eq!(red[2].as_f64().unwrap(), 0.0);
+    let attributes = &json["meshes"][1]["primitives"][0]["attributes"];
+    let accessor = &json["accessors"][attributes["POSITION"].as_u64().unwrap() as usize];
+    let top = accessor["max"][1].as_f64().unwrap();
+    assert!((top - 14.0).abs() < 1.0e-6, "{top}");
+    assert!(floats(&json, &bin, attributes["NORMAL"].as_u64().unwrap() as usize).len() > 0);
+}
+
+#[test]
+fn a_solid_part_file_exports_to_glb() {
+    let dir = std::path::PathBuf::from(scratch("solid_glb"));
+    std::fs::create_dir_all(&dir).unwrap();
+    let source = dir.join("plate.gcad");
+    std::fs::write(&source, "rect 20 10\nextrude 4\ncolor #ff0000\n").unwrap();
+    let run = gcad::model::run_path(&source, &[], None).expect("runs");
+    let out = dir.join("plate.glb");
+    gcad::export::export_model(&run.model, &source, out.to_str().unwrap()).expect("glb");
+    let (json, _) = glb_json(&std::fs::read(&out).unwrap());
+    assert_eq!(json["meshes"][0]["name"], "main");
 }
 
 #[test]

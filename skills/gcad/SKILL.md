@@ -528,6 +528,9 @@ Bones, skin weights, poses and clips are one line each, after `remesh` and all s
 for the other side), `skin auto` then `skin part=head bone=head_b` for rigid parts, `clip name fps=`
 with `key t= bone= rotate= axis=` lines, `pose clip=name t=` to look at a frame and `gcad render`
 it, `gcad export f.gcad f.glb` for the game asset. Example: `examples/mesh/rigged_creature.gcad`.
+The viewer (`gcad f.gcad`) draws mesh colours, soft borders, gloss and material textures, and on a
+rigged mesh has an animation card: pick a clip to play or scrub it, `pose bones` sliders, a
+`skeleton` overlay and `reset pose`. Use it to look at clips; it keeps the clip and time on save.
 
 For games, ship the text and build at load: `gcad_mesh::build(include_str!("hero.gcad"))` (crate
 `crates/gcad-mesh`, no CAD kernel) gives vertex buffers, joints, weights, clips and
