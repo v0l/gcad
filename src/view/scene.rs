@@ -1184,6 +1184,50 @@ mod tests {
         assert!(wave.circle.is_none());
     }
 
+    fn built(source: &str) -> super::Scene {
+        let lines = crate::parse::parse_program(source).expect("parses");
+        let model = crate::model::run(&lines).model;
+        super::build(&model, &[], &[], [1.0, 0.0, 0.0])
+    }
+
+    #[test]
+    fn a_mesh_body_carries_part_colours_and_gloss() {
+        let scene = built(
+            "a: blob 0,0,0 r=5\nb: blob 6,0,0 r=3\nremesh 1\ncolor #ff0000 part=a gloss=0.8\ncolor #0000ff part=b",
+        );
+        let surfaces = &scene.mesh.surfaces;
+        assert!(
+            surfaces
+                .iter()
+                .any(|s| s.colour[0] > 0.9 && s.colour[2] < 0.1)
+        );
+        assert!(
+            surfaces
+                .iter()
+                .any(|s| s.colour[2] > 0.9 && s.colour[0] < 0.1)
+        );
+        let rough: Vec<f32> = surfaces
+            .iter()
+            .map(|s| s.material.pbr().roughness)
+            .collect();
+        assert!(rough.iter().any(|r| *r < 0.5), "{rough:?}");
+    }
+
+    #[test]
+    fn soft_borders_give_blended_colours() {
+        let scene = built(
+            "a: blob 0,0,0 r=5\nb: blob 6,0,0 r=3\nremesh 0.5\ncolor #ff0000 part=a soft=2\ncolor #0000ff part=b",
+        );
+        let blended = scene
+            .mesh
+            .surfaces
+            .iter()
+            .flat_map(|s| &s.colours)
+            .filter(|c| c[0] > 0.15 && c[2] > 0.15)
+            .count();
+        assert!(blended > 0);
+    }
+
     #[test]
     fn mesh_bodies_carry_vertex_colours_gloss_and_textures() {
         let source = "left: blob -3,0,0 r=3\nright: blob 3,0,0 r=3 blend=1\nremesh 0.3\nmaterial pine\ncolor #000000\ncolor #ffffff part=right soft=2 gloss=0.8";

@@ -463,7 +463,7 @@ pose clip=walk t=0.25
 |---|---|---|
 | `bone` | `name` `parent=` `head=x,y,z` `tail=x,y,z` | adds a bone. A child's `head` is its parent's tail unless given. A bone turns about its head |
 | `mirror` | `x` `of=bone` | copies the bone and everything under it to the other side, `_l` names coming back `_r` |
-| `skin auto` | `power=` | weights every vertex to the bones by distance to each bone segment (`power` 4, higher is sharper), at most 4 bones per vertex, weights summing to 1 |
+| `skin auto` | `power=` | weights every vertex to the bones by distance to each bone segment it can reach through the inside of the mesh, so an arm hanging beside the body or a hand beside a leg does not pull it (`power` 4, higher is sharper), at most 4 bones per vertex, weights summing to 1 |
 | `skin` | `part=name bone=name` | binds every vertex of a blockout part rigidly to one bone, so it moves only with that bone |
 | `skin paint` | `bone=` `sphere=x,y,z` `r=` `falloff=` `strength=` | moves weight toward a bone inside the sphere, fading out over `falloff` |
 | `pose` | `bone=` `rotate=angle axis=x\|y\|z\|x,y,z` or `rotate=rx,ry,rz` | turns a bone from rest, relative to its parent; the mesh follows by linear blend skinning, so renders, `inspect` and exports show the pose |
