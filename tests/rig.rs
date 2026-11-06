@@ -331,6 +331,16 @@ fn glb_carries_skin_weights_and_animations() {
 }
 
 #[test]
+fn glb_colours_are_linear() {
+    let model = build(&format!("{LIMB}color #808080\n"));
+    let (json, _) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
+    let base = json["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"][0]
+        .as_f64()
+        .unwrap();
+    assert!((base - 0.2158).abs() < 1.0e-3, "{base}");
+}
+
+#[test]
 fn glb_without_a_rig_has_no_skin() {
     let model = build(LIMB);
     let (json, _) = glb_json(&gcad::export::glb_of(&model).expect("glb"));

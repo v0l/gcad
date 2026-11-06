@@ -21,6 +21,14 @@ fn y_up(p: P3) -> P3 {
     [p[0], p[2], -p[1]]
 }
 
+fn linear(c: f64) -> f64 {
+    if c <= 0.04045 {
+        c / 12.92
+    } else {
+        ((c + 0.055) / 1.055).powf(2.4)
+    }
+}
+
 fn quat_y_up(q: [f64; 4]) -> [f64; 4] {
     [q[0], q[2], -q[1], q[3]]
 }
@@ -178,7 +186,7 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
             materials.push(json!({
                 "name": format!("{}.{name}", body.name),
                 "pbrMetallicRoughness": {
-                    "baseColorFactor": [colour[0], colour[1], colour[2], 1.0],
+                    "baseColorFactor": [linear(colour[0]), linear(colour[1]), linear(colour[2]), 1.0],
                     "metallicFactor": 0.0,
                     "roughnessFactor": 1.0 - gloss * 0.8,
                 },

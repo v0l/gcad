@@ -259,7 +259,7 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | pose a bone | supported | `pose bone=knee rotate=30 axis=x`, `pose reset` | `rig::an_unposed_rig_equals_the_rest_mesh`, `rig::a_bent_limb_stays_closed_and_keeps_its_volume`, `rig::pose_rotates_about_the_bone_head`, `rig::pose_names_the_bones_when_it_misses`, `rig::pose_without_skin_leaves_the_mesh_alone` |
 | animation clips | supported | `clip walk fps=24`, `key t=0.5 bone=hind_l rotate=25 axis=x`, `pose clip=walk t=0.25` | `rig::clip_keys_are_sampled_between_keyframes`, `rig::key_without_a_clip_is_refused` |
 | clip translation keys | supported | `key t=0.3 bone=hips move=0,0,4` | `rig::move_keys_shift_a_bone_and_reach_the_glb` |
-| glTF binary export with skin and clips | supported | `gcad export creature.gcad creature.glb` | `rig::glb_carries_skin_weights_and_animations`, `rig::glb_without_a_rig_has_no_skin`, `rig::glb_exports_from_a_file_and_obj_is_posed` |
+| glTF binary export with skin and clips | supported | `gcad export creature.gcad creature.glb` | `rig::glb_carries_skin_weights_and_animations`, `rig::glb_without_a_rig_has_no_skin`, `rig::glb_exports_from_a_file_and_obj_is_posed`, `rig::glb_colours_are_linear` |
 | a rigged creature with two clips | supported | `examples/mesh/rigged_creature.gcad` | `rig::rigged_creature_example_poses_and_exports` |
 
 ## Assemblies
