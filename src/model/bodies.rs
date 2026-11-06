@@ -194,17 +194,7 @@ impl Model {
     pub(crate) fn op_mirror(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["on"], &["offset", "of"], false)?;
         if self.has_mesh() {
-            let on = args.text("on")?;
-            let axis = match on.to_ascii_lowercase().as_str() {
-                "x" | "yz" => 0,
-                "y" | "xz" => 1,
-                "z" | "xy" => 2,
-                other => {
-                    bail!("a mesh mirrors across x, y or z (the YZ, XZ or XY plane), got `{other}`")
-                }
-            };
-            let at = args.optional_number("offset", &self.scope)?.unwrap_or(0.0);
-            return self.mesh_mirror(axis, at, args.values.get("of").copied());
+            return self.scene.op_mirror(&self.scope, line);
         }
         if let Some(of) = args.values.get("of") {
             let frame = self
@@ -356,10 +346,7 @@ impl Model {
         let by = point3(args.text("by")?, &self.scope)?;
         let copy = copy_flag(&args)?;
         if self.has_mesh() {
-            if copy {
-                bail!("`move copy` copies solids; a mesh moves its selection");
-            }
-            return self.mesh_move([by.x, by.y, by.z]);
+            return self.scene.op_move(&self.scope, line);
         }
         self.place_or_copy(line, Matrix4::from_translation(by.to_vec()), copy)
     }
@@ -386,12 +373,11 @@ impl Model {
             (None, None) => Point3::origin(),
         };
         if self.has_mesh() {
-            if copy {
-                bail!("`rotate copy` copies solids; a mesh turns its selection");
-            }
-            let about =
-                (args.has("about") || named.is_some()).then_some([center.x, center.y, center.z]);
-            return self.mesh_rotate([direction.x, direction.y, direction.z], angle, about);
+            let axes = &self.axes;
+            return self.scene.op_rotate(&self.scope, line, |name| {
+                axes.get(name)
+                    .map(|(p, d)| ([p.x, p.y, p.z], [d.x, d.y, d.z]))
+            });
         }
         self.place_or_copy(
             line,
@@ -418,7 +404,7 @@ impl Model {
             .map(|text| point3(text, &self.scope))
             .transpose()?;
         if self.has_mesh() {
-            return self.mesh_scale(factors, given.map(|c| [c.x, c.y, c.z]));
+            return self.scene.op_scale(&self.scope, line);
         }
         let center = given.unwrap_or_else(Point3::origin);
         self.transform_all(about(

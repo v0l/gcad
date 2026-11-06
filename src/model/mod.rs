@@ -900,27 +900,7 @@ impl Model {
     }
 
     pub(crate) fn guarded(&self, line: &Line) -> Result<std::result::Result<Line, String>> {
-        let text = line.text.trim_start();
-        let text = match &line.label {
-            Some(label) => text.trim_start_matches(&format!("{label}:")).trim_start(),
-            None => text,
-        };
-        let rest = text
-            .strip_prefix("if")
-            .ok_or_else(|| anyhow!("`if` must start the line"))?
-            .trim_start();
-        let (condition, inner) = rest
-            .split_once(char::is_whitespace)
-            .ok_or_else(|| anyhow!("write `if <condition> <operation ...>`"))?;
-        let holds = crate::parse::eval(condition, &self.scope)?;
-        if holds == 0.0 {
-            return Ok(Err(condition.to_string()));
-        }
-        let mut inner = crate::parse::parse_line(line.number, inner.trim())?;
-        if inner.label.is_none() {
-            inner.label = line.label.clone();
-        }
-        Ok(Ok(inner))
+        gcad_mesh::ops::guard(line, &self.scope)
     }
 
     fn op_include(&mut self, line: &Line) -> Result<String> {

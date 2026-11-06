@@ -68,10 +68,6 @@ impl Model {
         self.scene.rigs()
     }
 
-    pub(crate) fn current_mesh(&self) -> Result<Option<Arc<Mesh>>> {
-        self.scene.current_mesh()
-    }
-
     pub(crate) fn finish_mesh_body(&mut self) -> Result<()> {
         self.scene.finish_mesh_body()
     }
@@ -84,27 +80,6 @@ impl Model {
         soft: Option<f64>,
     ) -> Result<String> {
         self.scene.colour_mesh_part(part, colour, gloss, soft)
-    }
-
-    pub(crate) fn mesh_move(&mut self, by: mesh::P3) -> Result<String> {
-        self.scene.mesh_move(by)
-    }
-
-    pub(crate) fn mesh_rotate(
-        &mut self,
-        axis: mesh::P3,
-        angle: f64,
-        about: Option<mesh::P3>,
-    ) -> Result<String> {
-        self.scene.mesh_rotate(axis, angle, about)
-    }
-
-    pub(crate) fn mesh_scale(&mut self, factors: mesh::P3, about: Option<mesh::P3>) -> Result<String> {
-        self.scene.mesh_scale(factors, about)
-    }
-
-    pub(crate) fn mesh_mirror(&mut self, axis: usize, at: f64, of: Option<&str>) -> Result<String> {
-        self.scene.mesh_mirror(axis, at, of)
     }
 
     pub(crate) fn op_mesh_pose(&mut self, line: &Line) -> Result<String> {
