@@ -472,6 +472,12 @@ for the other side), `skin auto` then `skin part=head bone=head_b` for rigid par
 with `key t= bone= rotate= axis=` lines, `pose clip=name t=` to look at a frame and `gcad render`
 it, `gcad export f.gcad f.glb` for the game asset. Example: `examples/mesh/rigged_creature.gcad`.
 
+For games, ship the text and build at load: `gcad_mesh::build(include_str!("hero.gcad"))` (crate
+`crates/gcad-mesh`, no CAD kernel) gives vertex buffers, joints, weights, clips and
+`bone_matrices(clip, t)` for GPU skinning; `to_glb()` or `gcad2glb in.gcad out.glb` writes the GLB;
+`include/gcad_mesh.h` is the C ABI. Only mesh and rig lines run there, others fail with the line
+number. See `docs/gcad-mesh.md`.
+
 ## Output
 
 ```sh

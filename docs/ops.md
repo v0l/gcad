@@ -260,6 +260,9 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | animation clips | supported | `clip walk fps=24`, `key t=0.5 bone=hind_l rotate=25 axis=x`, `pose clip=walk t=0.25` | `rig::clip_keys_are_sampled_between_keyframes`, `rig::key_without_a_clip_is_refused` |
 | glTF binary export with skin and clips | supported | `gcad export creature.gcad creature.glb` | `rig::glb_carries_skin_weights_and_animations`, `rig::glb_without_a_rig_has_no_skin`, `rig::glb_exports_from_a_file_and_obj_is_posed` |
 | a rigged creature with two clips | supported | `examples/mesh/rigged_creature.gcad` | `rig::rigged_creature_example_poses_and_exports` |
+| build a mesh and rig without the CAD kernel | supported | `gcad2glb in.gcad out.glb`, `gcad_mesh::build(source)` | `gcad2glb::rigged_creature_matches_gcad_export_byte_for_byte`, `gcad2glb::creature_matches_gcad_export_byte_for_byte`, `gcad2glb::fox_matches_gcad_export_byte_for_byte`, `gcad2glb::same_spec_gives_identical_bytes`, `gcad2glb::bone_matrices_bend_the_skinned_positions` |
+| solid operations are refused with a line number in the mesh library | supported | `gcad_mesh::build("rect 1 1")` | `gcad2glb::solid_operations_are_refused_with_the_line_number`, `gcad2glb::bad_arguments_name_their_line` |
+| lower remesh detail for slow devices | supported | `gcad2glb --detail 3 in.gcad out.glb` | `gcad2glb::lower_detail_gives_fewer_triangles` |
 
 ## Assemblies
 

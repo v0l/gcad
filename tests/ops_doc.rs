@@ -1,7 +1,8 @@
 use std::collections::BTreeMap;
 
-const CATEGORIES: [&str; 17] = [
+const CATEGORIES: [&str; 18] = [
     "rig",
+    "gcad2glb",
     "sketch",
     "workplane",
     "features",
