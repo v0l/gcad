@@ -991,6 +991,18 @@ The viewer also has:
   checks for parts that overlap at the slider positions;
 - open (or ctrl-O) to switch to another `.gcad` file.
 
+Mesh bodies show their part colours, the soft borders of `color ... soft=` and the shine of
+`gloss=` as the GLB export does, and a `material` with a texture (`material pine`) maps it onto
+the mesh. On a rigged mesh an animation card lists the bone and clip counts and every clip:
+pick one to play it, with play/pause, loop, a frame back and forward, a time slider, the
+speed, and the time and frame at the clip's fps. `pose bones` opens a slider per bone axis
+to pose it by hand on top of the clip, `skeleton` draws the bones over the mesh, and
+`reset pose` goes back to what the file says. `as file` shows the file's own `pose` lines,
+as `gcad inspect` and the exports do. Saving the file keeps the clip, time and bone sliders
+while the clip and bones still exist.
+
+![walk at 0 s](viewer-walk-0.png) ![walk at 0.5 s](viewer-walk-0.5.png)
+
 `render` lays the views out as iso (top left), top (top right), front from -Y
 (bottom left) and right from +X (bottom right), each with an axis marker: X red,
 Y green, Z blue.
