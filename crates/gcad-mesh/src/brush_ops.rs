@@ -627,7 +627,7 @@ impl Scene {
         let args = Args::new(
             line,
             &[],
-            &["decimate", "max_error", "keep", "focus", "weight"],
+            &["decimate", "max_error", "focus", "weight"],
             false,
         )?;
         let mesh = self.sculpted("finish")?;
@@ -661,12 +661,6 @@ impl Scene {
             bail!(
                 "say how far to go: `finish decimate=20000`, `finish decimate=10%` or `finish max_error=0.01`"
             );
-        }
-        let keep = args.values.get("keep").copied().unwrap_or("parts");
-        for k in keep.split(',') {
-            if !matches!(k.trim(), "parts" | "creases" | "colours" | "colors") {
-                bail!("`keep` lists parts, creases or colours, got `{k}`");
-            }
         }
         if self.mesh_body.rig.skin.is_some() {
             bail!(

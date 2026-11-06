@@ -129,3 +129,18 @@ A brush only visits the vertices under it through a spatial grid, but each strok
 grid, the normals and the closest-point index of the whole mesh, which is most of its time. `finish`
 runs once at the end; `finish max_error=` decimates several times to find the count, so it costs a few
 times more.
+
+## Fine detail at a game budget
+
+An agent that had only the gcad skill sculpted a head (498k triangles while sculpting) and a hand
+(119k), each finished with `finish decimate=20000`; the surface moved at most 0.2% and 0.07% of
+their size. The same head blocked out the old way (`remesh 0.3`, `refine`, `crease`,
+`decimate 20000`) is on the left, the brush version on the right, both at 20000 triangles:
+
+![before and after](sculpt-before-after.png)
+
+![head and hand](sculpt-head-hand.png)
+
+`examples/mesh/hero.gcad` is the kids-free-games hero rebuilt this way: 436k triangles of brush
+work (mouth, lips, dimples, pores, brow, cap stitches, hair strands on a layer, sleeve and knee
+folds) finished to 14000 with `focus=` on the face, then rigged.

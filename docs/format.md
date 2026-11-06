@@ -431,9 +431,37 @@ Sculpting, after `remesh` or `import`:
 | `import` | `file.obj mesh` or `file.stl mesh` | starts the body from a mesh file; an OBJ's `o` and `g` groups become its parts |
 | `color` | as for solids, and `part=name` `gloss=` | colours the whole mesh, or with `part=` one part of it: a white bib, dark socks, black eyes. `gloss` from 0 (matte, the default) to 1 (wet) makes the part shine: 0.8 for eyes and noses, 0.3 for claws. `soft=` fades the part's colour into its neighbours over that distance either side of the border instead of a hard edge: fur markings, a pale belly, dark socks. OBJ export writes colour and shine to an `.mtl` beside it |
 
-The mesh starts as fine as `remesh` made it, the same everywhere. Make detail where it goes
-rather than everywhere: a coarse `remesh`, then `select` the face and `refine` it before
-creasing it, and `decimate` at the end to the triangle budget of the game.
+`select` also takes `profile=smooth|linear|sharp|flat|curve(...)`, the shape of its falloff, and
+`strength=`, a factor on every weight, so any of the ops above can have a soft or partial edge.
+
+Brushes, the way to sculpt fine detail. Mesh the blockout fine (`remesh 0.1`) and sculpt at that
+resolution; decimate once with `finish` at the end.
+
+| operation | parameters | does |
+|---|---|---|
+| `brush` | `name` `type=` `size=` `strength=` `falloff=` `focal=` `edge=` `spacing=` `lazy=` `alpha=` `mirror=x\|y\|z` `geodesic=on` `normal=auto\|vertex\|x,y,z` `detail=` `pinch=` | defines a named brush, or changes settings of one defined before (`brush clay strength=0.04`). `type` is `draw` (or `standard`), `clay` (`buildup`), `inflate`, `smooth`, `pinch`, `dam_standard` (`crease`), `slash`, `planar` (`flatten`), `trim`, `polish`, `move` (`grab`), `snake_hook`, `nudge` or `stamp` (`alpha`). `size` is the radius in model units. `strength` is the height for draw, clay, inflate, crease, slash and stamp (a quarter of `size` unless given), and the share of the way for smooth (passes), pinch, planar, trim, polish, move and nudge. `falloff` is `smooth`, `linear`, `sharp`, `flat` or `curve(a,b,...)`, values from the rim to the centre. `edge` is the share of the radius that falls off (1, all of it; 0.2 keeps a hard core). `focal` from -1 to 1 shifts the falloff toward the rim or the centre. `spacing` is the distance between dabs as a share of `size` (0.25). `lazy` from 0 to 1 smooths a shaky path. `alpha` is `noise`, `pores`, `scales`, `wrinkles`, `stitch`, `hair` or `dots`, with an optional `(size,seed)`. `mirror` strokes both sides. `geodesic=on` measures the radius over the surface so a brush on one side of a thin part leaves the other side. `detail` refines the triangles under the brush to that edge length first, like `dyntopo` for one brush. `pinch` (0.3 for crease, 0.6 for slash) draws the sides of a groove in |
+| `dab` | `brush` `at=x,y,z` `pressure=` `to=x,y,z` | one dab of the brush on the surface point nearest `at`. A `move` or `snake_hook` dab drags to `to` |
+| `stroke` | `brush` `from=x,y,z to=x,y,z`, or points `x,y,z x,y,z ...`, `pressure=a,b,...` | dabs the brush along the path every `spacing`, each dab on the surface point nearest the path. `pressure` scales the strength along the stroke, from the first value at the start to the last at the end. `move` drags the region under `from` by `to - from`, `snake_hook` pulls a spike out along the path. The reply says how many vertices moved, how far, how many triangles `detail` added, and how far off the surface the stroke started |
+| `mask` | `sphere=x,y,z r=`, `box=`, `part=`, `by=height axis= from= to=`, `by=cavity r=`, `by=curvature r=`, `falloff=` `strength=`; or `invert`, `clear`, `blur N`, `grow D`, `shrink D` | holds vertices still: brushes and every sculpting line above move a masked vertex by its unmasked share only. Masks add up; `invert` swaps them, `blur` softens the edge, `grow` and `shrink` move it over the surface |
+| `hide`, `isolate`, `show` | part names | `hide ear_l` holds a whole part still, `isolate head` holds every other part, `show` (or `show ear_l`) frees them again |
+| `group` | `name` `sphere=x,y,z r=` or `box=` | makes the vertices inside a new part, a polygroup to `select`, `mask part=` or colour |
+| `join` | `a b` `blend=` `falloff=` | smooths across the border of two parts over `blend` either side, filling the crease where a limb meets a body. Parts that do not touch blend where they come within `blend` of each other |
+| `dyntopo` | `on detail=` or `off` | while on, every brush first refines the triangles under it to `detail`, so fine strokes stay sharp without refining the whole mesh |
+| `subdivide` | `levels` | splits every triangle into four, `levels` times (1), placing new vertices on the curve |
+| `level` | `name` | stores the surface as it is now |
+| `project` | `level` | moves the selection back onto a stored level's surface, by the selection's weights |
+| `layer` | `name` or `name amount=` | `layer wrinkles` records the sculpting that follows; `layer wrinkles amount=0.5` sets how much of it shows (1 as made, 0 none, 2 double), at any later point |
+| `remesh dynamesh` | `cell` | remeshes a sculpted mesh evenly at `cell`, keeping its shape and parts. Use it after big `move` or `snake_hook` strokes stretch the triangles |
+| `finish` | `decimate=N\|N%` `max_error=` `focus=parts` `weight=` | decimates the whole mesh once at the end, to `N` triangles or as few as keep the surface within `max_error` of the full-detail one, keeping part borders. `focus` keeps the named parts finer (`weight` 10 times as costly to simplify). The reply gives the triangles before and after and how far the surface moved, the most and on average. Put it before `skin` |
+
+`gcad export f.gcad f.glb --tris N` or `--max-error E` (and `gcad2glb --tris N`) do the same as a
+`finish` line for every unskinned body. `gcad inspect --zoom x,y,z,r --wire --path x,y,z` frames a
+close-up, draws the triangles and previews a stroke; `--pick` also prints the curvature there.
+
+The mesh starts as fine as `remesh` made it, the same everywhere. For a game asset, sculpt at
+full resolution (a fine `remesh`, `dyntopo` or `subdivide`) and decimate once at the end with
+`finish`. The older way still works: a coarse `remesh`, then `select` the face and `refine` it
+before creasing it, and `decimate` at the end to the triangle budget of the game.
 
 Each sculpting line reports how many vertices it moved, the most any one moved, and the
 new volume, so a line that missed its target shows up as `moved 0 vertices`. A body is a
