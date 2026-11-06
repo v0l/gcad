@@ -465,7 +465,10 @@ strokes, decimate once at the very end. Never ship the blockout resolution.
   `brush clay strength=0.04`.
 - A stroke starts on the surface point closest to each path point, so points a little off
   the surface are fine. The reply says how far off it started; a large number means a wrong
-  coordinate.
+  coordinate. `dab` takes `at=`; `stroke` takes `from=`/`to=` or a list of points, and needs a
+  point at least every brush size along a curve (an ear rim of 8 points comes out faceted).
+- Shells for nails, teeth and scales must stand proud of the surface by about their own
+  thickness: a shell buried in the finger only shows as an outline.
 - Protect what is done: `mask sphere=x,y,z r=` (or `part=`, `by=cavity r=1`, `by=height axis=z
   from= to=`), `mask invert|blur 2|grow 0.3|shrink 0.3|clear`; `isolate head` / `hide ear_l` /
   `show` hold whole parts still. Brushes and every `select` op skip masked vertices.
