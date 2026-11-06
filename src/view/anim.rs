@@ -1,13 +1,11 @@
+use super::timeline::Timeline;
 use crate::mesh::Mesh;
 use crate::mesh::rig::{Moves, Pose, Rig, quat_axis_angle};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Playback {
     pub clip: Option<String>,
-    pub time: f64,
-    pub playing: bool,
-    pub looping: bool,
-    pub speed: f64,
+    pub line: Timeline,
     pub turns: Vec<(String, [f64; 3])>,
     pub skeleton: bool,
 }
@@ -16,10 +14,7 @@ impl Default for Playback {
     fn default() -> Self {
         Playback {
             clip: None,
-            time: 0.0,
-            playing: false,
-            looping: true,
-            speed: 1.0,
+            line: Timeline::default(),
             turns: Vec::new(),
             skeleton: false,
         }
@@ -42,24 +37,8 @@ impl Playback {
     }
 
     pub fn advance(&mut self, rig: &Rig, seconds: f64) {
-        if !self.playing {
-            return;
-        }
         let duration = self.duration(rig);
-        if duration <= 0.0 {
-            self.playing = false;
-            return;
-        }
-        self.time += seconds * self.speed;
-        if self.looping {
-            self.time = self.time.rem_euclid(duration);
-        } else if self.time >= duration {
-            self.time = duration;
-            self.playing = false;
-        } else if self.time < 0.0 {
-            self.time = 0.0;
-            self.playing = false;
-        }
+        self.line.advance(duration, seconds);
     }
 
     pub fn turn_of(&self, bone: &str) -> [f64; 3] {
@@ -79,23 +58,21 @@ impl Playback {
     pub fn refit(&mut self, rig: &Rig) {
         if self.clip.is_some() && self.clip_index(rig).is_none() {
             self.clip = None;
-            self.playing = false;
-            self.time = 0.0;
+            self.line.rewind();
         }
-        self.time = self.time.clamp(0.0, self.duration(rig).max(0.0));
+        self.line.clamp(self.duration(rig));
         self.turns.retain(|(b, _)| rig.bone_index(b).is_some());
     }
 
     pub fn reset(&mut self) {
         self.clip = None;
-        self.time = 0.0;
-        self.playing = false;
+        self.line.rewind();
         self.turns.clear();
     }
 
     pub fn pose(&self, rig: &Rig) -> (Pose, Moves) {
         let (mut pose, moves) = match self.clip_index(rig) {
-            Some(c) => (rig.sample(c, self.time), rig.sample_moves(c, self.time)),
+            Some(c) => (rig.sample(c, self.line.time), rig.sample_moves(c, self.line.time)),
             None => (rig.pose.clone(), rig.moved.clone()),
         };
         for (name, turn) in &self.turns {
@@ -159,7 +136,7 @@ fn multiply(a: [f64; 4], b: [f64; 4]) -> [f64; 4] {
 
 #[cfg(test)]
 mod tests {
-    use super::Playback;
+    use super::{Playback, Timeline};
 
     const CREATURE: &str = include_str!("../../examples/mesh/rigged_creature.gcad");
 
@@ -182,7 +159,7 @@ mod tests {
         for (clip, t) in [("walk", 0.3), ("idle", 1.4), ("walk", 0.9)] {
             let playback = Playback {
                 clip: Some(clip.to_string()),
-                time: t,
+                line: Timeline { time: t, ..Default::default() },
                 ..Default::default()
             };
             let posed = playback.posed(rig, &rest);
@@ -247,8 +224,7 @@ mod tests {
         let rig = model.rig_of(&name).expect("a rig");
         let mut playback = Playback {
             clip: Some("idle".to_string()),
-            time: 1.25,
-            playing: true,
+            line: Timeline { time: 1.25, playing: true, ..Default::default() },
             ..Default::default()
         };
         playback.set_turn("tail1", [0.0, 0.0, 10.0]);
@@ -259,7 +235,7 @@ mod tests {
             p
         };
         assert_eq!(kept.clip.as_deref(), Some("idle"));
-        assert_eq!((kept.time, kept.playing), (1.25, true));
+        assert_eq!((kept.line.time, kept.line.playing), (1.25, true));
         assert_eq!(kept.turns, vec![("tail1".to_string(), [0.0, 0.0, 10.0])]);
         let edited = CREATURE.replace("clip idle", "clip rest");
         let lines = crate::parse::parse_program(&edited).expect("parses");
@@ -267,7 +243,7 @@ mod tests {
         let rig = model.rig_of(&name).expect("a rig");
         playback.refit(rig);
         assert_eq!(
-            (playback.clip, playback.playing, playback.time),
+            (playback.clip, playback.line.playing, playback.line.time),
             (None, false, 0.0)
         );
     }
@@ -279,16 +255,15 @@ mod tests {
         let rig = model.rig_of(&name).expect("a rig");
         let mut playback = Playback {
             clip: Some("walk".to_string()),
-            playing: true,
-            speed: 2.0,
+            line: Timeline { playing: true, speed: 2.0, ..Default::default() },
             ..Default::default()
         };
         playback.advance(rig, 0.3);
-        assert!((playback.time - 0.6).abs() < 1.0e-9);
+        assert!((playback.line.time - 0.6).abs() < 1.0e-9);
         playback.advance(rig, 0.3);
-        assert!((playback.time - 0.2).abs() < 1.0e-9, "{}", playback.time);
-        playback.looping = false;
+        assert!((playback.line.time - 0.2).abs() < 1.0e-9, "{}", playback.line.time);
+        playback.line.looping = false;
         playback.advance(rig, 1.0);
-        assert_eq!((playback.time, playback.playing), (1.0, false));
+        assert_eq!((playback.line.time, playback.line.playing), (1.0, false));
     }
 }

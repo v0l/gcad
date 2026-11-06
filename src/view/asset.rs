@@ -531,9 +531,7 @@ struct Preview {
     asset: Asset,
     frame: Frame,
     clip: Option<usize>,
-    time: f64,
-    playing: bool,
-    looping: bool,
+    line: super::timeline::Timeline,
     camera: Camera,
     orbit: Orbit,
     mode: RenderMode,
@@ -599,7 +597,7 @@ impl Document {
                         });
                     let clip =
                         name.and_then(|name| asset.scene.clips.iter().position(|c| c.name == name));
-                    let old_time = self.preview.as_ref().map_or(self.initial_time, |p| p.time);
+                    let old_time = self.preview.as_ref().map_or(self.initial_time, |p| p.line.time);
                     let time = old_time.min(preview_duration(&asset, clip));
                     let weight_joint = self
                         .preview
@@ -639,8 +637,8 @@ impl Document {
                                 p.asset = asset;
                                 p.weight_joint = weight_joint;
                                 p.clip = clip;
-                                p.time = time;
-                                p.playing &= preview_duration(&p.asset, clip) > 0.;
+                                p.line.time = time;
+                                p.line.playing &= preview_duration(&p.asset, clip) > 0.;
                                 p.error = None;
                             } else {
                                 self.preview = Some(Preview {
@@ -659,9 +657,7 @@ impl Document {
                                     asset,
                                     frame: next,
                                     clip,
-                                    time,
-                                    playing: false,
-                                    looping: true,
+                                    line: super::timeline::Timeline { time, ..Default::default() },
                                     camera: Camera::default(),
                                     orbit: Orbit::default(),
                                     mode: RenderMode::Shaded,
@@ -706,20 +702,12 @@ impl Document {
 
 impl Preview {
     fn ui(&mut self, ui: &mut egui::Ui, density: Option<crate::asset::texel_density::Settings>) {
-        let old = (self.clip, self.time);
+        let old = (self.clip, self.line.time);
         let old_weight = self.weight_joint.clone();
         let old_consumer = self.consumer;
         let duration = preview_duration(&self.asset, self.clip);
-        if self.playing && duration > 0. {
-            self.time += ui.input(|i| i.stable_dt) as f64;
-            if self.time >= duration {
-                if self.looping {
-                    self.time = self.time.rem_euclid(duration);
-                } else {
-                    self.time = duration;
-                    self.playing = false;
-                }
-            }
+        if self.line.playing && duration > 0. {
+            self.line.advance(duration, ui.input(|i| i.stable_dt) as f64);
             ui.ctx().request_repaint();
         }
         let mut refit = false;
@@ -738,31 +726,20 @@ impl Preview {
                             ui.selectable_value(&mut self.clip, Some(i), &c.name);
                         }
                     });
-                if ui
-                    .add_enabled(
-                        preview_duration(&self.asset, self.clip) > 0.,
-                        egui::Button::new(if self.playing { "Pause" } else { "Play" }),
-                    )
-                    .clicked()
-                {
-                    self.playing = !self.playing;
-                }
-                ui.checkbox(&mut self.looping, "Loop");
                 let duration = preview_duration(&self.asset, self.clip);
-                ui.add(egui::Slider::new(&mut self.time, 0.0..=duration).text("Seconds"));
+                self.line.show(ui, duration, None, super::timeline::Skin::Bar);
                 refit = ui
                     .button("Fit model")
                     .on_hover_text("Reset the camera to fit the current pose")
                     .clicked();
             });
             if self.clip != old.0 {
-                self.time = 0.;
-                self.playing = false;
+                self.line.rewind();
             }
             self.stage.ui(ui, &mut self.camera);
             self.selection.ui(ui, self.lod.displayed(&self.asset));
             self.inspector.select(self.selection.node.clone());
-            self.sprites.ui(ui, &self.asset, self.clip, self.time, self.camera, self.stage);
+            self.sprites.ui(ui, &self.asset, self.clip, self.line.time, self.camera, self.stage);
             viewer3d::mode_controls(ui, &mut self.mode);
             if !self.asset.skins.is_empty() {
                 ui.horizontal(|ui| {
@@ -786,7 +763,7 @@ impl Preview {
             ui.checkbox(&mut self.inspector_open, "Scene inspector");
             self.consumer.controls(ui,&self.asset);
             self.consumer.physics.controls(ui, &self.asset);
-            self.motion.controls(ui, &self.asset, self.clip, self.time);
+            self.motion.controls(ui, &self.asset, self.clip, self.line.time);
             lod_changed = self.lod.controls(ui, &self.asset);
             if lod_changed { self.density.invalidate(); }
             density_changed = self.density.update(ui, self.lod.displayed(&self.asset), density);
@@ -804,7 +781,7 @@ impl Preview {
             self.inspector.invalidate();
         }
         if refit
-            || old != (self.clip, self.time)
+            || old != (self.clip, self.line.time)
             || old_weight != self.weight_joint
             || lod_changed
             || density_changed
@@ -813,7 +790,7 @@ impl Preview {
             match weights::loaded_frame(
                 self.density.displayed(self.lod.displayed(&self.asset)),
                 self.clip,
-                self.time,
+                self.line.time,
                 self.weight_joint.as_deref(),
             )
             .map(|frame| {
@@ -836,7 +813,7 @@ impl Preview {
                     self.error = Some(format!(
                         "Pose unavailable; showing previous pose: {error:#}"
                     ));
-                    self.playing = false;
+                    self.line.playing = false;
                 }
             }
         }
@@ -849,7 +826,7 @@ impl Preview {
                         ui,
                         self.density.displayed(self.lod.displayed(&self.asset)),
                         self.clip,
-                        self.time,
+                        self.line.time,
                     );
                 });
         }
@@ -893,7 +870,7 @@ impl Preview {
             }
             if self.error.is_none() {
                 self.motion
-                    .paint(ui, rect, &viewer.projector(rect), self.time);
+                    .paint(ui, rect, &viewer.projector(rect), self.line.time);
             }
         });
     }
@@ -1069,7 +1046,7 @@ mod tests {
         wait(&mut harness, |d| d.ready() && pixel(d) == [0, 255, 0, 255]);
         let preview = harness.state().as_ref().unwrap().preview.as_ref().unwrap();
         assert_eq!(preview.camera, camera);
-        assert_eq!(preview.time, 1.5);
+        assert_eq!(preview.line.time, 1.5);
         assert_eq!(
             preview.asset.scene.meshes[0].primitives[0]
                 .geometry
@@ -1106,7 +1083,7 @@ mod tests {
         // Shortening an existing clip clamps its time; removing it returns to rest.
         std::fs::write(&path, source.replace("time=2", "time=1")).unwrap();
         wait(&mut harness, |d| {
-            d.ready() && d.preview.as_ref().unwrap().time == 1.
+            d.ready() && d.preview.as_ref().unwrap().line.time == 1.
         });
         let rest = source
             .lines()
@@ -1118,8 +1095,8 @@ mod tests {
             d.ready() && d.preview.as_ref().unwrap().clip.is_none()
         });
         let preview = harness.state().as_ref().unwrap().preview.as_ref().unwrap();
-        assert_eq!(preview.time, 0.);
-        assert!(!preview.playing);
+        assert_eq!(preview.line.time, 0.);
+        assert!(!preview.line.playing);
         assert_eq!(preview.camera, camera);
         drop(harness);
         for file in [&part, &texture, &path] {

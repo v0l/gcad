@@ -128,7 +128,7 @@ fn binding_and_rig_edits_update_live_pose_and_require_explicit_rebind() {
     wait(&mut harness, |d| d.ready() && moved(d, &initial, 10.));
     let preview = harness.state().as_ref().unwrap().preview.as_ref().unwrap();
     assert_eq!(preview.camera, camera);
-    assert_eq!(preview.time, 1.);
+    assert_eq!(preview.line.time, 1.);
     assert!(
         preview.weight_joint.is_none(),
         "removed palette selection must clear"
@@ -179,7 +179,7 @@ fn binding_and_rig_edits_update_live_pose_and_require_explicit_rebind() {
     wait(&mut harness, |d| d.ready() && moved(d, &initial, 18.));
     let preview = harness.state().as_ref().unwrap().preview.as_ref().unwrap();
     assert_eq!(preview.camera, camera);
-    assert_eq!(preview.time, 1.);
+    assert_eq!(preview.line.time, 1.);
     assert_eq!(
         preview.asset.scene.clips[preview.clip.unwrap()].name,
         "lift"
@@ -346,7 +346,7 @@ fn skinned_consumer_playback_switches_lods_and_keeps_weight_and_rig_controls() {
     harness.run_steps(4);
     let document = harness.state().as_ref().unwrap();
     let preview = document.preview.as_ref().unwrap();
-    let time = preview.time;
+    let time = preview.line.time;
     assert!(time > 0. && time < 1.);
     assert!(moved(document, &rest, (10. * time) as f32));
     let camera = preview.camera;
@@ -359,7 +359,7 @@ fn skinned_consumer_playback_switches_lods_and_keeps_weight_and_rig_controls() {
     let document = harness.state().as_ref().unwrap();
     let preview = document.preview.as_ref().unwrap();
     assert!(positions(document).len() < rest.len());
-    assert_eq!(preview.time, time);
+    assert_eq!(preview.line.time, time);
     assert_eq!(preview.camera, camera);
     assert!(preview.skeleton);
     assert_eq!(preview.weight_joint.as_deref(), Some("bone"));

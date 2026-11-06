@@ -2676,76 +2676,23 @@ impl App {
                 ui.horizontal_wrapped(|ui| {
                     if toggle(ui, "as file", playback.clip.is_none()).clicked() {
                         playback.clip = None;
-                        playback.playing = false;
-                        playback.time = 0.0;
+                        playback.line.rewind();
                     }
                     for clip in &rig.clips {
                         let on = playback.clip.as_deref() == Some(clip.name.as_str());
                         if toggle(ui, &clip.name, on).clicked() && !on {
                             playback.clip = Some(clip.name.clone());
-                            playback.time = 0.0;
-                            playback.playing = true;
+                            playback.line.time = 0.0;
+                            playback.line.playing = true;
                         }
                     }
                 });
                 if let Some(index) = playback.clip_index(rig) {
                     let clip = &rig.clips[index];
-                    let duration = clip.duration().max(1.0e-6);
-                    ui.horizontal(|ui| {
-                        let label = if playback.playing { "pause" } else { "play" };
-                        if toggle(ui, label, playback.playing).clicked() {
-                            if !playback.playing && !playback.looping && playback.time >= duration {
-                                playback.time = 0.0;
-                            }
-                            playback.playing = !playback.playing;
-                        }
-                        if toggle(ui, "loop", playback.looping).clicked() {
-                            playback.looping = !playback.looping;
-                        }
-                        let frame = 1.0 / clip.fps.max(1.0);
-                        if toggle(ui, "back", false).clicked() {
-                            playback.playing = false;
-                            playback.time = (playback.time - frame).max(0.0);
-                        }
-                        if toggle(ui, "next", false).clicked() {
-                            playback.playing = false;
-                            playback.time = (playback.time + frame).min(duration);
-                        }
-                    });
-                    ui.spacing_mut().slider_width = ui.available_width() - 10.0;
-                    if ui
-                        .add(
-                            egui::Slider::new(&mut playback.time, 0.0..=duration).show_value(false),
-                        )
-                        .on_hover_text("time")
-                        .changed()
-                    {
-                        playback.playing = false;
-                    }
-                    ui.horizontal(|ui| {
-                        ui.spacing_mut().slider_width = 110.0;
-                        ui.add(
-                            egui::Slider::new(&mut playback.speed, 0.1..=4.0)
-                                .logarithmic(true)
-                                .show_value(false),
-                        )
-                        .on_hover_text("playback speed");
-                        Line::new()
-                            .measured(format!("{:.2}x", playback.speed))
-                            .size(11.0)
-                            .show(ui);
-                    });
-                    Line::new()
-                        .legend("time")
-                        .measured(format!("{:.3} / {:.3} s", playback.time, duration))
-                        .legend("frame")
-                        .measured(format!(
-                            "{} at {} fps",
-                            (playback.time * clip.fps).round() as i64,
-                            clip.fps
-                        ))
-                        .size(11.0)
-                        .show(ui);
+                    let duration = clip.duration();
+                    playback
+                        .line
+                        .show(ui, duration, Some(clip.fps), super::timeline::Skin::Card);
                 }
                 ui.add_space(4.0);
                 egui::CollapsingHeader::new("pose bones")
@@ -3408,7 +3355,7 @@ impl App {
         if let Some(rigged) = scene.rigged.first() {
             let dt = ui.input(|i| i.stable_dt) as f64;
             self.playback.advance(&rigged.rig, dt);
-            if self.playback.playing {
+            if self.playback.line.playing {
                 ui.ctx().request_repaint();
             }
         }
