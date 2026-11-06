@@ -1,9 +1,13 @@
+pub mod alpha;
 pub mod brush;
 pub mod channels;
 pub mod decimate;
+pub mod grid;
+pub mod masking;
 pub mod rig;
 pub mod sculpt;
 pub mod sdf;
+pub mod stroke;
 
 use anyhow::{Context, Result, anyhow, bail};
 use std::collections::HashMap;
@@ -17,6 +21,7 @@ pub struct Mesh {
     pub labels: Vec<u16>,
     pub parts: Vec<String>,
     pub mask: Vec<f64>,
+    pub hidden: Vec<u16>,
     pub layers: Vec<channels::Layer>,
 }
 
@@ -200,12 +205,30 @@ pub enum Region {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Weighting {
+    pub profile: brush::Falloff,
+    pub strength: f64,
+    pub masked: bool,
+}
+
+impl Default for Weighting {
+    fn default() -> Self {
+        Weighting {
+            profile: brush::Falloff::Smooth,
+            strength: 1.0,
+            masked: true,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Selection {
     pub regions: Vec<Region>,
     pub falloff: f64,
     pub mirror: Option<usize>,
     pub weights: Vec<f64>,
     pub centre: P3,
+    pub weighting: Weighting,
 }
 
 fn box_distance(p: P3, lo: P3, hi: P3) -> f64 {
@@ -214,8 +237,7 @@ fn box_distance(p: P3, lo: P3, hi: P3) -> f64 {
 }
 
 fn smoothstep(t: f64) -> f64 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+    brush::smoothstep(t)
 }
 
 impl Selection {
@@ -224,6 +246,26 @@ impl Selection {
         regions: Vec<Region>,
         falloff: f64,
         mirror: Option<usize>,
+    ) -> Result<Selection> {
+        Selection::weighted(mesh, regions, falloff, mirror, Weighting::default())
+    }
+
+    pub fn again(&self, mesh: &Mesh) -> Result<Selection> {
+        Selection::weighted(
+            mesh,
+            self.regions.clone(),
+            self.falloff,
+            self.mirror,
+            self.weighting.clone(),
+        )
+    }
+
+    pub fn weighted(
+        mesh: &Mesh,
+        regions: Vec<Region>,
+        falloff: f64,
+        mirror: Option<usize>,
+        weighting: Weighting,
     ) -> Result<Selection> {
         for region in &regions {
             if let Region::Part(name) = region
@@ -303,14 +345,21 @@ impl Selection {
         };
         let weights: Vec<f64> = distance
             .iter()
-            .map(|&d| {
-                if d <= 0.0 {
+            .enumerate()
+            .map(|(i, &d)| {
+                let w = if d <= 0.0 {
                     1.0
                 } else if falloff > 0.0 && d < falloff {
-                    1.0 - smoothstep(d / falloff)
+                    weighting.profile.at(d / falloff)
                 } else {
                     0.0
-                }
+                };
+                let free = if weighting.masked {
+                    1.0 - mesh.mask_at(i).clamp(0.0, 1.0)
+                } else {
+                    1.0
+                };
+                w * weighting.strength * free
             })
             .collect();
         let (sum, total) = mesh
@@ -332,6 +381,7 @@ impl Selection {
             mirror,
             weights,
             centre,
+            weighting,
         })
     }
 
@@ -340,7 +390,7 @@ impl Selection {
     }
 }
 
-fn surface_distance(mesh: &Mesh, core: &[bool], limit: f64) -> Vec<f64> {
+pub(crate) fn surface_distance(mesh: &Mesh, core: &[bool], limit: f64) -> Vec<f64> {
     let around = mesh.neighbours();
     let mut distance: Vec<f64> = core
         .iter()

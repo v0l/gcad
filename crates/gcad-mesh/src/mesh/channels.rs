@@ -23,6 +23,9 @@ impl Layer {
 
 impl Mesh {
     pub fn mask_at(&self, i: usize) -> f64 {
+        if !self.hidden.is_empty() && self.hidden.contains(&self.labels[i]) {
+            return 1.0;
+        }
         self.mask.get(i).copied().unwrap_or(0.0)
     }
 
@@ -39,7 +42,9 @@ impl Mesh {
         let (a, b) = (a as usize, b as usize);
         let label = self.labels[a];
         if !self.mask.is_empty() {
-            let m = (self.mask_at(a) + self.mask_at(b)) * 0.5;
+            let m = (self.mask.get(a).copied().unwrap_or(0.0)
+                + self.mask.get(b).copied().unwrap_or(0.0))
+                * 0.5;
             self.mask_mut().push(m);
         }
         for layer in &mut self.layers {
@@ -70,7 +75,10 @@ impl Mesh {
     pub fn keep_vertices(&mut self, keep: &[u32]) {
         let pick = |v: &[P3]| keep.iter().map(|&i| v[i as usize]).collect::<Vec<P3>>();
         if !self.mask.is_empty() {
-            self.mask = keep.iter().map(|&i| self.mask_at(i as usize)).collect();
+            self.mask = keep
+                .iter()
+                .map(|&i| self.mask.get(i as usize).copied().unwrap_or(0.0))
+                .collect();
         }
         for layer in &mut self.layers {
             match &mut layer.origin {
@@ -86,7 +94,7 @@ impl Mesh {
         if !self.mask.is_empty() || !other.mask.is_empty() {
             self.mask.resize(before, 0.0);
             self.mask
-                .extend((0..other.positions.len()).map(|i| other.mask_at(i)));
+                .extend((0..other.positions.len()).map(|i| other.mask.get(i).copied().unwrap_or(0.0)));
         }
         for layer in &mut self.layers {
             let theirs = other.layers.iter().find(|l| l.name == layer.name);
@@ -102,6 +110,7 @@ impl Mesh {
 
     pub(crate) fn transform_channels(&self, out: &mut Mesh, f: &impl Fn(P3) -> P3) {
         out.mask = self.mask.clone();
+        out.hidden = self.hidden.clone();
         out.layers = self
             .layers
             .iter()

@@ -21,13 +21,7 @@ impl Mesh {
                 break;
             }
             added += more;
-            selection = Selection::new(
-                self,
-                selection.regions.clone(),
-                selection.falloff,
-                selection.mirror,
-            )
-            .unwrap_or(selection);
+            selection = selection.again(self).unwrap_or(selection);
         }
         added
     }

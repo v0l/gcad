@@ -9,7 +9,9 @@ use std::sync::Arc;
 
 pub const MESH_OPERATIONS: &[&str] = &[
     "blob", "limb", "remesh", "select", "inflate", "smooth", "refine", "crease", "pinch",
-    "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key",
+    "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key", "brush",
+    "stroke", "dab", "mask", "hide", "isolate", "show", "group", "join", "dyntopo",
+    "subdivide", "level", "project", "layer", "finish",
 ];
 
 pub type Shaded = (String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>);
@@ -25,6 +27,9 @@ pub struct MeshBody {
     pub selections: Vec<Named>,
     pub rig: crate::mesh::rig::Rig,
     pub clip: Option<usize>,
+    pub brushes: Vec<(String, crate::mesh::stroke::Brush)>,
+    pub dyntopo: Option<f64>,
+    pub levels: Vec<(String, Arc<Mesh>)>,
     pub(crate) preview: std::sync::OnceLock<std::result::Result<Arc<Mesh>, String>>,
 }
 
@@ -510,7 +515,7 @@ impl Scene {
     fn selection_for(&mut self, op: &str) -> Result<Selection> {
         let mesh = self.sculpted(op)?.clone();
         let selection = match self.mesh_body.selection.take() {
-            Some(s) => Selection::new(&mesh, s.regions, s.falloff, s.mirror)?,
+            Some(s) => s.again(&mesh)?,
             None => Selection::new(&mesh, vec![Region::All], 0.0, None)?,
         };
         self.mesh_body.selection = Some(selection.clone());

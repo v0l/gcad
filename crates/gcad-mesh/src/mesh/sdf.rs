@@ -309,7 +309,6 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
             lo[2] + k as f64 * cell,
         ]
     };
-    let index = |i: usize, j: usize, k: usize| (k * n[1] + j) * n[0] + i;
     let values: Vec<f64> = {
         collect_indexed(n[0] * n[1] * n[2], |id| {
             let i = id % n[0];
@@ -318,6 +317,60 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
             field(primitives, at(i, j, k))
         })
     };
+    let (positions, triangles) = nets(&values, n, lo, cell);
+    let positions: Vec<P3> = {
+        collect_indexed(positions.len(), |index| {
+            let p = positions[index];
+            let mut q = p;
+            for _ in 0..3 {
+                let d = field(primitives, q);
+                let g = gradient(primitives, q, cell * 0.05);
+                let gg = dot(g, g);
+                if gg < 1.0e-18 {
+                    break;
+                }
+                q = sub(q, scale(g, d / gg));
+            }
+            if length(sub(q, p)) > cell {
+                add(p, scale(normalized(sub(q, p)), cell))
+            } else {
+                q
+            }
+        })
+    };
+    let mut parts: Vec<String> = Vec::new();
+    let part_of: Vec<u16> = primitives
+        .iter()
+        .map(|p| match parts.iter().position(|q| *q == p.part) {
+            Some(i) => i as u16,
+            None => {
+                parts.push(p.part.clone());
+                (parts.len() - 1) as u16
+            }
+        })
+        .collect();
+    let labels = positions
+        .iter()
+        .map(|&p| part_of[owner(primitives, p)])
+        .collect();
+    Ok(Mesh {
+        positions,
+        triangles,
+        labels,
+        parts,
+        ..Default::default()
+    })
+}
+
+pub fn nets(values: &[f64], n: [usize; 3], lo: P3, cell: f64) -> (Vec<P3>, Vec<[u32; 3]>) {
+    let at = |i: usize, j: usize, k: usize| -> P3 {
+        [
+            lo[0] + i as f64 * cell,
+            lo[1] + j as f64 * cell,
+            lo[2] + k as f64 * cell,
+        ]
+    };
+    let index = |i: usize, j: usize, k: usize| (k * n[1] + j) * n[0] + i;
     let mut vertex_of: HashMap<(usize, usize, usize), [u32; 12]> = HashMap::new();
     let mut positions: Vec<P3> = Vec::new();
     for k in 0..n[2] - 1 {
@@ -416,48 +469,7 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
             }
         }
     }
-    let positions: Vec<P3> = {
-        collect_indexed(positions.len(), |index| {
-            let p = positions[index];
-            let mut q = p;
-            for _ in 0..3 {
-                let d = field(primitives, q);
-                let g = gradient(primitives, q, cell * 0.05);
-                let gg = dot(g, g);
-                if gg < 1.0e-18 {
-                    break;
-                }
-                q = sub(q, scale(g, d / gg));
-            }
-            if length(sub(q, p)) > cell {
-                add(p, scale(normalized(sub(q, p)), cell))
-            } else {
-                q
-            }
-        })
-    };
-    let mut parts: Vec<String> = Vec::new();
-    let part_of: Vec<u16> = primitives
-        .iter()
-        .map(|p| match parts.iter().position(|q| *q == p.part) {
-            Some(i) => i as u16,
-            None => {
-                parts.push(p.part.clone());
-                (parts.len() - 1) as u16
-            }
-        })
-        .collect();
-    let labels = positions
-        .iter()
-        .map(|&p| part_of[owner(primitives, p)])
-        .collect();
-    Ok(Mesh {
-        positions,
-        triangles,
-        labels,
-        parts,
-        ..Default::default()
-    })
+    (positions, triangles)
 }
 
 const EDGES: [(usize, usize); 12] = [
