@@ -52,6 +52,9 @@ pub struct Options {
     pub grid: Option<f64>,
     pub marks: Vec<(String, P3)>,
     pub picks: Vec<(f64, f64)>,
+    pub zoom: Option<(P3, f64)>,
+    pub wire: bool,
+    pub path: Vec<P3>,
 }
 
 struct Surface {
@@ -60,6 +63,7 @@ struct Surface {
     owner: Vec<u32>,
     names: Vec<String>,
     weight: Vec<f64>,
+    curvature: Vec<f64>,
 }
 
 fn gather(model: &Model) -> Surface {
@@ -69,6 +73,7 @@ fn gather(model: &Model) -> Surface {
         owner: Vec::new(),
         names: Vec::new(),
         weight: Vec::new(),
+        curvature: Vec::new(),
     };
     let current = model.current_body();
     let selection = model.scene.mesh_body.selection.as_ref();
@@ -83,6 +88,7 @@ fn gather(model: &Model) -> Surface {
             .map(|sel| sel.weights.clone())
             .unwrap_or_else(|| vec![0.0; mesh.positions.len()]);
         s.weight.extend(weights);
+        s.curvature.extend(mesh.curvature());
         for &t in &mesh.triangles {
             s.triangles.push(t.map(|i| i + base));
             s.owner.push(first + mesh.labels[t[0] as usize] as u32);
@@ -98,6 +104,7 @@ fn gather(model: &Model) -> Surface {
         s.names.push(name);
         s.positions.extend(points.iter().map(|p| [p.x, p.y, p.z]));
         s.weight.extend(std::iter::repeat_n(0.0, points.len()));
+        s.curvature.extend(std::iter::repeat_n(0.0, points.len()));
         for t in triangles {
             s.triangles.push(t.map(|i| i as u32 + base));
             s.owner.push(id);
@@ -141,6 +148,7 @@ pub struct Hit {
     pub point: P3,
     pub normal: P3,
     pub part: String,
+    pub curvature: f64,
 }
 
 pub struct Picture {
@@ -233,7 +241,9 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
     )
     .ok_or_else(|| anyhow!("the part has no triangles"))?;
     let centre = options
-        .centre
+        .zoom
+        .map(|(c, _)| c)
+        .or(options.centre)
         .unwrap_or_else(|| mesh::scale(mesh::add(focused.0, focused.1), 0.5));
     let corners: Vec<P3> = (0..8)
         .map(|c| {
@@ -253,7 +263,12 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
             [mesh::dot(d, view.right).abs(), mesh::dot(d, view.up).abs()]
         })
         .fold(0.0, f64::max);
-    let span = options.span.unwrap_or(2.0 * extent * 1.08).max(1.0e-6);
+    let span = options
+        .zoom
+        .map(|(_, r)| 2.0 * r * 1.08)
+        .or(options.span)
+        .unwrap_or(2.0 * extent * 1.08)
+        .max(1.0e-6);
     let frame = Frame {
         view,
         centre,
@@ -620,6 +635,18 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
         );
         marks.push((name.clone(), *p, (!hidden).then_some(*p)));
     }
+    let curvature_at = |x: f64, y: f64| -> f64 {
+        let (xi, yi) = (x.floor() as i64, y.floor() as i64);
+        if xi < 0 || yi < 0 || xi >= SIZE as i64 || yi >= SIZE as i64 {
+            return 0.0;
+        }
+        let f = tri_at[yi as usize * SIZE + xi as usize];
+        if f == NONE {
+            return 0.0;
+        }
+        let t = surface.triangles[f as usize];
+        t.iter().map(|&i| surface.curvature[i as usize]).sum::<f64>() / 3.0
+    };
     let mut hits = Vec::new();
     for (k, &(x, y)) in options.picks.iter().enumerate() {
         let hit = surface_at(x, y).map(|(o, point, normal, _)| Hit {
@@ -634,6 +661,7 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
                 .next()
                 .unwrap_or("")
                 .to_string(),
+            curvature: curvature_at(x, y),
         });
         let colour = [255, 140, 0];
         canvas.line(&[(x - 9.0, y - 9.0), (x + 9.0, y + 9.0)], 2.0, colour);
@@ -649,7 +677,7 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
             Some(h) => {
                 let _ = writeln!(
                     report,
-                    "pick p{} at pixel {},{}: {},{},{} on `{}`, normal {},{},{}",
+                    "pick p{} at pixel {},{}: {},{},{} on `{}`, normal {},{},{}, curvature {} ({})",
                     k + 1,
                     number(x),
                     number(y),
@@ -660,6 +688,14 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
                     number(h.normal[0]),
                     number(h.normal[1]),
                     number(h.normal[2]),
+                    number(h.curvature),
+                    if h.curvature > 0.02 {
+                        "a bump"
+                    } else if h.curvature < -0.02 {
+                        "a hollow"
+                    } else {
+                        "flat"
+                    },
                 );
             }
             None => {
@@ -677,6 +713,69 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
             }
         }
         hits.push(hit);
+    }
+    if options.wire {
+        let mut edges = 0usize;
+        let mut seen = std::collections::HashSet::new();
+        for t in &surface.triangles {
+            for k in 0..3 {
+                let (a, b) = (t[k], t[(k + 1) % 3]);
+                if !seen.insert((a.min(b), a.max(b))) {
+                    continue;
+                }
+                let (pa, pb) = (projected[a as usize], projected[b as usize]);
+                let mid = ((pa.0 + pb.0) * 0.5, (pa.1 + pb.1) * 0.5);
+                let front = surface_at(mid.0, mid.1).is_some_and(|(_, q, _, _)| {
+                    let z = frame.to_pixel(q).2;
+                    (pa.2 + pb.2) * 0.5 >= z - 1.0e-3 * span
+                });
+                let inside = |p: (f64, f64, f64)| {
+                    p.0 >= 0.0 && p.1 >= 0.0 && p.0 < SIZE as f64 && p.1 < SIZE as f64
+                };
+                if front && (inside(pa) || inside(pb)) {
+                    canvas.line(&[(pa.0, pa.1), (pb.0, pb.1)], 1.0, [25, 25, 25]);
+                    edges += 1;
+                }
+            }
+        }
+        let _ = writeln!(
+            report,
+            "wire: {edges} edges in view, one pixel is {} units",
+            number(1.0 / frame.pixels)
+        );
+    }
+    if !options.path.is_empty() {
+        let mut landed = Vec::new();
+        let mut worst = 0.0f64;
+        for (body, mesh) in model.meshes() {
+            let near = mesh::grid::Surface::new(&mesh);
+            for &p in &options.path {
+                if let Some(h) = near.closest(p) {
+                    landed.push((body.clone(), p, h.point, h.distance));
+                }
+            }
+        }
+        let mut points: Vec<(f64, f64)> = Vec::new();
+        for &p in &options.path {
+            let best = landed
+                .iter()
+                .filter(|(_, q, ..)| *q == p)
+                .min_by(|a, b| a.3.total_cmp(&b.3));
+            let q = best.map_or(p, |b| b.2);
+            worst = worst.max(best.map_or(f64::INFINITY, |b| b.3));
+            let (x, y, _) = frame.to_pixel(q);
+            points.push((x, y));
+        }
+        canvas.line(&points, 3.0, [220, 30, 200]);
+        for &(x, y) in &points {
+            canvas.line(&[(x - 4.0, y), (x + 4.0, y)], 3.0, [220, 30, 200]);
+        }
+        let _ = writeln!(
+            report,
+            "stroke path of {} points drawn in magenta on the surface; the farthest was {:.2} off the surface",
+            options.path.len(),
+            worst
+        );
     }
     for (body, rig) in model.rigs() {
         let _ = write!(report, "body {body}: {}", rig.describe());

@@ -40,6 +40,18 @@ fn parse_point(text: &str) -> std::result::Result<[f64; 3], String> {
         .map_err(|_| format!("`{text}` is not a point, write x,y,z"))
 }
 
+fn parse_zoom(text: &str) -> std::result::Result<([f64; 3], f64), String> {
+    let v: Vec<f64> = text
+        .split(',')
+        .map(|p| p.trim().parse::<f64>())
+        .collect::<std::result::Result<_, _>>()
+        .map_err(|_| format!("`{text}` is not a zoom, write x,y,z,r"))?;
+    match v[..] {
+        [x, y, z, r] if r > 0.0 => Ok(([x, y, z], r)),
+        _ => Err(format!("`{text}` is not a zoom, write x,y,z,r with r above 0")),
+    }
+}
+
 fn parse_pixel(text: &str) -> std::result::Result<(f64, f64), String> {
     let (x, y) = text.split_once(',').ok_or("write a pixel as x,y")?;
     Ok((
@@ -206,6 +218,15 @@ enum Command {
         /// Report the surface point and normal under this pixel, x,y (repeatable)
         #[arg(long, value_parser = parse_pixel)]
         pick: Vec<(f64, f64)>,
+        /// Frame a close-up of radius r around a point, x,y,z,r
+        #[arg(long, value_parser = parse_zoom)]
+        zoom: Option<([f64; 3], f64)>,
+        /// Draw the triangle edges over the surface
+        #[arg(long)]
+        wire: bool,
+        /// Preview a stroke: draw these points, x,y,z (repeatable), where they land on the surface
+        #[arg(long, value_parser = parse_point)]
+        path: Vec<[f64; 3]>,
         /// Show the model as it is after this line, with that line's selection
         #[arg(long)]
         line: Option<usize>,
@@ -607,6 +628,9 @@ fn main() -> Result<()> {
             grid,
             mark,
             pick,
+            zoom,
+            wire,
+            path,
             line,
         } => {
             let run = load(&file, line, &vars)?;
@@ -634,6 +658,9 @@ fn main() -> Result<()> {
                     grid,
                     marks,
                     picks: pick,
+                    zoom,
+                    wire,
+                    path,
                 },
             )?;
             picture.canvas.save(&output)?;

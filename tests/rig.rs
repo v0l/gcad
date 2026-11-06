@@ -265,6 +265,9 @@ fn inspect_report_lists_the_skeleton() {
             grid: None,
             marks: vec![],
             picks: vec![],
+            zoom: None,
+            wire: false,
+            path: vec![],
         },
     )
     .unwrap();
