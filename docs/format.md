@@ -476,7 +476,7 @@ pose clip=walk t=0.25
 Sculpt before binding: changing the vertex count (`refine`, `decimate`) after `skin` makes `pose` fail
 until the skin is bound again. `gcad inspect` prints the skeleton and clips. `gcad export f.gcad f.glb`
 writes a GLB (Y up) with the skin, joints, inverse bind matrices, weights, one material per part and all
-clips; the GLB holds the current pose as the node pose, the skin binds the rest shape. OBJ, STL and 3MF
+clips, and every solid body beside them as its own mesh in its `color`, with flat faces; the GLB holds the current pose as the node pose, the skin binds the rest shape. OBJ, STL and 3MF
 export the posed mesh.
 
 ### Placing detail by eye

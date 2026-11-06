@@ -96,7 +96,12 @@ fn skin_auto_does_not_bind_the_body_to_an_arm_beside_it() {
         .filter(|(l, _)| **l == torso)
         .zip(&mesh.positions)
         .filter(|(_, p)| p[0] < 4.0)
-        .map(|((_, w), _)| w.iter().filter(|(b, _)| *b == 1).map(|(_, w)| *w).sum::<f64>())
+        .map(|((_, w), _)| {
+            w.iter()
+                .filter(|(b, _)| *b == 1)
+                .map(|(_, w)| *w)
+                .sum::<f64>()
+        })
         .fold(0.0, f64::max);
     assert!(worst < 0.05, "torso vertices carry {worst:.2} of the arm");
 }
@@ -115,9 +120,17 @@ fn skin_auto_does_not_bind_a_leg_to_a_hand_hanging_beside_it() {
         .iter()
         .zip(skin)
         .filter(|(l, _)| **l == leg)
-        .map(|(_, w)| w.iter().filter(|(b, _)| *b != 0).map(|(_, w)| *w).sum::<f64>())
+        .map(|(_, w)| {
+            w.iter()
+                .filter(|(b, _)| *b != 0)
+                .map(|(_, w)| *w)
+                .sum::<f64>()
+        })
         .fold(0.0, f64::max);
-    assert!(worst < 0.02, "leg vertices carry {worst:.2} of the arm and hand");
+    assert!(
+        worst < 0.02,
+        "leg vertices carry {worst:.2} of the arm and hand"
+    );
 }
 
 #[test]
@@ -383,6 +396,29 @@ fn glb_colours_are_linear() {
         .as_f64()
         .unwrap();
     assert!((base - 0.2158).abs() < 1.0e-3, "{base}");
+}
+
+#[test]
+fn glb_carries_solid_bodies_in_their_colours() {
+    let model = build(
+        "rect 20 10\nextrude 4\ncolor #ff0000\nbody post\nplane XY offset=4\ncircle 2\nextrude 10\ncolor #0000ff\n",
+    );
+    let (json, bin) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
+    let names: Vec<&str> = json["meshes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|m| m["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["main", "post"]);
+    let red = &json["materials"][0]["pbrMetallicRoughness"]["baseColorFactor"];
+    assert_eq!(red[0].as_f64().unwrap(), 1.0);
+    assert_eq!(red[2].as_f64().unwrap(), 0.0);
+    let attributes = &json["meshes"][1]["primitives"][0]["attributes"];
+    let accessor = &json["accessors"][attributes["POSITION"].as_u64().unwrap() as usize];
+    let top = accessor["max"][1].as_f64().unwrap();
+    assert!((top - 14.0).abs() < 1.0e-6, "{top}");
+    assert!(floats(&json, &bin, attributes["NORMAL"].as_u64().unwrap() as usize).len() > 0);
 }
 
 #[test]

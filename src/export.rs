@@ -192,24 +192,61 @@ fn as_mesh(solid: &Solid, name: &str) -> crate::mesh::Mesh {
 pub fn glb_of(model: &crate::model::Model) -> Result<Vec<u8>> {
     let rest = model.rest_meshes();
     let tints = model.mesh_tints();
-    let bodies: Vec<crate::gltf::Body<'_>> = rest
-        .iter()
-        .map(|(name, mesh)| {
-            let colours = tints
-                .iter()
-                .find(|(n, ..)| n == name)
-                .map(|(_, _, t)| t.clone())
-                .unwrap_or_default();
-            crate::gltf::Body {
-                name: name.clone(),
-                mesh,
-                rig: model.rig_of(name),
-                colours,
-                gloss: model.part_gloss_of(name, mesh),
-            }
+    let solids: Vec<(String, crate::mesh::Mesh, Colour)> = model
+        .named_parts()
+        .into_iter()
+        .map(|(name, solid, colour)| {
+            (
+                name.clone(),
+                faceted_mesh(solid, &name),
+                colour.unwrap_or([0.7, 0.7, 0.7]),
+            )
         })
         .collect();
+    let mut bodies: Vec<crate::gltf::Body<'_>> = solids
+        .iter()
+        .map(|(name, mesh, colour)| crate::gltf::Body {
+            name: name.clone(),
+            mesh,
+            rig: None,
+            colours: vec![*colour],
+            gloss: vec![0.0],
+        })
+        .collect();
+    bodies.extend(rest.iter().map(|(name, mesh)| {
+        let colours = tints
+            .iter()
+            .find(|(n, ..)| n == name)
+            .map(|(_, _, t)| t.clone())
+            .unwrap_or_default();
+        crate::gltf::Body {
+            name: name.clone(),
+            mesh,
+            rig: model.rig_of(name),
+            colours,
+            gloss: model.part_gloss_of(name, mesh),
+        }
+    }));
     crate::gltf::glb(&bodies)
+}
+
+fn faceted_mesh(solid: &Solid, name: &str) -> crate::mesh::Mesh {
+    let polygons = fine_mesh(solid);
+    let positions = polygons.positions();
+    let corners: Vec<[f64; 3]> = polygons
+        .faces()
+        .triangle_iter()
+        .flat_map(|t| t.map(|v| positions[v.pos]))
+        .map(|p| [p.x, p.y, p.z])
+        .collect();
+    crate::mesh::Mesh {
+        labels: vec![0; corners.len()],
+        triangles: (0..corners.len() as u32 / 3)
+            .map(|t| [3 * t, 3 * t + 1, 3 * t + 2])
+            .collect(),
+        positions: corners,
+        parts: vec![name.to_string()],
+    }
 }
 
 fn export_meshes(model: &crate::model::Model, path: &str) -> Result<()> {
