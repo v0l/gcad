@@ -469,7 +469,7 @@ pose clip=walk t=0.25
 | `pose` | `bone=` `rotate=angle axis=x\|y\|z\|x,y,z` or `rotate=rx,ry,rz` | turns a bone from rest, relative to its parent; the mesh follows by linear blend skinning, so renders, `inspect` and exports show the pose |
 | `pose reset` | | back to the rest pose |
 | `clip` | `name` `fps=` | starts an animation clip |
-| `key` | `t=` `bone=` `rotate=` `axis=` | a rotation of one bone at a time in seconds, interpolated by slerp. A key without `rotate` is the rest rotation |
+| `key` | `t=` `bone=` `rotate=` `axis=` `move=x,y,z` | a rotation of one bone at a time in seconds, interpolated by slerp. A key without `rotate` or `move` is the rest rotation. `move` shifts the bone's head from rest by that much in its parent's frame, interpolated straight: a root bone that bobs, crouches or leaves the ground. A key with only `move` leaves the rotation keys alone |
 | `pose clip=name t=` | | poses the rig as the clip is at time `t` |
 
 Sculpt before binding: changing the vertex count (`refine`, `decimate`) after `skin` makes `pose` fail
