@@ -428,6 +428,13 @@ impl Mesh {
             triangles,
             labels,
             parts: self.parts.clone(),
+            mask: if self.mask.len() == self.positions.len() {
+                representative.iter().map(|&i| self.mask[i as usize]).collect()
+            } else {
+                Vec::new()
+            },
+            hidden: self.hidden.clone(),
+            layers: Vec::new(),
         };
         (mesh, representative)
     }
