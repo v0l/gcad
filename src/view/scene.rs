@@ -543,7 +543,7 @@ pub fn build(
         return scene;
     }
     let current = model.current_body();
-    let selection = model.mesh_body.selection.as_ref();
+    let selection = model.scene.mesh_body.selection.as_ref();
     let solid_mesh = std::mem::take(&mut scene.mesh);
     let solid_mesh = Arc::try_unwrap(solid_mesh).unwrap_or_default();
     let had_solids = !model.solids().is_empty();

@@ -226,6 +226,17 @@ fn gradient(primitives: &[Primitive], p: P3, h: f64) -> P3 {
 
 pub const MAX_CELLS: usize = 400;
 
+#[cfg(feature = "parallel")]
+fn collect_indexed<T: Send>(count: usize, f: impl Fn(usize) -> T + Sync + Send) -> Vec<T> {
+    use rayon::prelude::*;
+    (0..count).into_par_iter().map(f).collect()
+}
+
+#[cfg(not(feature = "parallel"))]
+fn collect_indexed<T>(count: usize, f: impl Fn(usize) -> T) -> Vec<T> {
+    (0..count).map(f).collect()
+}
+
 pub fn remesh(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
     let body: Vec<Primitive> = primitives
         .iter()
@@ -300,16 +311,12 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
     };
     let index = |i: usize, j: usize, k: usize| (k * n[1] + j) * n[0] + i;
     let values: Vec<f64> = {
-        use rayon::prelude::*;
-        (0..n[0] * n[1] * n[2])
-            .into_par_iter()
-            .map(|id| {
-                let i = id % n[0];
-                let j = (id / n[0]) % n[1];
-                let k = id / (n[0] * n[1]);
-                field(primitives, at(i, j, k))
-            })
-            .collect()
+        collect_indexed(n[0] * n[1] * n[2], |id| {
+            let i = id % n[0];
+            let j = (id / n[0]) % n[1];
+            let k = id / (n[0] * n[1]);
+            field(primitives, at(i, j, k))
+        })
     };
     let mut vertex_of: HashMap<(usize, usize, usize), [u32; 12]> = HashMap::new();
     let mut positions: Vec<P3> = Vec::new();
@@ -410,10 +417,8 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
         }
     }
     let positions: Vec<P3> = {
-        use rayon::prelude::*;
-        positions
-            .par_iter()
-            .map(|&p| {
+        collect_indexed(positions.len(), |index| {
+                let p = positions[index];
                 let mut q = p;
                 for _ in 0..3 {
                     let d = field(primitives, q);
@@ -430,7 +435,6 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
                     q
                 }
             })
-            .collect()
     };
     let mut parts: Vec<String> = Vec::new();
     let part_of: Vec<u16> = primitives

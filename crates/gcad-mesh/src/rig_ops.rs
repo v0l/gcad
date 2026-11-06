@@ -1,14 +1,9 @@
-use super::Model;
-use super::args::{Args, direction, point3, positive};
-use super::meshes::mirrored_name;
+use crate::args::{Args, direction, point3, positive};
+use crate::interp::{Scene, mirrored_name};
 use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, Quat, Rig};
 use crate::mesh::{self, P3};
-use crate::parse::Line;
+use crate::parse::{Line, Scope};
 use anyhow::{Result, anyhow, bail};
-
-fn p3(p: monstertruck::modeling::Point3) -> P3 {
-    [p.x, p.y, p.z]
-}
 
 fn quat_mul(a: Quat, b: Quat) -> Quat {
     let [ax, ay, az, aw] = a;
@@ -21,7 +16,7 @@ fn quat_mul(a: Quat, b: Quat) -> Quat {
     ]
 }
 
-impl Model {
+impl Scene {
     pub fn rig_of(&self, body: &str) -> Option<&Rig> {
         if let Some((_, rig)) = self.mesh_rigs.iter().find(|(name, _)| name == body) {
             return Some(rig);
@@ -48,7 +43,7 @@ impl Model {
         Ok(self.sculpted(op)?.clone())
     }
 
-    pub(crate) fn op_bone(&mut self, line: &Line) -> Result<String> {
+    pub fn op_bone(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         self.start_mesh("bone")?;
         let args = Args::new(line, &["name"], &["parent", "head", "tail"], false)?;
         let name = args.text("name")?.to_string();
@@ -57,9 +52,9 @@ impl Model {
             bail!("there is already a bone called `{name}`");
         }
         let parent = args.values.get("parent").map(|p| rig.bone(p)).transpose()?;
-        let tail = p3(point3(args.text("tail")?, &self.scope)?);
+        let tail = point3(args.text("tail")?, scope)?;
         let head = match args.values.get("head") {
-            Some(text) => p3(point3(text, &self.scope)?),
+            Some(text) => point3(text, scope)?,
             None => match parent {
                 Some(p) => rig.bones[p].tail,
                 None => bail!("a bone with no parent needs `head=x,y,z`"),
@@ -86,7 +81,7 @@ impl Model {
         ))
     }
 
-    pub(crate) fn mirror_bone(&mut self, axis: usize, at: f64, of: &str) -> Result<String> {
+    pub fn mirror_bone(&mut self, axis: usize, at: f64, of: &str) -> Result<String> {
         let rig = &self.mesh_body.rig;
         let root = rig.bone(of)?;
         let mut chain = vec![root];
@@ -138,28 +133,28 @@ impl Model {
         ))
     }
 
-    fn rotation_quat(&self, args: &Args<'_>) -> Result<Quat> {
+    fn rotation_quat(&self, scope: &Scope, args: &Args<'_>) -> Result<Quat> {
         let text = args.text("rotate")?;
         let parts = crate::parse::split_top_level(text, ',');
         if parts.len() == 3 {
-            let angle = |k: usize| crate::parse::eval(parts[k], &self.scope);
+            let angle = |k: usize| crate::parse::eval(parts[k], scope);
             let q = |axis: P3, deg: f64| rig::quat_axis_angle(axis, deg);
             let x = q([1.0, 0.0, 0.0], angle(0)?)?;
             let y = q([0.0, 1.0, 0.0], angle(1)?)?;
             let z = q([0.0, 0.0, 1.0], angle(2)?)?;
             return Ok(quat_mul(z, quat_mul(y, x)));
         }
-        let angle = args.number("rotate", &self.scope)?;
+        let angle = args.number("rotate", scope)?;
         let axis = direction(
             args.values.get("axis").copied().ok_or_else(|| {
                 anyhow!("`rotate=angle` needs `axis=x|y|z|x,y,z`, or give `rotate=rx,ry,rz`")
             })?,
-            &self.scope,
+            scope,
         )?;
-        rig::quat_axis_angle([axis.x, axis.y, axis.z], angle)
+        rig::quat_axis_angle(axis, angle)
     }
 
-    pub(crate) fn op_skin(&mut self, line: &Line) -> Result<String> {
+    pub fn op_skin(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         let args = Args::new(
             line,
             &["mode"],
@@ -173,21 +168,21 @@ impl Model {
         let rig = &mut self.mesh_body.rig;
         match mode {
             Some("auto") => {
-                let power = args.optional_number("power", &self.scope)?.unwrap_or(4.0);
+                let power = args.optional_number("power", scope)?.unwrap_or(4.0);
                 positive(power, "power")?;
                 rig.auto_skin(&mesh, power);
                 Ok(self.skin_summary(&mesh))
             }
             Some("paint") => {
                 let bone = rig.bone(args.text("bone")?)?;
-                let c = p3(point3(args.text("sphere")?, &self.scope)?);
-                let r = positive(args.number("r", &self.scope)?, "r")?;
-                let falloff = args.optional_number("falloff", &self.scope)?.unwrap_or(0.0);
+                let c = point3(args.text("sphere")?, scope)?;
+                let r = positive(args.number("r", scope)?, "r")?;
+                let falloff = args.optional_number("falloff", scope)?.unwrap_or(0.0);
                 if falloff < 0.0 {
                     bail!("falloff must be 0 or more, got {falloff}");
                 }
                 let strength = args
-                    .optional_number("strength", &self.scope)?
+                    .optional_number("strength", scope)?
                     .unwrap_or(1.0);
                 let touched = rig.paint(&mesh, bone, c, r, falloff, strength);
                 Ok(format!(
@@ -227,7 +222,7 @@ impl Model {
         )
     }
 
-    pub(crate) fn op_mesh_pose(&mut self, line: &Line) -> Result<String> {
+    pub fn op_mesh_pose(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         let args = Args::new(
             line,
             &["mode"],
@@ -248,13 +243,13 @@ impl Model {
         if let Some(name) = args.values.get("clip") {
             let rig = &mut self.mesh_body.rig;
             let clip = rig.clip(name)?;
-            let t = args.optional_number("t", &self.scope)?.unwrap_or(0.0);
+            let t = args.optional_number("t", scope)?.unwrap_or(0.0);
             rig.pose = rig.sample(clip, t);
             return self.pose_summary(&format!("pose of clip `{name}` at {t} s"));
         }
         let name = args.text("bone")?;
         let bone = self.mesh_body.rig.bone(name)?;
-        let q = self.rotation_quat(&args)?;
+        let q = self.rotation_quat(scope, &args)?;
         self.mesh_body.rig.pose.insert(bone, q);
         self.pose_summary(&format!("bone `{name}` posed"))
     }
@@ -279,12 +274,12 @@ impl Model {
         ))
     }
 
-    pub(crate) fn op_clip(&mut self, line: &Line) -> Result<String> {
+    pub fn op_clip(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         self.start_mesh("clip")?;
         let args = Args::new(line, &["name"], &["fps"], false)?;
         let name = args.text("name")?.to_string();
         let fps = positive(
-            args.optional_number("fps", &self.scope)?.unwrap_or(24.0),
+            args.optional_number("fps", scope)?.unwrap_or(24.0),
             "fps",
         )?;
         let rig = &mut self.mesh_body.rig;
@@ -302,19 +297,19 @@ impl Model {
         ))
     }
 
-    pub(crate) fn op_key(&mut self, line: &Line) -> Result<String> {
+    pub fn op_key(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         self.start_mesh("key")?;
         let args = Args::new(line, &[], &["t", "bone", "rotate", "axis"], false)?;
         let Some(clip) = self.mesh_body.clip else {
             bail!("`key` adds to a clip; start one with `clip name fps=24`");
         };
-        let t = args.number("t", &self.scope)?;
+        let t = args.number("t", scope)?;
         if t < 0.0 {
             bail!("a key's time is 0 or more, got {t}");
         }
         let bone = self.mesh_body.rig.bone(args.text("bone")?)?;
         let rotation = if args.has("rotate") {
-            self.rotation_quat(&args)?
+            self.rotation_quat(scope, &args)?
         } else {
             IDENTITY_QUAT
         };

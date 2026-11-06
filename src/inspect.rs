@@ -71,7 +71,7 @@ fn gather(model: &Model) -> Surface {
         weight: Vec::new(),
     };
     let current = model.current_body();
-    let selection = model.mesh_body.selection.as_ref();
+    let selection = model.scene.mesh_body.selection.as_ref();
     for (body, mesh) in model.meshes() {
         let base = s.positions.len() as u32;
         let first = s.names.len() as u32;

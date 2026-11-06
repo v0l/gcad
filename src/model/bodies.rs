@@ -106,7 +106,8 @@ impl Model {
         }
         self.bodies = others;
         self.solid = Some(result);
-        self.body = into;
+        self.body = into.clone();
+        self.scene.body = into;
         self.describe_solid()
     }
 
@@ -689,7 +690,7 @@ impl Model {
         let name = args.text("name")?.to_string();
         if self.body == name
             || self.bodies.iter().any(|(n, _)| *n == name)
-            || self.mesh_bodies.iter().any(|(n, _)| *n == name)
+            || self.scene.mesh_bodies.iter().any(|(n, _)| *n == name)
         {
             bail!("there is already a body called `{name}`");
         }
@@ -702,8 +703,9 @@ impl Model {
             };
             self.bodies.push((previous, solid));
         }
+        self.scene.body = name.clone();
         self.body = name;
-        let finished = self.bodies.len() + self.mesh_bodies.len();
+        let finished = self.bodies.len() + self.scene.mesh_bodies.len();
         Ok(format!(
             "{finished} finished bod{}; new body `{}`",
             if finished == 1 { "y" } else { "ies" },

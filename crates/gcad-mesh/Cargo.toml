@@ -1,0 +1,23 @@
+[package]
+name = "gcad-mesh"
+version = "0.6.1"
+edition = "2024"
+description = "Build rigged meshes from gcad text: blockout, sculpt, bones, skin, clips, GLB"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/v0l/gcad"
+
+[dependencies]
+anyhow = "1.0.104"
+serde_json = "1.0.151"
+rayon = { version = "1.12", optional = true }
+
+[features]
+default = []
+parallel = ["dep:rayon"]
+
+[lib]
+crate-type = ["rlib", "cdylib", "staticlib"]
+
+[[bin]]
+name = "gcad2glb"
+path = "src/bin/gcad2glb.rs"

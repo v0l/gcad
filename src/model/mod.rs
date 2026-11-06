@@ -20,7 +20,6 @@ mod oring;
 mod path;
 mod pattern;
 mod rib;
-mod rigging;
 mod round;
 mod sheet;
 mod simulate;
@@ -128,12 +127,7 @@ pub struct Model {
     pub sheet: Option<sheet::Sheet>,
     pub members: Vec<String>,
     pub sim: Option<Box<crate::sim::Spec>>,
-    pub mesh_body: MeshBody,
-    pub mesh_bodies: Vec<(String, std::sync::Arc<crate::mesh::Mesh>)>,
-    pub mesh_rigs: Vec<(String, crate::mesh::rig::Rig)>,
-    pub part_colours: HashMap<(String, String), [f64; 3]>,
-    pub part_gloss: HashMap<(String, String), f64>,
-    pub part_soft: HashMap<(String, String), f64>,
+    pub scene: gcad_mesh::interp::Scene,
 }
 
 #[derive(Clone)]

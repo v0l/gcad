@@ -1630,6 +1630,7 @@ dependencies = [
  "epaint_default_fonts 0.35.0",
  "faer",
  "flate2",
+ "gcad-mesh",
  "gcad-sims-proto",
  "getrandom 0.4.3",
  "image",
@@ -1665,6 +1666,15 @@ dependencies = [
  "wgpu",
  "winresource",
  "yaml-rust2",
+]
+
+[[package]]
+name = "gcad-mesh"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "rayon",
+ "serde_json",
 ]
 
 [[package]]

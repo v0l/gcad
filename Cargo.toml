@@ -7,10 +7,11 @@ license = "GPL-3.0-or-later"
 repository = "https://github.com/v0l/gcad"
 
 [workspace]
-members = [".", "web", "sims-proto"]
+members = [".", "web", "sims-proto", "crates/gcad-mesh"]
 
 [dependencies]
 gcad-sims-proto = { path = "sims-proto" }
+gcad-mesh = { path = "crates/gcad-mesh", features = ["parallel"] }
 anyhow = "1.0.104"
 rayon = "1.12"
 clap = { version = "4.6.7", features = ["derive"] }
