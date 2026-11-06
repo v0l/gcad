@@ -8,10 +8,39 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub const MESH_OPERATIONS: &[&str] = &[
-    "blob", "limb", "remesh", "select", "inflate", "smooth", "refine", "crease", "pinch",
-    "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key", "brush",
-    "stroke", "dab", "mask", "hide", "isolate", "show", "group", "join", "dyntopo",
-    "subdivide", "level", "project", "layer", "finish",
+    "blob",
+    "limb",
+    "remesh",
+    "select",
+    "inflate",
+    "smooth",
+    "refine",
+    "crease",
+    "pinch",
+    "flatten",
+    "noise",
+    "relax",
+    "decimate",
+    "bone",
+    "skin",
+    "pose",
+    "clip",
+    "key",
+    "brush",
+    "stroke",
+    "dab",
+    "mask",
+    "hide",
+    "isolate",
+    "show",
+    "group",
+    "join",
+    "dyntopo",
+    "subdivide",
+    "level",
+    "project",
+    "layer",
+    "finish",
 ];
 
 pub type Shaded = (String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>);
@@ -509,7 +538,9 @@ impl Scene {
         let args = Args::new(
             line,
             &[],
-            &["sphere", "r", "box", "falloff", "mirror", "profile", "strength"],
+            &[
+                "sphere", "r", "box", "falloff", "mirror", "profile", "strength",
+            ],
             true,
         )?;
         let mut regions = Vec::new();

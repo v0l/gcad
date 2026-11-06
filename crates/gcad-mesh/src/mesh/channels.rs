@@ -93,16 +93,17 @@ impl Mesh {
     pub(crate) fn merge_channels(&mut self, other: &Mesh, before: usize) {
         if !self.mask.is_empty() || !other.mask.is_empty() {
             self.mask.resize(before, 0.0);
-            self.mask
-                .extend((0..other.positions.len()).map(|i| other.mask.get(i).copied().unwrap_or(0.0)));
+            self.mask.extend(
+                (0..other.positions.len()).map(|i| other.mask.get(i).copied().unwrap_or(0.0)),
+            );
         }
         for layer in &mut self.layers {
             let theirs = other.layers.iter().find(|l| l.name == layer.name);
             let d = |i: usize| theirs.map_or([0.0; 3], |l| l.displacement(&other.positions, i));
             match &mut layer.origin {
-                Some(origin) => origin.extend(
-                    (0..other.positions.len()).map(|i| sub(other.positions[i], d(i))),
-                ),
+                Some(origin) => {
+                    origin.extend((0..other.positions.len()).map(|i| sub(other.positions[i], d(i))))
+                }
                 None => layer.delta.extend((0..other.positions.len()).map(d)),
             }
         }

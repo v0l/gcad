@@ -143,7 +143,9 @@ mod tests {
 
     #[test]
     fn patterns_stay_in_range_and_repeat() {
-        for name in ["noise", "pores", "scales", "wrinkles", "stitch", "hair", "dots"] {
+        for name in [
+            "noise", "pores", "scales", "wrinkles", "stitch", "hair", "dots",
+        ] {
             let a = Alpha::parse(&format!("{name}(0.5,3)"), n).unwrap();
             for k in 0..200 {
                 let (u, v) = (k as f64 * 0.037, k as f64 * 0.021 - 2.0);

@@ -1,7 +1,9 @@
 use super::alpha::Alpha;
 use super::brush::Profile;
 use super::grid::{Grid, Surface};
-use super::{Mesh, P3, Region, Selection, add, cross, dot, length, normalized, reflect, scale, sub};
+use super::{
+    Mesh, P3, Region, Selection, add, cross, dot, length, normalized, reflect, scale, sub,
+};
 use std::collections::{BinaryHeap, HashMap, HashSet};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -352,7 +354,13 @@ impl Mesh {
         self.refine_to(&selection, detail, rounds)
     }
 
-    fn samples(&self, path: &[P3], brush: &Brush, normals: &[P3], local: &mut Local) -> Vec<Sample> {
+    fn samples(
+        &self,
+        path: &[P3],
+        brush: &Brush,
+        normals: &[P3],
+        local: &mut Local,
+    ) -> Vec<Sample> {
         let surface = Surface::new(self);
         let mut out: Vec<Sample> = Vec::with_capacity(path.len());
         let mut s = 0.0;
@@ -369,7 +377,10 @@ impl Mesh {
                     let sum = local.near(self, at, brush.size).into_iter().fold(
                         [0.0; 3],
                         |acc, (i, d)| {
-                            add(acc, scale(normals[i as usize], brush.profile.weight(d / brush.size)))
+                            add(
+                                acc,
+                                scale(normals[i as usize], brush.profile.weight(d / brush.size)),
+                            )
                         },
                     );
                     if length(sum) > 1.0e-9 {
@@ -516,9 +527,7 @@ impl Mesh {
                 let pull = sub(t.on, p);
                 sub(pull, scale(n, dot(pull, n)))
             };
-            let alpha = brush
-                .alpha
-                .map_or(1.0, |a| a.value(t.u, t.v, p, fallback));
+            let alpha = brush.alpha.map_or(1.0, |a| a.value(t.u, t.v, p, fallback));
             let moved = match brush.kind {
                 Kind::Draw => add(p, scale(n, h * w * alpha)),
                 Kind::Inflate => add(p, scale(normals[i], h * w * alpha)),
@@ -563,9 +572,8 @@ impl Mesh {
                 reflect(by, brush.mirror.expect("mirrored"))
             };
             for (i, t) in self.touches(brush, &start, &mut local, around.as_deref()) {
-                let w = brush.profile.weight(t.d / brush.size)
-                    * brush.strength
-                    * self.free(i as usize);
+                let w =
+                    brush.profile.weight(t.d / brush.size) * brush.strength * self.free(i as usize);
                 moves.push((i as usize, scale(shift, w)));
             }
         }
@@ -732,8 +740,7 @@ impl Mesh {
                 for &(i, w) in touched {
                     let n = normals[i];
                     let t = sub(sample.tangent, scale(n, dot(sample.tangent, n)));
-                    self.positions[i] =
-                        add(self.positions[i], scale(t, step * brush.strength * w));
+                    self.positions[i] = add(self.positions[i], scale(t, step * brush.strength * w));
                 }
             }
             _ => {}

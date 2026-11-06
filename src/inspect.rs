@@ -645,7 +645,10 @@ pub fn inspect(model: &Model, options: &Options) -> Result<Picture> {
             return 0.0;
         }
         let t = surface.triangles[f as usize];
-        t.iter().map(|&i| surface.curvature[i as usize]).sum::<f64>() / 3.0
+        t.iter()
+            .map(|&i| surface.curvature[i as usize])
+            .sum::<f64>()
+            / 3.0
     };
     let mut hits = Vec::new();
     for (k, &(x, y)) in options.picks.iter().enumerate() {

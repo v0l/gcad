@@ -87,7 +87,12 @@ impl Mesh {
         (a.max(b), (sa + sb) / (na + nb).max(1) as f64)
     }
 
-    pub fn finish(&mut self, reference: &Mesh, target: Option<usize>, max_error: Option<f64>) -> String {
+    pub fn finish(
+        &mut self,
+        reference: &Mesh,
+        target: Option<usize>,
+        max_error: Option<f64>,
+    ) -> String {
         self.finish_weighted(reference, target, max_error, &[])
     }
 
@@ -99,8 +104,8 @@ impl Mesh {
         importance: &[f64],
     ) -> String {
         let before = self.triangles.len();
-        let all = Selection::new(self, vec![super::Region::All], 0.0, None)
-            .expect("a mesh has vertices");
+        let all =
+            Selection::new(self, vec![super::Region::All], 0.0, None).expect("a mesh has vertices");
         let unmasked = Selection {
             weights: vec![1.0; self.positions.len()],
             ..all
@@ -134,7 +139,10 @@ impl Mesh {
         }
         let (worst, mean) = self.error_from(reference);
         let (lo, hi) = reference.bounds().unwrap_or_default();
-        let size = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max).max(1.0e-12);
+        let size = (0..3)
+            .map(|k| hi[k] - lo[k])
+            .fold(0.0, f64::max)
+            .max(1.0e-12);
         let open = match self.open_edges() {
             0 => String::new(),
             n => format!(", {n} open edges"),
@@ -152,7 +160,12 @@ impl Mesh {
         self.decimate_weighted(selection, target, &[])
     }
 
-    pub fn decimate_weighted(&mut self, selection: &Selection, target: usize, importance: &[f64]) -> usize {
+    pub fn decimate_weighted(
+        &mut self,
+        selection: &Selection,
+        target: usize,
+        importance: &[f64],
+    ) -> usize {
         let importance_of = |i: u32| importance.get(i as usize).copied().unwrap_or(1.0);
         let start = self.triangles.len();
         if target >= start {

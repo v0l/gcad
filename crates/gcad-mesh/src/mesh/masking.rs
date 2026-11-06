@@ -136,11 +136,16 @@ impl Mesh {
             })
             .collect();
         let around = self.neighbours();
-        let picked: Vec<usize> = (0..self.positions.len()).filter(|&i| weights[i] > 0.0).collect();
+        let picked: Vec<usize> = (0..self.positions.len())
+            .filter(|&i| weights[i] > 0.0)
+            .collect();
         let edge = {
             let (sum, n) = picked.iter().take(2000).fold((0.0, 0.0), |(s, n), &i| {
                 around[i].first().map_or((s, n), |&j| {
-                    (s + length(sub(self.positions[i], self.positions[j as usize])), n + 1.0)
+                    (
+                        s + length(sub(self.positions[i], self.positions[j as usize])),
+                        n + 1.0,
+                    )
                 })
             });
             (sum / f64::max(n, 1.0)).max(1.0e-9)

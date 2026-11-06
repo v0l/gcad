@@ -38,8 +38,8 @@ fn fraction(value: f64, what: &str, lo: f64) -> Result<f64> {
 }
 
 const BRUSH_ARGS: &[&str] = &[
-    "type", "size", "strength", "falloff", "focal", "edge", "spacing", "lazy", "alpha",
-    "geodesic", "normal", "mirror", "detail", "pinch",
+    "type", "size", "strength", "falloff", "focal", "edge", "spacing", "lazy", "alpha", "geodesic",
+    "normal", "mirror", "detail", "pinch",
 ];
 
 fn sphere_regions(scope: &Scope, args: &Args<'_>) -> Result<Vec<Region>> {
@@ -221,13 +221,18 @@ impl Scene {
             outcome.moved, outcome.most
         );
         if outcome.added > 0 {
-            text += &format!(", {} new vertices, {} triangles", outcome.added, mesh.triangles.len());
+            text += &format!(
+                ", {} new vertices, {} triangles",
+                outcome.added,
+                mesh.triangles.len()
+            );
         }
         if off > brush.size * 0.5 && off.is_finite() {
             text += &format!("; started {off:.2} off the surface, put on the closest point");
         }
         if outcome.moved == 0 {
-            text += "; nothing moved: check the mask, or that the brush is larger than the edges here";
+            text +=
+                "; nothing moved: check the mask, or that the brush is larger than the edges here";
         } else if let Some(note) = self.coarse_brush(&brush, &stroke) {
             text += &note;
         }
@@ -323,7 +328,9 @@ impl Scene {
         let args = Args::new(
             line,
             &["action", "amount"],
-            &["sphere", "r", "box", "part", "by", "axis", "from", "to", "falloff", "strength"],
+            &[
+                "sphere", "r", "box", "part", "by", "axis", "from", "to", "falloff", "strength",
+            ],
             false,
         )?;
         let mesh = self.sculpted("mask")?;
@@ -360,7 +367,8 @@ impl Scene {
                 let strength = fraction(strength, "strength", 0.0)?;
                 let values: Vec<f64> = match args.values.get("by").copied() {
                     Some("height") => {
-                        let axis = direction(args.values.get("axis").copied().unwrap_or("z"), scope)?;
+                        let axis =
+                            direction(args.values.get("axis").copied().unwrap_or("z"), scope)?;
                         let from = args.number("from", scope)?;
                         let to = args.number("to", scope)?;
                         mesh.height_values(mesh::normalized(axis), from, to)
@@ -376,7 +384,9 @@ impl Scene {
                             })
                             .collect()
                     }
-                    Some(other) => bail!("`mask by=` is height, cavity or curvature, got `{other}`"),
+                    Some(other) => {
+                        bail!("`mask by=` is height, cavity or curvature, got `{other}`")
+                    }
                     None => {
                         let regions = sphere_regions(scope, &args)?;
                         if regions.is_empty() {
@@ -511,9 +521,9 @@ impl Scene {
         let args = Args::new(line, &["state"], &["detail"], false)?;
         let on = on_off(args.text("state")?, "dyntopo")?;
         self.mesh_body.dyntopo = if on {
-            let detail = args
-                .optional_number("detail", scope)?
-                .ok_or_else(|| anyhow!("`dyntopo on` needs `detail=`, the edge length to keep under the brush"))?;
+            let detail = args.optional_number("detail", scope)?.ok_or_else(|| {
+                anyhow!("`dyntopo on` needs `detail=`, the edge length to keep under the brush")
+            })?;
             Some(positive(detail, "detail")?)
         } else {
             None
@@ -606,13 +616,20 @@ impl Scene {
                     bail!("a layer amount goes from -4 to 4, got {amount}");
                 }
                 let most = mesh.set_layer(&name, amount)?;
-                Ok(format!("layer `{name}` at {amount}, moved the most by {most:.3}"))
+                Ok(format!(
+                    "layer `{name}` at {amount}, moved the most by {most:.3}"
+                ))
             }
         }
     }
 
     pub fn op_finish(&mut self, scope: &Scope, line: &Line) -> Result<String> {
-        let args = Args::new(line, &[], &["decimate", "max_error", "keep", "focus", "weight"], false)?;
+        let args = Args::new(
+            line,
+            &[],
+            &["decimate", "max_error", "keep", "focus", "weight"],
+            false,
+        )?;
         let mesh = self.sculpted("finish")?;
         let before = mesh.triangles.len();
         let target = match args.values.get("decimate") {
@@ -627,7 +644,9 @@ impl Scene {
                 None => {
                     let n = eval(text, scope)?;
                     if n < 4.0 || n.fract() != 0.0 {
-                        bail!("`finish decimate=` is a whole number of triangles or a share like 10%");
+                        bail!(
+                            "`finish decimate=` is a whole number of triangles or a share like 10%"
+                        );
                     }
                     n as usize
                 }
@@ -639,7 +658,9 @@ impl Scene {
             .map(|e| positive(e, "max_error"))
             .transpose()?;
         if target.is_none() && max_error.is_none() {
-            bail!("say how far to go: `finish decimate=20000`, `finish decimate=10%` or `finish max_error=0.01`");
+            bail!(
+                "say how far to go: `finish decimate=20000`, `finish decimate=10%` or `finish max_error=0.01`"
+            );
         }
         let keep = args.values.get("keep").copied().unwrap_or("parts");
         for k in keep.split(',') {
@@ -648,7 +669,9 @@ impl Scene {
             }
         }
         if self.mesh_body.rig.skin.is_some() {
-            bail!("`finish` goes before `skin`: decimate first, then bind the skin to the final triangles");
+            bail!(
+                "`finish` goes before `skin`: decimate first, then bind the skin to the final triangles"
+            );
         }
         let focus: Vec<&str> = args
             .values

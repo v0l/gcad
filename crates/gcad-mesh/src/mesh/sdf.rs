@@ -550,9 +550,14 @@ impl Mesh {
             bail!("the cell size must be positive, got {cell}");
         }
         if self.open_edges() > 0 {
-            bail!("`remesh dynamesh` needs a closed surface; this one has {} open edges", self.open_edges());
+            bail!(
+                "`remesh dynamesh` needs a closed surface; this one has {} open edges",
+                self.open_edges()
+            );
         }
-        let (lo, hi) = self.bounds().ok_or_else(|| anyhow::anyhow!("the mesh is empty"))?;
+        let (lo, hi) = self
+            .bounds()
+            .ok_or_else(|| anyhow::anyhow!("the mesh is empty"))?;
         let lo = sub(lo, [2.0 * cell; 3]);
         let hi = add(hi, [2.0 * cell; 3]);
         let n: [usize; 3] = std::array::from_fn(|k| ((hi[k] - lo[k]) / cell).ceil() as usize + 1);
@@ -582,11 +587,14 @@ impl Mesh {
         let index = |i: usize, j: usize, k: usize| (k * n[1] + j) * n[0] + i;
         let total = n[0] * n[1] * n[2];
         let mut band = vec![false; total];
-        let to_cell = |v: f64, k: usize| (((v - lo[k]) / cell).floor().max(0.0) as usize).min(n[k] - 1);
+        let to_cell =
+            |v: f64, k: usize| (((v - lo[k]) / cell).floor().max(0.0) as usize).min(n[k] - 1);
         for &t in &self.triangles {
             let [a, b, c] = self.corners(t);
-            let lo_t: [usize; 3] = std::array::from_fn(|k| to_cell(a[k].min(b[k]).min(c[k]) - 1.5 * cell, k));
-            let hi_t: [usize; 3] = std::array::from_fn(|k| to_cell(a[k].max(b[k]).max(c[k]) + 1.5 * cell, k) + 1);
+            let lo_t: [usize; 3] =
+                std::array::from_fn(|k| to_cell(a[k].min(b[k]).min(c[k]) - 1.5 * cell, k));
+            let hi_t: [usize; 3] =
+                std::array::from_fn(|k| to_cell(a[k].max(b[k]).max(c[k]) + 1.5 * cell, k) + 1);
             for k in lo_t[2]..=hi_t[2].min(n[2] - 1) {
                 for j in lo_t[1]..=hi_t[1].min(n[1] - 1) {
                     for i in lo_t[0]..=hi_t[0].min(n[0] - 1) {

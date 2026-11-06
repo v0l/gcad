@@ -45,7 +45,8 @@ fn closest_to(moved: &[(P3, f64)], at: P3, distance: f64) -> (f64, f64) {
 
 #[test]
 fn dab_draw_raises_by_strength_with_a_linear_falloff() {
-    let (before, after) = sculpt("brush b type=draw size=2 strength=0.5 falloff=linear\ndab b at=0,0,10");
+    let (before, after) =
+        sculpt("brush b type=draw size=2 strength=0.5 falloff=linear\ndab b at=0,0,10");
     let moved = moves(&before, &after);
     for (p, m) in &moved {
         let d = length(sub(*p, TOP));
@@ -56,7 +57,9 @@ fn dab_draw_raises_by_strength_with_a_linear_falloff() {
     let (d, m) = closest_to(&moved, TOP, 1.0);
     near(m, 0.5 * (1.0 - d / 2.0), 0.01);
     assert!(
-        moved.iter().all(|(p, m)| length(sub(*p, TOP)) < 2.05 || *m == 0.0),
+        moved
+            .iter()
+            .all(|(p, m)| length(sub(*p, TOP)) < 2.05 || *m == 0.0),
         "a vertex outside the brush moved"
     );
 }
@@ -74,8 +77,9 @@ fn brush_edge_keeps_a_flat_core() {
 
 #[test]
 fn stroke_lays_a_ridge_along_its_path() {
-    let (before, after) =
-        sculpt("brush b type=draw size=1 strength=0.3 falloff=linear\nstroke b from=-3,0,10 to=3,0,10");
+    let (before, after) = sculpt(
+        "brush b type=draw size=1 strength=0.3 falloff=linear\nstroke b from=-3,0,10 to=3,0,10",
+    );
     let moved = moves(&before, &after);
     for (p, m) in &moved {
         if p[2] < 9.0 {
@@ -126,9 +130,12 @@ fn stroke_points_and_lazy_smooth_a_shaky_path() {
 
 #[test]
 fn clay_builds_up_to_a_plane_above_the_surface() {
-    let (_, after) =
-        sculpt("brush c type=clay size=2 strength=0.2 falloff=flat\ndab c at=0,0,10");
-    let top = after.positions.iter().map(|p| p[2]).fold(f64::MIN, f64::max);
+    let (_, after) = sculpt("brush c type=clay size=2 strength=0.2 falloff=flat\ndab c at=0,0,10");
+    let top = after
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::MIN, f64::max);
     near(top, 10.2, 0.02);
     let low = after
         .positions
@@ -144,7 +151,11 @@ fn move_brush_drags_a_region_by_the_stroke() {
     let (before, after) =
         sculpt("brush g type=move size=3 falloff=linear edge=0.5\nstroke g from=0,0,10 to=0,0,12");
     let moved = moves(&before, &after);
-    let top = after.positions.iter().map(|p| p[2]).fold(f64::MIN, f64::max);
+    let top = after
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::MIN, f64::max);
     near(top, 12.0, 0.03);
     let (d, m) = closest_to(&moved, TOP, 2.25);
     near(m, 2.0 * (1.0 - (d / 3.0 - 0.5) / 0.5), 0.05);
@@ -155,14 +166,19 @@ fn snake_hook_pulls_out_a_spike() {
     let (_, after) = sculpt(
         "brush s type=snake_hook size=1 falloff=smooth detail=0.25\nstroke s from=0,0,10 to=0,0,14",
     );
-    let top = after.positions.iter().map(|p| p[2]).fold(f64::MIN, f64::max);
+    let top = after
+        .positions
+        .iter()
+        .map(|p| p[2])
+        .fold(f64::MIN, f64::max);
     near(top, 14.0, 0.1);
     assert_eq!(after.open_edges(), 0);
 }
 
 #[test]
 fn crease_brush_cuts_a_groove_of_its_strength() {
-    let (_, after) = sculpt("brush d type=dam_standard size=0.6 strength=0.2\nstroke d from=-2,0,10 to=2,0,10");
+    let (_, after) =
+        sculpt("brush d type=dam_standard size=0.6 strength=0.2\nstroke d from=-2,0,10 to=2,0,10");
     let deepest = after
         .positions
         .iter()
@@ -201,15 +217,24 @@ fn flatten_brush_planes_the_top() {
     let (_, after) = sculpt("brush f type=planar size=2 strength=1 falloff=flat\ndab f at=0,0,10");
     for p in &after.positions {
         if p[2] > 9.0 && (p[0] * p[0] + p[1] * p[1]).sqrt() < 1.5 {
-            near(p[2], after.positions.iter().map(|p| p[2]).fold(f64::MIN, f64::max), 0.03);
+            near(
+                p[2],
+                after
+                    .positions
+                    .iter()
+                    .map(|p| p[2])
+                    .fold(f64::MIN, f64::max),
+                0.03,
+            );
         }
     }
 }
 
 #[test]
 fn pinch_brush_draws_vertices_to_the_stroke() {
-    let (before, after) =
-        sculpt("brush p type=pinch size=1 strength=0.5 falloff=flat\nstroke p from=-2,0,10 to=2,0,10");
+    let (before, after) = sculpt(
+        "brush p type=pinch size=1 strength=0.5 falloff=flat\nstroke p from=-2,0,10 to=2,0,10",
+    );
     for (p, q) in before.positions.iter().zip(&after.positions) {
         if p[2] > 9.0 && p[0].abs() < 1.0 && p[1].abs() > 0.2 && p[1].abs() < 0.9 {
             near(q[1], p[1] * 0.5, 0.02);
@@ -293,7 +318,11 @@ fn brushes_respect_the_mask_and_invert_and_clear_it() {
         }
     }
     let (before, after) = sculpt("mask sphere=0,0,10 r=1.5\nmask clear\nselect all\ninflate 1");
-    assert!(moves(&before, &after).iter().all(|(_, m)| (m - 1.0).abs() < 1.0e-6));
+    assert!(
+        moves(&before, &after)
+            .iter()
+            .all(|(_, m)| (m - 1.0).abs() < 1.0e-6)
+    );
 }
 
 #[test]
@@ -348,15 +377,23 @@ fn isolate_and_hide_keep_other_parts_still() {
             near(m, 1.0, 1.0e-6);
         }
     }
-    let after = mesh_of(&build(&format!("{two}\nhide a\nshow\nselect all\ninflate 1")));
-    assert!(moves(&before, &after).iter().all(|(_, m)| (m - 1.0).abs() < 1.0e-6));
+    let after = mesh_of(&build(&format!(
+        "{two}\nhide a\nshow\nselect all\ninflate 1"
+    )));
+    assert!(
+        moves(&before, &after)
+            .iter()
+            .all(|(_, m)| (m - 1.0).abs() < 1.0e-6)
+    );
     let error = failure(&format!("{two}\nhide c"));
     assert!(error.contains("a, b"), "{error}");
 }
 
 #[test]
 fn group_makes_a_polygroup_to_select() {
-    let model = build(&format!("{BALL}\ngroup cap sphere=0,0,10 r=2\nselect cap\nmove 0,0,1"));
+    let model = build(&format!(
+        "{BALL}\ngroup cap sphere=0,0,10 r=2\nselect cap\nmove 0,0,1"
+    ));
     let mesh = mesh_of(&model);
     assert!(mesh.parts.contains(&"cap".to_string()));
     let top = mesh.positions.iter().map(|p| p[2]).fold(f64::MIN, f64::max);
@@ -365,9 +402,8 @@ fn group_makes_a_polygroup_to_select() {
 
 #[test]
 fn select_profile_and_strength_shape_the_falloff() {
-    let (before, after) = sculpt(
-        "select sphere=0,0,10 r=0.3 falloff=2 profile=linear strength=0.5\ninflate 1",
-    );
+    let (before, after) =
+        sculpt("select sphere=0,0,10 r=0.3 falloff=2 profile=linear strength=0.5\ninflate 1");
     let moved = moves(&before, &after);
     let (d, m) = closest_to(&moved, TOP, 1.3);
     near(m, 0.5 * (1.0 - (d - 0.3) / 2.0), 0.01);
@@ -378,7 +414,12 @@ fn join_softens_the_seam_between_parts() {
     let two = "a: blob 0,0,0 r=3\nb: blob 4,0,0 r=3\nremesh 0.2";
     let before = mesh_of(&build(two));
     let after = mesh_of(&build(&format!("{two}\njoin a b blend=1.5")));
-    assert!(after.volume() > before.volume() * 1.005, "{} vs {}", after.volume(), before.volume());
+    assert!(
+        after.volume() > before.volume() * 1.005,
+        "{} vs {}",
+        after.volume(),
+        before.volume()
+    );
     for (p, q) in before.positions.iter().zip(&after.positions) {
         if (p[0] - 2.0).abs() > 2.5 {
             assert_eq!(p, q);
@@ -404,10 +445,19 @@ fn dyntopo_refines_under_the_brush() {
             length(sub(after.positions[*a as usize], TOP)) < 1.0
                 && length(sub(after.positions[*b as usize], TOP)) < 1.0
         })
-        .map(|(a, b)| length(sub(after.positions[a as usize], after.positions[b as usize])))
+        .map(|(a, b)| {
+            length(sub(
+                after.positions[a as usize],
+                after.positions[b as usize],
+            ))
+        })
         .fold(0.0, f64::max);
     assert!(longest <= 0.2 * 1.05, "{longest}");
-    let top = after.positions.iter().map(|p| length(*p)).fold(0.0, f64::max);
+    let top = after
+        .positions
+        .iter()
+        .map(|p| length(*p))
+        .fold(0.0, f64::max);
     near(top, 10.3, 0.05);
 }
 
@@ -435,7 +485,8 @@ fn project_returns_a_selection_to_a_stored_level() {
 #[test]
 fn layer_amount_dials_its_strokes() {
     let base = mesh_of(&build(BALL));
-    let lines = "layer bumps\nbrush b type=draw size=2 strength=0.5 falloff=linear\ndab b at=0,0,10";
+    let lines =
+        "layer bumps\nbrush b type=draw size=2 strength=0.5 falloff=linear\ndab b at=0,0,10";
     let most = |extra: &str| {
         let after = mesh_of(&build(&format!("{BALL}\n{lines}{extra}")));
         moves(&base, &after).iter().map(|m| m.1).fold(0.0, f64::max)
@@ -444,7 +495,11 @@ fn layer_amount_dials_its_strokes() {
     near(full, 0.5, 0.06);
     near(most("\nlayer bumps amount=0.5"), full * 0.5, 1.0e-6);
     near(most("\nlayer bumps amount=0"), 0.0, 1.0e-9);
-    near(most("\nlayer bumps amount=0\nlayer bumps amount=2"), full * 2.0, 1.0e-6);
+    near(
+        most("\nlayer bumps amount=0\nlayer bumps amount=2"),
+        full * 2.0,
+        1.0e-6,
+    );
     let error = failure(&format!("{BALL}\nlayer bumps\nlayer other amount=1"));
     assert!(error.contains("bumps"), "{error}");
 }
@@ -452,9 +507,14 @@ fn layer_amount_dials_its_strokes() {
 #[test]
 fn finish_decimates_to_a_budget_and_reports_the_error() {
     let text = summary(&format!("{BALL}\nsubdivide 1\nfinish decimate=4000"));
-    assert!(text.starts_with("4000 triangles") || text.starts_with("399"), "{text}");
+    assert!(
+        text.starts_with("4000 triangles") || text.starts_with("399"),
+        "{text}"
+    );
     assert!(text.contains("surface moved"), "{text}");
-    let mesh = mesh_of(&build(&format!("{BALL}\nsubdivide 1\nfinish decimate=4000")));
+    let mesh = mesh_of(&build(&format!(
+        "{BALL}\nsubdivide 1\nfinish decimate=4000"
+    )));
     assert_eq!(mesh.open_edges(), 0);
     let worst = mesh
         .positions
@@ -469,22 +529,33 @@ fn finish_to_an_error_bound_stays_within_it() {
     let full = mesh_of(&build(BALL));
     let model = build(&format!("{BALL}\nfinish max_error=0.02"));
     let done = mesh_of(&model);
-    assert!(done.triangles.len() < full.triangles.len() / 3, "{}", done.triangles.len());
+    assert!(
+        done.triangles.len() < full.triangles.len() / 3,
+        "{}",
+        done.triangles.len()
+    );
     let (worst, _) = done.error_from(&full);
     assert!(worst <= 0.02, "{worst}");
     let bumpy = format!("{BALL}\nnoise 0.3 size=1");
     let coarse = mesh_of(&build(&format!("{bumpy}\nfinish max_error=0.02")));
-    assert!(coarse.triangles.len() > done.triangles.len(), "detail keeps triangles");
+    assert!(
+        coarse.triangles.len() > done.triangles.len(),
+        "detail keeps triangles"
+    );
 }
 
 #[test]
 fn finish_keeps_fine_brush_detail_better_than_a_coarse_build() {
     let detail = "brush w type=dam_standard size=0.3 strength=0.15\nstroke w from=-3,0,9.6 to=3,0,9.6\nstroke w from=-3,1,9.5 to=3,1,9.5";
-    let fine = mesh_of(&build(&format!("ball: blob 0,0,0 r=10\nremesh 0.1\n{detail}")));
+    let fine = mesh_of(&build(&format!(
+        "ball: blob 0,0,0 r=10\nremesh 0.1\n{detail}"
+    )));
     let finished = mesh_of(&build(&format!(
         "ball: blob 0,0,0 r=10\nremesh 0.1\n{detail}\nfinish decimate=20000"
     )));
-    let coarse = mesh_of(&build(&format!("ball: blob 0,0,0 r=10\nremesh 0.6\n{detail}")));
+    let coarse = mesh_of(&build(&format!(
+        "ball: blob 0,0,0 r=10\nremesh 0.6\n{detail}"
+    )));
     assert!(coarse.triangles.len() <= finished.triangles.len() * 2);
     let (kept, _) = finished.error_from(&fine);
     let (lost, _) = coarse.error_from(&fine);
@@ -508,11 +579,16 @@ fn finish_focus_spends_the_budget_on_the_named_parts() {
             .fold(0.0, f64::max)
     };
     let even = mesh_of(&build(&format!("{two}\nfinish decimate=3000")));
-    let focused = mesh_of(&build(&format!("{two}\nfinish decimate=3000 focus=face weight=20")));
+    let focused = mesh_of(&build(&format!(
+        "{two}\nfinish decimate=3000 focus=face weight=20"
+    )));
     assert_eq!(focused.triangles.len(), 3000);
     let on_face = |m: &Mesh| {
         let id = m.parts.iter().position(|p| p == "face").unwrap() as u16;
-        m.triangles.iter().filter(|t| m.labels[t[0] as usize] == id).count()
+        m.triangles
+            .iter()
+            .filter(|t| m.labels[t[0] as usize] == id)
+            .count()
     };
     assert!(
         on_face(&focused) * 10 > on_face(&even) * 14,
@@ -566,10 +642,20 @@ fn hero_example_sculpts_at_full_detail_and_finishes_to_its_budget() {
         .filter_map(|(line, out)| (line.op == "stroke").then(|| out.as_ref().unwrap().clone()))
         .collect::<Vec<_>>();
     assert!(sculpted.len() >= 12, "{}", sculpted.len());
-    assert!(sculpted.iter().all(|s| !s.contains("nothing moved")), "{sculpted:?}");
+    assert!(
+        sculpted.iter().all(|s| !s.contains("nothing moved")),
+        "{sculpted:?}"
+    );
     let worst_start = sculpted
         .iter()
-        .filter_map(|s| s.split("started ").nth(1)?.split(' ').next()?.parse::<f64>().ok())
+        .filter_map(|s| {
+            s.split("started ")
+                .nth(1)?
+                .split(' ')
+                .next()?
+                .parse::<f64>()
+                .ok()
+        })
         .fold(0.0, f64::max);
     assert!(worst_start < 1.0, "{worst_start}");
     let full = result.model.meshes().last().unwrap().1.clone();
@@ -592,6 +678,14 @@ fn a_dab_off_the_surface_lands_on_it_and_says_how_far() {
         "{BALL}\nbrush b type=draw size=0.5 falloff=flat\nbrush b strength=0.1\ndab b at=0,0,30"
     ));
     assert!(text.contains("20.00 off the surface"), "{text}");
-    let (before, after) = sculpt("brush b type=draw size=0.5 falloff=flat\nbrush b strength=0.1\ndab b at=0,0,30");
-    near(moves(&before, &after).iter().map(|m| m.1).fold(0.0, f64::max), 0.1, 1.0e-3);
+    let (before, after) =
+        sculpt("brush b type=draw size=0.5 falloff=flat\nbrush b strength=0.1\ndab b at=0,0,30");
+    near(
+        moves(&before, &after)
+            .iter()
+            .map(|m| m.1)
+            .fold(0.0, f64::max),
+        0.1,
+        1.0e-3,
+    );
 }

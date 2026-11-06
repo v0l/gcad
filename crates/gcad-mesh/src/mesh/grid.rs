@@ -130,17 +130,25 @@ impl<'a> Surface<'a> {
             None => face,
         };
         let side = dot(sub(p, hit.point), n);
-        let d = if side < 0.0 { -hit.distance } else { hit.distance };
+        let d = if side < 0.0 {
+            -hit.distance
+        } else {
+            hit.distance
+        };
         Some((d, hit))
     }
 }
 
 impl<'a> Surface<'a> {
     pub fn new(mesh: &'a Mesh) -> Surface<'a> {
-        let (sum, count) = mesh.triangles.iter().take(5000).fold((0.0, 0.0), |(s, n), t| {
-            let [a, b, _] = mesh.corners(*t);
-            (s + length(sub(a, b)), n + 1.0)
-        });
+        let (sum, count) = mesh
+            .triangles
+            .iter()
+            .take(5000)
+            .fold((0.0, 0.0), |(s, n), t| {
+                let [a, b, _] = mesh.corners(*t);
+                (s + length(sub(a, b)), n + 1.0)
+            });
         let cell = (2.0 * sum / f64::max(count, 1.0)).max(1.0e-9);
         let mut cells: HashMap<[i64; 3], Vec<u32>> = HashMap::new();
         for (f, &t) in mesh.triangles.iter().enumerate() {
@@ -183,7 +191,8 @@ impl<'a> Surface<'a> {
                             if !seen.insert(f) {
                                 continue;
                             }
-                            let [a, b, c] = self.triangles[f as usize].map(|i| self.positions[i as usize]);
+                            let [a, b, c] =
+                                self.triangles[f as usize].map(|i| self.positions[i as usize]);
                             let q = closest_on_triangle(p, a, b, c);
                             let d = length(sub(q, p));
                             if best.as_ref().is_none_or(|h| d < h.distance) {
@@ -239,6 +248,10 @@ mod tests {
         assert!((hit.distance - 4.0).abs() < 1.0e-12);
         assert_eq!(hit.point, [2.0, 3.0, 0.0]);
         let hit = surface.closest([12.0, -1.0, 0.0]).unwrap();
-        assert!((hit.distance - 5.0f64.sqrt()).abs() < 1.0e-12, "{}", hit.distance);
+        assert!(
+            (hit.distance - 5.0f64.sqrt()).abs() < 1.0e-12,
+            "{}",
+            hit.distance
+        );
     }
 }

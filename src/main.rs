@@ -48,7 +48,9 @@ fn parse_zoom(text: &str) -> std::result::Result<([f64; 3], f64), String> {
         .map_err(|_| format!("`{text}` is not a zoom, write x,y,z,r"))?;
     match v[..] {
         [x, y, z, r] if r > 0.0 => Ok(([x, y, z], r)),
-        _ => Err(format!("`{text}` is not a zoom, write x,y,z,r with r above 0")),
+        _ => Err(format!(
+            "`{text}` is not a zoom, write x,y,z,r with r above 0"
+        )),
     }
 }
 
