@@ -12,7 +12,66 @@ fn options(name: &str) -> Options {
         grid: None,
         marks: Vec::new(),
         picks: Vec::new(),
+        zoom: None,
+        wire: false,
+        path: Vec::new(),
     }
+}
+
+#[test]
+fn pick_reports_the_curvature_of_the_surface() {
+    let model = build("ball: blob 0,0,0 r=10\nremesh 0.2");
+    let mut o = options("front");
+    o.centre = Some([0.0, 0.0, 0.0]);
+    o.span = Some(30.0);
+    o.picks = vec![(512.0, 512.0)];
+    let picture = inspect(&model, &o).expect("draws");
+    let hit = picture.hits[0].as_ref().expect("hits");
+    assert!((hit.curvature - 0.1).abs() < 0.01, "{}", hit.curvature);
+    assert!(
+        picture.report.contains("curvature 0.1"),
+        "{}",
+        picture.report
+    );
+}
+
+#[test]
+fn zoom_frames_a_region_and_wire_draws_the_triangles() {
+    let model = build("ball: blob 0,0,0 r=10\nremesh 0.5");
+    let mut o = options("front");
+    o.zoom = Some(([0.0, -10.0, 0.0], 2.0));
+    let plain = inspect(&model, &o).expect("draws");
+    assert!(
+        (plain.frame.span - 4.0 * 1.08).abs() < 1.0e-9,
+        "{}",
+        plain.frame.span
+    );
+    let (x, y, _) = plain.frame.to_pixel([0.0, -10.0, 0.0]);
+    assert!((x - 512.0).abs() < 1.0e-6 && (y - 512.0).abs() < 1.0e-6);
+    o.wire = true;
+    let wired = inspect(&model, &o).expect("draws");
+    let dark = |c: &gcad::plot::Canvas| {
+        c.image
+            .pixels()
+            .filter(|p| p.0.iter().all(|&v| v < 60))
+            .count()
+    };
+    assert!(dark(&wired.canvas) > dark(&plain.canvas) + 2000);
+    assert!(wired.report.contains("edges"), "{}", wired.report);
+}
+
+#[test]
+fn stroke_path_overlay_lands_on_the_surface() {
+    let model = build("ball: blob 0,0,0 r=10\nremesh 0.3");
+    let mut o = options("front");
+    o.path = vec![[0.0, -12.0, 0.0], [0.0, -10.0, 3.0]];
+    let picture = inspect(&model, &o).expect("draws");
+    assert!(picture.report.contains("stroke path"), "{}", picture.report);
+    assert!(
+        picture.report.contains("2.00 off the surface"),
+        "{}",
+        picture.report
+    );
 }
 
 #[test]

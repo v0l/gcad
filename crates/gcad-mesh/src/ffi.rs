@@ -30,6 +30,7 @@ pub unsafe extern "C" fn gcad_build(
         detail: if detail > 0.0 { detail } else { 1.0 },
         y_up: y_up != 0,
         vars: Vec::new(),
+        ..Options::default()
     };
     match std::panic::catch_unwind(|| build_with(text, &options)) {
         Ok(Ok(model)) => Box::into_raw(Box::new(Handle {

@@ -14,6 +14,8 @@ pub struct Options {
     pub detail: f64,
     pub y_up: bool,
     pub vars: Vec<(String, f64)>,
+    pub triangles: Option<usize>,
+    pub max_error: Option<f64>,
 }
 
 impl Default for Options {
@@ -22,6 +24,8 @@ impl Default for Options {
             detail: 1.0,
             y_up: true,
             vars: Vec::new(),
+            triangles: None,
+            max_error: None,
         }
     }
 }
@@ -225,9 +229,48 @@ struct Run {
 }
 
 const SUBSET: &[&str] = &[
-    "let", "if", "blob", "limb", "block", "remesh", "select", "inflate", "smooth", "refine",
-    "crease", "pinch", "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip",
-    "key", "move", "rotate", "scale", "mirror", "body", "color",
+    "let",
+    "if",
+    "blob",
+    "limb",
+    "block",
+    "remesh",
+    "select",
+    "inflate",
+    "smooth",
+    "refine",
+    "crease",
+    "pinch",
+    "flatten",
+    "noise",
+    "relax",
+    "decimate",
+    "bone",
+    "skin",
+    "pose",
+    "clip",
+    "key",
+    "move",
+    "rotate",
+    "scale",
+    "mirror",
+    "body",
+    "color",
+    "brush",
+    "stroke",
+    "dab",
+    "mask",
+    "hide",
+    "isolate",
+    "show",
+    "group",
+    "join",
+    "dyntopo",
+    "subdivide",
+    "level",
+    "project",
+    "layer",
+    "finish",
 ];
 
 impl Run {
@@ -299,6 +342,19 @@ impl Run {
             "pose" => scene.op_mesh_pose(scope, line),
             "clip" => scene.op_clip(scope, line),
             "key" => scene.op_key(scope, line),
+            "brush" => scene.op_brush(scope, line),
+            "stroke" => scene.op_stroke(scope, line),
+            "dab" => scene.op_dab(scope, line),
+            "mask" => scene.op_mask(scope, line),
+            "hide" | "isolate" | "show" => scene.op_hide(scope, line),
+            "group" => scene.op_group(scope, line),
+            "join" => scene.op_join(scope, line),
+            "dyntopo" => scene.op_dyntopo(scope, line),
+            "subdivide" => scene.op_subdivide(scope, line),
+            "level" => scene.op_level(scope, line),
+            "project" => scene.op_project(scope, line),
+            "layer" => scene.op_layer(scope, line),
+            "finish" => scene.op_finish(scope, line),
             "move" => scene.op_move(scope, line),
             "rotate" => scene.op_rotate(scope, line, |_| None),
             "scale" => scene.op_scale(scope, line),
@@ -368,6 +424,7 @@ pub fn build_with(source: &str, options: &Options) -> std::result::Result<Model,
         text: String::new(),
         message: format!("{e:#}"),
     })?;
+    run.scene.budget(options.triangles, options.max_error);
     Ok(collect(&run, options.y_up))
 }
 

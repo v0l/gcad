@@ -12,6 +12,14 @@ fn main() -> ExitCode {
                 None => return usage("--detail takes a number"),
             },
             "--z-up" => options.y_up = false,
+            "--tris" => match args.next().and_then(|v| v.parse().ok()) {
+                Some(v) if v >= 4 => options.triangles = Some(v),
+                _ => return usage("--tris takes a whole number of triangles, at least 4"),
+            },
+            "--max-error" => match args.next().and_then(|v| v.parse::<f64>().ok()) {
+                Some(v) if v > 0.0 => options.max_error = Some(v),
+                _ => return usage("--max-error takes a distance above 0 in model units"),
+            },
             "-h" | "--help" => return usage(""),
             _ if input.is_none() => input = Some(arg),
             _ if output.is_none() => output = Some(arg),
@@ -50,7 +58,7 @@ fn usage(problem: &str) -> ExitCode {
     if !problem.is_empty() {
         eprintln!("{problem}");
     }
-    eprintln!("usage: gcad2glb [--detail N] [--z-up] in.gcad out.glb");
+    eprintln!("usage: gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] in.gcad out.glb");
     if problem.is_empty() {
         ExitCode::SUCCESS
     } else {

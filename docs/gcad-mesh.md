@@ -50,8 +50,12 @@ rest pose) and returns the joint count, also when `out` is null. `gcad_glb` retu
 ## Command line
 
 ```
-gcad2glb [--detail N] [--z-up] in.gcad out.glb
+gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] in.gcad out.glb
 ```
+
+`--tris` and `--max-error` decimate every unskinned body before writing it, like a `finish` line at
+the end of each body (`gcad export f.gcad f.glb --tris N` gives the same bytes). Skinned bodies keep
+their triangles: put `finish` before `skin` in the file instead.
 
 A `build.rs` step for a game:
 
@@ -104,3 +108,39 @@ compares sampled skinned vertices with `cargo run -p gcad-mesh --example dump_sk
 
 `crates/gcad-mesh-viewer` running in a headless sway: the creature is built from `rigged_creature.gcad`
 at startup (66 ms) and the walk clip is skinned on the CPU every frame.
+
+## Sculpting dense meshes
+
+`cargo run --release --features parallel -p gcad-mesh --example sculpt_timing -- LEVELS` sculpts a
+r=10 ball meshed at 0.1 and subdivided LEVELS times. Linux x86_64, 48 threads, one run each.
+
+| op | 1.5M triangles (`subdivide 1`) | 6.0M triangles (`subdivide 2`) |
+|---|---|---|
+| `subdivide` | 138 ms | 1134 ms |
+| `dab` draw, size 1 | 256 ms | 1220 ms |
+| `stroke` clay, size 2, 10 long | 290 ms | 1418 ms |
+| `stroke` dam_standard, size 0.3, 10 long | 404 ms | 1982 ms |
+| `dab` smooth, size 1.5 | 440 ms | 2337 ms |
+| `stroke` move, size 3 | 258 ms | 1195 ms |
+| `mask sphere=`, `select all`, `inflate` | 5, 5, 19 ms | 20, 20, 84 ms |
+| `finish decimate=20000` | 13.0 s, 0.011 off at most | 60.8 s, 0.021 off at most |
+
+A brush only visits the vertices under it through a spatial grid, but each stroke still rebuilds the
+grid, the normals and the closest-point index of the whole mesh, which is most of its time. `finish`
+runs once at the end; `finish max_error=` decimates several times to find the count, so it costs a few
+times more.
+
+## Fine detail at a game budget
+
+An agent that had only the gcad skill sculpted a head (498k triangles while sculpting) and a hand
+(119k), each finished with `finish decimate=20000`; the surface moved at most 0.2% and 0.07% of
+their size. The same head blocked out the old way (`remesh 0.3`, `refine`, `crease`,
+`decimate 20000`) is on the left, the brush version on the right, both at 20000 triangles:
+
+![before and after](sculpt-before-after.png)
+
+![head and hand](sculpt-head-hand.png)
+
+`examples/mesh/hero.gcad` is the kids-free-games hero rebuilt this way: 436k triangles of brush
+work (mouth, lips, dimples, pores, brow, cap stitches, hair strands on a layer, sleeve and knee
+folds) finished to 14000 with `focus=` on the face, then rigged.

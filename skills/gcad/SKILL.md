@@ -422,7 +422,7 @@ note "Ø12 silver steel, 131 long|Break all edges 0.5" place=20,20
 ## Meshes
 
 Characters, creatures and other organic game assets are mesh bodies, not solids. Never write
-triangles. Build them in three passes and look between every step.
+triangles. Build them in four passes and look between every step.
 
 **1. Blockout.** Labelled `blob` and `limb` lines that `blend` into each other: torso, chest,
 hips, neck, head, muzzle, jaw, limbs with a joint per bend, tail. Model the +x side as `_l`
@@ -435,11 +435,56 @@ any size and gets its own `color ... part=` and `gloss=`. An eye is three shells
 amber eyeball, a dark pupil in front of it (`gloss=0.9`), an eyelid crease above. A nose is a
 dark `gloss=0.8` shell. Never make eyes by denting the body: dents read as smudges.
 
-**3. Sculpt and colour.** `select` a part by label, then `move`, `scale`, `rotate`, `inflate`,
-`pinch`, `crease`; `refine` a region before fine work. Colour every part that should differ
-(white chest, dark paws). Fur markings fade, so give them `soft=` (`color #f4efe6 part=chest
-soft=1.5`); hard borders read as stuck-on patches. Markings are their own parts: make a
-`bib`, `sock_l` or `tail_tip` blob that blends into the body and colour that.
+**3. Sculpt at full resolution with brushes.** Work like ZBrush: mesh fine, sculpt with brush
+strokes, decimate once at the very end. Never ship the blockout resolution.
+
+- `remesh` the blockout fine enough for the smallest detail (an edge about a third of the
+  finest brush). For a 30-unit head that is `remesh 0.1` or finer. Re-even a stretched sculpt
+  with `remesh dynamesh 0.1`. Turn on `dyntopo on detail=0.03` to refine under each brush
+  as it works, so fine strokes stay sharp without refining the whole mesh.
+- Define brushes once, one line each, then stroke with them:
+  ```
+  brush clay type=clay size=0.6 strength=0.08 falloff=smooth
+  brush dam type=dam_standard size=0.15 strength=0.06 lazy=0.5
+  brush pore type=stamp size=1.5 strength=0.02 alpha=pores(0.15,3)
+  brush grab type=move size=2 falloff=linear
+  stroke clay from=x,y,z to=x,y,z
+  stroke dam x,y,z x,y,z x,y,z pressure=0.3,1,0.3
+  dab pore at=x,y,z
+  stroke grab from=x,y,z to=x,y,z
+  ```
+  Types: `draw` (standard), `clay` (buildup to a level), `inflate`, `smooth`, `pinch`,
+  `dam_standard` (a sharp v groove for lids, lips, nails, wrinkles), `slash`, `planar`, `trim`,
+  `polish`, `move`, `snake_hook` (pulls out horns, ears, fingers; add `detail=` so it grows
+  triangles), `nudge`, `stamp` with `alpha=` pores, scales, wrinkles, stitch, hair, dots or noise.
+  `size=` is the radius in model units, `strength=` the height (or the share for smooth, pinch,
+  planar and move), `falloff=smooth|linear|sharp|flat|curve(0,0.3,1)`, `edge=` the soft share of
+  the radius (0.2 gives a hard rim), `focal=-1..1` the ZBrush focal shift, `spacing=` dabs per
+  size, `lazy=` stroke smoothing, `mirror=x` both sides, `geodesic=on` to stay on one side of
+  thin parts (ear rims, lips), `normal=x|vertex|auto`. Change one setting later with
+  `brush clay strength=0.04`.
+- A stroke starts on the surface point closest to each path point, so points a little off
+  the surface are fine. The reply says how far off it started; a large number means a wrong
+  coordinate. `dab` takes `at=`; `stroke` takes `from=`/`to=` or a list of points, and needs a
+  point at least every brush size along a curve (an ear rim of 8 points comes out faceted).
+- Shells for nails, teeth and scales must stand proud of the surface by about their own
+  thickness: a shell buried in the finger only shows as an outline.
+- Protect what is done: `mask sphere=x,y,z r=` (or `part=`, `by=cavity r=1`, `by=height axis=z
+  from= to=`), `mask invert|blur 2|grow 0.3|shrink 0.3|clear`; `isolate head` / `hide ear_l` /
+  `show` hold whole parts still. Brushes and every `select` op skip masked vertices.
+- `group lip sphere=x,y,z r=1` makes a polygroup you can `select lip` later.
+- Soften seams: `join arm_l body blend=1.5` smooths across the border of two parts; `select
+  ... falloff=2 profile=linear strength=0.5` gives any op a softer edge.
+- `layer wrinkles` records the strokes after it; `layer wrinkles amount=0.5` dials them, `0`
+  turns them off. `level base` stores the surface; `subdivide 1` then `project base` returns a
+  region to it.
+- The older region ops (`select` + `move`, `scale`, `inflate`, `pinch`, `crease`, `flatten`,
+  `noise`, `refine`, `relax`) still work for big shape changes.
+
+Colour every part that should differ (white chest, dark paws). Fur markings fade, so give them
+`soft=` (`color #f4efe6 part=chest soft=1.5`); hard borders read as stuck-on patches. Markings
+are their own parts: make a `bib`, `sock_l` or `tail_tip` blob that blends into the body and
+colour that.
 
 Proportions decide most of the result. Legs are long and thin (a fox's leg is as long as its
 body is deep, and about a fifth as thick), the body is slim, paws are small and not boots,
@@ -451,17 +496,29 @@ Look between every step, not only at the end:
   grid, part names and the surface. Check the face from the front and the side every time
   it changes, at the size the detail is; a whole-body render hides anything under a few
   percent of its size.
-- `--pick x,y` on an inspect picture prints the surface point and part under a pixel. Use the
-  numbers for `at=` of shells and for `select sphere=`, `crease` and `pinch`. Never guess
-  coordinates for small features.
+- `--zoom x,y,z,r` frames a close-up of radius r; `--wire` draws the triangles, so you can see
+  whether there are enough under a brush (a brush needs at least three edges across its radius);
+  `--path x,y,z --path x,y,z` previews a stroke on the surface before you write it.
+- `--pick x,y` on an inspect picture prints the surface point, normal, part and curvature
+  under a pixel (bump, hollow or flat). Use the numbers for `dab at=`, `stroke` points, shell
+  `at=`, `mask sphere=` and `select sphere=`. Never guess coordinates for small features: pick
+  them on a `--zoom` close-up.
 - `--line N` shows what line N selected; `moved 0 vertices` in `gcad check` means a miss.
 
 Spend the budget. A model you looked at three times is a blockout; one you looked at fifteen
 times, fixing what each look showed, is an asset. Stop only when a close-up of the face, a
 side view and a three-quarter view all look right.
 
-- End a game asset with `select all` and `decimate 5000` (or its budget) behind a variable
-  (`if budget>0 decimate budget`) so full detail stays available for renders.
+**4. Finish.** The last line of each body is `finish decimate=20000` (a count or a share like
+`10%`) or `finish max_error=0.02` (the most the surface may move, in model units). It keeps part
+borders, reports the triangles before and after and how far the surface moved. Put it behind a
+variable (`if budget>0 finish decimate=budget`) so full detail stays for renders, or leave it
+out and export with `gcad export f.gcad f.glb --tris 20000` (`--max-error 0.02`;
+`gcad2glb --tris` does the same). `finish` goes before `skin`. Fine detail survives this far
+better than sculpting at low resolution: a 20k finish of a 1.5M sculpt stays within 0.05% of
+its size. Add `focus=head,jaw weight=30` to keep the face finer than the body: a 14k finish of
+the hero (`examples/mesh/hero.gcad`) keeps the mouth and dimples only with it.
+
 - Export with `gcad export file.gcad out.obj`: each part is its own `g` group with an `.mtl`.
 
 ### Rigging a mesh

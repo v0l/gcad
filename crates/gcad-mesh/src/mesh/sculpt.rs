@@ -21,13 +21,7 @@ impl Mesh {
                 break;
             }
             added += more;
-            selection = Selection::new(
-                self,
-                selection.regions.clone(),
-                selection.falloff,
-                selection.mirror,
-            )
-            .unwrap_or(selection);
+            selection = selection.again(self).unwrap_or(selection);
         }
         added
     }
@@ -71,10 +65,8 @@ impl Mesh {
         for (a, b) in keys {
             let (pa, pb) = (self.positions[a as usize], self.positions[b as usize]);
             let p = curved_midpoint(pa, normals[a as usize], pb, normals[b as usize]);
-            let label = self.labels[a as usize];
-            self.positions.push(p);
-            self.labels.push(label);
-            split.insert((a, b), (self.positions.len() - 1) as u32);
+            let id = self.push_between(p, a, b);
+            split.insert((a, b), id);
         }
         let mid = |a: u32, b: u32| split.get(&edge(a, b)).copied();
         let mut triangles = Vec::with_capacity(self.triangles.len() * 2);

@@ -8,8 +8,40 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 pub const MESH_OPERATIONS: &[&str] = &[
-    "blob", "limb", "block", "remesh", "select", "inflate", "smooth", "refine", "crease", "pinch",
-    "flatten", "noise", "relax", "decimate", "bone", "skin", "pose", "clip", "key",
+    "blob",
+    "limb",
+    "block",
+    "remesh",
+    "select",
+    "inflate",
+    "smooth",
+    "refine",
+    "crease",
+    "pinch",
+    "flatten",
+    "noise",
+    "relax",
+    "decimate",
+    "bone",
+    "skin",
+    "pose",
+    "clip",
+    "key",
+    "brush",
+    "stroke",
+    "dab",
+    "mask",
+    "hide",
+    "isolate",
+    "show",
+    "group",
+    "join",
+    "dyntopo",
+    "subdivide",
+    "level",
+    "project",
+    "layer",
+    "finish",
 ];
 
 pub type Shaded = (String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>);
@@ -25,6 +57,9 @@ pub struct MeshBody {
     pub selections: Vec<Named>,
     pub rig: crate::mesh::rig::Rig,
     pub clip: Option<usize>,
+    pub brushes: Vec<(String, crate::mesh::stroke::Brush)>,
+    pub dyntopo: Option<f64>,
+    pub levels: Vec<(String, Arc<Mesh>)>,
     pub(crate) preview: std::sync::OnceLock<std::result::Result<Arc<Mesh>, String>>,
 }
 
@@ -275,6 +310,47 @@ impl Scene {
         (size / 120.0 * self.cell_factor()).max(1.0e-6)
     }
 
+    pub fn budget(&mut self, triangles: Option<usize>, max_error: Option<f64>) -> Vec<String> {
+        if triangles.is_none() && max_error.is_none() {
+            return Vec::new();
+        }
+        let skinned: Vec<String> = self
+            .mesh_rigs
+            .iter()
+            .filter(|(_, rig)| rig.skin.is_some())
+            .map(|(name, _)| name.clone())
+            .collect();
+        let mut reports = Vec::new();
+        if self.mesh_body.rig.skin.is_none()
+            && let Ok(Some(open)) = self.current_mesh()
+        {
+            let mut mesh = (*open).clone();
+            let report = mesh.finish(&open, triangles, max_error);
+            reports.push(format!("body `{}`: {report}", self.body_name()));
+            self.mesh_body.mesh = Some(Arc::new(mesh));
+        } else if self.mesh_body.rig.skin.is_some() {
+            reports.push(format!(
+                "body `{}` is skinned, so it keeps its triangles; put `finish` before `skin` in the file",
+                self.body_name()
+            ));
+        }
+        let done: Vec<String> = self.mesh_bodies
+            .iter_mut()
+            .map(|(name, mesh)| {
+                if skinned.contains(name) {
+                    return format!(
+                        "body `{name}` is skinned, so it keeps its {} triangles; put `finish` before `skin` in the file",
+                        mesh.triangles.len()
+                    );
+                }
+                let reference = (**mesh).clone();
+                let report = Arc::make_mut(mesh).finish(&reference, triangles, max_error);
+                format!("body `{name}`: {report}")
+            })
+            .collect();
+        done.into_iter().chain(reports).collect()
+    }
+
     pub fn finish_mesh_body(&mut self) -> Result<()> {
         if let Some(mesh) = self.current_mesh()? {
             self.mesh_bodies.push((self.body_name(), mesh));
@@ -428,6 +504,20 @@ impl Scene {
     }
 
     pub fn op_remesh(&mut self, scope: &Scope, line: &Line) -> Result<String> {
+        if line.positional.first().map(String::as_str) == Some("dynamesh") {
+            let args = Args::new(line, &["mode", "cell"], &[], false)?;
+            let cell = positive(args.number("cell", scope)?, "cell")? * self.cell_factor();
+            let before = self.sculpted("remesh dynamesh")?.clone();
+            let mut even = before.dynamesh(cell)?;
+            even.hidden = before.hidden.clone();
+            self.mesh_body.mesh = Some(Arc::new(even));
+            self.mesh_body.levels.clear();
+            return Ok(format!(
+                "{} (was {} triangles)",
+                self.describe_mesh()?,
+                before.triangles.len()
+            ));
+        }
         let args = Args::new(line, &["cell"], &[], false)?;
         if self.mesh_body.blockout.is_empty() {
             bail!(
@@ -481,7 +571,9 @@ impl Scene {
         let args = Args::new(
             line,
             &[],
-            &["sphere", "r", "box", "falloff", "mirror"],
+            &[
+                "sphere", "r", "box", "falloff", "mirror", "profile", "strength",
+            ],
             true,
         )?;
         let mut regions = Vec::new();
@@ -522,7 +614,17 @@ impl Scene {
             .map(|t| axis_index(t))
             .transpose()?;
         let mesh = self.sculpted("select")?.clone();
-        let selection = Selection::new(&mesh, regions.clone(), falloff, mirror)?;
+        let mut weighting = mesh::Weighting::default();
+        if let Some(text) = args.values.get("profile") {
+            weighting.profile = crate::brush_ops::falloff_of(text, scope)?;
+        }
+        if let Some(s) = args.optional_number("strength", scope)? {
+            if !(-4.0..=4.0).contains(&s) {
+                bail!("`strength` goes from -4 to 4, got {s}");
+            }
+            weighting.strength = s;
+        }
+        let selection = Selection::weighted(&mesh, regions.clone(), falloff, mirror, weighting)?;
         let count = selection.count();
         let full = selection.weights.iter().filter(|&&w| w >= 1.0).count();
         let centre = selection.centre;
@@ -542,7 +644,7 @@ impl Scene {
     fn selection_for(&mut self, op: &str) -> Result<Selection> {
         let mesh = self.sculpted(op)?.clone();
         let selection = match self.mesh_body.selection.take() {
-            Some(s) => Selection::new(&mesh, s.regions, s.falloff, s.mirror)?,
+            Some(s) => s.again(&mesh)?,
             None => Selection::new(&mesh, vec![Region::All], 0.0, None)?,
         };
         self.mesh_body.selection = Some(selection.clone());

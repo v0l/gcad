@@ -186,6 +186,7 @@ fn as_mesh(solid: &Solid, name: &str) -> crate::mesh::Mesh {
         positions: points.iter().map(|p| [p.x, p.y, p.z]).collect(),
         triangles: triangles.iter().map(|t| t.map(|i| i as u32)).collect(),
         parts: vec![name.to_string()],
+        ..Default::default()
     }
 }
 
@@ -253,6 +254,7 @@ fn faceted_mesh(solid: &Solid, name: &str, tolerance: f64) -> crate::mesh::Mesh 
             .collect(),
         positions: corners,
         parts: vec![name.to_string()],
+        ..Default::default()
     }
 }
 

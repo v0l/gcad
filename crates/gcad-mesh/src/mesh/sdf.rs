@@ -309,7 +309,6 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
             lo[2] + k as f64 * cell,
         ]
     };
-    let index = |i: usize, j: usize, k: usize| (k * n[1] + j) * n[0] + i;
     let values: Vec<f64> = {
         collect_indexed(n[0] * n[1] * n[2], |id| {
             let i = id % n[0];
@@ -318,6 +317,60 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
             field(primitives, at(i, j, k))
         })
     };
+    let (positions, triangles) = nets(&values, n, lo, cell);
+    let positions: Vec<P3> = {
+        collect_indexed(positions.len(), |index| {
+            let p = positions[index];
+            let mut q = p;
+            for _ in 0..3 {
+                let d = field(primitives, q);
+                let g = gradient(primitives, q, cell * 0.05);
+                let gg = dot(g, g);
+                if gg < 1.0e-18 {
+                    break;
+                }
+                q = sub(q, scale(g, d / gg));
+            }
+            if length(sub(q, p)) > cell {
+                add(p, scale(normalized(sub(q, p)), cell))
+            } else {
+                q
+            }
+        })
+    };
+    let mut parts: Vec<String> = Vec::new();
+    let part_of: Vec<u16> = primitives
+        .iter()
+        .map(|p| match parts.iter().position(|q| *q == p.part) {
+            Some(i) => i as u16,
+            None => {
+                parts.push(p.part.clone());
+                (parts.len() - 1) as u16
+            }
+        })
+        .collect();
+    let labels = positions
+        .iter()
+        .map(|&p| part_of[owner(primitives, p)])
+        .collect();
+    Ok(Mesh {
+        positions,
+        triangles,
+        labels,
+        parts,
+        ..Default::default()
+    })
+}
+
+pub fn nets(values: &[f64], n: [usize; 3], lo: P3, cell: f64) -> (Vec<P3>, Vec<[u32; 3]>) {
+    let at = |i: usize, j: usize, k: usize| -> P3 {
+        [
+            lo[0] + i as f64 * cell,
+            lo[1] + j as f64 * cell,
+            lo[2] + k as f64 * cell,
+        ]
+    };
+    let index = |i: usize, j: usize, k: usize| (k * n[1] + j) * n[0] + i;
     let mut vertex_of: HashMap<(usize, usize, usize), [u32; 12]> = HashMap::new();
     let mut positions: Vec<P3> = Vec::new();
     for k in 0..n[2] - 1 {
@@ -416,47 +469,7 @@ fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
             }
         }
     }
-    let positions: Vec<P3> = {
-        collect_indexed(positions.len(), |index| {
-            let p = positions[index];
-            let mut q = p;
-            for _ in 0..3 {
-                let d = field(primitives, q);
-                let g = gradient(primitives, q, cell * 0.05);
-                let gg = dot(g, g);
-                if gg < 1.0e-18 {
-                    break;
-                }
-                q = sub(q, scale(g, d / gg));
-            }
-            if length(sub(q, p)) > cell {
-                add(p, scale(normalized(sub(q, p)), cell))
-            } else {
-                q
-            }
-        })
-    };
-    let mut parts: Vec<String> = Vec::new();
-    let part_of: Vec<u16> = primitives
-        .iter()
-        .map(|p| match parts.iter().position(|q| *q == p.part) {
-            Some(i) => i as u16,
-            None => {
-                parts.push(p.part.clone());
-                (parts.len() - 1) as u16
-            }
-        })
-        .collect();
-    let labels = positions
-        .iter()
-        .map(|&p| part_of[owner(primitives, p)])
-        .collect();
-    Ok(Mesh {
-        positions,
-        triangles,
-        labels,
-        parts,
-    })
+    (positions, triangles)
 }
 
 const EDGES: [(usize, usize); 12] = [
@@ -529,6 +542,132 @@ fn edge_groups(corners: &[f64; 8]) -> [usize; 12] {
 
 fn corner_offset(c: usize) -> P3 {
     [(c & 1) as f64, ((c >> 1) & 1) as f64, ((c >> 2) & 1) as f64]
+}
+
+impl Mesh {
+    pub fn dynamesh(&self, cell: f64) -> Result<Mesh> {
+        if cell <= 0.0 {
+            bail!("the cell size must be positive, got {cell}");
+        }
+        if self.open_edges() > 0 {
+            bail!(
+                "`remesh dynamesh` needs a closed surface; this one has {} open edges",
+                self.open_edges()
+            );
+        }
+        let (lo, hi) = self
+            .bounds()
+            .ok_or_else(|| anyhow::anyhow!("the mesh is empty"))?;
+        let lo = sub(lo, [2.0 * cell; 3]);
+        let hi = add(hi, [2.0 * cell; 3]);
+        let n: [usize; 3] = std::array::from_fn(|k| ((hi[k] - lo[k]) / cell).ceil() as usize + 1);
+        if n.iter().any(|&c| c > MAX_CELLS) {
+            bail!(
+                "a {cell} cell makes a {} x {} x {} grid; use a cell of at least {:.3}",
+                n[0],
+                n[1],
+                n[2],
+                (0..3)
+                    .map(|k| (hi[k] - lo[k]) / (MAX_CELLS - 1) as f64)
+                    .fold(0.0, f64::max)
+            );
+        }
+        let surface = super::grid::Surface::new(self);
+        let normals = self.vertex_normals();
+        let at = |id: usize| -> P3 {
+            let i = id % n[0];
+            let j = (id / n[0]) % n[1];
+            let k = id / (n[0] * n[1]);
+            [
+                lo[0] + i as f64 * cell,
+                lo[1] + j as f64 * cell,
+                lo[2] + k as f64 * cell,
+            ]
+        };
+        let index = |i: usize, j: usize, k: usize| (k * n[1] + j) * n[0] + i;
+        let total = n[0] * n[1] * n[2];
+        let mut band = vec![false; total];
+        let to_cell =
+            |v: f64, k: usize| (((v - lo[k]) / cell).floor().max(0.0) as usize).min(n[k] - 1);
+        for &t in &self.triangles {
+            let [a, b, c] = self.corners(t);
+            let lo_t: [usize; 3] =
+                std::array::from_fn(|k| to_cell(a[k].min(b[k]).min(c[k]) - 1.5 * cell, k));
+            let hi_t: [usize; 3] =
+                std::array::from_fn(|k| to_cell(a[k].max(b[k]).max(c[k]) + 1.5 * cell, k) + 1);
+            for k in lo_t[2]..=hi_t[2].min(n[2] - 1) {
+                for j in lo_t[1]..=hi_t[1].min(n[1] - 1) {
+                    for i in lo_t[0]..=hi_t[0].min(n[0] - 1) {
+                        band[index(i, j, k)] = true;
+                    }
+                }
+            }
+        }
+        let near: Vec<f64> = collect_indexed(total, |id| {
+            if band[id] {
+                surface
+                    .signed(at(id), &normals)
+                    .map_or(f64::INFINITY, |(d, _)| d)
+            } else {
+                0.0
+            }
+        });
+        let mut values: Vec<f64> = vec![-1.0e9; total];
+        let mut queue = std::collections::VecDeque::from([0usize]);
+        values[0] = 1.0e9;
+        while let Some(id) = queue.pop_front() {
+            let (i, j, k) = (id % n[0], (id / n[0]) % n[1], id / (n[0] * n[1]));
+            let steps = [
+                (i > 0).then(|| index(i - 1, j, k)),
+                (i + 1 < n[0]).then(|| index(i + 1, j, k)),
+                (j > 0).then(|| index(i, j - 1, k)),
+                (j + 1 < n[1]).then(|| index(i, j + 1, k)),
+                (k > 0).then(|| index(i, j, k - 1)),
+                (k + 1 < n[2]).then(|| index(i, j, k + 1)),
+            ];
+            for next in steps.into_iter().flatten() {
+                if values[next] > 0.0 || band[next] {
+                    continue;
+                }
+                values[next] = 1.0e9;
+                queue.push_back(next);
+            }
+        }
+        for id in 0..total {
+            if band[id] {
+                values[id] = near[id];
+            }
+        }
+        let (positions, triangles) = nets(&values, n, lo, cell);
+        let mut out = Mesh {
+            parts: self.parts.clone(),
+            triangles,
+            ..Default::default()
+        };
+        for p in positions {
+            let hit = surface.closest(p);
+            let (q, label) = match hit {
+                Some(h) if h.distance <= cell => {
+                    let t = self.triangles[h.triangle as usize];
+                    let near = t
+                        .iter()
+                        .min_by(|a, b| {
+                            length(sub(self.positions[**a as usize], h.point))
+                                .total_cmp(&length(sub(self.positions[**b as usize], h.point)))
+                        })
+                        .expect("three corners");
+                    (h.point, self.labels[*near as usize])
+                }
+                _ => (p, 0),
+            };
+            out.positions.push(q);
+            out.labels.push(label);
+        }
+        if out.triangles.is_empty() {
+            bail!("the {cell} cell is too coarse for this mesh; nothing was left");
+        }
+        Ok(out)
+    }
 }
 
 #[cfg(test)]
