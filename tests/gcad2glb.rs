@@ -163,7 +163,7 @@ fn export_tris_flag_matches_gcad2glb() {
         "{}",
         String::from_utf8_lossy(&gcad.stderr)
     );
-    let tool = std::path::Path::new(env!("CARGO_BIN_EXE_gcad")).with_file_name("gcad2glb");
+    let tool = gcad2glb_tool();
     let glb = std::process::Command::new(&tool)
         .args([
             "--tris",
@@ -194,5 +194,65 @@ fn export_tris_flag_matches_gcad2glb() {
     assert!(
         from_gcad == expected && from_tool == expected,
         "same length, different bytes"
+    );
+}
+
+fn gcad2glb_tool() -> std::path::PathBuf {
+    let gcad = std::path::Path::new(env!("CARGO_BIN_EXE_gcad"));
+    let tool = gcad.with_file_name("gcad2glb");
+    let profile_dir = gcad.parent().expect("profile dir");
+    let target = profile_dir.parent().expect("target dir");
+    let mut build = std::process::Command::new(env!("CARGO"));
+    build
+        .args([
+            "build",
+            "-p",
+            "gcad-mesh",
+            "--bin",
+            "gcad2glb",
+            "--target-dir",
+        ])
+        .arg(target);
+    if profile_dir.file_name().is_some_and(|n| n == "release") {
+        build.arg("--release");
+    }
+    let status = build.status().expect("builds gcad2glb");
+    assert!(status.success(), "building gcad2glb");
+    tool
+}
+
+const BAKED: &str = "ball: blob 0,0,0 r=10\nremesh 0.25\nbrush w type=dam_standard size=0.5 strength=0.3\nstroke w from=-4,0,9.2 to=4,0,9.2\nfinish decimate=1500\nbake normals size=64\nlod 600 200\n";
+
+#[test]
+fn export_and_gcad2glb_write_the_same_bytes_for_a_bake_and_lod() {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let spec = dir.join("baked.gcad");
+    std::fs::write(&spec, BAKED).expect("writes");
+    let (a, b) = (dir.join("baked-a.glb"), dir.join("baked-b.glb"));
+    let gcad = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["export", spec.to_str().unwrap(), a.to_str().unwrap()])
+        .output()
+        .expect("runs gcad");
+    assert!(
+        gcad.status.success(),
+        "{}",
+        String::from_utf8_lossy(&gcad.stderr)
+    );
+    let glb = std::process::Command::new(gcad2glb_tool())
+        .args([spec.to_str().unwrap(), b.to_str().unwrap()])
+        .output()
+        .expect("runs gcad2glb");
+    assert!(
+        glb.status.success(),
+        "{}",
+        String::from_utf8_lossy(&glb.stderr)
+    );
+    let (from_gcad, from_tool) = (std::fs::read(&a).unwrap(), std::fs::read(&b).unwrap());
+    assert_eq!(from_gcad, from_tool);
+    assert_eq!(from_gcad, gcad_mesh::to_glb(BAKED).expect("builds"));
+    let text = String::from_utf8_lossy(&from_gcad);
+    assert!(
+        text.contains("MSFT_lod") && text.contains("main_LOD2") && text.contains("normalTexture")
     );
 }
