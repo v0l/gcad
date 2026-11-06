@@ -35,8 +35,12 @@ fn tinted(image: &Image, colour: [f32; 3]) -> Image {
 
 impl Library {
     pub fn new() -> Self {
+        Self::with_images(Vec::new())
+    }
+
+    pub fn with_images(images: Vec<Image>) -> Self {
         Self {
-            images: Vec::new(),
+            images,
             entries: Vec::new(),
         }
     }

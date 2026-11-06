@@ -134,6 +134,7 @@ pub struct Scene {
     pub vertices: Vec<(usize, V3)>,
     pub edges: Vec<SnapEdge>,
     pub faces: Vec<FaceInfo>,
+    pub rigged: Vec<Rigged>,
 }
 
 #[derive(Clone, Debug)]
@@ -464,14 +465,72 @@ fn describe_source(source: &crate::model::Source) -> String {
     text
 }
 
+fn mesh_inks(model: &Model, name: &str, mesh: &crate::mesh::Mesh, tints: &[V3]) -> Vec<Ink> {
+    let finish = model.materials.get(name).and_then(|m| m.finish.clone());
+    let gloss = model.part_gloss_of(name, mesh);
+    (0..mesh.parts.len().max(1))
+        .map(|part| {
+            let g: f64 = if part < gloss.len() { gloss[part] } else { 0.0 };
+            let base = finish.clone().unwrap_or_default();
+            let roughness = if g > 0.0 {
+                Some(1.0 - g * 0.8)
+            } else {
+                base.roughness
+            };
+            let finish = crate::model::materials::Finish { roughness, ..base };
+            let tint = tints.get(part).copied().unwrap_or(BODY);
+            Ink::Finished(Finish::new(&finish, tint))
+        })
+        .collect()
+}
+
+#[derive(Clone, Default)]
+pub struct Rigged {
+    pub name: String,
+    pub group: usize,
+    pub rest: Arc<crate::mesh::Mesh>,
+    pub rig: crate::mesh::rig::Rig,
+    pub slots: Vec<(usize, Vec<u32>)>,
+}
+
+pub fn pose_surfaces(
+    surfaces: &mut [Surface],
+    slots: &[(usize, Vec<u32>)],
+    mesh: &crate::mesh::Mesh,
+) {
+    let normals = mesh.vertex_normals();
+    let point = |p: crate::mesh::P3| [p[0] as f32, p[1] as f32, p[2] as f32];
+    for (index, vertices) in slots {
+        let Some(surface) = surfaces.get_mut(*index) else {
+            continue;
+        };
+        surface.positions = vertices
+            .iter()
+            .map(|&i| point(mesh.positions[i as usize]))
+            .collect();
+        surface.normals = vertices
+            .iter()
+            .map(|&i| point(normals[i as usize]))
+            .collect();
+    }
+}
+
+struct MeshLook<'a> {
+    colours: &'a [[f64; 3]],
+    inks: &'a [Ink],
+    tints: &'a [V3],
+}
+
 fn mesh_surfaces(
     mesh: &crate::mesh::Mesh,
     body: usize,
-    tints: &[V3],
+    look: &MeshLook<'_>,
     selected: Option<(&[f64], V3)>,
     out: &mut Vec<Surface>,
     info: &mut Vec<FaceInfo>,
-) {
+) -> Vec<(usize, Vec<u32>)> {
+    let mut slots = Vec::new();
+    let tints = look.tints;
     let normals = mesh.vertex_normals();
     let point = |p: crate::mesh::P3| [p[0] as f32, p[1] as f32, p[2] as f32];
     let mut by_part: Vec<Vec<[u32; 3]>> = vec![Vec::new(); mesh.parts.len().max(1)];
@@ -505,22 +564,32 @@ fn mesh_surfaces(
             triangles.len()
         );
         let colour = tints.get(part).copied().unwrap_or(BODY);
+        let ink = look.inks.get(part).copied().unwrap_or(Ink::Body);
         for (highlit, tint) in [(false, colour), (true, selected.map_or(colour, |(_, c)| c))] {
             let mut surface = Surface {
                 colour: tint,
-                material: Ink::Body,
+                material: ink,
                 group: body,
                 ..Default::default()
             };
+            let mut vertices = Vec::new();
             for t in triangles.iter().filter(|t| picked(t) == highlit) {
                 for &i in t {
                     surface.positions.push(point(mesh.positions[i as usize]));
                     surface.normals.push(point(normals[i as usize]));
+                    if !highlit && let Some(c) = look.colours.get(i as usize) {
+                        surface.colours.push(c.map(|v| v as f32));
+                    }
+                    vertices.push(i);
                 }
             }
             if surface.positions.is_empty() {
                 continue;
             }
+            if surface.colours.len() != surface.positions.len() {
+                surface.colours.clear();
+            }
+            slots.push((out.len(), vertices));
             out.push(surface);
             info.push(FaceInfo {
                 body,
@@ -529,6 +598,7 @@ fn mesh_surfaces(
             });
         }
     }
+    slots
 }
 
 pub fn build(
@@ -538,10 +608,11 @@ pub fn build(
     marked_colour: V3,
 ) -> Scene {
     let mut scene = build_solids(model, highlights, marked, marked_colour);
-    let meshes = model.mesh_tints();
+    let meshes = model.mesh_shading();
     if meshes.is_empty() {
         return scene;
     }
+    let tinted = model.mesh_tints();
     let current = model.current_body();
     let selection = model.scene.mesh_body.selection.as_ref();
     let solid_mesh = std::mem::take(&mut scene.mesh);
@@ -549,10 +620,16 @@ pub fn build(
     let had_solids = !model.solids().is_empty();
     let (solid_centre, solid_radius) = (solid_mesh.centre, solid_mesh.radius);
     let mut surfaces = solid_mesh.surfaces;
+    let mut textures = super::textures::Library::with_images(solid_mesh.images);
+    let rests = model.rest_meshes();
     let mut bounds: Option<(crate::mesh::P3, crate::mesh::P3)> = None;
-    for (name, mesh, tints) in &meshes {
+    for (name, mesh, colours, _) in &meshes {
         let body = scene.parts.len();
-        let tints: Vec<V3> = tints.iter().map(|c| c.map(|v| v as f32)).collect();
+        let tints: Vec<V3> = tinted
+            .iter()
+            .find(|(n, ..)| n == name)
+            .map(|(_, _, t)| t.iter().map(|c| c.map(|v| v as f32)).collect())
+            .unwrap_or_default();
         let colour = model
             .colours
             .get(name)
@@ -566,14 +643,37 @@ pub fn build(
                     highlights.last().map_or(BODY, |h| h.colour),
                 )
             });
-        mesh_surfaces(
-            mesh,
-            body,
-            &tints,
-            selected,
-            &mut surfaces,
-            &mut scene.faces,
-        );
+        let inks = mesh_inks(model, name, mesh, &tints);
+        let look = MeshLook {
+            colours,
+            inks: &inks,
+            tints: &tints,
+        };
+        let first = surfaces.len();
+        let slots = mesh_surfaces(mesh, body, &look, selected, &mut surfaces, &mut scene.faces);
+        if let Some(finish) = model.materials.get(name).and_then(|m| m.finish.as_ref()) {
+            for index in first..surfaces.len() {
+                if let Some(binding) = textures.binding(finish, surfaces[index].colour) {
+                    super::textures::apply(
+                        &mut surfaces[index..index + 1],
+                        binding,
+                        Matrix4::identity(),
+                    );
+                }
+            }
+        }
+        if let Some(rig) = model.rig_of(name)
+            && let Some((_, rest)) = rests.iter().find(|(n, _)| n == name)
+            && rig.skin_fits(rest)
+        {
+            scene.rigged.push(Rigged {
+                name: name.clone(),
+                group: body,
+                rest: rest.clone(),
+                rig: rig.clone(),
+                slots,
+            });
+        }
         if let Some((lo, hi)) = mesh.bounds() {
             bounds = Some(match bounds {
                 None => (lo, hi),
@@ -610,7 +710,7 @@ pub fn build(
     scene.mesh = Arc::new(viewer3d::Scene {
         surfaces,
         lines: solid_mesh.lines,
-        images: solid_mesh.images,
+        images: textures.images,
         centre: std::array::from_fn(|k| ((lo[k] + hi[k]) / 2.0) as f32),
         radius: (crate::mesh::length(crate::mesh::sub(hi, lo)) / 2.0).max(1.0e-3) as f32,
         ..Default::default()
@@ -770,6 +870,7 @@ fn build_solids(
         vertices,
         edges: snap_edges,
         faces: info,
+        rigged: Vec::new(),
     }
 }
 
@@ -961,6 +1062,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         vertices: Vec::new(),
         edges: Vec::new(),
         faces: Vec::new(),
+        rigged: Vec::new(),
     }
 }
 
@@ -1071,6 +1173,42 @@ mod tests {
             (0..12).map(|i| [i as f32, (i as f32).sin(), 0.0]).collect(),
         );
         assert!(wave.circle.is_none());
+    }
+
+    #[test]
+    fn mesh_bodies_carry_vertex_colours_gloss_and_textures() {
+        let source = "left: blob -3,0,0 r=3\nright: blob 3,0,0 r=3 blend=1\nremesh 0.3\nmaterial pine\ncolor #000000\ncolor #ffffff part=right soft=2 gloss=0.8";
+        let lines = crate::parse::parse_program(source).expect("parses");
+        let model = crate::model::run(&lines).model;
+        let scene = super::build(&model, &[], &[], [1.0, 0.0, 0.0]);
+        let surfaces = &scene.mesh.surfaces;
+        assert!(!surfaces.is_empty());
+        for s in surfaces {
+            assert_eq!(s.colours.len(), s.positions.len());
+            assert_eq!(s.uvs.len(), s.positions.len());
+            assert!(s.texture.is_some() && s.texture < Some(scene.mesh.images.len()));
+        }
+        let greys: Vec<f32> = surfaces
+            .iter()
+            .flat_map(|s| s.colours.iter().map(|c| c[0]))
+            .collect();
+        assert!(greys.iter().any(|g| *g < 0.05) && greys.iter().any(|g| *g > 0.95));
+        assert!(
+            greys.iter().any(|g| *g > 0.2 && *g < 0.8),
+            "soft= blends the border"
+        );
+        let roughness: Vec<f32> = surfaces
+            .iter()
+            .map(|s| s.material.pbr().roughness)
+            .collect();
+        assert!(
+            roughness.iter().any(|r| (r - 0.36).abs() < 1.0e-4),
+            "{roughness:?}"
+        );
+        assert!(
+            roughness.iter().any(|r| (r - 0.75).abs() < 1.0e-4),
+            "{roughness:?}"
+        );
     }
 
     #[test]
