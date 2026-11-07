@@ -15,7 +15,7 @@ pub mod model;
 pub mod nest;
 pub mod offset;
 pub mod packed;
-pub use gcad_mesh::parse;
+pub use gcad_parse as parse;
 pub mod plot;
 pub mod progress;
 #[cfg(not(target_arch = "wasm32"))]

@@ -2059,6 +2059,7 @@ dependencies = [
  "flate2",
  "gcad-calc",
  "gcad-mesh",
+ "gcad-parse",
  "gcad-sims-proto",
  "getrandom 0.4.3",
  "image 0.25.10",
@@ -2111,6 +2112,7 @@ name = "gcad-mesh"
 version = "0.6.1"
 dependencies = [
  "anyhow",
+ "gcad-parse",
  "miniz_oxide 0.8.9",
  "rayon",
  "serde_json",
@@ -2122,6 +2124,13 @@ version = "0.6.1"
 dependencies = [
  "gcad-mesh",
  "macroquad",
+]
+
+[[package]]
+name = "gcad-parse"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
 ]
 
 [[package]]

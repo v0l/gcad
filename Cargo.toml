@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
+members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
 
 [workspace.package]
 version = "0.6.1"
@@ -17,12 +17,14 @@ repository = "https://github.com/v0l/gcad"
 
 [workspace.dependencies]
 gcad-calc = { path = "crates/gcad-calc" }
+gcad-parse = { path = "crates/gcad-parse" }
 anyhow = "1.0.104"
 serde = { version = "1", features = ["derive"] }
 toml = "1.1.8"
 
 [dependencies]
 gcad-calc.workspace = true
+gcad-parse.workspace = true
 gcad-sims-proto = { path = "sims-proto" }
 gcad-mesh = { path = "crates/gcad-mesh", features = ["parallel"] }
 anyhow.workspace = true

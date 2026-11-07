@@ -1,6 +1,7 @@
 doc gcad_calc: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_mesh: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+doc gcad_parse: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_sims_proto: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_web: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly_hierarchy.rs assembly_hierarchy: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -26,6 +27,7 @@ tests/manifest.rs manifest: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 fil
 tests/mesh.rs mesh: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/ops_doc.rs ops_doc: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/output.rs output: ok. 28 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out
+tests/parse.rs parse: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/progress.rs progress: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/remote_job.rs remote_job: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/remote_overview.rs remote_overview: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -41,9 +43,10 @@ tests/stored.rs stored: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtere
 tests/workplane.rs workplane: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad2glb: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_calc: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-unittests gcad_mesh: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_mesh: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_mesh_viewer: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_parse: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_sims_proto: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_web: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
