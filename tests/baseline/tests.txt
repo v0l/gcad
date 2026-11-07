@@ -30,11 +30,11 @@ tests/progress.rs progress: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 fil
 tests/remote_job.rs remote_job: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/remote_overview.rs remote_overview: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/revision.rs revision: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/rig.rs rig: ok. 35 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/rig.rs rig: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/simulation.rs simulation: ok. 105 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out
 tests/simulation.rs simulation: test result_goes_stale ... ok
 tests/sketch.rs sketch: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/skinning.rs skinning: ok. 15 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/skinning.rs skinning: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/solid_props.rs solid_props: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/solid_silhouette.rs solid_silhouette: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/stored.rs stored: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

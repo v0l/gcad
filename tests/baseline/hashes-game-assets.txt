@@ -430,6 +430,15 @@ dfa25004e069c107 0 obj examples/mesh/rigged_creature.gcad
 647ab0ff14e1b7b0 1 step examples/mesh/rigged_creature.gcad
 406aa4835588af24 0 stl examples/mesh/rigged_creature.gcad
 647ab0ff14e1b7b0 1 svg examples/mesh/rigged_creature.gcad
+587498d180e9590b 0 3mf examples/mesh/skin_arm_corrective.gcad
+1bed3c37774d5b2f 0 check examples/mesh/skin_arm_corrective.gcad
+647ab0ff14e1b7b0 1 dxf examples/mesh/skin_arm_corrective.gcad
+66e037f854498858 0 glb examples/mesh/skin_arm_corrective.gcad
+400900d7ed4232fb 0 obj examples/mesh/skin_arm_corrective.gcad
+afc5c6887091adcb 0 render examples/mesh/skin_arm_corrective.gcad
+647ab0ff14e1b7b0 1 step examples/mesh/skin_arm_corrective.gcad
+1d812a1df182ae73 0 stl examples/mesh/skin_arm_corrective.gcad
+647ab0ff14e1b7b0 1 svg examples/mesh/skin_arm_corrective.gcad
 587498d180e9590b 0 3mf examples/mesh/skin_arm.gcad
 904218a36f2730f8 0 check examples/mesh/skin_arm.gcad
 647ab0ff14e1b7b0 1 dxf examples/mesh/skin_arm.gcad
