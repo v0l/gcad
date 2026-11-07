@@ -4,6 +4,7 @@ pub mod fem;
 pub mod frame;
 mod heat;
 pub mod job;
+mod language;
 pub mod magnetic;
 pub mod mesh;
 mod mesh_cache;
@@ -241,9 +242,42 @@ impl Spec {
     }
 }
 
-pub fn is_sim(path: &Path) -> bool {
-    path.extension()
-        .is_some_and(|e| e.eq_ignore_ascii_case("gsim"))
+pub use crate::model::is_sim;
+
+impl crate::model::Study for Spec {
+    fn boxed(&self) -> Box<dyn crate::model::Study> {
+        Box::new(self.clone())
+    }
+
+    fn lines(&self) -> fn(&mut Model, &crate::parse::Line) -> Result<String> {
+        language::apply
+    }
+}
+
+fn start_study(path: &Path) -> Box<dyn crate::model::Study> {
+    Box::new(Spec {
+        origin: Some(path.to_path_buf()),
+        ..Default::default()
+    })
+}
+
+pub fn install() {
+    crate::model::set_study(start_study);
+}
+
+pub fn spec(model: &Model) -> Option<&Spec> {
+    let study: &dyn std::any::Any = model.sim.as_deref()?;
+    study.downcast_ref()
+}
+
+pub(crate) fn spec_mut(model: &mut Model) -> &mut Spec {
+    let study: &mut dyn std::any::Any = model
+        .sim
+        .get_or_insert_with(|| Box::new(Spec::default()))
+        .as_mut();
+    study
+        .downcast_mut()
+        .expect("a simulation model holds a sim::Spec")
 }
 
 pub fn result_path(spec: &Path) -> PathBuf {

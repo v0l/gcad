@@ -1,4 +1,4 @@
-mod args;
+pub mod args;
 mod assembly;
 mod blends;
 mod bodies;
@@ -22,13 +22,13 @@ mod pattern;
 mod rib;
 mod round;
 mod sheet;
-mod simulate;
 mod sketch;
 mod skin;
 mod solids;
 mod standard;
 mod step_raw;
 pub mod stored;
+pub mod study;
 pub mod texture;
 mod thread;
 pub mod view_sidecar;
@@ -54,6 +54,7 @@ pub use measure::{MassProperties, mass_properties};
 pub use meshes::{MESH_OPERATIONS, MeshBody};
 pub use path::SweepPath;
 pub use sheet::{Sheet, flat_dxf};
+pub use study::{Study, is_sim, set_study};
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Combine {
@@ -128,7 +129,7 @@ pub struct Model {
     pub hole_notes: Vec<HoleNote>,
     pub sheet: Option<sheet::Sheet>,
     pub members: Vec<String>,
-    pub sim: Option<Box<crate::sim::Spec>>,
+    pub sim: Option<Box<dyn Study>>,
     pub scene: gcad_mesh::interp::Scene,
 }
 
@@ -703,8 +704,9 @@ impl Model {
     }
 
     pub fn apply(&mut self, line: &Line) -> Result<String> {
-        if self.sim.is_some() {
-            return self.apply_sim(line);
+        if let Some(study) = &self.sim {
+            let lines = study.lines();
+            return lines(self, line);
         }
         if self.assembly {
             return self.apply_assembly(line);
@@ -1047,11 +1049,8 @@ pub(crate) fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: u
     model.fixed = vars.iter().cloned().collect();
     model.scope = model.fixed.clone();
     model.assembly = is_assembly(path);
-    if crate::sim::is_sim(path) {
-        model.sim = Some(Box::new(crate::sim::Spec {
-            origin: Some(path.to_path_buf()),
-            ..Default::default()
-        }));
+    if is_sim(path) {
+        model.sim = Some(study::start_study(path));
     }
     model.depth = depth;
     model.scene.pixel = view_sidecar::recorded_pixel(path);
@@ -1097,7 +1096,7 @@ pub(crate) fn load_model(
     if let Some(spec) = path.to_str().filter(|text| standard::is_standard(text)) {
         return standard_model(spec);
     }
-    let lasting = !crate::sim::is_sim(path) && crate::host::covering(path).is_none();
+    let lasting = !is_sim(path) && crate::host::covering(path).is_none();
     if lasting && let Some(model) = stored::fetch(path, vars) {
         return Ok(model);
     }

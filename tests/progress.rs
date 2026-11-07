@@ -23,7 +23,7 @@ fn static_run_reports_its_stages() {
             .push(r.clone())
     });
     let run = gcad::model::run_path(&path, &[], None).expect("reads");
-    gcad::sim::simulate(run.model.sim.as_deref().expect("a simulation")).expect("simulates");
+    gcad::sim::simulate(gcad::sim::spec(&run.model).expect("a simulation")).expect("simulates");
     drop(listening);
     let seen = seen.lock().unwrap_or_else(|e| e.into_inner());
     let finished = |name: &str| seen.iter().any(|r| r.finished && r.stage == name);

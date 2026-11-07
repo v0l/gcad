@@ -1919,7 +1919,7 @@ impl App {
                 .then(|| self.program.snapshots.last())
                 .flatten()
                 .filter(|snapshot| snapshot.result.is_ok())
-                .and_then(|snapshot| snapshot.model.sim.clone());
+                .and_then(|snapshot| crate::sim::spec(&snapshot.model).cloned().map(Box::new));
         self.activity
             .lock()
             .unwrap_or_else(|e| e.into_inner())
@@ -4302,7 +4302,7 @@ fn simulate_file(path: &std::path::Path, vars: &[(String, f64)]) -> anyhow::Resu
     if let Some((line, Err(error))) = run.steps.last() {
         anyhow::bail!("line {}: {error:#}", line.number);
     }
-    let Some(spec) = run.model.sim.as_deref() else {
+    let Some(spec) = crate::sim::spec(&run.model) else {
         anyhow::bail!("{} is not a simulation", path.display());
     };
     simulate_spec(path, vars, spec)
@@ -4412,11 +4412,8 @@ fn field_shown(view: &crate::sim::statics::FieldView, key: SceneKey) -> Shown {
 }
 
 fn build_shown(snapshot: &Snapshot, key: SceneKey, vars: &[(String, f64)]) -> Option<Shown> {
-    let picture = snapshot
-        .model
-        .sim
-        .as_deref()
-        .and_then(|spec| crate::sim::picture(spec, vars));
+    let picture =
+        crate::sim::spec(&snapshot.model).and_then(|spec| crate::sim::picture(spec, vars));
     let (field, sim) = match picture {
         Some(p) => (
             p.field,
@@ -4434,12 +4431,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey, vars: &[(String, f64)]) -> Op
             ..field_shown(&view, key)
         });
     }
-    let model = match snapshot
-        .model
-        .sim
-        .as_deref()
-        .and_then(|s| s.target.as_deref())
-    {
+    let model = match crate::sim::spec(&snapshot.model).and_then(|s| s.target.as_deref()) {
         Some(target) => target,
         None => &snapshot.model,
     };

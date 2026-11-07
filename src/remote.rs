@@ -440,11 +440,7 @@ fn submit(
     submit.max_price = Some(price as i64);
     submit.check().map_err(|e| anyhow!(e))?;
     let run = build()?;
-    let spec = run
-        .model
-        .sim
-        .as_deref()
-        .context("a .gsim file runs as a simulation")?;
+    let spec = crate::sim::spec(&run.model).context("a .gsim file runs as a simulation")?;
     let packed = crate::sim::job::pack(spec, stamp.to_vec())?;
     eprintln!(
         "sending {} ({} kB) to {}",

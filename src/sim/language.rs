@@ -1,6 +1,5 @@
-use super::args::{Args, point3, positive};
-use super::assembly::{JointKind, subtree};
-use super::{Model, load_model, posed};
+use crate::model::args::{Args, point3, positive};
+use crate::model::{JointKind, Model, load_model, posed, subtree};
 use crate::parse::Line;
 use crate::sim::fem::STRIDE;
 use crate::sim::fem::elastic::{Hold, Load, Push, Support};
@@ -77,9 +76,68 @@ pub const SIM_OPERATIONS: &[&str] = &[
 ];
 
 const BEARING_STIFFNESS: f64 = 1.0e5;
-impl Model {
+trait Lines {
+    fn spec(&mut self) -> &mut Spec;
+
+    fn target_mut(&mut self) -> Result<&mut Model>;
+
+    fn with_target<T>(&mut self, run: impl FnOnce(&mut Model) -> Result<T>) -> Result<T>;
+
+    fn apply_sim(&mut self, line: &Line) -> Result<String>;
+
+    fn target_faces(&mut self, selector: &str) -> Result<Vec<usize>>;
+
+    fn target_band(
+        &mut self,
+        selector: &str,
+        point: Point3,
+        axis: Vector3,
+    ) -> Result<Option<(f64, f64, f64)>>;
+
+    fn target_axis(&mut self, selector: &str) -> Result<(Point3, Vector3)>;
+
+    fn op_torque(&mut self, line: &Line) -> Result<String>;
+
+    fn boundary_label(&mut self, line: &Line) -> String;
+
+    fn op_seat(&mut self, line: &Line) -> Result<String>;
+
+    fn op_support(&mut self, line: &Line, hold: Hold) -> Result<String>;
+
+    fn op_load(&mut self, line: &Line) -> Result<String>;
+
+    fn op_frame(&mut self, line: &Line) -> Result<String>;
+
+    fn op_acoustics(&mut self, line: &Line) -> Result<String>;
+
+    fn op_sim(&mut self, line: &Line) -> Result<String>;
+
+    fn op_sim_part(&mut self, line: &Line) -> Result<String>;
+
+    fn op_magnetic(&mut self, line: &Line) -> Result<String>;
+
+    fn op_spin(&mut self, line: &Line) -> Result<String>;
+
+    fn op_sim_pose(&mut self, line: &Line) -> Result<String>;
+
+    fn op_joint_speed(&mut self, line: &Line) -> Result<String>;
+
+    fn op_joint_torque(&mut self, line: &Line) -> Result<String>;
+
+    fn op_payload(&mut self, line: &Line) -> Result<String>;
+
+    fn op_sim_sweep(&mut self, line: &Line) -> Result<String>;
+
+    fn op_expect(&mut self, line: &Line) -> Result<String>;
+}
+
+pub(crate) fn apply(model: &mut Model, line: &Line) -> Result<String> {
+    model.apply_sim(line)
+}
+
+impl Lines for Model {
     fn spec(&mut self) -> &mut Spec {
-        self.sim.get_or_insert_with(Default::default)
+        crate::sim::spec_mut(self)
     }
 
     fn target_mut(&mut self) -> Result<&mut Model> {
@@ -99,7 +157,7 @@ impl Model {
         result
     }
 
-    pub(crate) fn apply_sim(&mut self, line: &Line) -> Result<String> {
+    fn apply_sim(&mut self, line: &Line) -> Result<String> {
         let op = line.op.as_str();
         if !matches!(op, "let" | "if" | "include" | "sim") && self.spec().kind.is_none() {
             bail!(
@@ -423,7 +481,7 @@ impl Model {
                 let args = Args::new(line, &["speed"], &["toward", "about"], false)?;
                 let speed = positive(args.number("speed", &self.scope)?, "the wind speed")?;
                 let toward = if args.has("toward") {
-                    super::args::direction(args.text("toward")?, &self.scope)?
+                    crate::model::args::direction(args.text("toward")?, &self.scope)?
                 } else {
                     Vector3::unit_x()
                 };
@@ -577,7 +635,7 @@ impl Model {
             let faces = crate::select::select_faces(selector, &solid, &target.groups, tolerance)?;
             (solid, faces)
         };
-        let Some(radius) = super::mate::cylinders(&solid, &faces)
+        let Some(radius) = crate::model::mate::cylinders(&solid, &faces)
             .first()
             .map(|c| c.radius)
         else {
@@ -610,7 +668,7 @@ impl Model {
             let faces = crate::select::select_faces(selector, &solid, &target.groups, tolerance)?;
             (solid, faces)
         };
-        match super::mate::cylinders(&solid, &faces).as_slice() {
+        match crate::model::mate::cylinders(&solid, &faces).as_slice() {
             [one] => Ok((one.point, one.axis)),
             [] => flat_axis(&solid, &faces).ok_or_else(|| {
                 anyhow!("`{selector}` has no round face or single flat face to find an axis from")
@@ -629,7 +687,7 @@ impl Model {
         let faces = self.target_faces(selector)?;
         let (point, axis) = match (args.values.get("axis"), args.values.get("at")) {
             (Some(axis), at) => {
-                let axis = super::args::direction(axis, &self.scope)?;
+                let axis = crate::model::args::direction(axis, &self.scope)?;
                 if axis.magnitude() == 0.0 {
                     bail!("`axis=` needs a direction");
                 }
@@ -1039,7 +1097,9 @@ impl Model {
                         let toward = match args.values.get("toward").map(|t| t.as_ref()) {
                             None | Some("radial") => Pointing::Radial(1.0),
                             Some("-radial") => Pointing::Radial(-1.0),
-                            Some(text) => Pointing::Along(super::args::direction(text, &scope)?),
+                            Some(text) => {
+                                Pointing::Along(crate::model::args::direction(text, &scope)?)
+                            }
                         };
                         Role::Magnet { br, mu, toward }
                     }
@@ -1077,7 +1137,7 @@ impl Model {
                         }
                         let current = number("current")?.unwrap_or(0.0);
                         let axis = match args.values.get("axis") {
-                            Some(text) => Some(super::args::direction(text, &scope)?),
+                            Some(text) => Some(crate::model::args::direction(text, &scope)?),
                             None => None,
                         };
                         Role::Coil {

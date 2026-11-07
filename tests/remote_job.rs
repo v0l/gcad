@@ -5,7 +5,7 @@ use std::path::Path;
 
 fn local_and_packed(spec: &Path) -> (gcad::sim::Outcome, gcad::sim::Outcome) {
     let run = gcad::model::run_path(spec, &[], None).expect("reads");
-    let spec_model = run.model.sim.as_deref().expect("a simulation");
+    let spec_model = gcad::sim::spec(&run.model).expect("a simulation");
     let stamp = gcad::sim::stamp(spec, &[]);
     let local = gcad::sim::simulate(spec_model).expect("solves here");
 
@@ -83,7 +83,7 @@ fn torque_stays_local() {
     let spec = dir.join("t.gsim");
     std::fs::write(&spec, "sim torque\npart arm.gasm\nsweep swing steps=4\n").unwrap();
     let run = gcad::model::run_path(&spec, &[], None).expect("reads");
-    let error = gcad::sim::job::pack(run.model.sim.as_deref().unwrap(), vec![])
+    let error = gcad::sim::job::pack(gcad::sim::spec(&run.model).unwrap(), vec![])
         .expect_err("torque is refused");
     assert!(error.to_string().contains("run it locally"), "{error}");
 }
@@ -144,7 +144,7 @@ fn packed_wind_load_carries_the_pressure() {
     );
     let flow = dir.join("flow.gsim");
     let run = gcad::model::run_path(&flow, &[], None).expect("reads");
-    let outcome = gcad::sim::simulate(run.model.sim.as_deref().unwrap()).expect("flows");
+    let outcome = gcad::sim::simulate(gcad::sim::spec(&run.model).unwrap()).expect("flows");
     gcad::sim::save(&flow, &[], &outcome).expect("saves");
     let (local, remote) = local_and_packed(&dir.join("t.gsim"));
     same(&local, &remote);

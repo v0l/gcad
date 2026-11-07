@@ -42,7 +42,7 @@ fn check(name: &str, example: &str) {
     if std::env::var_os("GCAD_UPDATE_FIXTURES").is_some() {
         let spec_path = Path::new(example);
         let run = gcad::model::run_path(spec_path, &[], None).expect("reads the example");
-        let spec = run.model.sim.as_deref().expect("a simulation");
+        let spec = gcad::sim::spec(&run.model).expect("a simulation");
         let packed =
             gcad::sim::job::pack(spec, gcad::sim::stamp(spec_path, &[])).expect("packs the job");
         std::fs::create_dir_all(directory()).expect("fixture directory");

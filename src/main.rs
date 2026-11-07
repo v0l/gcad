@@ -698,7 +698,7 @@ fn finished(run: &Run) -> Result<()> {
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("line {}: {}: {error:#}", line.number, line.text);
     }
-    if let Some(spec) = &run.model.sim {
+    if let Some(spec) = gcad::sim::spec(&run.model) {
         spec.target()?;
         return Ok(());
     }
@@ -846,11 +846,7 @@ fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
         load(file, None, vars)?
     };
     finished(&run)?;
-    let spec = run
-        .model
-        .sim
-        .as_deref()
-        .expect("a .gsim file runs as a simulation");
+    let spec = gcad::sim::spec(&run.model).expect("a .gsim file runs as a simulation");
     if dry_run {
         println!("{}", gcad::sim::plan(spec)?);
         return Ok(());
@@ -2273,11 +2269,7 @@ fn main() -> Result<()> {
             if gcad::sim::is_sim(std::path::Path::new(&file)) {
                 let run = load(&file, None, &vars)?;
                 finished(&run)?;
-                let spec = run
-                    .model
-                    .sim
-                    .as_deref()
-                    .expect("a .gsim file runs as a simulation");
+                let spec = gcad::sim::spec(&run.model).expect("a .gsim file runs as a simulation");
                 if flow {
                     let result = gcad::sim::result_path(std::path::Path::new(&file));
                     let outcome = gcad::sim::Outcome::read(&result)?;

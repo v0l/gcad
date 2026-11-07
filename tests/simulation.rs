@@ -30,7 +30,7 @@ fn spec_of(path: &std::path::Path) -> gcad::model::Model {
 
 fn simulated(test: &str, files: &[(&str, &str)], spec: &str) -> Outcome {
     let model = spec_of(&written(test, files, spec));
-    gcad::sim::simulate(model.sim.as_deref().expect("a simulation")).expect("simulates")
+    gcad::sim::simulate(gcad::sim::spec(&model).expect("a simulation")).expect("simulates")
 }
 
 fn pendulum_files() -> Vec<(&'static str, &'static str)> {
@@ -372,7 +372,7 @@ fn torque_needs_joints() {
     );
     let model = spec_of(&path);
     let error =
-        gcad::sim::simulate(model.sim.as_deref().expect("a simulation")).expect_err("fails");
+        gcad::sim::simulate(gcad::sim::spec(&model).expect("a simulation")).expect_err("fails");
     assert!(format!("{error}").contains("joints"), "{error}");
 }
 
@@ -383,7 +383,8 @@ fn result_goes_stale() {
         &pendulum_files(),
         "sim torque\npart arm.gasm\nsweep swing steps=4",
     );
-    let outcome = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
+    let outcome =
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect("runs");
     gcad::sim::write(&path, &outcome, &gcad::sim::stamp(&path, &[])).expect("write result");
     assert_eq!(gcad::sim::stale(&path, &[]), None);
     let read = Outcome::read(&gcad::sim::result_path(&path)).expect("reads back");
@@ -530,7 +531,7 @@ fn field_reads_at_a_point() {
         "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nload >X force=1000,0,0\nmesh 4",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("sim");
+    let spec = gcad::sim::spec(&model).expect("sim");
     let outcome = gcad::sim::simulate(spec).expect("solves");
     let view = gcad::sim::statics::field_view(spec, &outcome).expect("a field");
     let (v, _) = view
@@ -602,8 +603,8 @@ fn static_needs_supports_and_stiffness() {
         &[("beam.gcad", BEAM)],
         "sim static\npart beam.gcad\nload >X force=0,0,-1",
     );
-    let error =
-        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("no supports");
+    let error = gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim"))
+        .expect_err("no supports");
     assert!(format!("{error}").contains("support"), "{error}");
     let path = written(
         "static_needs_stiffness",
@@ -613,8 +614,8 @@ fn static_needs_supports_and_stiffness() {
         )],
         "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-1",
     );
-    let error =
-        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("no stiffness");
+    let error = gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim"))
+        .expect_err("no stiffness");
     assert!(format!("{error}").contains("E="), "{error}");
 }
 
@@ -626,7 +627,7 @@ fn stress_field_render() {
         "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\nmesh 8",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("sim");
+    let spec = gcad::sim::spec(&model).expect("sim");
     let outcome = gcad::sim::simulate(spec).expect("solves");
     gcad::sim::write(&path, &outcome, &gcad::sim::stamp(&path, &[])).expect("write");
     let picture = path.with_file_name("stress.png");
@@ -670,7 +671,7 @@ fn setup_shown_before_a_result() {
         "sim static\npart beam.gcad\nfix <X\nload >X force=0,0,-100\nmesh 8",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("sim");
+    let spec = gcad::sim::spec(&model).expect("sim");
     let picture = gcad::sim::picture(spec, &[]).expect("a simulation");
     assert!(picture.outcome.is_none());
     assert!(picture.stale.is_some_and(|why| why.contains("no result")));
@@ -776,7 +777,7 @@ fn heat_needs_a_boundary() {
         "sim thermal\npart beam.gcad\nsource 5",
     );
     let error =
-        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("floats");
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect_err("floats");
     assert!(format!("{error}").contains("temperature"), "{error}");
 }
 
@@ -842,7 +843,8 @@ fn large_eigenproblems_iterate() {
 #[test]
 fn robot_arm_motor_torque() {
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("examples/robot/arm.gsim");
-    let outcome = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
+    let outcome =
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect("runs");
     assert!(outcome.failed().is_empty(), "{}", outcome.table());
     let drive = 1.0 + 54.0 / 18.0;
     for (joint, motor) in [
@@ -1072,7 +1074,7 @@ fn mesh_dry_run() {
         "sim modal\npart beam.gcad\nmesh 4",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("sim");
+    let spec = gcad::sim::spec(&model).expect("sim");
     let plan = gcad::sim::plan(spec).expect("plans");
     assert!(
         plan.contains("mesh size 4") && plan.contains("tetrahedra"),
@@ -1166,17 +1168,16 @@ fn friction_holds_until_it_slides() {
         )
     };
     let bonded = gcad::sim::simulate(
-        spec_of(&run("friction_bonded", 270.0, ""))
-            .sim
-            .as_deref()
-            .expect("sim"),
+        gcad::sim::spec(&spec_of(&run("friction_bonded", 270.0, ""))).expect("sim"),
     )
     .expect("bonded solves");
     let held = gcad::sim::simulate(
-        spec_of(&run("friction_held", 270.0, "contact a b friction=0.3"))
-            .sim
-            .as_deref()
-            .expect("sim"),
+        gcad::sim::spec(&spec_of(&run(
+            "friction_held",
+            270.0,
+            "contact a b friction=0.3",
+        )))
+        .expect("sim"),
     )
     .expect("friction holds 0.9 of its limit");
     close(
@@ -1190,10 +1191,12 @@ fn friction_holds_until_it_slides() {
         held.table()
     );
     let error = gcad::sim::simulate(
-        spec_of(&run("friction_slides", 330.0, "contact a b friction=0.3"))
-            .sim
-            .as_deref()
-            .expect("sim"),
+        gcad::sim::spec(&spec_of(&run(
+            "friction_slides",
+            330.0,
+            "contact a b friction=0.3",
+        )))
+        .expect("sim"),
     )
     .expect_err("friction gives way above its limit");
     assert!(format!("{error}").contains("slide"), "{error}");
@@ -1260,7 +1263,7 @@ fn floating_part_is_refused() {
         &[("block.gcad", SLAB), ("stack.gasm", apart)],
         "sim static\npart stack.gasm\nfix a:<Z\nload b:>Z force=0,0,-100\nmesh 4",
     );
-    let error = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"))
+    let error = gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim"))
         .expect_err("b touches nothing");
     let text = format!("{error}");
     assert!(text.contains("`b` floats free"), "{text}");
@@ -1269,7 +1272,7 @@ fn floating_part_is_refused() {
         &[("block.gcad", SLAB), ("stack.gasm", apart)],
         "sim thermal\npart stack.gasm\ntemperature a:<Z 50\nmesh 4",
     );
-    let error = gcad::sim::simulate(spec_of(&heat).sim.as_deref().expect("sim"))
+    let error = gcad::sim::simulate(gcad::sim::spec(&spec_of(&heat)).expect("sim"))
         .expect_err("b touches nothing");
     assert!(format!("{error}").contains("`b` floats free"), "{error}");
 }
@@ -1451,7 +1454,7 @@ fn probe_on_a_curved_face_snaps_to_the_mesh() {
     assert!(rim.at.contains("outside the mesh"), "{}", rim.at);
     assert!(rim.value > 0.0);
     let model = spec_of(&written("probe_off_the_part", &disc, &spec("60,0,10")));
-    let error = gcad::sim::simulate(model.sim.as_deref().expect("sim")).expect_err("too far");
+    let error = gcad::sim::simulate(gcad::sim::spec(&model).expect("sim")).expect_err("too far");
     assert!(
         format!("{error:#}").contains("not inside the part"),
         "{error:#}"
@@ -1552,7 +1555,7 @@ fn bearing_row_must_touch_the_shaft() {
         ],
         "sim static\npart pair.gasm\nfix a:h.start\nfix b:h.start\nkey: slide s:>X\nbearing a:bore.side s axial at=0,0,130\nbearing b:bore.side s\nload s:sq.end force=0,-1000,0\nmesh 4",
     );
-    let error = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"))
+    let error = gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim"))
         .expect_err("no ties at the row");
     assert!(
         format!("{error:#}").contains("do not touch at the ball row"),
@@ -1568,7 +1571,7 @@ fn bearings_need_one_held_along_the_axis() {
         "sim static\npart shaft.gcad\nleft: bearing l.side\nright: bearing r.side\nkey: slide >X\nload c.side force=0,-1000,0\nmesh 3",
     );
     let model = spec_of(&path);
-    let error = gcad::sim::simulate(model.sim.as_deref().expect("sim")).expect_err("slides");
+    let error = gcad::sim::simulate(gcad::sim::spec(&model).expect("sim")).expect_err("slides");
     assert!(format!("{error:#}").contains("free to move"), "{error:#}");
     let pinned = written(
         "short_pin_suggests_a_bearing",
@@ -1614,7 +1617,7 @@ fn pinned_link() {
         "sim static\npart link.gcad\npin a.side\nload >Y force=0,-500,0\nmesh 4",
     );
     let error =
-        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("turns");
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect_err("turns");
     assert!(format!("{error}").contains("turn"), "{error}");
 }
 
@@ -1651,7 +1654,7 @@ fn example_simulations() {
     for name in ["bracket", "heatsink"] {
         let path = root.join(format!("{name}.gsim"));
         let outcome =
-            gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
+            gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect("runs");
         assert!(outcome.failed().is_empty(), "{name}: {}", outcome.table());
     }
 }
@@ -1662,7 +1665,7 @@ fn building_example_simulations() {
     for name in ["frame/portal", "conduction/tie", "acoustics/room"] {
         let path = root.join(format!("{name}.gsim"));
         let outcome =
-            gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("runs");
+            gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect("runs");
         assert!(outcome.failed().is_empty(), "{name}: {}", outcome.table());
         assert!(!outcome.readings.is_empty(), "{name}");
     }
@@ -1683,7 +1686,7 @@ fn column_buckling() {
         &[("col.gcad", "rect 10 10\ncol: extrude 200\nmaterial steel\n")],
         "sim buckling\npart col.gcad\nfix <Z\nload >Z force=0,0,1000\nmesh 6",
     );
-    let error = gcad::sim::simulate(spec_of(&pulled).sim.as_deref().expect("sim"))
+    let error = gcad::sim::simulate(gcad::sim::spec(&spec_of(&pulled)).expect("sim"))
         .expect_err("no buckling");
     assert!(format!("{error}").contains("cannot buckle"), "{error}");
 }
@@ -1746,7 +1749,7 @@ fn expansion_from_a_heat_result() {
         "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nwarm hot.gsim\nmesh 5",
     );
     let error =
-        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect_err("mismatch");
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect_err("mismatch");
     assert!(
         format!("{error}").contains("same `part` and `mesh`"),
         "{error}"
@@ -1821,7 +1824,7 @@ fn flow_setup_shown_before_a_result() {
         "sim flow\npart cube.gcad\nwind 10 toward=1,0,0\nduct 300 200\nmesh 5\nchip: heat <Z 10",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("sim");
+    let spec = gcad::sim::spec(&model).expect("sim");
     let picture = gcad::sim::picture(spec, &[]).expect("a simulation");
     assert!(picture.outcome.is_none());
     let view = picture.field.expect("the parts");
@@ -1861,7 +1864,7 @@ fn torque_readings_without_a_field() {
         "sim torque\npart arm.gasm\nsweep swing steps=4",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("sim");
+    let spec = gcad::sim::spec(&model).expect("sim");
     let outcome = gcad::sim::simulate(spec).expect("solves");
     gcad::sim::save(&path, &[], &outcome).expect("saves");
     let picture = gcad::sim::picture(spec, &[]).expect("a simulation");
@@ -1902,11 +1905,13 @@ fn wind_loads_a_static_part() {
     let load =
         "sim static\npart cube.gcad\nmaterial aluminium\nbase: fix <Z\nwind flow.gsim\nmesh 15";
     std::fs::write(&path, load).expect("write spec");
-    let early = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"));
+    let early = gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim"));
     assert!(format!("{:#}", early.expect_err("no flow result yet")).contains("no result yet"),);
-    let outcome = gcad::sim::simulate(spec_of(&flow).sim.as_deref().expect("sim")).expect("flows");
+    let outcome =
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&flow)).expect("sim")).expect("flows");
     gcad::sim::write(&flow, &outcome, &gcad::sim::stamp(&flow, &[])).expect("write result");
-    let statics = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("loads");
+    let statics =
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect("loads");
     close(reading(&statics, "base"), reading(&outcome, "drag"), 0.06);
     close(
         reading(&statics, "base.moment"),
@@ -1984,7 +1989,7 @@ fn wind_draws_the_flow() {
         "sim flow\npart cube.gcad\nwind 10 toward=1,0,0\nmesh 5\naverage 4",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("sim");
+    let spec = gcad::sim::spec(&model).expect("sim");
     let outcome = gcad::sim::simulate(spec).expect("flows");
     assert_eq!(outcome.slices.len(), 2);
     for slice in &outcome.slices {
@@ -2528,7 +2533,7 @@ fn directional_material_takes_the_weakest() {
         "sim static\npart bar.gcad\nslide <X\nslide <Y\nslide <Z\nload >X force=1000,0,0\nmid: probe 50,0,0\nmesh 4",
     );
     let outcome =
-        gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim")).expect("simulates");
+        gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim")).expect("simulates");
     let strain: f64 = 1000.0 / (100.0 * 1.5e3);
     let along = strain * 50.0;
     let across = 0.35 * strain * 5.0;
@@ -2670,7 +2675,7 @@ fn flow_heat_lines_parse() {
         &[("sink.gcad", FINNED)],
         "sim flow\npart sink.gcad\nwind 2 toward=1,0,0\nduct 40 25\nair temperature=30\nchip: heat <Z 5",
     ));
-    let spec = model.sim.as_deref().expect("a simulation");
+    let spec = gcad::sim::spec(&model).expect("a simulation");
     assert_eq!(spec.duct, Some([40.0, 25.0]));
     assert_eq!(spec.ambient, Some(30.0));
     assert_eq!(spec.thermal.len(), 1);
@@ -2800,7 +2805,7 @@ fn a_spinning_fan_cools_a_heated_post() {
         &files,
         "sim flow\npart fan.gasm\nspin spin rpm=3000\nmesh 3\nhot: heat rotor:<Z 2",
     );
-    let error = gcad::sim::simulate(spec_of(&path).sim.as_deref().expect("sim"))
+    let error = gcad::sim::simulate(gcad::sim::spec(&spec_of(&path)).expect("sim"))
         .expect_err("a spinning part cannot carry heat");
     assert!(format!("{error}").contains("spins"), "{error}");
 }
@@ -2888,7 +2893,7 @@ fn failing_spec(test: &str, files: &[(&str, &str)], spec: &str) -> String {
     }
     let model = run.model;
     let error =
-        gcad::sim::simulate(model.sim.as_deref().expect("a simulation")).expect_err("refused");
+        gcad::sim::simulate(gcad::sim::spec(&model).expect("a simulation")).expect_err("refused");
     format!("{error:#}")
 }
 
@@ -2992,7 +2997,7 @@ fn acoustic_view_draws_the_room() {
         "sim acoustics\npart room.gcad\nabsorb all plaster\nabsorb -Z carpet\nspeaker 2100,3300,1700\nhall: probe 7400,2200,1200",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("a simulation");
+    let spec = gcad::sim::spec(&model).expect("a simulation");
     let picture = gcad::sim::picture(spec, &[]).expect("a picture");
     let view = picture.field.expect("a field");
     assert_eq!(view.title, "absorption at 1 kHz");
@@ -3308,7 +3313,7 @@ fn frame_joins_a_girder_to_the_middle_of_a_column() {
         "sim frame\npart t.gasm\nfix post:<Z\nload girder:>X force=0,0,-2000\nend: probe 3100,0,2000",
     );
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("a simulation");
+    let spec = gcad::sim::spec(&model).expect("a simulation");
     let plan = gcad::sim::plan(spec).expect("plans");
     assert!(plan.contains("1 members split by a joint"), "{plan}");
     let outcome = gcad::sim::simulate(spec).expect("simulates");
@@ -3367,7 +3372,7 @@ fn frame_view_shows_the_deflected_members() {
     );
     let _ = std::fs::remove_file(gcad::sim::result_path(&path));
     let model = spec_of(&path);
-    let spec = model.sim.as_deref().expect("a simulation");
+    let spec = gcad::sim::spec(&model).expect("a simulation");
     let outcome = gcad::sim::simulate(spec).expect("simulates");
     let field = outcome.field.as_ref().expect("a field");
     assert_eq!(field.unit, "MPa");
@@ -3411,7 +3416,7 @@ fn building_kinds_run_remotely() {
     ] {
         let path = written(&format!("remote_{kind}"), &files, spec);
         let model = spec_of(&path);
-        let sim = model.sim.as_deref().expect("a simulation");
+        let sim = gcad::sim::spec(&model).expect("a simulation");
         let packed = gcad::sim::job::pack(sim, Vec::new()).expect("packs");
         let unpacked = gcad::sim::job::unpack(&packed).expect("unpacks");
         let outcome = gcad::sim::simulate(&unpacked.spec).expect("simulates");

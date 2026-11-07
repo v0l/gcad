@@ -2062,7 +2062,7 @@ pub fn surface_samples(file: &std::path::Path) -> Result<(Vec<(Point3, f64)>, f6
     if let Some((line, Err(error))) = run.steps.last() {
         bail!("{}:{}: {error:#}", file.display(), line.number);
     }
-    let Some(spec) = run.model.sim.as_deref() else {
+    let Some(spec) = crate::sim::spec(&run.model) else {
         bail!("{} is not a simulation", file.display());
     };
     if spec.kind != Some(super::Kind::Flow) {
