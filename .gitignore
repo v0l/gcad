@@ -1,4 +1,5 @@
 /target
+/crates/*/target
 *.result.bin
 .wrangler
 *.frames.bin
