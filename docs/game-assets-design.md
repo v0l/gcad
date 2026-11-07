@@ -469,7 +469,7 @@ bilinear resampling quality, engine rendering, minification or mipmaps.
 Reproduce the CAD fixture from the repository root:
 
 The probe needs the pinned dependency checkouts documented in
-[its README](../tools/game-assets-fbx/README.md). No dependency installation or
+its README (gcad-engines). No dependency installation or
 download happens automatically. The sample writes its specified output file;
 its parent directory must exist.
 
@@ -1341,7 +1341,7 @@ a backend and document exact dependency/license/redistribution obligations.
 
 ### Native FBX prototype result
 
-The project-owned [probe](../tools/game-assets-fbx/README.md) uses Assimp revision
+The project-owned probe (gcad-engines) uses Assimp revision
 `a4643cbd30d3088bbff312d3cc2652f514fb97c0` and independent ufbx reader revision
 `5955c5c0b042ac2dc6f32955ab206aaec0620cfc`. These dependencies are isolated under
 ignored `target/`; gcad's Cargo dependencies are unchanged.
@@ -2183,7 +2183,7 @@ representative appearance/deformation budgets remain open.
 
 ### Authored FBX skin and unit conversion audit (2026-10-31)
 
-`tools/game-assets-fbx/skin_conversion_probe.h` extends the isolated native probe
+`gcad-engines:fbx-helper/skin_conversion_probe.h` extends the isolated native probe
 to convert the authored plate attachment GLB, rather than only a synthetic native
 scene. Both raw and metre-metadata routes use the already pinned Assimp exporter
 and independent ufbx reader. No production dependency or converter was installed.

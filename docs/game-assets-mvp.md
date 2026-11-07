@@ -11,9 +11,9 @@ opening the viewer while authoring and exporting on request. The shell command
 below is an optional manual launcher; users of the skill need not run it.
 
 ```sh
-sh tools/game-assets-mvp.sh
+sh gcad-engines:mvp.sh
 # Or open your own saved asset:
-sh tools/game-assets-mvp.sh examples/game-assets/plate.gasset
+sh gcad-engines:mvp.sh examples/game-assets/plate.gasset
 ```
 
 The launcher builds the optional game-asset feature in release mode and opens the
@@ -22,7 +22,7 @@ perform substantially more slowly when deforming dense meshes.
 It uses the reviewed v12 helper if already built in this checkout. To use another
 copy, set `GCAD_FBX_HELPER` to its absolute executable path before launching, or
 enter that path in the export panel. Building the helper is documented in
-[the native helper guide](../tools/game-assets-fbx/README.md). The launcher does
+the native helper guide (gcad-engines). The launcher does
 not download dependencies or install a helper.
 
 Edit and save the asset or its source CAD files while the window stays open.

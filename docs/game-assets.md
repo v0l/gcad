@@ -1,5 +1,7 @@
 # Experimental game assets
 
+> Engine adapters (Unity, Godot), the FBX helper and the renderer patches live in the private repo v0l/gcad-engines. Paths written as `gcad-engines:...` below refer to that repo.
+
 Reviewed: 2026-11-01. Review before format stabilisation
 or by 2026-11-14. This guide describes the opt-in implementation in this checkout;
 the [development plan](game-assets-plan.md) remains incomplete. Detailed validation
@@ -42,7 +44,7 @@ Frozen shader exports additionally include `gcad-shaders.json`, bound to the
 published FBX's SHA-256 digest. The explicit Unity adapter reads this receipt
 and attaches per-instance, explicit-time UV scrolling; ordinary consumers retain
 the static frozen PBR fallback. Direct native-helper invocation does not create
-the receipt. See the [Unity attachment workflow](../tools/game-assets-unity/README.md).
+the receipt. See the Unity attachment workflow (gcad-engines).
 The deadline applies separately to each helper process. Both gcad and its helper
 hold shared leases while using private staging. After an interrupted run, use
 `gcad asset-fbx-recover OUTPUT_PARENT` to remove abandoned version-marked stages;
@@ -154,7 +156,7 @@ versioned handshake and pinned backend identity; it does not export. The current
 helper keeps production conversion unavailable while exposing experimental staged
 conversion through a separate capability. Build it with the v12 native
 tools as described in [development commands](../tools/game-assets.md).
-The [isolated FBX/import probes](../tools/game-assets-fbx/README.md) are development
+The isolated FBX/import probes (gcad-engines) are development
 tools; their results do not select a production backend.
 
 ## Asset description
@@ -574,7 +576,7 @@ preserves exact in-place TRS channels for every animated node, with bounded dens
 float accessors and unique names. Unity samples these keys directly to preserve
 STEP boundaries and quaternion interpolation. Version 1 STEP receipts must be
 re-exported; their FBX curves import discontinuities early even without resampling.
-See `tools/game-assets-unity/README.md` for validation and remaining limits.
+See `gcad-engines:unity/README.md` for validation and remaining limits.
 Baking currently projects geometric rest normals, not an
 arbitrary source shader or source normal-map detail.
 
@@ -734,7 +736,7 @@ The prepared `examples/game-assets/plate-face-uv.gasset` demonstrates this trans
 on the top face with the existing local colour-map fixture. Its paired software
 snapshots show the selected chart change. The native `--face-uv` probe verifies
 imported coordinates and planar tangent frames in Debug/Release, including skinned
-and six-map variants; see `tools/game-assets-fbx/README.md` for its fixture contract.
+and six-map variants; see `gcad-engines:fbx-helper/README.md` for its fixture contract.
 This does not establish engine sampler or shading parity.
 
 At least one of `scale`, `rotation`, or `offset` is required; omitted values use
@@ -802,7 +804,7 @@ The unpatched FBX prototype loses PBR maps/properties. The isolated v10 experime
 preserves the tested custom material contracts and sampled motion, with an explicit
 consumer adapter for material properties and shading bases. It is not integrated
 into the production CLI and does not establish generic engine import parity; see
-the [backend proposal](game-assets-fbx-backend-proposal.md).
+the backend proposal (gcad-engines).
 
 The recorded full Windows release regression runs have 440 passing tests with default
 features and 555 with `game-assets` in the isolated patch-0030 checkout (before the

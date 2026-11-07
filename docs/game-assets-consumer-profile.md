@@ -1,5 +1,7 @@
 # Experimental consumer profile v1
 
+> Engine adapters (Unity, Godot), the FBX helper and the renderer patches live in the private repo v0l/gcad-engines. Paths written as `gcad-engines:...` below refer to that repo.
+
 Reviewed: 2026-11-02. Next review: 2026-11-16.
 
 This opt-in profile declares engine roles without changing node names or CAD
@@ -153,7 +155,7 @@ Run with installed Unity and the reviewed helper:
 UNITY=/absolute/path/to/Unity UNITY_VERSION=6000.5.4f1 \
 GCAD_FBX_HELPER=/absolute/path/to/gcad_fbx_helper \
 GCAD_CONSUMER_CHECK=1 GCAD_CONSUMER_PLAYER=1 GCAD_CONSUMER_RENDER=1 \
-  sh tools/game-assets-unity/check-import.sh FBX_PACKAGE NEW_PROJECT
+  sh gcad-engines:unity/check-import.sh FBX_PACKAGE NEW_PROJECT
 ```
 
 The fixture passes on Unity 6000.4.7f1 and 6000.5.4f1 in editor and Windows
@@ -183,7 +185,7 @@ still need acceptance. Next action: complete those runtime/visual
 gates and cooking-failure recovery before claiming the profile production-ready.
 
 The two-mesh skinned LOD fixture is `plate-consumer-skinned.gasset`. Prepare its
-two explicit weight resources with `sh tools/game-assets-consumer-fixture.sh`
+two explicit weight resources with `sh gcad-engines:consumer-fixture.sh`
 (or the normal `prepare-fixtures` command), then export/package it as above.
 Existing resources are preserved and validated on repeated preparation.
 The preparation script now binds the original document directly: missing peer

@@ -13,7 +13,7 @@ for every command. Verify `--help` includes `asset-capabilities` and
 `asset-fbx-experimental`; a stock executable on PATH may lack these commands.
 Do not replace this feature build with the stock release installation procedure.
 Use an explicitly configured, existing native FBX helper. The repository's
-`tools/game-assets-fbx/README.md` documents building it; do not silently download
+`gcad-engines:fbx-helper/README.md` documents building it; do not silently download
 or install a replacement.
 
 ## Model and preview

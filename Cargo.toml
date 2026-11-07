@@ -63,10 +63,6 @@ name = "game_asset_normals_reference"
 required-features = ["game-assets"]
 
 [[example]]
-name = "game_asset_mip_gpu"
-required-features = ["game-assets"]
-
-[[example]]
 name = "game_asset_renderer_fixture"
 required-features = ["game-assets"]
 

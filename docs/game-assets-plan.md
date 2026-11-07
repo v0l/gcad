@@ -119,7 +119,7 @@ These results precede the new export panel.
 requested mesh. Existing peer bindings still validate, and invalid node references,
 malformed/stale weights and non-NotFound I/O errors remain failures. Normal
 check/export still requires every declared skin. This removes the temporary source
-rewrite from `tools/game-assets-consumer-fixture.sh`. A fresh two-skin fixture was
+rewrite from `gcad-engines:consumer-fixture.sh`. A fresh two-skin fixture was
 bound sequentially through the rebuilt CLI and exported successfully; the focused
 bootstrap/refusal regression passes in `target/multi-binding-tests.log`.
 Authoring regression evidence: `target/multi-binding-author-regression.log`.
@@ -137,7 +137,7 @@ Review: 2026-11-16.
 
 ### Godot acceptance preparation (2026-11-02)
 
-`tools/game-assets-godot/check-import.sh` now prepares an isolated project for an
+`gcad-engines:godot/check-import.sh` now prepares an isolated project for an
 existing, explicitly versioned Godot 4 executable. The GDScript probe compares
 active-scene mesh/surface/triangle and skin counts to independently parsed source
 GLB metadata, checks skeleton binding and named clips, and writes a required pass
@@ -193,7 +193,7 @@ run correctly rejected unchanged rendered poses; enabling per-render skin-matrix
 refresh for its synchronous captures resolved that test scheduling issue without
 changing the prefab. This is manual bone-pose coverage, not Animator/controller
 integration or a general deformation-accuracy guarantee. Preparation is reproducible
-with `tools/game-assets-consumer-fixture.sh` and included in `prepare-fixtures`.
+with `gcad-engines:consumer-fixture.sh` and included in `prepare-fixtures`.
 
 Focused native Windows UI checks verified LOD switching, collision-source display
 and fitting the ring fixture in the existing viewer. A separate CAD document in
@@ -755,7 +755,7 @@ addressing modes and all material output channels. Maximum error is about
 0.00000005960465; all 120 shifted-UV controls are rejected and invalid-input
 last-good checks pass. Existing surface/raster regressions pass; editor exit zero.
 Evidence and recipe: `target/unity-uv-scroll-verified-6000.5.4f1` and
-`tools/game-assets-unity/README.md`; the corresponding 6000.4.7f1 project also
+`gcad-engines:unity/README.md`; the corresponding 6000.4.7f1 project also
 records identical numerical results and successful surface/raster regressions.
 
 Next action: explicit attachment from retained
@@ -876,7 +876,7 @@ position distance is 0.000000008344 metres, changed pixels per view 2, and mean
 RGB error about 0.000001477. Editor/player processes exit zero. Recovery controls
 reject shifted and ambiguous contracts and verify original-weight preservation.
 Evidence: `target/unity-refined-recovered-*`; implementation/recipe and limits:
-`tools/game-assets-unity/README.md`. Earlier failed pruning controls remain.
+`gcad-engines:unity/README.md`. Earlier failed pruning controls remain.
 
 The reflected two-instance editor regression also passes all 21 poses, both
 recovery controls and both deformation lifecycle checks on 6000.5.4f1
@@ -932,7 +932,7 @@ vertex distance about 0.00000001666 metres. Editors and players exit zero.
 Both mesh adapters pass last-good retention, recovery and source preservation.
 The original single-instance import/material regression also passes. Evidence:
 `target/unity-reflected-player-*`, `target/unity-source-count-regression-6000.5.4f1`;
-recipe and scope: `tools/game-assets-unity/README.md`. This is two small instances,
+recipe and scope: `gcad-engines:unity/README.md`. This is two small instances,
 not large-mesh performance or deformable-topology quality acceptance. Next action: scale the geometry comparison and validate a more highly refined asset.
 Other engine consumers and the remaining plan milestones stay open.
 Review: 2026-11-14.
@@ -951,7 +951,7 @@ late-bend player views while still meeting the looser vertex-distance gate;
 that failure is retained. No image thresholds were relaxed. Evidence:
 `target/unity-player-render-uncompressed-*` and the failed
 `target/unity-player-render-geometry-6000.5.4f1`; recipe:
-`tools/game-assets-unity/README.md`. PNG output uses Unity's bundled
+`gcad-engines:unity/README.md`. PNG output uses Unity's bundled
 image-conversion module, with no registry dependencies or engine installation.
 
 This checks sampled shipped-player geometry and shading using shared Unity
@@ -974,7 +974,7 @@ there are no registry dependencies or engine installations. Player execution is
 headless/no-graphics and does not automate the desktop. Evidence:
 `target/unity-player-animator-*` (`player-build-report.json`,
 `Player/player-report.json`); reproduction: add `GCAD_PLAYER_CHECK=1` to the
-documented deformation-adapter command in `tools/game-assets-unity/README.md`.
+documented deformation-adapter command in `gcad-engines:unity/README.md`.
 This establishes CPU/runtime lifecycle for this fixture, not player GPU shading,
 IL2CPP, Linux, large meshes or other engines. Next action: larger/reflected
 fixture and rendered-player acceptance. Review: 2026-11-14.
@@ -999,7 +999,7 @@ Singular/missing-bone rejection, last-good retention, recovery and rest-mesh
 preservation pass. Measured explicit refresh cost is about 0.72–0.79 ms for this
 1,169-vertex fixture (32 refreshes), not a general runtime performance guarantee.
 Evidence: `target/unity-deformation-verified-*`; recipe/limits:
-`tools/game-assets-unity/README.md`. Player lifecycle, larger/other fixtures,
+`gcad-engines:unity/README.md`. Player lifecycle, larger/other fixtures,
 URP/HDRP and other engines remain unverified. This does not complete M5 shader
 authoring or the full plan. Next action: standalone player lifecycle and
 broader fixture validation. Review: 2026-11-14.
@@ -1017,8 +1017,8 @@ audits plus the Rust helper package integration test. Both Unity versions pass
 exact rest images with imported v12 tangents and no sign workaround. Active
 helper identity, shell build/package and Unity pins now require v12. Patch hash:
 `783bf12bee4103422f8e8d2f74b2f17ae4dd93109b25266cd67baa9838340bf9`.
-Evidence and reproduction: `tools/game-assets-fbx/README.md` and
-`tools/game-assets-unity/README.md`. Nine animated shaded poses still fail in
+Evidence and reproduction: `gcad-engines:fbx-helper/README.md` and
+`gcad-engines:unity/README.md`. Nine animated shaded poses still fail in
 both versions; the tangent fix does not resolve the separate deformation-basis
 convention. Next action: preserve the intended animated basis in the
 engine adapter, then rerun the unchanged gate. Review: 2026-11-14.
@@ -1038,7 +1038,7 @@ orthogonalization. With compression off, stretch discrepancies fall to at most
 15 pixels per view, but late bend discrepancies remain (up to 344). Neither
 diagnostic changes the inverse-transpose source reference or acceptance gate.
 All four runs exit 1 for their failed gates. Evidence and commands are recorded
-under controlled import diagnostics in `tools/game-assets-unity/README.md`.
+under controlled import diagnostics in `gcad-engines:unity/README.md`.
 Next action: independent stored/imported tangent and handedness readback,
 then an adapter path preserving the intended deformation basis. These modes are
 not yet tested on the second Unity version. Review: 2026-11-14.
@@ -1058,7 +1058,7 @@ but does not eliminate all bend differences. This suggests a deformation-basis
 mismatch, not a fully established root cause. The diagnostic does not affect
 acceptance or change production behavior. Evidence:
 `target/unity-source-animation-basis-*`; reproduction and limits:
-`tools/game-assets-unity/README.md`. Next action: isolate imported
+`gcad-engines:unity/README.md`. Next action: isolate imported
 animation/tangent differences and preserve the intended deformation basis through
 the adapter, then rerun the same gate. Review: 2026-11-14.
 
@@ -1074,7 +1074,7 @@ The gate allows changed pixels up to 1% of visible coverage and mean error up to
 view plus a translated model all fail the same gate (nine controls).
 
 Evidence: `target/unity-source-render-controls-*`; recipe and exact thresholds:
-`tools/game-assets-unity/README.md`. The reference loader is fixture-scoped,
+`gcad-engines:unity/README.md`. The reference loader is fixture-scoped,
 checks bind-neutral rest skinning and shares the independently audited adapter
 materials with the imported model. This establishes bounded rest geometry and
 attribute transfer, not independent shader equivalence, gcad-renderer parity,
@@ -1125,7 +1125,7 @@ global import hook is used. Linear colour space is required. Both Unity
 rendered feature-use controls for the masked reference fixture. All six controls
 (normal, metallic, roughness, occlusion, alpha mask, emission) change rendered
 pixels. Evidence: `target/unity-adapter-render-*`; recipe and limits:
-`tools/game-assets-unity/README.md`. This does not establish source-render parity,
+`gcad-engines:unity/README.md`. This does not establish source-render parity,
 blend/back-face/shadow correctness, numerical sampler fidelity, URP/HDRP or other
 engine acceptance. Next action: numerical shader/sampler validation and
 source-render comparisons. Review: 2026-11-14.
@@ -1156,7 +1156,7 @@ requirement. Reports contain 32 failed checks, including three deliberately
 unverified metallic/roughness-repacking checks. These are settings/connection
 findings, not rendered pixel differences or full shader acceptance. Both editors
 terminate with code 1 for the failed gate. Evidence: `target/unity-material-*`;
-reproduction: `tools/game-assets-unity/README.md`. Existing import/pose passes
+reproduction: `gcad-engines:unity/README.md`. Existing import/pose passes
 do not establish material parity. Next action: explicit material adapter,
 channel/factor conversion and rendered validation. Review: 2026-11-14.
 
@@ -1246,7 +1246,7 @@ installing a global postprocessor. With it both versions pass. Baselines before
 and after settings normalization are byte-identical on this fixture, so this is
 not evidence of visual correction or full source-material parity. Images were
 visually checked; source alpha/PBR/AO/emission and wider engines still need tests.
-Evidence: `target/unity-render-*`; recipe: `tools/game-assets-unity/README.md`.
+Evidence: `target/unity-render-*`; recipe: `gcad-engines:unity/README.md`.
 Next action: wider material/render coverage. Review: 2026-11-14.
 
 Unity 6000.4.7f1 and 6000.5.4f1 now pass a source-derived sampled pose check for
@@ -1278,7 +1278,7 @@ duplicate references, reassigns 168 vertices reported unweighted, and connects n
 normal maps. 6000.5.4f1 initially reports the same warnings/map omissions and exits
 abnormally after its report; its stricter rerun exits with code 1 and confirms the
 same four duplicate bone references and zero normal maps. The headless check is in
-`tools/game-assets-unity/`; this is failed import acceptance, not renderer support.
+`gcad-engines:unity/`; this is failed import acceptance, not renderer support.
 Next action: fix same-joint FBX cluster duplication and standard normal-map
 connections, then rerun engine checks. Evidence: `target/unity-import-*`.
 WSL is present but has no Rust/C++ build tools on PATH; no toolchains were installed.
@@ -1826,7 +1826,7 @@ mixed paths, missing indices, strength limits and unsupported-mode refusal.
 
 Evidence: `target/renderer-extra-v3-verified` and
 `target/renderer-extra-v3-verify.*`. Preparation, verification and patch pin are in
-`tools/game-assets-renderer/README.md`. Candidate source hashes remain unchanged
+`gcad-engines:renderer-patches/README.md`. Candidate source hashes remain unchanged
 during checks; active dependencies and Cargo.lock are unchanged. This is not
 engine PBR parity, indirect specular occlusion, software/tracing support or an
 active gcad preview feature. The subsequent adapter work is recorded above.
@@ -1956,7 +1956,7 @@ The debugger UI was not launched. Evidence: `target/renderer-alpha-verified`,
 
 The additions are `renderer-alpha.patch` and `gcad-alpha-adapter.patch`, applied
 after their existing proposal patches. Reproduction scripts and SHA256 pins are
-in `tools/game-assets-renderer/README.md`. Active renderer dependencies and
+in `gcad-engines:renderer-patches/README.md`. Active renderer dependencies and
 Cargo.lock remain unchanged. This is candidate raster support, not adoption,
 engine parity or order-independent transparency. Intersecting transparent
 surfaces can sort incorrectly, and alpha-mask coverage is not preserved across
@@ -2089,7 +2089,7 @@ budgets and validation optimization remain open. Renderer adoption and FBX backe
 
 ### Isolated authored-chain preview adapter (2026-11-01)
 
-The reviewable `tools/game-assets-renderer/gcad-preview-adapter.patch` now connects
+The reviewable `gcad-engines:renderer-patches/gcad-preview-adapter.patch` now connects
 authored immutable chains to the proposed renderer. The adapter preserves every
 prepared level, uses sRGB only for colour, shares three image slots between the
 two fixture instances and validates the resulting scene. Unsupported software
@@ -2107,7 +2107,7 @@ script also creates the local target directory required by an existing test.
 Evidence: `target/gcad-preview-reproduced` and
 `target/gcad-preview-reproduced.*`; earlier failed controls remain in
 `target/gcad-preview-verified`. Reproduction and patch pin are documented in
-`tools/game-assets-renderer/README.md`.
+`gcad-engines:renderer-patches/README.md`.
 
 This verifies the isolated adapter, not active adoption or general material
 acceptance. Next action: bound aggregate preview image memory and measure
@@ -2200,7 +2200,7 @@ remaining game-asset requirements are still open. Review: 2026-11-14.
 
 ### Reviewable explicit-image renderer API (2026-11-01)
 
-Added `tools/game-assets-renderer/explicit-image-api.patch`, an unapplied public
+Added `gcad-engines:renderer-patches/explicit-image-api.patch`, an unapplied public
 API addition for pinned egui_bench 0.9.2. Its `ExplicitImage` owns validated
 contiguous levels and uploads them with explicit sRGB/linear formats and a bounded
 clamp/linear sampler. It does not change legacy renderer behavior. Preparation
@@ -2688,7 +2688,7 @@ reproducibility and remaining full-plan gates are open. Review: 2026-11-14.
 
 ### Production backend proposal and resource observation (2026-11-01)
 
-The [FBX backend proposal](game-assets-fbx-backend-proposal.md) consolidates the
+The FBX backend proposal (gcad-engines) consolidates the
 tested writer/consumer contract, alternatives, source pins, partial license
 inventory, failure semantics, deployment gaps and concrete acceptance tasks.
 It proposes an optional native helper but does not adopt that architecture.
@@ -3096,7 +3096,7 @@ properties; these verify checker sensitivity, not engine rendering. Baseline and
 version-1 writers fail the version-2 expectation; opt-out audits match the original,
 the version-1 regression passes and the source GLB/pinned checkouts stay unchanged.
 The portable patch checksum and intended consumer interpretation are documented in
-`tools/game-assets-fbx/README.md`. Evidence:
+`gcad-engines:fbx-helper/README.md`. Evidence:
 `target/game-assets-tools/material-extension-v2-verify.{ps1,stdout,stderr}` and
 `target/fbx-v2-verified-{Release,Debug}-{mask,blend,opaque}`.
 
@@ -3120,7 +3120,7 @@ An isolated extension of the existing Assimp writer now preserves previously los
 roughness/metallic/occlusion connections as explicit `gcad|...` properties, exact
 embedded map bytes, packed G/B/R channel identifiers and roughness/metallic factors.
 The caller must opt in with `gcad.extension.version=1`; legacy shading remains.
-The portable patch and reproducible build script are under `tools/game-assets-fbx`,
+The portable patch and reproducible build script are under `gcad-engines:fbx-helper`,
 with source revision and checksum documented there. Original pinned sources remain
 clean; no production dependency or gcad export backend was added.
 
@@ -3596,7 +3596,7 @@ That proves packaging fidelity, not completion of M0-M6.
 | Cost and performance reporting | `report::Report` counts geometry, materials, primitive instances, source RGBA bytes, animation keys/influences and sampled mask records. Capability reporting measures encoded clip buffer-view bytes. Preview preflight counts retained payloads, upload scratch and GPU texels, with the candidate accounting for all five slots. These exclude source storage, driver allocations, geometry, targets and overlapping frames; timing observations are not engine performance budgets | Set representative budgets and measure actual consumer costs; preserve the distinction between accounting and process/driver memory |
 | Rig-aware optimisation | LOD, sampled surface/silhouette/shading gates and key reduction exist. Exact unused skin-palette pruning is now explicit, with remapping and protected animated/parent/keep nodes. An opt-in UNORM16 weight encoder now has sampled error gates; native validation exposes an Assimp UNORM16 incompatibility; target-engine acceptance and skeleton-node deletion remain; size/performance goals and representative camera/pose budgets remain unaccepted | Define explicit budgets; evaluate remaining operations with unoptimised references |
 | GLB export | Actual encoder and independent fixture imports pass; `engine_verified` remains false. No tested engine/version matrix exists | Validate scale, maps, skinning and clips in selected engine |
-| Production FBX | CLI explicitly permits GLB only. The pinned v10 native importer/writer experiment and custom material/basis contract are described in `game-assets-fbx-backend-proposal.md`; they are not a production converter. Handshake, transactional output, cancellation, release packaging and a selected consumer remain absent | Select the proposed helper route or an alternative, then implement its production boundary and consumer adapter |
+| Production FBX | CLI explicitly permits GLB only. The pinned v10 native importer/writer experiment and custom material/basis contract are described in `gcad-engines:docs/fbx-backend-proposal.md`; they are not a production converter. Handshake, transactional output, cancellation, release packaging and a selected consumer remain absent | Select the proposed helper route or an alternative, then implement its production boundary and consumer adapter |
 | Engine-specific profiles | Unity root motion has static/skinned fractional STEP and loop/seek evidence. Explicit socket/collider/LOD roles now survive GLB/FBX transport and have initial Unity component/box-ray acceptance. Rendered LOD switching, mesh/convex cooking, skinned LODs, Animator controller integration and other engines remain open | Complete runtime/visual profile acceptance |
 | Shader description, preview and adapter | UV-scrolling authoring, tracked reload, raster preview and explicit frozen export are implemented with Windows GPU/reference checks. Dynamic engine adapter, broader maps/platforms and M4 dependency acceptance remain | Implement dynamic consumer parity and remaining acceptance gates |
 | Desktop/browser/platform support | Historical native CPU/WASM checks retain their scopes. The isolated Windows renderer now passes Direct3D 12/Vulkan alpha, explicit mips and five-map rigid/skinned tests: `target/renderer-extra-v3-verified` and `target/gcad-extra-motion-verified` (140 asset tests per backend). This is not active integration, interactive control verification, engine parity, browser runtime or Linux evidence | Decide renderer adoption; complete interactive and target-platform runtime validation with supported tooling |

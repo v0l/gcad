@@ -1,5 +1,7 @@
 # Game assets in gcad: overview
 
+> Engine adapters (Unity, Godot), the FBX helper and the renderer patches live in the private repo v0l/gcad-engines. Paths written as `gcad-engines:...` below refer to that repo.
+
 gcad has two ways to make a game asset. Both end in a GLB.
 
 - **Mesh files** (`.gcad` with `blob`, `limb`, brushes, `bone`, `skin`, `clip`, `key`) are built by
@@ -25,8 +27,8 @@ gcad examples/game-assets/plate-collision.gasset
 The default build has none of it: no `asset-*` commands, no `.gasset` in the viewer, no xatlas.
 Several examples need weight files made first by `sh tools/game-assets.sh prepare-fixtures`
 (set `GCAD=target/release/gcad`). FBX output needs a native helper built from pinned Assimp and
-ufbx sources (`tools/game-assets-fbx`), and the Unity and Godot importers in
-`tools/game-assets-unity` and `tools/game-assets-godot` need those engines.
+ufbx sources (`gcad-engines:fbx-helper`), and the Unity and Godot importers in
+`gcad-engines:unity` and `gcad-engines:godot` need those engines.
 
 The fork's renderer changes (explicit mip chains, material alpha, occlusion and emission maps, UV
 transforms) live in egui_bench. gcad pins `v0l/egui_bench` branch `gcad-renderer`, which is
