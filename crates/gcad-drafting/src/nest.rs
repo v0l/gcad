@@ -114,7 +114,7 @@ pub fn mark_edges(pieces: &mut [Piece], patterns: &[String]) -> Result<()> {
     for pattern in patterns {
         let mut hit = false;
         for p in pieces.iter_mut() {
-            if crate::sim::matches(pattern, &p.name) {
+            if crate::parse::matches(pattern, &p.name) {
                 p.edge = true;
                 hit = true;
             }
@@ -148,11 +148,11 @@ pub fn pick(model: &Model, patterns: &[String]) -> Result<Vec<String>> {
         .map(|(name, _)| name)
         .filter(|name| {
             let mut wanted = patterns.iter().filter(|p| !p.starts_with('!')).peekable();
-            let keep = wanted.peek().is_none() || wanted.any(|p| crate::sim::matches(p, name));
+            let keep = wanted.peek().is_none() || wanted.any(|p| crate::parse::matches(p, name));
             let drop = patterns
                 .iter()
                 .filter_map(|p| p.strip_prefix('!'))
-                .any(|p| crate::sim::matches(p, name));
+                .any(|p| crate::parse::matches(p, name));
             keep && !drop
         })
         .collect();

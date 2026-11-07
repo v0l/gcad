@@ -382,9 +382,9 @@ pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &
         .map(|s| s.to_string_lossy().to_string())
         .unwrap_or_default();
     let name = name.as_str();
-    if let Some(spec) = crate::sim::spec(&model) {
-        let parts: Vec<_> = spec
-            .named()?
+    if let Some(study) = model.sim.as_deref() {
+        let parts: Vec<_> = study
+            .solids()?
             .into_iter()
             .map(|(_, solid)| (solid, None))
             .collect();

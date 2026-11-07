@@ -2059,11 +2059,13 @@ dependencies = [
  "flate2",
  "gcad-brep",
  "gcad-calc",
+ "gcad-drafting",
  "gcad-geom",
  "gcad-host",
  "gcad-mesh",
  "gcad-parse",
  "gcad-plot",
+ "gcad-render",
  "gcad-sims-proto",
  "gcad-version",
  "getrandom 0.4.3",
@@ -2137,6 +2139,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "gcad-drafting"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "gcad-brep",
+ "gcad-geom",
+ "gcad-host",
+ "gcad-mesh",
+ "gcad-parse",
+ "lopdf",
+ "monstertruck",
+]
+
+[[package]]
 name = "gcad-geom"
 version = "0.6.1"
 dependencies = [
@@ -2199,6 +2215,20 @@ dependencies = [
  "image 0.25.10",
  "serde",
  "ttf-parser",
+]
+
+[[package]]
+name = "gcad-render"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "gcad-brep",
+ "gcad-geom",
+ "gcad-mesh",
+ "gcad-plot",
+ "image 0.25.10",
+ "monstertruck",
+ "rayon",
 ]
 
 [[package]]

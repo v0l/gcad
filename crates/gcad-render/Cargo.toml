@@ -1,0 +1,18 @@
+[package]
+name = "gcad-render"
+description = "Software rendering for gcad: the four-view and turntable PNGs, sim fields, and the inspect view"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-brep.workspace = true
+gcad-geom.workspace = true
+gcad-mesh.workspace = true
+gcad-plot.workspace = true
+anyhow.workspace = true
+image.workspace = true
+monstertruck.workspace = true
+rayon.workspace = true

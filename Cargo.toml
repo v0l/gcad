@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
+members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
 
 [workspace.package]
 version = "0.6.1"
@@ -22,6 +22,8 @@ gcad-geom = { path = "crates/gcad-geom" }
 gcad-host = { path = "crates/gcad-host" }
 gcad-plot = { path = "crates/gcad-plot" }
 gcad-brep = { path = "crates/gcad-brep" }
+gcad-render = { path = "crates/gcad-render" }
+gcad-drafting = { path = "crates/gcad-drafting" }
 gcad-version = { path = "crates/gcad-version" }
 gcad-mesh = { path = "crates/gcad-mesh" }
 anyhow = "1.0.104"
@@ -29,6 +31,7 @@ bitcode = { version = "0.6", features = ["serde"] }
 epaint_default_fonts = "0.35"
 flate2 = "1"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+lopdf = { version = "0.45", default-features = false }
 monstertruck = { version = "0.4.1", features = ["solid", "step"] }
 monstertruck-io = { version = "0.4.1", features = ["step"] }
 monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
@@ -52,6 +55,8 @@ gcad-geom.workspace = true
 gcad-host.workspace = true
 gcad-plot.workspace = true
 gcad-brep.workspace = true
+gcad-render.workspace = true
+gcad-drafting.workspace = true
 gcad-version.workspace = true
 gcad-sims-proto = { path = "sims-proto" }
 gcad-mesh = { workspace = true, features = ["parallel"] }
@@ -91,7 +96,7 @@ bytemuck = "1"
 toml.workspace = true
 roxmltree.workspace = true
 yaml-rust2.workspace = true
-lopdf = { version = "0.45", default-features = false }
+lopdf.workspace = true
 
 [features]
 gpu-tests = []

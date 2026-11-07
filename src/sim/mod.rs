@@ -252,6 +252,10 @@ impl crate::model::Study for Spec {
     fn lines(&self) -> fn(&mut Model, &crate::parse::Line) -> Result<String> {
         language::apply
     }
+
+    fn solids(&self) -> Result<Vec<(String, &monstertruck::modeling::Solid)>> {
+        self.named()
+    }
 }
 
 fn start_study(path: &Path) -> Box<dyn crate::model::Study> {
@@ -507,21 +511,4 @@ pub fn save(spec: &Path, vars: &[(String, f64)], outcome: &Outcome) -> Result<Pa
     write(spec, outcome, &stamp(spec, vars))
 }
 
-pub fn matches(pattern: &str, name: &str) -> bool {
-    let pieces: Vec<&str> = pattern.split('*').collect();
-    if pieces.len() == 1 {
-        return pattern == name;
-    }
-    let (first, last) = (pieces[0], pieces[pieces.len() - 1]);
-    if !name.starts_with(first) || name.len() < first.len() + last.len() || !name.ends_with(last) {
-        return false;
-    }
-    let mut rest = &name[first.len()..name.len() - last.len()];
-    for piece in &pieces[1..pieces.len() - 1] {
-        match rest.find(piece) {
-            Some(at) => rest = &rest[at + piece.len()..],
-            None => return false,
-        }
-    }
-    true
-}
+pub use crate::parse::matches;

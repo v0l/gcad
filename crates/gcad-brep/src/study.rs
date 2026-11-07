@@ -8,6 +8,7 @@ use std::sync::OnceLock;
 pub trait Study: Any + Send + Sync {
     fn boxed(&self) -> Box<dyn Study>;
     fn lines(&self) -> fn(&mut Model, &Line) -> Result<String>;
+    fn solids(&self) -> Result<Vec<(String, &monstertruck::modeling::Solid)>>;
 }
 
 impl Clone for Box<dyn Study> {

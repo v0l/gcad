@@ -1,0 +1,18 @@
+[package]
+name = "gcad-drafting"
+description = "gcad output: STEP, STL, OBJ, 3MF, GLB, SVG and DXF export, drawings, .gdwg sheets, nesting and the bill of materials"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-brep.workspace = true
+gcad-geom.workspace = true
+gcad-host.workspace = true
+gcad-mesh.workspace = true
+gcad-parse.workspace = true
+anyhow.workspace = true
+lopdf.workspace = true
+monstertruck.workspace = true
