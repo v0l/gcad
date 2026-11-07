@@ -1,4 +1,4 @@
-use super::{Mesh, P3, add, length, scale, smoothstep, sub};
+use super::{Mesh, P3, add, length, scale, sub};
 use anyhow::{Result, bail};
 use std::collections::HashMap;
 
@@ -486,41 +486,6 @@ impl Rig {
                 *w = vec![(bone, 1.0)];
                 count += 1;
             }
-        }
-        count
-    }
-
-    pub fn paint(
-        &mut self,
-        mesh: &Mesh,
-        bone: usize,
-        centre: P3,
-        radius: f64,
-        falloff: f64,
-        strength: f64,
-    ) -> usize {
-        let skin = self.ensure_skin(mesh.positions.len());
-        let mut count = 0;
-        for (p, w) in mesh.positions.iter().zip(skin.iter_mut()) {
-            let d = length(sub(*p, centre));
-            let profile = if d <= radius {
-                1.0
-            } else if falloff > 0.0 && d < radius + falloff {
-                1.0 - smoothstep((d - radius) / falloff)
-            } else {
-                0.0
-            };
-            let k = (profile * strength).clamp(0.0, 1.0);
-            if k <= 0.0 {
-                continue;
-            }
-            let mut next: Vec<(usize, f64)> = w.iter().map(|&(b, v)| (b, v * (1.0 - k))).collect();
-            match next.iter_mut().find(|(b, _)| *b == bone) {
-                Some((_, v)) => *v += k,
-                None => next.push((bone, k)),
-            }
-            *w = trim(next);
-            count += 1;
         }
         count
     }

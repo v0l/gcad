@@ -2,6 +2,7 @@ use crate::args::{Args, direction, point3, positive};
 use crate::interp::{Scene, mirrored_name};
 use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, MoveKey, Quat, Rig};
 use crate::mesh::skin_heat;
+use crate::mesh::skin_paint;
 use crate::mesh::skin_smooth::{self, SmoothOptions};
 use crate::mesh::{self, P3};
 use crate::parse::{Line, Scope};
@@ -201,12 +202,20 @@ impl Scene {
                 "heat",
                 "cut",
                 "snap",
+                "mirror",
+                "from",
                 "joint",
             ],
-            false,
+            true,
         )?;
         let mesh = self.rest_mesh_for_rig("skin")?;
         let mode = args.values.get("mode").copied();
+        if !args.rest.is_empty() && !matches!(mode, Some("paint") | Some("smooth")) {
+            bail!(
+                "only `skin paint` and `skin smooth` take more points after `sphere=`, got `{}`",
+                args.rest[0]
+            );
+        }
         let rig = &mut self.mesh_body.rig;
         match mode {
             Some("auto") => {
@@ -279,20 +288,40 @@ impl Scene {
                 let step = step_of(&args, scope)?;
                 let bone = args.values.get("bone").map(|b| rig.bone(b)).transpose()?;
                 let sphere = match args.values.get("sphere") {
-                    Some(text) => Some((
-                        point3(text, scope)?,
-                        positive(args.number("r", scope)?, "r")?,
-                    )),
+                    Some(text) => {
+                        let mut points = vec![point3(text, scope)?];
+                        for text in &args.rest {
+                            points.push(point3(text, scope)?);
+                        }
+                        Some((points, positive(args.number("r", scope)?, "r")?))
+                    }
+                    None if !args.rest.is_empty() => {
+                        bail!("`skin smooth` takes extra points only after `sphere=`")
+                    }
                     None => None,
                 };
+                let mirror = match args.values.get("mirror").copied() {
+                    None => false,
+                    Some("x") => true,
+                    Some(other) => bail!("`skin smooth mirror=` takes x, got `{other}`"),
+                };
+                let sphere = sphere.map(|(mut points, r)| {
+                    if mirror {
+                        let flipped: Vec<P3> = points.iter().map(|p| [-p[0], p[1], p[2]]).collect();
+                        points.extend(flipped);
+                    }
+                    (points, r)
+                });
                 let skin = rig.skin.as_ref().expect("skinned");
-                let region: Vec<bool> = mesh
-                    .positions
+                let inside = sphere
+                    .as_ref()
+                    .map(|(points, r)| skin_paint::stroke_region(&mesh, points, *r));
+                let region: Vec<bool> = skin
                     .iter()
-                    .zip(skin)
-                    .map(|(p, w)| {
-                        bone.is_none_or(|b| w.iter().any(|(x, v)| *x == b && *v > 0.0))
-                            && sphere.is_none_or(|(c, r)| mesh::length(mesh::sub(*p, c)) <= r)
+                    .enumerate()
+                    .map(|(v, w)| {
+                        bone.is_none_or(|b| w.iter().any(|(x, val)| *x == b && *val > 0.0))
+                            && inside.as_ref().is_none_or(|i| i[v])
                     })
                     .collect();
                 let touched = skin_smooth::smooth_existing(rig, &mesh, &region, passes, step);
@@ -303,16 +332,77 @@ impl Scene {
             }
             Some("paint") => {
                 let bone = rig.bone(args.text("bone")?)?;
-                let c = point3(args.text("sphere")?, scope)?;
+                let mut points = vec![point3(args.text("sphere")?, scope)?];
+                for text in &args.rest {
+                    points.push(point3(text, scope)?);
+                }
                 let r = positive(args.number("r", scope)?, "r")?;
                 let falloff = args.optional_number("falloff", scope)?.unwrap_or(0.0);
                 if falloff < 0.0 {
                     bail!("falloff must be 0 or more, got {falloff}");
                 }
                 let strength = args.optional_number("strength", scope)?.unwrap_or(1.0);
-                let touched = rig.paint(&mesh, bone, c, r, falloff, strength);
+                if !(-1.0..=1.0).contains(&strength) {
+                    bail!("strength is from -1 to 1, got {strength}");
+                }
+                let mirror = match args.values.get("mirror").copied() {
+                    None => false,
+                    Some("x") => true,
+                    Some(other) => bail!("`skin paint mirror=` takes x, got `{other}`"),
+                };
+                let mut strokes = vec![skin_paint::Stroke {
+                    bone,
+                    points,
+                    radius: r,
+                    falloff,
+                    strength,
+                }];
+                if mirror {
+                    let other = skin_paint::mirror_bone(rig, bone, 0);
+                    let points = strokes[0]
+                        .points
+                        .iter()
+                        .map(|p| [-p[0], p[1], p[2]])
+                        .collect();
+                    strokes.push(skin_paint::Stroke {
+                        bone: other,
+                        points,
+                        ..strokes[0].clone()
+                    });
+                }
+                let touched: usize = strokes
+                    .iter()
+                    .map(|s| skin_paint::paint_stroke(rig, &mesh, s))
+                    .sum();
                 Ok(format!(
                     "painted {touched} vertices; {}",
+                    self.skin_summary(&mesh)
+                ))
+            }
+            Some("mirror") => {
+                let from_positive = match args.values.get("from").copied() {
+                    None | Some("+x") | Some("x") => true,
+                    Some("-x") => false,
+                    Some(other) => bail!("`skin mirror from=` takes +x or -x, got `{other}`"),
+                };
+                if rig.skin.is_none() {
+                    bail!(
+                        "`skin mirror` copies weights that are there; bind them first with `skin auto`"
+                    );
+                }
+                let n = skin_paint::mirror_skin(rig, &mesh, 0, from_positive);
+                Ok(format!(
+                    "mirrored {n} vertices across x, `_l` bones to `_r`; {}",
+                    self.skin_summary(&mesh)
+                ))
+            }
+            Some("normalize") | Some("normalise") => {
+                if rig.skin.is_none() {
+                    bail!("`skin normalize` needs weights; bind them first with `skin auto`");
+                }
+                let n = skin_paint::normalise(rig);
+                Ok(format!(
+                    "normalised {n} vertices to sum 1, at most 4 bones, none under 0.01; {}",
                     self.skin_summary(&mesh)
                 ))
             }
@@ -332,7 +422,9 @@ impl Scene {
                 ))
             }
             Some(other) => {
-                bail!("`skin` takes auto, smooth, paint, or `part=name bone=name`, got `{other}`")
+                bail!(
+                    "`skin` takes auto, smooth, paint, mirror, normalize, or `part=name bone=name`, got `{other}`"
+                )
             }
         }
     }

@@ -11,6 +11,7 @@ pub mod sculpt;
 pub mod sdf;
 pub mod skin_check;
 pub mod skin_heat;
+pub mod skin_paint;
 pub mod skin_smooth;
 pub mod stroke;
 pub mod uv;

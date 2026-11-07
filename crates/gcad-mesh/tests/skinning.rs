@@ -45,6 +45,59 @@ fn skin_smooth_softens_a_hard_part_binding() {
 }
 
 #[test]
+fn a_painted_stroke_and_its_mirror_match_and_smooth_softens_them() {
+    let base = example("rigged_creature");
+    let painted = |extra: &str| {
+        let source = base.replace("\nskin auto\n", &format!("\nskin auto\n{extra}\n"));
+        let model = gcad_mesh::build(&source).expect("builds");
+        let body = &model.bodies[0];
+        (body.rest_mesh().clone(), body.rig().unwrap().clone())
+    };
+    let (mesh, auto) = painted("");
+    let (_, one) =
+        painted("skin paint bone=hind_l sphere=3,8,8 3,7.5,8.5 r=1 strength=0.6 mirror=x");
+    let near = |p: [f64; 3]| {
+        (0..mesh.positions.len())
+            .min_by(|a, b| {
+                let d =
+                    |v: usize| gcad_mesh::mesh::length(gcad_mesh::mesh::sub(mesh.positions[v], p));
+                d(*a).total_cmp(&d(*b))
+            })
+            .unwrap()
+    };
+    let left = near([3.0, 8.0, 8.0]);
+    let right = near([-3.0, 8.0, 8.0]);
+    let weight = |rig: &gcad_mesh::mesh::rig::Rig, v: usize, bone: &str| {
+        let b = rig.bone_index(bone).unwrap();
+        rig.skin.as_ref().unwrap()[v]
+            .iter()
+            .find(|(x, _)| *x == b)
+            .map_or(0.0, |(_, w)| *w)
+    };
+    assert!(weight(&one, left, "hind_l") >= weight(&auto, left, "hind_l"));
+    let before = (weight(&auto, left, "hind_l") - weight(&auto, right, "hind_r")).abs();
+    let gap = (weight(&one, left, "hind_l") - weight(&one, right, "hind_r")).abs();
+    assert!(gap <= before + 0.05, "{gap} {before}");
+    assert!(weight(&one, right, "hind_r") >= weight(&auto, right, "hind_r"));
+    let (_, mirrored) = painted("skin paint bone=hind_l sphere=3,8,8 r=1 strength=1\nskin mirror");
+    let swap = |w: &[(usize, f64)], rig: &gcad_mesh::mesh::rig::Rig| -> Vec<(String, f64)> {
+        let mut out: Vec<(String, f64)> = w
+            .iter()
+            .map(|(b, x)| (rig.bones[*b].name.replace("_l", "_r"), *x))
+            .collect();
+        out.sort_by(|a, b| a.0.cmp(&b.0));
+        out
+    };
+    let skin = mirrored.skin.as_ref().unwrap();
+    assert_eq!(swap(&skin[left], &mirrored), swap(&skin[right], &mirrored));
+    let (_, cleaned) = painted(
+        "skin paint bone=hind_l sphere=3,8,8 r=1 strength=1\nskin smooth sphere=3,8,8 r=2 passes=20\nskin normalize",
+    );
+    let r = check(&mesh, &cleaned).unwrap();
+    assert!(r.max_jump < 0.5, "{}", r.max_jump);
+}
+
+#[test]
 fn skin_auto_refuses_bad_settings() {
     let base = "arm: limb 0,0,0 0,0,10 r=2\nremesh 0.8\nbone a head=0,0,0 tail=0,0,10\n";
     for (line, words) in [
@@ -53,6 +106,12 @@ fn skin_auto_refuses_bad_settings() {
         ("skin auto passes=1.5", "whole number"),
         ("skin auto unrelated=maybe", "true or false"),
         ("skin smooth", "bind them first"),
+        (
+            "skin paint bone=a sphere=0,0,5 r=1 strength=2",
+            "from -1 to 1",
+        ),
+        ("skin auto 1,2,3", "take more points"),
+        ("skin mirror", "bind them first"),
     ] {
         let error = gcad_mesh::build(&format!("{base}{line}\n")).unwrap_err();
         assert!(error.message.contains(words), "{line}: {}", error.message);
