@@ -642,6 +642,7 @@ fn refine_joints_splits_triangles_near_the_joint_only() {
 fn refine_joints_needs_a_parented_bone() {
     let message = failure("arm: limb 0,0,0 0,0,20 r=3\nremesh 0.4\nbone a head=0,0,0 tail=0,0,20\nrefine joints edge=0.3");
     assert!(message.contains("bone"), "{message}");
+}
 
 const BENT: &str = "arm: limb 0,0,0 0,0,20 r=3\nremesh 0.4\nbone b_up head=0,0,0 tail=0,0,10\nbone b_low parent=b_up tail=0,0,20\nskin auto\n";
 const PUSH: &str = "corrective bulge bone=b_low axis=x from=30 to=90\nselect sphere=0,-3,10 r=3 falloff=3\nmove 0,2,0\n";
