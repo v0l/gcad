@@ -1106,6 +1106,8 @@ fn load_internal(
     let mut face_maps = BTreeMap::new();
     let mut face_sources = BTreeMap::new();
     let mut pending_motions = Vec::new();
+    let mut mesh_skins: Vec<(usize, Vec<usize>, Vec<super::skin::Weights>)> = Vec::new();
+    let mut mesh_clips: Vec<super::animation::Clip> = Vec::new();
     let mut scene = Scene {
         nodes: document.scene_nodes()?,
         consumer: document.consumer.clone(),
@@ -1164,6 +1166,48 @@ fn load_internal(
             if let Err(error) = result {
                 bail!("source `{name}` line {}: {error:#}", line.number);
             }
+        }
+        let mesh_body = run
+            .model
+            .rest_meshes()
+            .into_iter()
+            .find(|(body, _)| body == &source.body);
+        if let Some((body, rest)) = mesh_body {
+            let converted = super::mesh_body::convert(&rest, run.model.rig_of(&body))?;
+            let colour = run.model.colours.get(&body).copied().unwrap_or([0.7; 3]);
+            let opacity = run.model.opacities.get(&body).copied().unwrap_or(1.0);
+            let mut material = super::material::Material::from_finish(
+                &Default::default(),
+                colour,
+                opacity,
+            )?;
+            if let Some(settings) = &source.surface {
+                material = settings.apply(&material)?;
+            }
+            let index = scene.meshes.len();
+            let vertices = converted.mesh.positions.len();
+            scene.meshes.push(SceneMesh {
+                name: name.clone(),
+                primitives: vec![Primitive {
+                    geometry: converted.mesh,
+                    material: scene.materials.len(),
+                }],
+            });
+            scene.materials.push(material);
+            for owner in owners {
+                ensure!(
+                    !document.skins.contains_key(&scene.nodes[owner].name),
+                    "mesh body skins come from the part's `skin` lines; remove the skin declaration for `{}`",
+                    scene.nodes[owner].name
+                );
+                scene.nodes[owner].mesh = Some(index);
+                if let Some(weights) = super::mesh_body::joint_weights(&converted.rig, vertices) {
+                    let joints = super::mesh_body::place(&mut scene, owner, &converted.rig)?;
+                    mesh_clips.extend(super::mesh_body::clips(&converted.rig, &joints)?);
+                    mesh_skins.push((owner, joints, weights));
+                }
+            }
+            continue;
         }
         let face_source = |body: &str| -> Result<Option<super::face_author::Source>> {
             let Some(reads) = &cad_reads else {
@@ -1354,12 +1398,22 @@ fn load_internal(
                 })?;
         }
     }
+    for clip in mesh_clips {
+        match scene.clips.iter_mut().find(|c| c.name == clip.name) {
+            Some(existing) => existing.tracks.extend(clip.tracks),
+            None => scene.clips.push(clip),
+        }
+    }
     for (motion, model) in pending_motions {
         let clip = motion.bake(&scene, &model)?;
         scene.clips.push(clip);
     }
     scene.validate()?;
-    let skins = document
+    let mut mesh_skin_bindings = Vec::new();
+    for (node, joints, weights) in mesh_skins {
+        mesh_skin_bindings.push(super::skin::Skin::bind(&scene, node, joints, vec![weights])?);
+    }
+    let skins: Vec<super::skin::Skin> = document
         .skins
         .iter()
         .filter(|(name, _)| Some(name.as_str()) != binding_node)
@@ -1397,6 +1451,7 @@ fn load_internal(
         .collect::<Result<Vec<_>>>()?
         .into_iter()
         .flatten()
+        .chain(mesh_skin_bindings)
         .collect();
     let mut asset = Asset {
         scene,
@@ -1739,6 +1794,47 @@ pub(crate) fn capture_inputs(
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn mesh_body_source_loads_with_its_rig_clips_and_exports_skinned_glb() {
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/mesh");
+        let dir = Path::new(env!("CARGO_MANIFEST_DIR")).join(format!(
+            "target/asset-mesh-body-{}",
+            std::process::id()
+        ));
+        std::fs::create_dir_all(&dir).unwrap();
+        std::fs::copy(
+            root.join("rigged_creature.gcad"),
+            dir.join("creature.gcad"),
+        )
+        .unwrap();
+        std::fs::copy(root.join("creature.gcad"), dir.join("statue.gcad")).unwrap();
+        let path = dir.join("creature.gasset");
+        std::fs::write(
+            &path,
+            "asset 1\nsource creature creature.gcad body=main\ntessellate creature tolerance=0.1\nuv creature projection=box tile=25\nnode creature source=creature\nsource statue statue.gcad body=main\ntessellate statue tolerance=0.1\nuv statue projection=box tile=25\nnode statue source=statue translation=100,0,0\ncollision statue shape=capsule\n",
+        )
+        .unwrap();
+        let asset = load(&path, &[]).unwrap();
+        assert_eq!(asset.skins.len(), 1);
+        assert!(asset.skins[0].joints.len() >= 12);
+        assert_eq!(asset.scene.clips.len(), 2);
+        let glb = asset.encode_glb().unwrap();
+        let json_len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+        let doc: serde_json::Value = serde_json::from_slice(&glb[20..20 + json_len]).unwrap();
+        assert_eq!(doc["skins"].as_array().unwrap().len(), 1);
+        assert_eq!(doc["animations"].as_array().unwrap().len(), 2);
+        let skinned = doc["nodes"][0]["mesh"].as_u64().unwrap() as usize;
+        assert!(doc["meshes"][skinned]["primitives"][0]["attributes"]["JOINTS_0"].is_number());
+        std::fs::write(
+            &path,
+            std::fs::read_to_string(&path)
+                .unwrap()
+                .replace("collision statue shape=capsule\n", "skin creature weights=w.json\n"),
+        )
+        .unwrap();
+        assert!(load(&path, &[]).is_err());
+    }
+
     #[test]
     fn first_binding_allows_unprepared_peers_but_rejects_invalid_existing_weights() {
         use super::*;

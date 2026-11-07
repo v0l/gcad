@@ -1,3 +1,4 @@
+use crate::glb::{ARRAY_BUFFER, Buffer, ELEMENT_ARRAY_BUFFER, UNSIGNED_INT, UNSIGNED_SHORT};
 use crate::interp::Detail;
 use crate::mesh::bake::bake_normals;
 use crate::mesh::rig::{IDENTITY_QUAT, Rig, Weights};
@@ -14,12 +15,6 @@ pub struct Body<'a> {
     pub gloss: Vec<f64>,
     pub detail: Option<Detail>,
 }
-
-const ARRAY_BUFFER: u32 = 34962;
-const ELEMENT_ARRAY_BUFFER: u32 = 34963;
-const FLOAT: u32 = 5126;
-const UNSIGNED_SHORT: u32 = 5123;
-const UNSIGNED_INT: u32 = 5125;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Fit {
@@ -132,72 +127,6 @@ fn linear(c: f64) -> f64 {
 
 pub(crate) fn quat_y_up(q: [f64; 4]) -> [f64; 4] {
     [q[0], q[2], -q[1], q[3]]
-}
-
-#[derive(Default)]
-struct Builder {
-    bin: Vec<u8>,
-    views: Vec<Value>,
-    accessors: Vec<Value>,
-}
-
-impl Builder {
-    fn view(&mut self, bytes: &[u8], target: Option<u32>) -> usize {
-        while !self.bin.len().is_multiple_of(4) {
-            self.bin.push(0);
-        }
-        let mut view =
-            json!({"buffer": 0, "byteOffset": self.bin.len(), "byteLength": bytes.len()});
-        if let Some(t) = target {
-            view["target"] = json!(t);
-        }
-        self.bin.extend_from_slice(bytes);
-        self.views.push(view);
-        self.views.len() - 1
-    }
-
-    fn accessor(
-        &mut self,
-        bytes: &[u8],
-        target: Option<u32>,
-        component: u32,
-        count: usize,
-        kind: &str,
-        bounds: Option<(Vec<f64>, Vec<f64>)>,
-    ) -> usize {
-        let view = self.view(bytes, target);
-        let mut a =
-            json!({"bufferView": view, "componentType": component, "count": count, "type": kind});
-        if let Some((lo, hi)) = bounds {
-            a["min"] = json!(lo);
-            a["max"] = json!(hi);
-        }
-        self.accessors.push(a);
-        self.accessors.len() - 1
-    }
-
-    fn floats(
-        &mut self,
-        values: &[f32],
-        width: usize,
-        kind: &str,
-        target: Option<u32>,
-        bounds: bool,
-    ) -> usize {
-        let bytes: Vec<u8> = values.iter().flat_map(|v| v.to_le_bytes()).collect();
-        let b = bounds.then(|| {
-            let mut lo = vec![f64::INFINITY; width];
-            let mut hi = vec![f64::NEG_INFINITY; width];
-            for chunk in values.chunks(width) {
-                for (k, v) in chunk.iter().enumerate() {
-                    lo[k] = lo[k].min(*v as f64);
-                    hi[k] = hi[k].max(*v as f64);
-                }
-            }
-            (lo, hi)
-        });
-        self.accessor(&bytes, target, FLOAT, values.len() / width, kind, b)
-    }
 }
 
 fn flat(points: impl Iterator<Item = P3>) -> Vec<f32> {
@@ -318,7 +247,7 @@ fn levels_of(body: &Body<'_>, rig: Option<&Rig>) -> Vec<Level> {
 }
 
 fn emit_level(
-    b: &mut Builder,
+    b: &mut Buffer,
     materials: &mut Vec<Value>,
     images: &mut Vec<Value>,
     textures: &mut Vec<Value>,
@@ -446,7 +375,7 @@ fn emit_level(
 }
 
 pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
-    let mut b = Builder::default();
+    let mut b = Buffer::default();
     let mut nodes: Vec<Value> = Vec::new();
     let mut scene: Vec<usize> = Vec::new();
     let mut meshes: Vec<Value> = Vec::new();
@@ -610,9 +539,6 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
         "nodes": nodes,
         "meshes": meshes,
         "materials": materials,
-        "buffers": [{"byteLength": b.bin.len().div_ceil(4) * 4}],
-        "bufferViews": b.views,
-        "accessors": b.accessors,
     });
     if !images.is_empty() {
         root["images"] = json!(images);
@@ -629,23 +555,5 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
     if !animations.is_empty() {
         root["animations"] = json!(animations);
     }
-    let mut json_bytes = serde_json::to_vec(&root)?;
-    while !json_bytes.len().is_multiple_of(4) {
-        json_bytes.push(b' ');
-    }
-    while !b.bin.len().is_multiple_of(4) {
-        b.bin.push(0);
-    }
-    let total = 12 + 8 + json_bytes.len() + 8 + b.bin.len();
-    let mut out = Vec::with_capacity(total);
-    out.extend(b"glTF");
-    out.extend(2u32.to_le_bytes());
-    out.extend((total as u32).to_le_bytes());
-    out.extend((json_bytes.len() as u32).to_le_bytes());
-    out.extend(b"JSON");
-    out.extend(&json_bytes);
-    out.extend((b.bin.len() as u32).to_le_bytes());
-    out.extend(b"BIN\0");
-    out.extend(&b.bin);
-    Ok(out)
+    b.finish(root)
 }

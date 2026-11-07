@@ -7,6 +7,7 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- A `.gasset` `source` can be a mesh body: its `bone`, `skin` and `clip` lines become a skin and clips, so sculpted characters get joint pruning, weight quantisation, collision, LOD and FBX. See `examples/game-assets/creature.gasset`.
 - Wixely's game-assets fork, merged with its history, behind the `game-assets` cargo feature:
   `.gasset` files, the `gcad asset-*` commands, the asset viewer, sprite sheets, collision
   shapes, LODs and experimental FBX. Default builds are unchanged. See

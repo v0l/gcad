@@ -32,6 +32,7 @@ mod fbx_response;
 pub mod glb;
 pub mod lod;
 pub mod material;
+pub mod mesh_body;
 pub mod motion;
 #[cfg(not(target_arch = "wasm32"))]
 mod motion_receipt;
