@@ -2065,6 +2065,7 @@ dependencies = [
  "gcad-mesh",
  "gcad-parse",
  "gcad-plot",
+ "gcad-remote",
  "gcad-render",
  "gcad-sim",
  "gcad-sims-proto",
@@ -2216,6 +2217,23 @@ dependencies = [
  "image 0.25.10",
  "serde",
  "ttf-parser",
+]
+
+[[package]]
+name = "gcad-remote"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "flate2",
+ "gcad-brep",
+ "gcad-sim",
+ "gcad-sims-proto",
+ "gcad-version",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "toml",
+ "ureq",
 ]
 
 [[package]]

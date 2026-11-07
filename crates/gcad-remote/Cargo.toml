@@ -1,0 +1,21 @@
+[package]
+name = "gcad-remote"
+description = "Paid remote simulation for gcad: account, runners, job submission and the worker side of `gcad sim --remote`"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-brep.workspace = true
+gcad-sim.workspace = true
+gcad-sims-proto.workspace = true
+gcad-version.workspace = true
+anyhow.workspace = true
+flate2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+toml.workspace = true
+ureq.workspace = true

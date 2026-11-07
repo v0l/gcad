@@ -1,4 +1,6 @@
 use anyhow::{Context, Result, anyhow, bail};
+use gcad_brep as model;
+use gcad_sim as sim;
 use gcad_sims_proto::{self as proto, ApiError, Job, JobState, Submit};
 use serde::de::DeserializeOwned;
 use sha2::{Digest, Sha256};
@@ -294,7 +296,7 @@ impl Overview {
     }
 
     pub fn build() -> &'static str {
-        env!("GCAD_BUILD_VERSION")
+        gcad_version::BUILD
     }
 
     pub fn known_on_this_build(&self) -> usize {
@@ -413,7 +415,7 @@ pub fn simulate(
             file,
             Submit {
                 spec: name,
-                version: env!("GCAD_BUILD_VERSION").to_string(),
+                version: gcad_version::BUILD.to_string(),
                 hash,
                 max_seconds: limits.minutes * 60,
                 max_price: None,
@@ -475,7 +477,7 @@ fn submit(
 }
 
 fn ready(client: &Client, limits: &Limits) -> Result<u64> {
-    let version = env!("GCAD_BUILD_VERSION");
+    let version = gcad_version::BUILD;
     let status = status_at(&client.server)?;
     let able: Vec<&proto::Runner> = status
         .runners

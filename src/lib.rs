@@ -19,7 +19,7 @@ pub use gcad_parse as parse;
 pub use gcad_plot as plot;
 pub mod progress;
 #[cfg(not(target_arch = "wasm32"))]
-pub mod remote;
+pub use gcad_remote as remote;
 pub use gcad_render::render;
 pub use gcad_geom::select;
 pub use gcad_sim as sim;
