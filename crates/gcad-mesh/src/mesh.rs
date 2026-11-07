@@ -9,6 +9,7 @@ pub mod quadric;
 pub mod rig;
 pub mod sculpt;
 pub mod sdf;
+pub mod skin_check;
 pub mod stroke;
 pub mod uv;
 
