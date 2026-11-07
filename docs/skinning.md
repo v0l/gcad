@@ -4,6 +4,25 @@ How gcad binds a mesh to its bones, what makes a skin good, and the numbers that
 
 ![before and after](skin-before-after.png)
 
+## Bounds
+
+The fixture tests (`crates/gcad-mesh/tests/skinning.rs`) hold `skin auto` to these, against the old
+distance weights:
+
+| | old, creature / stress | now, creature / stress | bound in the tests |
+|---|---|---|---|
+| largest weight step across an edge | 1.00 / 0.81 | 0.27 / 0.28 | under 0.35, no edge over |
+| vertices on an unrelated bone | 1084 / 1122 | 0 / 0 | 0 |
+| rigid core, worst bone | 0.00 / 0.00 | 1.00 / 1.00 | 0.99 or more |
+| flipped triangles over the clips | 198 / 103 | 0 / 3 | 0 / 4 or fewer |
+| squashed triangles | 14 / 23 | 0 / 7 | 0 / 8 or fewer |
+| stretched triangles | 141 / 82 | 0 / 0 | 0 on the creature |
+| slivers in joint zones | 40 / 37 | 0 / 1 | 2 / 4 or fewer |
+
+The arm (`skin_arm`): no step over 0.35, rigid cores 1.00, and its twisted wrist 15% wider or more with
+`twist=` or `skin blend dq=`. Its 120 degree elbow still flips 28 triangles under linear skinning
+(Blender's weights: 88); that needs corrective shapes, #300.
+
 ## Workflow
 
 1. Sculpt and `remesh` first, then `relax 6` to even the triangles; `skin` binds the vertices that exist.
@@ -95,6 +114,35 @@ fold first. `relax 6` straight after `remesh` evens them out:
 | skin_arm | 8 of 2512 | 0 of 2499 | 30 (was 28) |
 
 Both quadruped fixtures now have the `relax 6` line. A remesh that adds edge loops at joints is #302.
+
+## Against Blender
+
+Blender 4.2.23 (the portable Linux build, run headless) gave each fixture "Parent with automatic
+weights" (bone heat) on the same welded mesh and armature, exported from gcad as GLB.
+`tools/blender/auto_weights.py` writes Blender's weights, `tools/blender/side_by_side.py` renders both
+in Blender with its own linear skinning, and `crates/gcad-mesh/tests/blender.rs` (ignored, run with
+`BLENDER_WEIGHTS=dir`) scores Blender's weights with `skincheck`:
+
+```sh
+blender -b --factory-startup --python tools/blender/auto_weights.py -- creature.glb creature.json
+BLENDER_WEIGHTS=dir cargo test -p gcad-mesh --release --test blender -- --ignored --nocapture
+```
+
+| fixture | weights | max jump | unrelated | min core | area ratio | aspect growth | flipped | squashed | stretched |
+|---|---|---|---|---|---|---|---|---|---|
+| rigged_creature | Blender | 0.307 | 2651 | 1.00 | 0.463..2.29 | 3.99 | 0 | 0 | 0 |
+| rigged_creature | gcad | 0.271 | 0 | 1.00 | 0.645..1.47 | 1.63 | 0 | 0 | 0 |
+| skin_stress | Blender | 0.310 | 2658 | 1.00 | 0.022..6.51 | 80.0 | 286 | 153 | 8 |
+| skin_stress | gcad | 0.277 | 0 | 1.00 | 0.090..2.42 | 13.0 | 3 | 7 | 0 |
+| skin_arm | Blender | 0.209 | 0 | 1.00 | 0.019..2.19 | 19.9 | 88 | 92 | 0 |
+| skin_arm | gcad | 0.138 | 0 | 1.00 | 0.012..2.09 | 15.5 | 28 | 78 | 0 |
+
+![gcad and Blender side by side](skin-vs-blender.png)
+
+Left gcad, right Blender, both posed by Blender: the creature's walk, the stress quadruped at its
+worst key, and the arm at 120 degrees. Blender gives 2651 creature vertices weight from a bone that is
+not the vertex's leading bone, its parent or child; gcad gives none. In the stress pose that shows as
+creases over the back and shoulders. Neither side was hand-fixed.
 
 ## Before (straight-line distance, `power=4`)
 
