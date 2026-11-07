@@ -204,6 +204,7 @@ impl Scene {
                 "snap",
                 "mirror",
                 "from",
+                "dq",
                 "joint",
             ],
             true,
@@ -379,6 +380,19 @@ impl Scene {
                     self.skin_summary(&mesh)
                 ))
             }
+            Some("blend") => {
+                let dq = match args.optional_number("dq", scope)? {
+                    Some(v) if (0.0..=1.0).contains(&v) => v,
+                    Some(v) => bail!("dq is from 0 (linear blend) to 1 (dual quaternion), got {v}"),
+                    None => 1.0,
+                };
+                rig.dq = dq;
+                Ok(format!(
+                    "posing blends {:.0}% dual quaternion, {:.0}% linear; GLB players skin linearly",
+                    dq * 100.0,
+                    (1.0 - dq) * 100.0
+                ))
+            }
             Some("mirror") => {
                 let from_positive = match args.values.get("from").copied() {
                     None | Some("+x") | Some("x") => true,
@@ -423,7 +437,7 @@ impl Scene {
             }
             Some(other) => {
                 bail!(
-                    "`skin` takes auto, smooth, paint, mirror, normalize, or `part=name bone=name`, got `{other}`"
+                    "`skin` takes auto, smooth, paint, mirror, normalize, blend, or `part=name bone=name`, got `{other}`"
                 )
             }
         }

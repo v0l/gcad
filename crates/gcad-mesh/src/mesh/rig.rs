@@ -70,6 +70,7 @@ pub struct Rig {
     pub pose: Pose,
     pub moved: Moves,
     pub clips: Vec<Clip>,
+    pub dq: f64,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -377,6 +378,10 @@ impl Rig {
         };
         let xf = self.skin_transforms(pose);
         let mut out = mesh.clone();
+        if self.dq > 0.0 {
+            out.positions = super::skin_dq::pose_positions(&mesh.positions, skin, &xf, self.dq);
+            return out;
+        }
         for (p, weights) in out.positions.iter_mut().zip(skin) {
             let v = *p;
             *p = weights

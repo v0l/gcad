@@ -98,6 +98,30 @@ fn a_painted_stroke_and_its_mirror_match_and_smooth_softens_them() {
 }
 
 #[test]
+fn dual_quaternion_blending_keeps_the_twisted_wrist_round() {
+    let width = |extra: &str| {
+        let source = example("skin_arm").replace("\nskin auto\n", &format!("\nskin auto\n{extra}"));
+        let model = gcad_mesh::build(&source).expect("builds");
+        let body = &model.bodies[0];
+        let mut rig = body.rig().unwrap().clone();
+        let clip = rig.clip("rom").unwrap();
+        rig.pose = rig.sample(clip, 2.0);
+        let posed = rig.posed(body.rest_mesh(), &rig.pose);
+        posed
+            .positions
+            .iter()
+            .filter(|p| (p[2] - 23.0).abs() < 0.3)
+            .map(|p| (p[0] * p[0] + p[1] * p[1]).sqrt())
+            .fold(f64::INFINITY, f64::min)
+    };
+    let linear = width("");
+    let dq = width("skin blend dq=1\n");
+    assert!(dq > linear * 1.15, "{linear} {dq}");
+    let error = gcad_mesh::build(&format!("{}skin blend dq=2\n", example("skin_arm"))).unwrap_err();
+    assert!(error.message.contains("from 0"), "{}", error.message);
+}
+
+#[test]
 fn skin_auto_refuses_bad_settings() {
     let base = "arm: limb 0,0,0 0,0,10 r=2\nremesh 0.8\nbone a head=0,0,0 tail=0,0,10\n";
     for (line, words) in [
