@@ -297,6 +297,8 @@ pub struct App {
     parts_open: bool,
     flow: Flow,
     playback: super::anim::Playback,
+    weights: super::weights::Weights,
+    weighted: Option<(u64, super::weights::Show, usize, Arc<viewer3d::Scene<Ink>>)>,
     posed: Option<(u64, super::anim::Playback, Arc<viewer3d::Scene<Ink>>)>,
     reels: Vec<Option<(usize, egui::TextureHandle)>>,
     opacity: f32,
@@ -318,6 +320,7 @@ pub struct App {
     traced: bool,
     edges: bool,
     painted: Painted,
+    viewport_rect: Option<Rect>,
     frames: std::collections::VecDeque<Instant>,
     editing: bool,
     source: String,
@@ -984,6 +987,8 @@ impl App {
             parts_open: true,
             flow: Flow::default(),
             playback: super::anim::Playback::default(),
+            weights: super::weights::Weights::default(),
+            weighted: None,
             posed: None,
             reels: Vec::new(),
             opacity: 0.25,
@@ -1005,6 +1010,7 @@ impl App {
             traced: false,
             edges: true,
             painted: Painted::default(),
+            viewport_rect: None,
             frames: std::collections::VecDeque::new(),
             editing: WEB,
             source: String::new(),
@@ -2636,11 +2642,44 @@ impl App {
                 } else {
                     self.parts_card(ui);
                     self.animation_card(ui);
+                    self.weights_card(ui);
                 }
                 if !self.shown.as_ref().is_some_and(|s| s.assembly) {
                     self.select_card(ui);
                 }
             });
+    }
+
+    fn weights_card(&mut self, ui: &mut Ui) {
+        let Some(shown) = self.shown.as_ref() else {
+            return;
+        };
+        let Some(rigged) = shown.scene.rigged.first().cloned() else {
+            return;
+        };
+        let key = shown.scene.mesh.id;
+        self.weights.fit(&rigged);
+        super::weights::card(ui, &mut self.weights, &rigged, key);
+    }
+
+    fn finish_weight_stroke(&mut self) {
+        let Some(rigged) = self
+            .shown
+            .as_ref()
+            .and_then(|s| s.scene.rigged.first().cloned())
+        else {
+            self.weights.stroke.clear();
+            return;
+        };
+        let line = self.weights.line(&rigged);
+        self.weights.stroke.clear();
+        let (Some(line), Some(path)) = (line, self.path.clone()) else {
+            return;
+        };
+        let source = crate::host::read_to_string(&path).unwrap_or_else(|_| self.source.clone());
+        self.source = super::weights::append_line(&source, &line);
+        crate::host::save(&path, &self.source);
+        self.dirty = Some(Instant::now());
     }
 
     fn animation_card(&mut self, ui: &mut Ui) {
@@ -2826,6 +2865,26 @@ impl App {
 
     fn shown_scene(&mut self) -> Option<Arc<viewer3d::Scene<Ink>>> {
         let shown = self.shown.as_ref()?;
+        if self.weights.active() && !shown.scene.rigged.is_empty() {
+            let key = shown.scene.mesh.id;
+            let (show, bone) = (self.weights.show, self.weights.bone);
+            if let Some((k, s, b, scene)) = &self.weighted
+                && *k == key
+                && *s == show
+                && *b == bone
+            {
+                return Some(scene.clone());
+            }
+            let scene = shown.scene.clone();
+            let colours: Vec<Vec<[f64; 3]>> = scene
+                .rigged
+                .iter()
+                .map(|r| self.weights.colours(r, key).unwrap_or_default())
+                .collect();
+            let painted = super::weights::recolour(&scene.mesh, &scene.rigged, &colours);
+            self.weighted = Some((key, show, bone, painted.clone()));
+            return Some(painted);
+        }
         if shown.scene.rigged.is_empty() || !self.playback.active() {
             return Some(shown.scene.mesh.clone());
         }
@@ -2842,7 +2901,18 @@ impl App {
     }
 
     fn viewer(&self, shown: &Shown) -> Viewer<Ink> {
+        let weighted = self
+            .weighted
+            .as_ref()
+            .filter(|(key, show, bone, _)| {
+                self.weights.active()
+                    && *key == shown.scene.mesh.id
+                    && *show == self.weights.show
+                    && *bone == self.weights.bone
+            })
+            .map(|(.., scene)| scene.clone());
         let scene = match &self.posed {
+            _ if weighted.is_some() => weighted.unwrap_or_default(),
             Some((key, playback, scene))
                 if *key == shown.scene.mesh.id
                     && *playback == self.playback
@@ -3321,6 +3391,7 @@ impl App {
 
     fn viewport(&mut self, ui: &mut Ui) {
         let rect = ui.max_rect();
+        self.viewport_rect = Some(rect);
         let resp = ui.allocate_rect(rect, Sense::click_and_drag());
         let p = ui.painter_at(rect);
         let Some(shown) = &self.shown else {
@@ -3364,7 +3435,7 @@ impl App {
         let mut viewer = self.viewer(shown);
         self.painted = viewer.paint(ui, rect);
         let projector = viewer.projector(rect);
-        if self.playback.skeleton {
+        if self.playback.skeleton && !self.weights.active() {
             skeleton(&p, &projector, &scene.rigged, &self.playback);
         }
         if let Some(field) = self.shown.as_ref().and_then(|s| s.field.clone())
@@ -3434,7 +3505,35 @@ impl App {
             }
         }
         let on_cube = self.view_cube(ui, rect, &projector);
-        if !on_cube {
+        let brushing = self.weights.painting() && !ui.input(|i| i.modifiers.shift);
+        if brushing && !on_cube {
+            if resp.dragged_by(egui::PointerButton::Primary)
+                && let Some(at) = resp.interact_pointer_pos()
+                && let Some(point) = super::weights::hit(&viewer, rect, at)
+            {
+                self.weights.stroke.push(point);
+            }
+            if resp.drag_stopped() || (resp.clicked() && !self.weights.stroke.is_empty()) {
+                self.finish_weight_stroke();
+            } else if resp.clicked()
+                && let Some(at) = resp.interact_pointer_pos()
+                && let Some(point) = super::weights::hit(&viewer, rect, at)
+            {
+                self.weights.stroke.push(point);
+                self.finish_weight_stroke();
+            }
+            if let Some(at) = resp.hover_pos()
+                && let Some(point) = super::weights::hit(&viewer, rect, at)
+            {
+                super::weights::brush_ring(&p, &projector, point, self.weights.radius, READOUT);
+            }
+            for point in &self.weights.stroke {
+                if let Some(s) = projector.project(point.map(|v| v as f32)) {
+                    p.circle_filled(s, 2.0, READOUT);
+                }
+            }
+        }
+        if !on_cube && !brushing {
             viewer.navigate(ui, &resp, &mut self.orbit);
             self.cam = viewer.camera();
             if resp.double_clicked() {
@@ -4696,6 +4795,116 @@ mod tests {
         assert!(harness.state().watching.is_none());
         assert!(harness.state().loading.is_none());
         harness.step();
+    }
+
+    #[cfg(not(target_arch = "wasm32"))]
+    #[test]
+    fn dragging_the_weight_brush_adds_a_skin_line_and_recolours_the_mesh() {
+        let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR"));
+        let dir = root.join(format!("target/weights-brush-{}", std::process::id()));
+        std::fs::create_dir_all(&dir).unwrap();
+        let file = dir.join("creature.gcad");
+        let source = std::fs::read_to_string(root.join("examples/mesh/rigged_creature.gcad"))
+            .unwrap()
+            .replace("pose clip=walk t=0.125\n", "");
+        std::fs::write(&file, &source).unwrap();
+        let file = crate::host::canonicalize(&file).unwrap();
+        let opened = file.clone();
+        let mut harness = egui_kittest::Harness::builder()
+            .with_size(egui::vec2(1100., 760.))
+            .build_eframe(|cc| {
+                super::App::new(cc, Some(opened.clone()), String::new(), None, vec![])
+            });
+        let wait = |harness: &mut egui_kittest::Harness<'_, super::App>,
+                    done: &dyn Fn(&super::App) -> bool| {
+            let deadline = std::time::Instant::now() + std::time::Duration::from_secs(60);
+            while !done(harness.state()) {
+                assert!(std::time::Instant::now() < deadline, "timed out");
+                std::thread::sleep(std::time::Duration::from_millis(25));
+                harness.step();
+            }
+        };
+        wait(&mut harness, &|a| {
+            a.shown.as_ref().is_some_and(|s| !s.scene.rigged.is_empty())
+        });
+        harness.step();
+        let plain = harness.render().expect("renders");
+        {
+            let app = harness.state_mut();
+            let rig = &app.shown.as_ref().unwrap().scene.rigged[0].rig;
+            app.weights.bone = rig.bone_index("hind_l").unwrap();
+            app.weights.show = super::super::weights::Show::Bone;
+            app.cam = super::Camera {
+                ortho: true,
+                ..super::Camera::default()
+            };
+        }
+        for _ in 0..4 {
+            harness.step();
+        }
+        let weighted = harness.render().expect("renders");
+        let changed = plain
+            .pixels()
+            .zip(weighted.pixels())
+            .filter(|(a, b)| a != b)
+            .count();
+        assert!(
+            changed > 10_000,
+            "the weights view recolours the mesh: {changed}"
+        );
+        weighted.save(dir.join("weights-view.png")).unwrap();
+        harness.state_mut().weights.tool = super::super::weights::Tool::Add;
+        harness.step();
+        let rect = harness.state().viewport_rect.expect("a viewport");
+        let centre = rect.center();
+        let path: Vec<egui::Pos2> = (0..8)
+            .map(|k| centre + egui::vec2(-60.0 + 15.0 * k as f32, 10.0))
+            .collect();
+        harness.hover_at(path[0]);
+        harness.step();
+        harness.event(egui::Event::PointerButton {
+            pos: path[0],
+            button: egui::PointerButton::Primary,
+            pressed: true,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+        for at in &path[1..] {
+            harness.hover_at(*at);
+            harness.step();
+        }
+        harness.event(egui::Event::PointerButton {
+            pos: *path.last().unwrap(),
+            button: egui::PointerButton::Primary,
+            pressed: false,
+            modifiers: egui::Modifiers::NONE,
+        });
+        harness.step();
+        let written = std::fs::read_to_string(&file).unwrap();
+        let added: Vec<&str> = written.lines().skip(source.lines().count()).collect();
+        assert_eq!(added.len(), 1, "{added:?}");
+        assert!(
+            added[0].starts_with("skin paint bone=hind_l sphere="),
+            "{}",
+            added[0]
+        );
+        assert!(added[0].contains(" strength=0.5"), "{}", added[0]);
+        let lines = crate::parse::parse_program(&written).unwrap();
+        let run = crate::model::run(&lines);
+        assert!(run.steps.iter().all(|(_, s)| s.is_ok()));
+        wait(&mut harness, &|a| a.dirty.is_none() && a.loading.is_none());
+        for _ in 0..4 {
+            harness.step();
+        }
+        harness
+            .render()
+            .unwrap()
+            .save(dir.join("weights-painted.png"))
+            .unwrap();
+        assert!(
+            harness.state().cam.ortho,
+            "painting does not orbit the view"
+        );
     }
 
     #[test]

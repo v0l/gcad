@@ -8,6 +8,7 @@ mod scene;
 mod textures;
 mod timeline;
 mod units;
+mod weights;
 
 pub use app::App;
 #[cfg(not(target_arch = "wasm32"))]
