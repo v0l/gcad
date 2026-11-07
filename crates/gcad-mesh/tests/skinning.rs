@@ -378,3 +378,33 @@ fn smoothed_auto_weights_keep_the_arm_clean() {
     let r = report(&with_method("skin_arm", "smooth"));
     assert_clean("skin_arm", &r, 16);
 }
+
+#[test]
+fn refine_joints_adds_rings_at_the_elbow_and_the_bend_stops_flipping() {
+    let plain = example("skin_arm");
+    let rigged = plain.replace(
+        "\nskin auto\n",
+        "\nrefine joints edge=0.3 reach=1.8\nskin auto\nskin smooth sphere=0,0,12 r=5 passes=300\n",
+    );
+    let before = report(&plain);
+    let after = report(&rigged);
+    let triangles = |source: &str| {
+        let model = gcad_mesh::build(source).expect("builds");
+        model.bodies[0].rest_mesh().triangles.len()
+    };
+    assert_eq!(before.quality.flipped, 28);
+    assert!(after.quality.flipped < 5, "{}", after.quality.flipped);
+    let (a, b) = (triangles(&plain), triangles(&rigged));
+    assert!(b > a && (b as f64) < a as f64 * 1.2, "{a} -> {b}");
+}
+
+#[test]
+fn refine_joints_needs_bones_and_an_unskinned_mesh() {
+    let plain = example("skin_arm");
+    let early = plain.replace("\nbone upper_b", "\nrefine joints edge=0.3\nbone upper_b");
+    let message = gcad_mesh::build(&early).err().expect("fails").to_string();
+    assert!(message.contains("bone"), "{message}");
+    let late = plain.replace("\nclip rom", "\nrefine joints edge=0.3 reach=1.8\nclip rom");
+    let message = gcad_mesh::build(&late).err().expect("fails").to_string();
+    assert!(message.contains("before `skin auto`"), "{message}");
+}

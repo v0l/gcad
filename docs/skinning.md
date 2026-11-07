@@ -46,7 +46,7 @@ The arm (`skin_arm`): no step over 0.35, rigid cores 1.00, and its twisted wrist
 - GLB consumers run linear blend skinning with 4 joints per vertex, so the weights have to look
   right under LBS; that is what `skincheck` measures.
 - Sharp bends (the 120 degree elbow of `skin_arm`) still fold under LBS. `twist=` segments and
-  `skin blend dq=` fix twists; corrective shapes for bends are #300.
+  `skin blend dq=` fix twists; corrective shapes for bends are #300. `refine joints` adds rings at the joints before binding.
 - Weights are stored as the `skin` lines that made them. There is no binary weights file. For a
   compact game export, use the mesh body as a `.gasset` `source`: its skin goes through the palette
   prune and UNORM16 weight quantise (`examples/game-assets/creature.gasset`).

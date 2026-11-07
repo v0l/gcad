@@ -801,9 +801,18 @@ impl Scene {
     }
 
     pub fn op_refine(&mut self, scope: &Scope, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["edge"], &[], false)?;
+        let joints = line.positional.first().map(String::as_str) == Some("joints");
+        let args = if joints {
+            Args::new(line, &["mode", "edge"], &["reach"], false)?
+        } else {
+            Args::new(line, &["edge"], &[], false)?
+        };
         let edge = positive(args.number("edge", scope)?, "edge length")?;
-        let selection = self.selection_for("refine")?;
+        let selection = if joints {
+            self.joint_selection(&args, scope, edge)?
+        } else {
+            self.selection_for("refine")?
+        };
         let before = self.sculpted("refine")?.triangles.len();
         let (mean, _) = self.sculpted("refine")?.edge_lengths(&selection);
         let rounds = ((mean / edge).log2().ceil().max(0.0) as usize + 1).min(8);
@@ -816,6 +825,27 @@ impl Scene {
             );
         }
         self.topology_summary("refine", before)
+    }
+
+    fn joint_selection(&mut self, args: &Args, scope: &Scope, edge: f64) -> Result<Selection> {
+        if self.mesh_body.rig.skin.is_some() {
+            bail!("`refine joints` adds vertices the skin does not cover; run it before `skin auto`");
+        }
+        let reach = match args.optional_number("reach", scope)? {
+            Some(r) => positive(r, "reach")?,
+            None => edge * 4.0,
+        };
+        let rig = &self.mesh_body.rig;
+        let regions: Vec<Region> = rig
+            .bones
+            .iter()
+            .filter_map(|b| b.parent.map(|_| Region::Sphere(b.head, reach)))
+            .collect();
+        if regions.is_empty() {
+            bail!("`refine joints` needs a bone with a parent; add `bone` lines first");
+        }
+        let mesh = self.sculpted("refine")?.clone();
+        Selection::new(&mesh, regions, 0.0, None)
     }
 
     pub fn op_crease(&mut self, scope: &Scope, line: &Line) -> Result<String> {
