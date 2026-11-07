@@ -122,6 +122,166 @@ fn dual_quaternion_blending_keeps_the_twisted_wrist_round() {
 }
 
 #[test]
+fn twist_segments_spread_the_wrist_roll_and_the_glb_plays_the_same_pose() {
+    let source = example("skin_arm").replace(
+        "bone lower_b parent=upper_b tail=0,0,23",
+        "bone lower_b parent=upper_b tail=0,0,23 twist=3",
+    );
+    let model = gcad_mesh::build(&source).expect("builds");
+    let body = &model.bodies[0];
+    let rig = body.rig().unwrap();
+    let names: Vec<&str> = rig.bones.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "upper_b",
+            "lower_b",
+            "lower_b_twist1",
+            "lower_b_twist2",
+            "hand_b"
+        ]
+    );
+    assert_eq!(rig.bones[4].parent, Some(3));
+    let wrist = |source: &str| {
+        let model = gcad_mesh::build(source).expect("builds");
+        let body = &model.bodies[0];
+        let mut r = body.rig().unwrap().clone();
+        let clip = r.clip("rom").unwrap();
+        r.pose = r.sample(clip, 2.0);
+        r.posed(body.rest_mesh(), &r.pose)
+            .positions
+            .iter()
+            .filter(|p| (p[2] - 23.0).abs() < 0.3)
+            .map(|p| (p[0] * p[0] + p[1] * p[1]).sqrt())
+            .fold(f64::INFINITY, f64::min)
+    };
+    let (plain, twisted) = (wrist(&example("skin_arm")), wrist(&source));
+    assert!(twisted > plain * 1.15, "{plain} {twisted}");
+    let clip = body.clip_index("rom");
+    let expected = {
+        let mut r = rig.clone();
+        r.pose = r.sample(clip.unwrap(), 1.7);
+        r.posed(body.rest_mesh(), &r.pose)
+    };
+    let doc = {
+        let glb = gcad_mesh::to_glb_with(
+            &source,
+            &gcad_mesh::Options {
+                y_up: false,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let n = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+        serde_json::from_slice::<serde_json::Value>(&glb[20..20 + n]).unwrap()
+    };
+    let channels = doc["animations"][0]["channels"].as_array().unwrap();
+    let animated: Vec<u64> = channels
+        .iter()
+        .map(|c| c["target"]["node"].as_u64().unwrap())
+        .collect();
+    assert!(animated.len() >= 4, "{animated:?}");
+    let options = gcad_mesh::Options {
+        y_up: false,
+        ..Default::default()
+    };
+    let built = gcad_mesh::build_with(&source, &options).unwrap();
+    let b = &built.bodies[0];
+    let library = b.skinned_positions(&b.bone_matrices(clip, 1.7));
+    let gap = |p: &[[f32; 3]]| {
+        p.iter()
+            .zip(&expected.positions)
+            .flat_map(|(a, e)| (0..3).map(move |k| (a[k] as f64 - e[k]).abs()))
+            .fold(0.0, f64::max)
+    };
+    assert!(gap(&library) < 1.0e-3, "library {}", gap(&library));
+    let played = b.skinned_positions(&played_matrices(b, "rom", 1.7));
+    let worst = gap(&played);
+    assert!(worst < 1.0e-3, "{worst}");
+}
+
+fn played_matrices(body: &gcad_mesh::Body, clip: &str, t: f32) -> Vec<gcad_mesh::Matrix> {
+    let clip = &body.clips[body.clip_index(clip).unwrap()];
+    let joints = &body.joints;
+    let rotation = |joint: usize| -> [f64; 4] {
+        let Some(track) = clip.tracks.iter().find(|tr| tr.joint == joint) else {
+            return [0.0, 0.0, 0.0, 1.0];
+        };
+        let at = track
+            .times
+            .iter()
+            .position(|x| *x > t)
+            .unwrap_or(track.times.len());
+        let q = if at == 0 {
+            track.rotations[0]
+        } else if at == track.times.len() {
+            track.rotations[at - 1]
+        } else {
+            let (a, b) = (track.rotations[at - 1], track.rotations[at]);
+            let f = (t - track.times[at - 1]) / (track.times[at] - track.times[at - 1]);
+            let dot: f32 = a.iter().zip(&b).map(|(x, y)| x * y).sum();
+            let b = if dot < 0.0 { b.map(|v| -v) } else { b };
+            let angle = dot.abs().clamp(-1.0, 1.0).acos();
+            let (wa, wb) = if angle < 1.0e-4 {
+                (1.0 - f, f)
+            } else {
+                (
+                    ((1.0 - f) * angle).sin() / angle.sin(),
+                    (f * angle).sin() / angle.sin(),
+                )
+            };
+            let q: Vec<f32> = (0..4).map(|k| a[k] * wa + b[k] * wb).collect();
+            let n = q.iter().map(|v| v * v).sum::<f32>().sqrt();
+            [q[0] / n, q[1] / n, q[2] / n, q[3] / n]
+        };
+        q.map(|v| v as f64)
+    };
+    let mut world: Vec<([[f64; 3]; 3], [f64; 3])> = Vec::new();
+    for (i, j) in joints.iter().enumerate() {
+        let r = gcad_mesh::mesh::rig::quat_matrix(rotation(i));
+        let head = j.head.map(|v| v as f64);
+        let offset = match j.parent {
+            Some(p) => {
+                let ph = joints[p].head.map(|v| v as f64);
+                [head[0] - ph[0], head[1] - ph[1], head[2] - ph[2]]
+            }
+            None => head,
+        };
+        world.push(match j.parent {
+            Some(p) => {
+                let (pr, pt) = world[p];
+                let rr = std::array::from_fn(|a| {
+                    std::array::from_fn(|b| (0..3).map(|k| pr[a][k] * r[k][b]).sum())
+                });
+                let tt = std::array::from_fn(|a| {
+                    pt[a] + (0..3).map(|k| pr[a][k] * offset[k]).sum::<f64>()
+                });
+                (rr, tt)
+            }
+            None => (r, offset),
+        });
+    }
+    world
+        .iter()
+        .zip(joints)
+        .map(|((r, t), j)| {
+            let head = j.head.map(|v| v as f64);
+            let tt: [f64; 3] =
+                std::array::from_fn(|a| t[a] - (0..3).map(|k| r[a][k] * head[k]).sum::<f64>());
+            let mut m = [0.0f32; 16];
+            for c in 0..3 {
+                for row in 0..3 {
+                    m[c * 4 + row] = r[row][c] as f32;
+                }
+                m[12 + c] = tt[c] as f32;
+            }
+            m[15] = 1.0;
+            m
+        })
+        .collect()
+}
+
+#[test]
 fn skin_auto_refuses_bad_settings() {
     let base = "arm: limb 0,0,0 0,0,10 r=2\nremesh 0.8\nbone a head=0,0,0 tail=0,0,10\n";
     for (line, words) in [

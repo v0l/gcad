@@ -548,27 +548,24 @@ fn body_of(
         clips = rig
             .clips
             .iter()
-            .map(|clip| Clip {
+            .enumerate()
+            .map(|(clip_index, clip)| Clip {
                 name: clip.name.clone(),
                 fps: clip.fps as f32,
                 duration: clip.duration() as f32,
                 tracks: (0..rig.bones.len())
                     .filter_map(|bone| {
-                        let keys = clip.bone_keys(bone);
+                        let keys = rig.rotation_track(clip_index, bone);
                         if keys.is_empty() {
                             return None;
                         }
                         Some(Track {
                             joint: bone,
-                            times: keys.iter().map(|k| k.t as f32).collect(),
+                            times: keys.iter().map(|k| k.0 as f32).collect(),
                             rotations: keys
                                 .iter()
                                 .map(|k| {
-                                    let q = if y_up {
-                                        gltf::quat_y_up(k.rotation)
-                                    } else {
-                                        k.rotation
-                                    };
+                                    let q = if y_up { gltf::quat_y_up(k.1) } else { k.1 };
                                     let n = q.iter().map(|v| v * v).sum::<f64>().sqrt();
                                     let n = if n > 0.0 { n } else { 1.0 };
                                     q.map(|v| (v / n) as f32)

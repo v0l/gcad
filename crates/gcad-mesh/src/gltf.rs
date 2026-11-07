@@ -414,8 +414,9 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
         }
         if let Some(rig) = rig {
             let base = nodes.len();
+            let rest_pose = rig.effective(&rig.pose);
             for (i, bone) in rig.bones.iter().enumerate() {
-                let q = quat_y_up(rig.pose.get(&i).copied().unwrap_or(IDENTITY_QUAT));
+                let q = quat_y_up(rest_pose.get(&i).copied().unwrap_or(IDENTITY_QUAT));
                 let n = (q.iter().map(|v| v * v).sum::<f64>()).sqrt();
                 let mut joint = json!({
                     "name": bone.name,
@@ -461,19 +462,19 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
                 "skeleton": rig.bones.iter().position(|b| b.parent.is_none()).map(|r| base + r),
             }));
             node["skin"] = json!(skins.len() - 1);
-            for clip in &rig.clips {
+            for (clip_index, clip) in rig.clips.iter().enumerate() {
                 let mut samplers = Vec::new();
                 let mut channels = Vec::new();
                 for bone in 0..rig.bones.len() {
-                    let keys = clip.bone_keys(bone);
-                    if keys.is_empty() {
+                    let rotations_of = rig.rotation_track(clip_index, bone);
+                    if rotations_of.is_empty() {
                         continue;
                     }
-                    let times: Vec<f32> = keys.iter().map(|k| k.t as f32).collect();
-                    let rotations: Vec<f32> = keys
+                    let times: Vec<f32> = rotations_of.iter().map(|k| k.0 as f32).collect();
+                    let rotations: Vec<f32> = rotations_of
                         .iter()
                         .flat_map(|k| {
-                            let q = quat_y_up(k.rotation);
+                            let q = quat_y_up(k.1);
                             let n = (q.iter().map(|v| v * v).sum::<f64>()).sqrt();
                             q.map(|v| (v / n) as f32)
                         })

@@ -4,6 +4,7 @@ use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, MoveKey, Quat, Rig}
 use crate::mesh::skin_heat;
 use crate::mesh::skin_paint;
 use crate::mesh::skin_smooth::{self, SmoothOptions};
+use crate::mesh::skin_twist;
 use crate::mesh::{self, P3};
 use crate::parse::{Line, Scope};
 use anyhow::{Result, anyhow, bail};
@@ -72,13 +73,17 @@ impl Scene {
 
     pub fn op_bone(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         self.start_mesh("bone")?;
-        let args = Args::new(line, &["name"], &["parent", "head", "tail"], false)?;
+        let args = Args::new(line, &["name"], &["parent", "head", "tail", "twist"], false)?;
         let name = args.text("name")?.to_string();
         let rig = &self.mesh_body.rig;
         if rig.bone_index(&name).is_some() {
             bail!("there is already a bone called `{name}`");
         }
-        let parent = args.values.get("parent").map(|p| rig.bone(p)).transpose()?;
+        let parent = args
+            .values
+            .get("parent")
+            .map(|p| rig.bone(p).map(|b| rig.chain_end(b)))
+            .transpose()?;
         let tail = point3(args.text("tail")?, scope)?;
         let head = match args.values.get("head") {
             Some(text) => point3(text, scope)?,
@@ -90,16 +95,41 @@ impl Scene {
         if mesh::length(mesh::sub(tail, head)) < 1.0e-9 {
             bail!("bone `{name}` has its head and tail at the same point");
         }
+        let twist = match args.optional_number("twist", scope)? {
+            None => 1,
+            Some(n) if n >= 1.0 && n <= 8.0 && n.fract() == 0.0 => n as usize,
+            Some(n) => bail!("twist is a whole number of segments from 1 to 8, got {n}"),
+        };
         let skinned = self.mesh_body.rig.skin.is_some();
-        self.mesh_body.rig.bones.push(Bone {
-            name,
-            parent,
-            head,
-            tail,
-        });
+        let rig = &mut self.mesh_body.rig;
+        let mut segments = Vec::new();
+        for k in 0..twist {
+            let at = |f: f64| mesh::add(head, mesh::scale(mesh::sub(tail, head), f));
+            let index = rig.bones.len();
+            rig.bones.push(Bone {
+                name: if k == 0 {
+                    name.clone()
+                } else {
+                    skin_twist::segment_name(&name, k)
+                },
+                parent: if k == 0 { parent } else { Some(index - 1) },
+                head: at(k as f64 / twist as f64),
+                tail: at((k + 1) as f64 / twist as f64),
+            });
+            segments.push(index);
+        }
+        if twist > 1 {
+            rig.twists
+                .push(skin_twist::Twist::new(segments, head, tail));
+        }
         Ok(format!(
-            "{} bone(s){}",
+            "{} bone(s){}{}",
             self.mesh_body.rig.bones.len(),
+            if twist > 1 {
+                format!("; `{name}` is {twist} segments that share the roll of the bone after it")
+            } else {
+                String::new()
+            },
             if skinned {
                 "; the new bone has no skin weights until `skin` binds something to it"
             } else {
@@ -153,7 +183,21 @@ impl Scene {
             });
         }
         let count = added.len();
+        let twists: Vec<skin_twist::Twist> = rig
+            .twists
+            .iter()
+            .filter(|t| t.segments.iter().all(|s| index_of.contains_key(s)))
+            .map(|t| {
+                let mut direction = t.axis;
+                direction[axis] = -direction[axis];
+                skin_twist::Twist {
+                    segments: t.segments.iter().map(|s| index_of[s]).collect(),
+                    axis: direction,
+                }
+            })
+            .collect();
         self.mesh_body.rig.bones.extend(added);
+        self.mesh_body.rig.twists.extend(twists);
         Ok(format!(
             "{count} bone(s) mirrored; {} bone(s) in the skeleton",
             self.mesh_body.rig.bones.len()

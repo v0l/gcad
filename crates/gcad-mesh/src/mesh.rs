@@ -14,6 +14,7 @@ pub mod skin_dq;
 pub mod skin_heat;
 pub mod skin_paint;
 pub mod skin_smooth;
+pub mod skin_twist;
 pub mod stroke;
 pub mod uv;
 

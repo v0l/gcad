@@ -71,6 +71,7 @@ pub struct Rig {
     pub moved: Moves,
     pub clips: Vec<Clip>,
     pub dq: f64,
+    pub twists: Vec<super::skin_twist::Twist>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -343,6 +344,13 @@ impl Rig {
     }
 
     pub fn world(&self, pose: &Pose) -> Vec<Xf> {
+        let effective;
+        let pose = if self.twists.is_empty() {
+            pose
+        } else {
+            effective = self.effective(pose);
+            &effective
+        };
         let mut out: Vec<Xf> = Vec::with_capacity(self.bones.len());
         for (i, b) in self.bones.iter().enumerate() {
             let local = Xf {
