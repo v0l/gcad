@@ -8,6 +8,7 @@ doc gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_parse: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_plot: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_render: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+doc gcad_sim: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_sims_proto: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_web: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -61,6 +62,7 @@ unittests gcad: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_parse: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_plot: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_render: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_sim: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_sims_proto: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_web: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

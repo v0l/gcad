@@ -77,7 +77,7 @@ fn job_of(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Job> {
         .collect();
     materials.sort_by(|a, b| a.0.cmp(&b.0));
     Ok(Job {
-        gcad: env!("GCAD_BUILD_VERSION").to_string(),
+        gcad: gcad_version::BUILD.to_string(),
         spec,
         bodies: model
             .named_solids()
@@ -98,11 +98,11 @@ pub fn pack(spec: &Spec, stamp: Vec<(String, String)>) -> Result<Vec<u8>> {
 }
 
 fn spec_of(job: Job) -> Result<Spec> {
-    if !gcad_sims_proto::same_line(&job.gcad, env!("GCAD_BUILD_VERSION")) {
+    if !gcad_sims_proto::same_line(&job.gcad, gcad_version::BUILD) {
         bail!(
             "the job was packed by gcad {} and this is gcad {}; they must share a major and minor version",
             job.gcad,
-            env!("GCAD_BUILD_VERSION")
+            gcad_version::BUILD
         );
     }
     let mut spec = job.spec;
@@ -132,7 +132,7 @@ pub fn unpack(bytes: &[u8]) -> Result<Unpacked> {
     let job: Job = bitcode::deserialize(&raw).map_err(|e| {
         anyhow!(
             "gcad {} cannot read the job ({e}); it needs the version that packed it",
-            env!("GCAD_BUILD_VERSION")
+            gcad_version::BUILD
         )
     })?;
     let stamp = job.stamp.clone();

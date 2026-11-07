@@ -33,7 +33,7 @@ fn mesh_key(solid: &Solid, size: f64) -> Option<String> {
         .map(|meta| (meta.len(), meta.modified().ok()));
     Some(format!(
         "{}|{exe:?}|{size:?}|{shape}",
-        env!("GCAD_BUILD_VERSION")
+        gcad_version::BUILD
     ))
 }
 

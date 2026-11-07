@@ -1,0 +1,41 @@
+[package]
+name = "gcad-sim"
+description = "gcad simulations: the .gsim language, FEM, flow, magnetics, acoustics, conduction, frames, torque and packed remote jobs"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-brep.workspace = true
+gcad-drafting.workspace = true
+gcad-geom.workspace = true
+gcad-host.workspace = true
+gcad-parse.workspace = true
+gcad-plot.workspace = true
+gcad-render.workspace = true
+gcad-sims-proto.workspace = true
+gcad-version.workspace = true
+anyhow.workspace = true
+bitcode.workspace = true
+faer.workspace = true
+flate2.workspace = true
+image.workspace = true
+monstertruck.workspace = true
+rayon.workspace = true
+serde.workspace = true
+sha2.workspace = true
+sims-acoustics.workspace = true
+sims-fem.workspace = true
+sims-field.workspace = true
+sims-flow.workspace = true
+sims-frame.workspace = true
+sims-magnetic.workspace = true
+sims-progress.workspace = true
+sims-tet.workspace = true
+sims-thermal.workspace = true
+spade.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+faer = { workspace = true, features = ["rayon"] }

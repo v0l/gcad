@@ -1,6 +1,7 @@
 pub mod acoustics;
 pub mod conduction;
 pub mod fem;
+pub mod flow;
 pub mod frame;
 mod heat;
 pub mod job;
@@ -21,6 +22,16 @@ pub use gcad_plot::result::{
     Curve, Expect, Field, Movie, Outcome, Reading, Reel, Series, Slice, Stream, short,
 };
 pub use stamp::{inputs, stale, stamp};
+
+use crate as sim;
+use gcad_brep as model;
+use gcad_drafting::drawing;
+use gcad_geom::{geometry, packed, select};
+use gcad_host as host;
+use gcad_host::progress;
+use gcad_parse as parse;
+use gcad_plot as plot;
+use gcad_render::render;
 
 use crate::model::Model;
 use anyhow::{Result, bail};
