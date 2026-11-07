@@ -256,7 +256,10 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | list the skeleton | supported | `gcad inspect f.gcad out.png` | `rig::inspect_lists_the_skeleton`, `rig::inspect_report_lists_the_skeleton` |
 | automatic skin weights | supported | `skin auto` | `rig::skin_auto_weights_sum_to_one_with_four_influences_at_most`, `rig::skin_auto_binds_each_end_to_its_own_bone`, `rig::skin_auto_does_not_bind_the_body_to_an_arm_beside_it`, `rig::skin_auto_does_not_bind_a_leg_to_a_hand_hanging_beside_it` |
 | bind a part to a bone | supported | `skin part=upper bone=b_up` | `rig::skin_part_moves_only_with_its_bone`, `rig::skin_part_unknown_lists_the_parts` |
-| paint skin weights | supported | `skin paint bone=b sphere=0,0,10 r=4 falloff=3` | `rig::skin_paint_moves_weight_to_the_bone` |
+| paint skin weights | supported | `skin paint bone=b sphere=0,0,10 r=4 falloff=3`, `skin paint bone=b sphere=0,0,6 0,0,10 r=3 strength=-0.5 mirror=x` | `rig::skin_paint_moves_weight_to_the_bone`, `rig::skin_paint_takes_a_stroke_and_negative_strength_gives_weight_back` |
+| smooth skin weights | supported | `skin smooth sphere=0,0,20 r=5 passes=40` | `rig::skin_smooth_softens_the_seam_between_two_parts` |
+| mirror and normalise skin weights | supported | `skin mirror`, `skin normalize` | `rig::skin_mirror_copies_one_side_with_bones_swapped` |
+| check skin quality | supported | `gcad skincheck creature.gcad` | `rig::skincheck_reports_the_creature` |
 | pose a bone | supported | `pose bone=knee rotate=30 axis=x`, `pose reset` | `rig::an_unposed_rig_equals_the_rest_mesh`, `rig::a_bent_limb_stays_closed_and_keeps_its_volume`, `rig::pose_rotates_about_the_bone_head`, `rig::pose_names_the_bones_when_it_misses`, `rig::pose_without_skin_leaves_the_mesh_alone` |
 | animation clips | supported | `clip walk fps=24`, `key t=0.5 bone=hind_l rotate=25 axis=x`, `pose clip=walk t=0.25` | `rig::clip_keys_are_sampled_between_keyframes`, `rig::key_without_a_clip_is_refused` |
 | clip translation keys | supported | `key t=0.3 bone=hips move=0,0,4` | `rig::move_keys_shift_a_bone_and_reach_the_glb` |

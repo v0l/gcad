@@ -201,6 +201,96 @@ fn skin_paint_moves_weight_to_the_bone() {
 }
 
 #[test]
+fn skin_paint_takes_a_stroke_and_negative_strength_gives_weight_back() {
+    let base = format!("{ARM}skin part=upper bone=b_up\nskin part=lower bone=b_low\n");
+    let model = build(&format!(
+        "{base}skin paint bone=b_low sphere=0,0,6 0,0,10 0,0,14 r=3.5 strength=1"
+    ));
+    let rest = rest_of(&model);
+    let skin = rig_of(&model).skin.as_ref().unwrap();
+    let at = |z: f64| {
+        (0..rest.positions.len())
+            .find(|&i| (rest.positions[i][2] - z).abs() < 0.3)
+            .unwrap()
+    };
+    assert_eq!(skin[at(6.0)], vec![(1, 1.0)]);
+    assert_eq!(skin[at(2.0)], vec![(0, 1.0)]);
+    let model = build(&format!(
+        "{base}skin paint bone=b_low sphere=0,0,30 r=3.5 strength=-1"
+    ));
+    let skin = rig_of(&model).skin.as_ref().unwrap();
+    let rest = rest_of(&model);
+    let v = (0..rest.positions.len())
+        .find(|&i| (rest.positions[i][2] - 30.0).abs() < 0.3)
+        .unwrap();
+    assert_eq!(skin[v], vec![(0, 1.0)]);
+}
+
+#[test]
+fn skin_smooth_softens_the_seam_between_two_parts() {
+    let base = format!("{ARM}skin part=upper bone=b_up\nskin part=lower bone=b_low\n");
+    let jump = |source: &str| {
+        let model = build(source);
+        gcad::mesh::skin_check::check(&rest_of(&model), rig_of(&model))
+            .unwrap()
+            .max_jump
+    };
+    assert!(jump(&base) > 0.99);
+    assert!(jump(&format!("{base}skin smooth sphere=0,0,20 r=5 passes=40")) < 0.35);
+}
+
+#[test]
+fn skin_mirror_copies_one_side_with_bones_swapped() {
+    let source = "leg_l: limb 3,0,0 3,0,10 r=1.5\nmirror x of=leg_l\nremesh 0.4\nbone root head=0,0,12 tail=0,0,10\nbone leg_l parent=root head=3,0,10 tail=3,0,0\nmirror x of=leg_l\nskin auto\nskin paint bone=root sphere=3,0,5 r=2\nskin mirror\nskin normalize";
+    let model = build(source);
+    let rest = rest_of(&model);
+    let rig = rig_of(&model);
+    let skin = rig.skin.as_ref().unwrap();
+    let nearest = |p: [f64; 3]| {
+        (0..rest.positions.len())
+            .min_by(|a, b| {
+                let d = |i: usize| gcad::mesh::length(gcad::mesh::sub(rest.positions[i], p));
+                d(*a).total_cmp(&d(*b))
+            })
+            .unwrap()
+    };
+    let left = nearest([4.5, 0.0, 5.0]);
+    let right = nearest([-4.5, 0.0, 5.0]);
+    let root = rig.bone_index("root").unwrap();
+    assert_eq!(skin[left], vec![(root, 1.0)]);
+    assert_eq!(skin[right], vec![(root, 1.0)]);
+    for w in skin {
+        assert!((w.iter().map(|(_, v)| v).sum::<f64>() - 1.0).abs() < 1.0e-9);
+    }
+}
+
+#[test]
+fn skincheck_reports_the_creature() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["skincheck", "examples/mesh/rigged_creature.gcad"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("runs");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let text = String::from_utf8(out.stdout).unwrap();
+    assert!(text.starts_with("body main\n"), "{text}");
+    assert!(text.contains(", 0 edge(s) over 0.35"), "{text}");
+    assert!(text.contains("parent or child: 0\n"), "{text}");
+    assert!(text.contains("posed over 10 clip pose(s)"), "{text}");
+    let failed = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["skincheck", "examples/mesh/creature.gcad"])
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("runs");
+    assert!(!failed.status.success());
+    assert!(String::from_utf8_lossy(&failed.stderr).contains("no skinned body"));
+}
+
+#[test]
 fn an_unposed_rig_equals_the_rest_mesh() {
     let model = build(&format!("{ARM}skin auto"));
     assert!(*rest_of(&model) == *posed_of(&model));
