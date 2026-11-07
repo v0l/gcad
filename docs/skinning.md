@@ -6,7 +6,7 @@ How gcad binds a mesh to its bones, what makes a skin good, and the numbers that
 
 ## Workflow
 
-1. Sculpt and `remesh` first; `skin` binds the vertices that exist.
+1. Sculpt and `remesh` first, then `relax 6` to even the triangles; `skin` binds the vertices that exist.
 2. `bone` lines, `mirror x of=` for the other side, then `skin auto` (bone heat).
 3. `gcad skincheck f.gcad`. Aim for no edge over 0.35, 0 unrelated, rigid cores near 1 and no
    flipped triangles over the clips. Write a `clip` with the extreme poses the game will play
@@ -43,6 +43,7 @@ How gcad binds a mesh to its bones, what makes a skin good, and the numbers that
 | influences | how many vertices have 0, 1, 2, 3 and 4 bones | at most 4, none with 0 |
 | unrelated | vertices that take at least 5% from a bone that is not their strongest bone, its parent or its child | 0 |
 | rigid core | for the middle 50% of each bone, at least 2 limb thicknesses from a joint and not closer than twice to an unrelated bone, the share of vertices nearest that bone that are 99% or more on it | near 1 |
+| slivers in joint zones | triangles touching blended vertices whose longest edge squared is over 6 times twice their area | few; `relax 6` after `remesh` |
 | posed quality | every clip pose at its keys and halfway between: the smallest and largest triangle area ratio against rest, the worst growth of the aspect ratio, and how many triangles flip against their leading bone's turn, shrink below a quarter or grow past four times | no flips |
 
 `tools/skin_shots.sh OUT` renders the fixtures at their worst keys with `gcad inspect` (set `GCAD` to the
@@ -80,6 +81,20 @@ linearly, so the weights must already look right without it.
 (`tests/skinning.rs` holds both at 15% over linear or more.) With `twist=3` the arm's elbow flips rise
 from 28 to 56: the first segment is a third as long, so its joint zone is shorter. Corrective shapes
 for sharp bends are #300.
+
+## Stage 5: slivers in joint zones
+
+`gcad skincheck` counts triangles in blended zones (any corner with more than one bone) whose longest
+edge squared is over 6 times twice their area. Thin triangles where weights blend are the ones that
+fold first. `relax 6` straight after `remesh` evens them out:
+
+| fixture | slivers, `remesh` only | after `relax 6` | flips after |
+|---|---|---|---|
+| rigged_creature | 40 of 10286 | 0 of 10227 | 0 (was 4) |
+| skin_stress | 37 of 9999 | 1 of 10011 | 3 (was 6) |
+| skin_arm | 8 of 2512 | 0 of 2499 | 30 (was 28) |
+
+Both quadruped fixtures now have the `relax 6` line. A remesh that adds edge loops at joints is #302.
 
 ## Before (straight-line distance, `power=4`)
 

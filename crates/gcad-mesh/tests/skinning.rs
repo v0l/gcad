@@ -26,8 +26,9 @@ fn distance_method_reproduces_the_old_auto_weights_byte_for_byte() {
         ("rigged_creature", 0x9cd7b7c99b5c77d8, 477712),
         ("skin_arm", 0x9be69288ebd5feb5, 259912),
     ] {
-        let source =
-            example(name).replace("\nskin auto\n", "\nskin auto method=distance power=4\n");
+        let source = example(name)
+            .replace("\nrelax 6\n", "\n")
+            .replace("\nskin auto\n", "\nskin auto method=distance power=4\n");
         let glb = gcad_mesh::to_glb(&source).expect("builds");
         assert_eq!((glb.len(), fnv(&glb)), (len, hash), "{name}");
     }
@@ -318,22 +319,24 @@ fn with_method(name: &str, method: &str) -> String {
 #[test]
 fn heat_weights_keep_the_creature_clean() {
     let r = report(&example("rigged_creature"));
-    assert_clean("rigged_creature", &r, 4);
+    assert_clean("rigged_creature", &r, 0);
     assert!(r.min_core >= 0.99, "{}", r.min_core);
     assert!(r.contested < 852 / 2, "{}", r.contested);
     assert!(
-        r.quality.stretched <= 6 && r.quality.squashed == 0,
+        r.quality.stretched == 0 && r.quality.squashed == 0,
         "{:?}",
         r.quality
     );
+    assert!(r.joint_slivers.len() <= 2, "{}", r.joint_slivers.len());
 }
 
 #[test]
 fn heat_weights_keep_the_stress_quadruped_clean() {
     let r = report(&example("skin_stress"));
-    assert_clean("skin_stress", &r, 6);
+    assert_clean("skin_stress", &r, 4);
     assert!(r.min_core >= 0.99, "{}", r.min_core);
     assert!(r.quality.squashed <= 8, "{:?}", r.quality);
+    assert!(r.joint_slivers.len() <= 4, "{}", r.joint_slivers.len());
 }
 
 #[test]

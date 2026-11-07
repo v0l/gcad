@@ -11,6 +11,7 @@ mirror x of=fore_l
 hind_l: limb 3,8,9 3,8,5 3,8.5,0.8 r=2,1.3,1 blend=1
 mirror x of=hind_l
 remesh 0.5
+relax 6
 color #b98c5f
 bone hips_b head=0,8,12 tail=0,0,12
 bone spine parent=hips_b tail=0,-8,13

@@ -7,7 +7,7 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
-- `gcad skincheck f.gcad` scores a skin: weight jumps across edges, contested and unrelated weights, rigid cores, and triangles that flip, squash or stretch over every clip key. See `docs/skinning.md`.
+- `gcad skincheck f.gcad` scores a skin: weight jumps across edges, contested and unrelated weights, rigid cores, slivers in joint zones, and triangles that flip, squash or stretch over every clip key. See `docs/skinning.md`.
 - `skin smooth bone= sphere= r= passes=` smooths the weights already bound; `skin paint` takes a stroke of points, negative strength and `mirror=x`; `skin mirror` and `skin normalize`.
 - The viewer's weights card colours the mesh by one bone's weight, by influence count or by skincheck problems, and its weight brush (add, remove, smooth, mirror) writes `skin paint` and `skin smooth` lines to the file.
 - `bone ... twist=N` splits a limb bone into segments that share the roll of the next bone, baked into GLB clips; `skin blend dq=` poses with dual quaternion skinning in gcad's own views.

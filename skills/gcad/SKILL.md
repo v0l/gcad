@@ -545,7 +545,8 @@ Bones, skin weights, poses and clips are one line each, after `remesh` and all s
 for the other side), `skin auto` then `skin part=head bone=head_b` for rigid parts, `clip name fps=`
 with `key t= bone= rotate= axis=` lines, `pose clip=name t=` to look at a frame and `gcad render`
 it, `gcad export f.gcad f.glb` for the game asset. Example: `examples/mesh/rigged_creature.gcad`.
-`skin auto` uses bone heat weights (like Blender's automatic weights) and keeps bone middles rigid; after binding, run
+`skin auto` uses bone heat weights (like Blender's automatic weights) and keeps bone middles rigid. Put
+`relax 6` right after `remesh` so the joints have even triangles; after binding, run
 `gcad skincheck f.gcad`: aim for no edge over 0.35, 0 unrelated, rigid core near 1 and no flipped
 triangles in any clip key. Fix a bad joint with `skin smooth sphere=x,y,z r= passes=20`, or
 `skin paint` then `skin smooth`; `skin paint` takes several points (a stroke), `strength=-0.5` to

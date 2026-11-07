@@ -11,6 +11,7 @@ pub const RIGID: f64 = 0.99;
 pub const UNRELATED_MIN: f64 = 0.05;
 pub const SQUASH: f64 = 0.25;
 pub const STRETCH: f64 = 4.0;
+pub const SLIVER: f64 = 6.0;
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct CoreFraction {
@@ -45,6 +46,8 @@ pub struct SkinReport {
     pub cores: Vec<CoreFraction>,
     pub min_core: f64,
     pub quality: PoseQuality,
+    pub joint_triangles: usize,
+    pub joint_slivers: Vec<usize>,
     pub steep: Vec<usize>,
     pub loose: Vec<usize>,
 }
@@ -299,6 +302,19 @@ pub fn check(mesh: &Mesh, rig: &Rig) -> Option<SkinReport> {
         .collect();
     report.min_core = report.cores.iter().map(|c| c.rigid).fold(1.0, f64::min);
     report.quality = quality(mesh, rig);
+    report.joint_triangles = 0;
+    for &t in &mesh.triangles {
+        let blended = t
+            .iter()
+            .any(|&i| skin[i as usize].iter().filter(|(_, w)| *w > 1.0e-4).count() > 1);
+        if !blended {
+            continue;
+        }
+        report.joint_triangles += 1;
+        if shape(mesh, t).aspect > SLIVER {
+            report.joint_slivers.push(t[0] as usize);
+        }
+    }
     Some(report)
 }
 
@@ -342,6 +358,12 @@ impl fmt::Display for SkinReport {
                 .map(|c| format!("{} {:.2}", c.bone, c.rigid))
                 .collect::<Vec<_>>()
                 .join(", ")
+        )?;
+        writeln!(
+            f,
+            "slivers in joint zones (longest edge squared over twice the area above {SLIVER}): {} of {} blended triangles",
+            self.joint_slivers.len(),
+            self.joint_triangles
         )?;
         writeln!(
             f,
@@ -472,6 +494,30 @@ mod tests {
         rig.skin.as_mut().unwrap()[0] = vec![(1, 0.6), (2, 0.4)];
         let r = check(&mesh, &rig).unwrap();
         assert_eq!(r.unrelated, 1);
+    }
+
+    #[test]
+    fn a_thin_triangle_in_a_blend_zone_is_a_sliver() {
+        let mut mesh = strip();
+        mesh.positions[10][2] = 4.02;
+        mesh.positions[11][2] = 4.02;
+        let skin = (0..mesh.positions.len())
+            .map(|i| {
+                let z = (i / 2) as f64;
+                let w = ((z - 3.0) / 4.0).clamp(0.0, 1.0);
+                let mut v = vec![(0, 1.0 - w), (1, w)];
+                v.retain(|(_, x)| *x > 0.0);
+                v
+            })
+            .collect();
+        let r = check(&mesh, &arm(skin)).unwrap();
+        assert_eq!(r.joint_triangles, 8);
+        assert!(!r.joint_slivers.is_empty());
+        let clean = strip();
+        let skin = (0..clean.positions.len())
+            .map(|i| vec![(usize::from(i / 2 > 5), 1.0)])
+            .collect();
+        assert!(check(&clean, &arm(skin)).unwrap().joint_slivers.is_empty());
     }
 
     #[test]
