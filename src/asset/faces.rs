@@ -472,6 +472,7 @@ mod tests {
             max_uv_error: 0.,
             max_angle_degrees: 30.,
             max_trials: 1000,
+            edge_length_order: false,
         };
         let poses = vec![
             mesh.positions

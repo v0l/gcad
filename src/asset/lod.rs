@@ -11,6 +11,7 @@ pub struct Options {
     pub max_uv_error: f64,
     pub max_angle_degrees: f64,
     pub max_trials: usize,
+    pub edge_length_order: bool,
 }
 
 #[derive(Debug, serde::Serialize)]
@@ -559,14 +560,15 @@ fn simplify_with_basis(
                     && !locked.contains(&(*b as usize))
             })
             .map(|(&(a, b), _)| {
-                let q = quadric::plus(&quadrics[a as usize], &quadrics[b as usize]);
-                (
+                let cost = if options.edge_length_order {
+                    length(sub(mesh.positions[a as usize], mesh.positions[b as usize]))
+                } else {
+                    let q = quadric::plus(&quadrics[a as usize], &quadrics[b as usize]);
                     quadric::error(&q, mesh.positions[a as usize])
                         .max(quadric::error(&q, mesh.positions[b as usize]))
-                        .max(0.0),
-                    a,
-                    b,
-                )
+                        .max(0.0)
+                };
+                (cost, a, b)
             })
             .collect();
         candidates.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)).then(a.2.cmp(&b.2)));
@@ -868,6 +870,7 @@ mod tests {
             max_uv_error: 0.17,
             max_angle_degrees: 20.,
             max_trials: 1000,
+            edge_length_order: false,
         }
     }
 

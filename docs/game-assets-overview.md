@@ -45,7 +45,7 @@ egui_bench master (0.9.6, per-vertex colours) merged with Wixely's `gcad-rendere
 | mocap to clips | none (clips are keyed by hand, or baked from assembly joints) | `clip` and `key` lines | `hero/retarget.py`, `clips.json` | absorbed as `tools/bvh-retarget` with a JSON config; the hero config reproduces its `motion.gcad` byte for byte |
 | turntable and pose views | viewer turntable and sprite sheets (lit, albedo, normals) for `.gasset` | `gcad render --turns N --clip C --times ...` | `render_views.py` (Blender) | absorbed for review sheets. Game sprite sheets: use the fork's sprite export |
 | skin weights and rig | `src/asset/skin.rs`: weight files bound to a stamped mesh, palettes, quantise, prune; viewer weight painting by face | `gcad-mesh` `bone`, `skin auto\|part\|paint`, `pose` | rigid part binding in `hero.gcad` | keep both, different data: fork weights index a tessellated CAD mesh by stamp, ours live on the mesh body. Mesh characters use ours (#267) |
-| LOD and reduction | `asset-lod` (error-bounded, UV and shading checks, normal bake), `asset-reduce` (clip keys), viewer LOD comparison | `finish decimate=`/`max_error=`, `export --tris`, `Mesh::cluster` viewer edit LOD | Blender decimate in `prop_build.py` | keep both: ours for sculpted mesh bodies, theirs for tessellated CAD with UVs. Shared decimator later (#268) |
+| LOD and reduction | `asset-lod` (error-bounded, UV and shading checks, normal bake), `asset-reduce` (clip keys), viewer LOD comparison | `finish decimate=`/`max_error=`, `export --tris`, `Mesh::cluster` viewer edit LOD | Blender decimate in `prop_build.py` | keep both: ours for sculpted mesh bodies, theirs for tessellated CAD with UVs. `asset-lod` and `finish` share one quadric (`gcad_mesh::mesh::quadric`); see "Collapse ordering" below |
 | UVs and textures | box and xatlas unwrap, UV edit by face, atlas packing with mips, paint guide and apply, texel density | procedural surface patterns in the viewer (`textures.rs`), now from `model::texture::pattern` | Hunyuan3D textures (`props.py`) | the pattern code is shared (the fork moved it to `model/texture.rs`). Painted UV textures exist only for `.gasset` |
 | viewer animation | `.gasset` clip timeline, rig overlay, weight view | animation card for mesh clips (`src/view/anim.rs`) | none | keep both; each drives its own document type (#269) |
 | collision shapes | `collision NODE shape=...` in GLB extras | none | none | fork only |
@@ -63,3 +63,31 @@ A prop from CAD solids, one colour per body: a `.gcad` part, `gcad export --heig
 
 A textured asset from CAD parts or assemblies, with UV painting, atlases, collision, LODs, sprite
 sheets or FBX: a `.gasset` in a `game-assets` build.
+
+## Collapse ordering
+
+`asset-lod` ranks edge collapses by the shared quadric error instead of edge length. Every gate
+(position, UV, normal, posed, topology) is unchanged, so ordering only decides which collapses are
+tried first. `--edge-length-order` restores the old ranking. Measured on the fork's fixtures with
+the fork's own report (worst value over all sampled poses, both directions):
+
+| Fixture, target | Order | Triangles | Target met | Correspondence mm | Surface max mm | Surface p95 mm | Silhouette diff | Shading angle |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `plate-lod-bake`, 3000 | edge length | 3000 | yes | 1.000 | 0.1862 | 0.0431 | 0.00139 | 26.77 |
+| `plate-lod-bake`, 3000 | quadric | 3000 | yes | 1.000 | 0.0868 | 0.0230 | 0.00035 | 24.20 |
+| `plate-scene-refined`, 14000 (fixture script, 5000 trials) | edge length | 14000 | yes | 0.441 | 0.0030 | 0.0000 | 0.00000 | 2.93 |
+| `plate-scene-refined`, 14000 (5000 trials) | quadric | 14660 | no, trial limit | 0.928 | 0.0047 | 0.0000 | 0.00028 | 2.97 |
+| `plate-scene-refined`, 14000 (20000 trials, fixture limits) | quadric | 14000 | yes | 0.928 | 0.0047 | 0.0001 | 0.00028 | 2.97 |
+| `plate-skinned`, 600 | edge length | 1054 | no | 0.987 | 0.2185 | 0.0608 | 0.00170 | 25.12 |
+| `plate-skinned`, 600 | quadric | 1056 | no | 0.975 | 0.2185 | 0.0422 | 0.00119 | 25.12 |
+
+Quadric order halves the surface error and silhouette difference on the bake plate, is neutral on
+the skinned plate (UV limits block both at about 1055 triangles) and needs about 2.1x the trials
+on the 17.5k-triangle refined plate to reach 14000, though that costs less wall time (55 s
+against 76 s) because most trials die before the expensive pose checks. Surface error stays far
+inside the fixture limits (0.1 mm max, 0.05 mm p95, 0.01 silhouette), so quality is not worse and
+quadric order is the default. Raise `--max-trials` for large meshes.
+
+`Mesh::finish` already uses the same quadric code, so there is no second decimator. Wrapping
+`finish` in the fork's acceptance checks is not done: the checks need the skinned pose samples
+that `finish` does not have.

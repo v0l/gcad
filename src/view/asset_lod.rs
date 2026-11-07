@@ -51,6 +51,7 @@ fn generate(
             max_uv_error: settings.uv_error,
             max_angle_degrees: settings.angle,
             max_trials: settings.trials,
+            edge_length_order: false,
         },
     )?;
     Ok((Asset::preview_scene(scene, skins)?, report))

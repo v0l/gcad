@@ -310,6 +310,9 @@ enum Command {
         samples: usize,
         #[arg(long, default_value_t = 1000)]
         max_trials: usize,
+        /// Order collapses by edge length instead of quadric error
+        #[arg(long)]
+        edge_length_order: bool,
         #[arg(long, value_delimiter = ',')]
         lock: Vec<usize>,
         /// Bake original rest normals onto this LOD at SIZE x SIZE resolution
@@ -1174,6 +1177,7 @@ fn main() -> Result<()> {
             max_angle,
             samples,
             max_trials,
+            edge_length_order,
             lock,
             bake_normals,
             bake_distance,
@@ -1214,6 +1218,7 @@ fn main() -> Result<()> {
                     max_uv_error,
                     max_angle_degrees: max_angle,
                     max_trials,
+                    edge_length_order,
                 },
             )?;
             report.accept(limits)?;
