@@ -4,6 +4,7 @@ fn main() -> ExitCode {
     let mut input = None;
     let mut output = None;
     let mut options = gcad_mesh::Options::default();
+    let mut fit = gcad_mesh::gltf::Fit::default();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -20,6 +21,15 @@ fn main() -> ExitCode {
                 Some(v) if v > 0.0 => options.max_error = Some(v),
                 _ => return usage("--max-error takes a distance above 0 in model units"),
             },
+            "--height" => match args.next().and_then(|v| v.parse::<f64>().ok()) {
+                Some(v) if v > 0.0 => fit.height = Some(v),
+                _ => return usage("--height takes a height above 0"),
+            },
+            "--scale" => match args.next().and_then(|v| v.parse::<f64>().ok()) {
+                Some(v) if v > 0.0 => fit.scale = Some(v),
+                _ => return usage("--scale takes a factor above 0"),
+            },
+            "--centre" => fit.centre = true,
             "-h" | "--help" => return usage(""),
             _ if input.is_none() => input = Some(arg),
             _ if output.is_none() => output = Some(arg),
@@ -38,7 +48,11 @@ fn main() -> ExitCode {
     };
     let glb = gcad_mesh::build_with(&source, &options)
         .map_err(|e| e.to_string())
-        .and_then(|model| model.to_glb().map_err(|e| format!("{e:#}")));
+        .and_then(|model| model.to_glb().map_err(|e| format!("{e:#}")))
+        .and_then(|glb| match fit.is_none() {
+            true => Ok(glb),
+            false => gcad_mesh::gltf::fit(&glb, &fit).map_err(|e| format!("{e:#}")),
+        });
     match glb {
         Ok(bytes) => match std::fs::write(&output, bytes) {
             Ok(()) => ExitCode::SUCCESS,
@@ -58,7 +72,9 @@ fn usage(problem: &str) -> ExitCode {
     if !problem.is_empty() {
         eprintln!("{problem}");
     }
-    eprintln!("usage: gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] in.gcad out.glb");
+    eprintln!(
+        "usage: gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] [--height H | --scale K] [--centre] in.gcad out.glb"
+    );
     if problem.is_empty() {
         ExitCode::SUCCESS
     } else {

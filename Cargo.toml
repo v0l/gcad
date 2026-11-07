@@ -52,8 +52,30 @@ lopdf = { version = "0.45", default-features = false }
 
 [features]
 gpu-tests = []
+game-assets = ["dep:xatlas-rs-v2"]
+
+[[example]]
+name = "game_asset_glb"
+required-features = ["game-assets"]
+
+[[example]]
+name = "game_asset_normals_reference"
+required-features = ["game-assets"]
+
+[[example]]
+name = "game_asset_mip_gpu"
+required-features = ["game-assets"]
+
+[[example]]
+name = "game_asset_renderer_fixture"
+required-features = ["game-assets"]
+
+[[example]]
+name = "game_asset_preview_bench"
+required-features = ["game-assets"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+xatlas-rs-v2 = { version = "=0.1.4", optional = true }
 eframe = { version = "0.37", default-features = false, features = ["wayland", "clipboard", "links", "x11"] }
 faer = { version = "0.24", features = ["rayon"] }
 notify = "8"
@@ -65,7 +87,11 @@ web-sys = { version = "0.3", features = ["Window", "Storage"] }
 web-time = "1"
 getrandom = { version = "0.4", features = ["wasm_js"] }
 
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["wgpu", "eframe"] }
+
 [patch.crates-io]
+egui_bench = { git = "https://github.com/v0l/egui_bench", rev = "bd43401261d70b6c66b9f29c4aec135fefbc012f" }
 monstertruck = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }
 monstertruck-core = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }
 monstertruck-traits = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }

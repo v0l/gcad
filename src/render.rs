@@ -293,81 +293,193 @@ pub fn render_with_meshes(
     meshes: &[ColouredMesh],
     path: &str,
 ) -> Result<()> {
-    let solids: Vec<&Solid> = parts.iter().map(|(s, _)| *s).collect();
-    let mut positions: Vec<Point3> = Vec::new();
-    let mut triangles: Vec<([usize; 3], [[f64; 3]; 3])> = Vec::new();
-    let mut normals: Vec<[Vector3; 3]> = Vec::new();
-    for (solid, colour) in parts {
-        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid) * 0.5);
-        let base = positions.len();
-        positions.extend(mesh.positions().iter().copied());
-        let tint = colour.unwrap_or([150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0]);
-        for t in mesh.faces().triangle_iter() {
-            let corners = [t[0].pos + base, t[1].pos + base, t[2].pos + base];
-            let flat = face_normal(&positions, corners).unwrap_or(Vector3::unit_z());
-            normals.push(t.map(|v| {
-                v.nor
-                    .and_then(|i| mesh.normals().get(i))
-                    .filter(|n| n.magnitude2() > 1.0e-24)
-                    .map_or(flat, |n| {
-                        let n = n.normalize();
-                        if n.dot(flat) < 0.0 { -n } else { n }
-                    })
-            }));
-            triangles.push((corners, [tint; 3]));
-        }
-    }
-    let mut shine: Vec<f64> = vec![0.0; triangles.len()];
-    for (_, mesh, tints, glosses) in meshes {
-        let base = positions.len();
-        let at = |p: crate::mesh::P3| Point3::new(p[0], p[1], p[2]);
-        positions.extend(mesh.positions.iter().map(|&p| at(p)));
-        let vertex_normals = mesh.vertex_normals();
-        let fallback = [150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0];
-        let tint_of = |i: u32| tints.get(i as usize).copied().unwrap_or(fallback);
-        for t in &mesh.triangles {
-            let corners = t.map(|i| i as usize + base);
-            normals.push(t.map(|i| {
-                let n = vertex_normals[i as usize];
-                Vector3::new(n[0], n[1], n[2])
-            }));
-            triangles.push((corners, t.map(tint_of)));
-            shine.push(glosses.get(t[0] as usize).copied().unwrap_or(0.0));
-        }
-    }
-    let edges: Vec<Vec<Point3>> = solids
-        .iter()
-        .flat_map(|solid| edge_polylines(solid))
-        .collect();
-    let bounds: BoundingBox<Point3> = solids
-        .iter()
-        .flat_map(|solid| [geometry::bounds(solid).min(), geometry::bounds(solid).max()])
-        .chain(
-            meshes
-                .iter()
-                .filter_map(|(_, mesh, _, _)| {
-                    let (lo, hi) = mesh.bounds()?;
-                    Some([
-                        Point3::new(lo[0], lo[1], lo[2]),
-                        Point3::new(hi[0], hi[1], hi[2]),
-                    ])
-                })
-                .flatten(),
-        )
-        .collect();
-    let scene = Scene {
-        positions: &positions,
-        triangles: &triangles,
-        normals: &normals,
-        edges: &edges,
-        lines: &[],
-        floor: 0.3,
-        edges_on_surface: true,
-        shine: &shine,
-        outline: !parts.is_empty(),
-    };
+    let gathered = Gathered::new(parts, meshes);
+    let (scene, bounds) = gathered.scene();
     draw_lit(&scene, bounds).save(path)?;
     Ok(())
+}
+
+pub fn posed_rows(
+    model: &crate::model::Model,
+    clip: Option<&str>,
+    times: &[f64],
+) -> Result<Vec<Vec<ColouredMesh>>> {
+    let shaded = model.mesh_shading();
+    let Some(clip) = clip else {
+        return Ok(vec![shaded]);
+    };
+    let rest = model.rest_meshes();
+    let rigs = model.rigs();
+    if !rigs.iter().any(|(_, rig)| rig.clip(clip).is_ok()) {
+        return Err(match rigs.first() {
+            Some((_, rig)) => rig.clip(clip).unwrap_err(),
+            None => anyhow::anyhow!("the model has no rig, so it has no clip `{clip}`"),
+        });
+    }
+    Ok(times
+        .iter()
+        .map(|&t| {
+            shaded
+                .iter()
+                .map(|(name, mesh, colours, shine)| {
+                    let posed = model.rig_of(name).and_then(|rig| {
+                        let index = rig.clip(clip).ok()?;
+                        let (_, rest) = rest.iter().find(|(n, _)| n == name)?;
+                        rig.skin_fits(rest).then(|| {
+                            let mut rig = rig.clone();
+                            rig.moved = rig.sample_moves(index, t);
+                            std::sync::Arc::new(rig.posed(rest, &rig.sample(index, t)))
+                        })
+                    });
+                    (
+                        name.clone(),
+                        posed.unwrap_or_else(|| mesh.clone()),
+                        colours.clone(),
+                        shine.clone(),
+                    )
+                })
+                .collect()
+        })
+        .collect())
+}
+
+pub fn render_sheet(
+    parts: &[(&Solid, Option<[f64; 3]>)],
+    rows: &[Vec<ColouredMesh>],
+    turns: usize,
+    path: &str,
+) -> Result<()> {
+    anyhow::ensure!(turns >= 1, "a sheet needs at least one angle");
+    anyhow::ensure!(!rows.is_empty(), "a sheet needs at least one pose");
+    let gathered: Vec<Gathered> = rows.iter().map(|m| Gathered::new(parts, m)).collect();
+    let bounds: BoundingBox<Point3> = gathered
+        .iter()
+        .flat_map(|g| {
+            let b = g.bounds();
+            [b.min(), b.max()]
+        })
+        .collect();
+    let cell = |row: usize, turn: usize| {
+        let angle = std::f64::consts::TAU * turn as f64 / turns as f64;
+        let eye = Vector3::new(angle.sin(), -angle.cos(), 0.35);
+        let (scene, _) = gathered[row].scene();
+        draw_view_fixed(&scene, &View::looking_from(eye, Vector3::unit_z()), &bounds)
+    };
+    let jobs: Vec<(usize, usize)> = (0..rows.len())
+        .flat_map(|r| (0..turns).map(move |t| (r, t)))
+        .collect();
+    let canvases: Vec<Canvas> = jobs.par_iter().map(|&(r, t)| cell(r, t)).collect();
+    let mut image = RgbImage::from_pixel(CELL * turns as u32, CELL * rows.len() as u32, BACKGROUND);
+    for (&(r, t), canvas) in jobs.iter().zip(&canvases) {
+        canvas.downsample(&mut image, (t as u32 * CELL, r as u32 * CELL));
+    }
+    image.save(path)?;
+    Ok(())
+}
+
+struct Gathered {
+    positions: Vec<Point3>,
+    triangles: Vec<([usize; 3], [[f64; 3]; 3])>,
+    normals: Vec<[Vector3; 3]>,
+    shine: Vec<f64>,
+    edges: Vec<Vec<Point3>>,
+    bounds: Vec<Point3>,
+    outline: bool,
+}
+
+impl Gathered {
+    fn new(parts: &[(&Solid, Option<[f64; 3]>)], meshes: &[ColouredMesh]) -> Gathered {
+        let solids: Vec<&Solid> = parts.iter().map(|(s, _)| *s).collect();
+        let mut positions: Vec<Point3> = Vec::new();
+        let mut triangles: Vec<([usize; 3], [[f64; 3]; 3])> = Vec::new();
+        let mut normals: Vec<[Vector3; 3]> = Vec::new();
+        for (solid, colour) in parts {
+            let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid) * 0.5);
+            let base = positions.len();
+            positions.extend(mesh.positions().iter().copied());
+            let tint = colour.unwrap_or([150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0]);
+            for t in mesh.faces().triangle_iter() {
+                let corners = [t[0].pos + base, t[1].pos + base, t[2].pos + base];
+                let flat = face_normal(&positions, corners).unwrap_or(Vector3::unit_z());
+                normals.push(t.map(|v| {
+                    v.nor
+                        .and_then(|i| mesh.normals().get(i))
+                        .filter(|n| n.magnitude2() > 1.0e-24)
+                        .map_or(flat, |n| {
+                            let n = n.normalize();
+                            if n.dot(flat) < 0.0 { -n } else { n }
+                        })
+                }));
+                triangles.push((corners, [tint; 3]));
+            }
+        }
+        let mut shine: Vec<f64> = vec![0.0; triangles.len()];
+        for (_, mesh, tints, glosses) in meshes {
+            let base = positions.len();
+            let at = |p: crate::mesh::P3| Point3::new(p[0], p[1], p[2]);
+            positions.extend(mesh.positions.iter().map(|&p| at(p)));
+            let vertex_normals = mesh.vertex_normals();
+            let fallback = [150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0];
+            let tint_of = |i: u32| tints.get(i as usize).copied().unwrap_or(fallback);
+            for t in &mesh.triangles {
+                let corners = t.map(|i| i as usize + base);
+                normals.push(t.map(|i| {
+                    let n = vertex_normals[i as usize];
+                    Vector3::new(n[0], n[1], n[2])
+                }));
+                triangles.push((corners, t.map(tint_of)));
+                shine.push(glosses.get(t[0] as usize).copied().unwrap_or(0.0));
+            }
+        }
+        let edges: Vec<Vec<Point3>> = solids
+            .iter()
+            .flat_map(|solid| edge_polylines(solid))
+            .collect();
+        let bounds: Vec<Point3> = solids
+            .iter()
+            .flat_map(|solid| [geometry::bounds(solid).min(), geometry::bounds(solid).max()])
+            .chain(
+                meshes
+                    .iter()
+                    .filter_map(|(_, mesh, _, _)| {
+                        let (lo, hi) = mesh.bounds()?;
+                        Some([
+                            Point3::new(lo[0], lo[1], lo[2]),
+                            Point3::new(hi[0], hi[1], hi[2]),
+                        ])
+                    })
+                    .flatten(),
+            )
+            .collect();
+        Gathered {
+            positions,
+            triangles,
+            normals,
+            shine,
+            edges,
+            bounds,
+            outline: !parts.is_empty(),
+        }
+    }
+
+    fn bounds(&self) -> BoundingBox<Point3> {
+        self.bounds.iter().copied().collect()
+    }
+
+    fn scene(&self) -> (Scene<'_>, BoundingBox<Point3>) {
+        let scene = Scene {
+            positions: &self.positions,
+            triangles: &self.triangles,
+            normals: &self.normals,
+            edges: &self.edges,
+            lines: &[],
+            floor: 0.3,
+            edges_on_surface: true,
+            shine: &self.shine,
+            outline: self.outline,
+        };
+        (scene, self.bounds())
+    }
 }
 
 fn smooth_normals(
@@ -480,16 +592,28 @@ struct Scene<'a> {
 }
 
 fn draw_view(scene: &Scene, view: &View, center: Vector3) -> Canvas {
+    let projected = scene.positions.iter().map(|&p| {
+        let v = p.to_vec() - center;
+        (v.dot(view.right), v.dot(view.up))
+    });
+    let parts = projected
+        .map(|p| p.0.abs().max(p.1.abs()))
+        .fold(1.0e-9, f64::max);
+    draw_view_framed(scene, view, center, parts)
+}
+
+fn draw_view_fixed(scene: &Scene, view: &View, bounds: &BoundingBox<Point3>) -> Canvas {
+    let radius = (bounds.max() - bounds.min()).magnitude() / 2.0;
+    draw_view_framed(scene, view, bounds.center().to_vec(), radius.max(1.0e-9))
+}
+
+fn draw_view_framed(scene: &Scene, view: &View, center: Vector3, parts: f64) -> Canvas {
     let positions = scene.positions;
     let project = |p: Point3| {
         let v = p.to_vec() - center;
         (v.dot(view.right), v.dot(view.up), v.dot(view.toward_eye))
     };
     let projected: Vec<(f64, f64, f64)> = positions.iter().map(|&p| project(p)).collect();
-    let parts = projected
-        .iter()
-        .map(|p| p.0.abs().max(p.1.abs()))
-        .fold(1.0e-9, f64::max);
     let extent = scene
         .lines
         .iter()

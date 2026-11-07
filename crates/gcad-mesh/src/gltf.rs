@@ -21,6 +21,103 @@ const FLOAT: u32 = 5126;
 const UNSIGNED_SHORT: u32 = 5123;
 const UNSIGNED_INT: u32 = 5125;
 
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct Fit {
+    pub height: Option<f64>,
+    pub scale: Option<f64>,
+    pub centre: bool,
+}
+
+impl Fit {
+    pub fn is_none(&self) -> bool {
+        *self == Fit::default()
+    }
+}
+
+fn chunks(glb: &[u8]) -> Result<(Value, &[u8])> {
+    let word = |at: usize| -> Result<usize> {
+        let bytes = glb
+            .get(at..at + 4)
+            .ok_or_else(|| anyhow::anyhow!("GLB is truncated"))?;
+        Ok(u32::from_le_bytes(bytes.try_into()?) as usize)
+    };
+    anyhow::ensure!(glb.starts_with(b"glTF"), "not a GLB file");
+    let n = word(12)?;
+    anyhow::ensure!(&glb[16..20] == b"JSON", "GLB has no JSON chunk first");
+    let json = glb
+        .get(20..20 + n)
+        .ok_or_else(|| anyhow::anyhow!("GLB is truncated"))?;
+    Ok((serde_json::from_slice(json)?, &glb[20 + n..]))
+}
+
+fn position_bounds(doc: &Value) -> Option<(P3, P3)> {
+    let mut lo = [f64::INFINITY; 3];
+    let mut hi = [f64::NEG_INFINITY; 3];
+    for mesh in doc["meshes"].as_array()? {
+        for primitive in mesh["primitives"].as_array()? {
+            let index = primitive["attributes"]["POSITION"].as_u64()? as usize;
+            let accessor = &doc["accessors"][index];
+            for k in 0..3 {
+                lo[k] = lo[k].min(accessor["min"][k].as_f64()?);
+                hi[k] = hi[k].max(accessor["max"][k].as_f64()?);
+            }
+        }
+    }
+    lo[0].is_finite().then_some((lo, hi))
+}
+
+pub fn fit(glb: &[u8], fit: &Fit) -> Result<Vec<u8>> {
+    anyhow::ensure!(
+        fit.height.is_none() || fit.scale.is_none(),
+        "give a height or a scale, not both"
+    );
+    let (mut doc, rest) = chunks(glb)?;
+    let (lo, hi) = position_bounds(&doc)
+        .ok_or_else(|| anyhow::anyhow!("the GLB has no mesh positions with bounds to fit"))?;
+    let k = match (fit.height, fit.scale) {
+        (Some(h), _) => {
+            anyhow::ensure!(h > 0.0 && h.is_finite(), "height must be above 0");
+            anyhow::ensure!(hi[1] > lo[1], "the model has no height to scale");
+            h / (hi[1] - lo[1])
+        }
+        (None, Some(s)) => {
+            anyhow::ensure!(s > 0.0 && s.is_finite(), "scale must be above 0");
+            s
+        }
+        (None, None) => 1.0,
+    };
+    let mid = |i: usize| match fit.centre {
+        true => -(lo[i] + hi[i]) / 2.0 * k,
+        false => 0.0,
+    };
+    let scene = doc["scene"].as_u64().unwrap_or(0) as usize;
+    let roots = doc["scenes"][scene]["nodes"].take();
+    let nodes = doc["nodes"]
+        .as_array_mut()
+        .ok_or_else(|| anyhow::anyhow!("the GLB has no nodes"))?;
+    nodes.push(json!({
+        "name": "model",
+        "children": roots,
+        "scale": [k, k, k],
+        "translation": [mid(0), -lo[1] * k, mid(2)],
+    }));
+    doc["scenes"][scene]["nodes"] = json!([nodes.len() - 1]);
+    let mut json_bytes = serde_json::to_vec(&doc)?;
+    while !json_bytes.len().is_multiple_of(4) {
+        json_bytes.push(b' ');
+    }
+    let total = 12 + 8 + json_bytes.len() + rest.len();
+    let mut out = Vec::with_capacity(total);
+    out.extend(b"glTF");
+    out.extend(2u32.to_le_bytes());
+    out.extend((total as u32).to_le_bytes());
+    out.extend((json_bytes.len() as u32).to_le_bytes());
+    out.extend(b"JSON");
+    out.extend(&json_bytes);
+    out.extend(rest);
+    Ok(out)
+}
+
 pub(crate) fn y_up(p: P3) -> P3 {
     [p[0], p[2], -p[1]]
 }

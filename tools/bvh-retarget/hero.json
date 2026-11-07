@@ -1,0 +1,238 @@
+{
+ "rig": "hero.gcad",
+ "root": "hips_b",
+ "map": {
+  "hips_b": [
+   "Hips",
+   "Spine1"
+  ],
+  "chest": [
+   "Chest",
+   "Neck1"
+  ],
+  "head_b": [
+   "Head",
+   "HeadEnd"
+  ],
+  "arm_l": [
+   "LeftArm",
+   "LeftForeArm"
+  ],
+  "forearm_l": [
+   "LeftForeArm",
+   "LeftHand"
+  ],
+  "hand_b_l": [
+   "LeftHand",
+   "LeftHandMiddle4"
+  ],
+  "arm_r": [
+   "RightArm",
+   "RightForeArm"
+  ],
+  "forearm_r": [
+   "RightForeArm",
+   "RightHand"
+  ],
+  "hand_b_r": [
+   "RightHand",
+   "RightHandMiddle4"
+  ],
+  "thigh_l": [
+   "LeftLeg",
+   "LeftShin"
+  ],
+  "shin_l": [
+   "LeftShin",
+   "LeftFoot"
+  ],
+  "foot_l": [
+   "LeftFoot",
+   "LeftToeBase"
+  ],
+  "thigh_r": [
+   "RightLeg",
+   "RightShin"
+  ],
+  "shin_r": [
+   "RightShin",
+   "RightFoot"
+  ],
+  "foot_r": [
+   "RightFoot",
+   "RightToeBase"
+  ]
+ },
+ "aim": {
+  "hips_b": [
+   "Hips",
+   "Spine2"
+  ],
+  "chest": [
+   "Spine2",
+   "Neck2"
+  ],
+  "head_b": [
+   "Neck2",
+   "HeadEnd"
+  ]
+ },
+ "upright": {
+  "hips_b": [
+   0.5,
+   30
+  ],
+  "chest": [
+   0.35,
+   30
+  ],
+  "head_b": [
+   0.4,
+   8
+  ]
+ },
+ "scale": {
+  "bone": "thigh_l",
+  "source": "LeftLeg",
+  "floor": [
+   "LeftToeEnd",
+   "RightToeEnd"
+  ]
+ },
+ "facing": [
+  "LeftLeg",
+  "RightLeg"
+ ],
+ "arms": {
+  "arm_l": 1,
+  "arm_r": -1
+ },
+ "loop_bones": [
+  "thigh_l",
+  "thigh_r",
+  "shin_l",
+  "shin_r",
+  "arm_l",
+  "arm_r",
+  "hips_b"
+ ],
+ "contacts": [
+  [
+   "foot_l",
+   "tail",
+   5.7
+  ],
+  [
+   "foot_r",
+   "tail",
+   5.7
+  ],
+  [
+   "shin_l",
+   "tail",
+   13.68
+  ],
+  [
+   "shin_r",
+   "tail",
+   13.68
+  ],
+  [
+   "hips_b",
+   "head",
+   19.38
+  ],
+  [
+   "chest",
+   "tail",
+   22.8
+  ],
+  [
+   "head_b",
+   "mid",
+   37.62
+  ],
+  [
+   "hand_b_l",
+   "tail",
+   6.84
+  ],
+  [
+   "hand_b_r",
+   "tail",
+   6.84
+  ],
+  [
+   "forearm_l",
+   "head",
+   9.12
+  ],
+  [
+   "forearm_r",
+   "head",
+   9.12
+  ],
+  [
+   "shin_l",
+   "head",
+   11.4
+  ],
+  [
+   "shin_r",
+   "head",
+   11.4
+  ]
+ ],
+ "clips": {
+  "run": {
+   "file": "../motion/bvh/sprint_13.bvh",
+   "loop": true,
+   "lift": "plant"
+  },
+  "jump": {
+   "file": "../motion/bvh/hop_11.bvh",
+   "trim": [
+    22,
+    44
+   ],
+   "lift": "plant"
+  },
+  "slide": {
+   "file": "../motion/bvh/duck_11.bvh",
+   "trim": [
+    8,
+    40
+   ],
+   "lift": "plant",
+   "amp": {
+    "thigh_l": 1.5,
+    "thigh_r": 1.5,
+    "shin_l": 1.5,
+    "shin_r": 1.5
+   },
+   "upright": false
+  },
+  "idle": {
+   "file": "../motion/bvh/idle_1.bvh",
+   "loop": true,
+   "lift": "plant",
+   "search": [
+    0.05,
+    0.5
+   ],
+   "span": [
+    30,
+    60
+   ]
+  },
+  "happy": {
+   "file": "../motion/bvh/cheer_12.bvh",
+   "lift": "ground"
+  },
+  "fail": {
+   "file": "../motion/bvh/fail_1.bvh",
+   "lift": "plant",
+   "upright": false
+  }
+ }
+}

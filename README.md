@@ -121,6 +121,15 @@ The format, operations and selectors are in [docs/format.md](docs/format.md), wh
 operations exist, which are still missing and the tests behind each are in
 [docs/ops.md](docs/ops.md).
 
+## Game assets
+
+Mesh files export rigged, animated GLBs in every build (`gcad export hero.gcad hero.glb --height 1`,
+or the light `gcad2glb`, see [docs/gcad-mesh.md](docs/gcad-mesh.md)). A build with
+`--features game-assets` adds Wixely's experimental `.gasset` tools: textured assets from CAD parts,
+UV painting, atlases, collision shapes, LODs, sprite sheets and FBX. Which to use, and how the
+two relate, is in [docs/game-assets-overview.md](docs/game-assets-overview.md); the `.gasset`
+guide is [docs/game-assets.md](docs/game-assets.md).
+
 ## In the browser
 
 The viewer also runs as a WebAssembly page with an editor beside the view. Edits are kept

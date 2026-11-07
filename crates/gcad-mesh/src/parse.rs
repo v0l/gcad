@@ -15,7 +15,7 @@ pub fn parse_program(source: &str) -> Result<Vec<Line>> {
     source
         .lines()
         .enumerate()
-        .filter(|(_, text)| !text.trim().is_empty())
+        .filter(|(_, text)| !text.trim().is_empty() && !text.trim().starts_with('#'))
         .map(|(index, text)| parse_line(index + 1, text))
         .collect()
 }
@@ -417,6 +417,7 @@ mod tests {
     #[test]
     fn rejects_non_operations() {
         assert!(parse_line(1, "# a comment").is_err());
+        assert!(parse_program("# a comment\nrect 10 10\n").unwrap().len() == 1);
         assert!(parse_line(1, "base:").is_err());
     }
 }

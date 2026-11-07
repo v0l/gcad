@@ -50,8 +50,14 @@ rest pose) and returns the joint count, also when `out` is null. `gcad_glb` retu
 ## Command line
 
 ```
-gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] in.gcad out.glb
+gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] [--height H | --scale K] [--centre] in.gcad out.glb
 ```
+
+`--height H` scales the model to `H` units tall, `--scale K` by a fixed factor (0.01 for a part
+modelled in centimetres to a game in metres). Both put the lowest point at 0, and `--centre` also
+puts the middle on the vertical axis. They wrap the scene in one root node named `model` that
+carries the scale and offset, so meshes, skins and clips keep their bytes. `gcad export f.gcad
+f.glb --height 1` does the same for any GLB gcad writes, solid parts and `.gasset` scenes too.
 
 `--tris` and `--max-error` decimate every unskinned body before writing it, like a `finish` line at
 the end of each body (`gcad export f.gcad f.glb --tris N` gives the same bytes). Skinned bodies keep

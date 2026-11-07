@@ -256,3 +256,77 @@ fn export_and_gcad2glb_write_the_same_bytes_for_a_bake_and_lod() {
         text.contains("MSFT_lod") && text.contains("main_LOD2") && text.contains("normalTexture")
     );
 }
+
+#[test]
+fn export_height_flag_matches_gcad2glb_and_the_library() {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let spec = format!(
+        "{}/examples/mesh/rigged_creature.gcad",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (a, b) = (dir.join("height-a.glb"), dir.join("height-b.glb"));
+    let flags = ["--height", "1", "--centre"];
+    let gcad = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["export", &spec, a.to_str().unwrap()])
+        .args(flags)
+        .output()
+        .expect("runs gcad");
+    assert!(
+        gcad.status.success(),
+        "{}",
+        String::from_utf8_lossy(&gcad.stderr)
+    );
+    let glb = std::process::Command::new(gcad2glb_tool())
+        .args(flags)
+        .args([spec.as_str(), b.to_str().unwrap()])
+        .output()
+        .expect("runs gcad2glb");
+    assert!(
+        glb.status.success(),
+        "{}",
+        String::from_utf8_lossy(&glb.stderr)
+    );
+    let expected = gcad_mesh::gltf::fit(
+        &gcad_mesh::to_glb(&example("rigged_creature")).expect("builds"),
+        &gcad_mesh::gltf::Fit {
+            height: Some(1.0),
+            centre: true,
+            ..Default::default()
+        },
+    )
+    .expect("fits");
+    assert!(std::fs::read(&a).unwrap() == expected);
+    assert!(std::fs::read(&b).unwrap() == expected);
+}
+
+#[test]
+fn export_scale_flag_fits_a_solid_part() {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let spec = dir.join("coin.gcad");
+    std::fs::write(&spec, "circle 100\ncoin: extrude 12\n").expect("writes");
+    let out = dir.join("coin-scaled.glb");
+    let gcad = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["export", spec.to_str().unwrap(), out.to_str().unwrap()])
+        .args(["--scale", "0.01"])
+        .output()
+        .expect("runs gcad");
+    assert!(
+        gcad.status.success(),
+        "{}",
+        String::from_utf8_lossy(&gcad.stderr)
+    );
+    let bytes = std::fs::read(&out).unwrap();
+    let n = u32::from_le_bytes(bytes[12..16].try_into().unwrap()) as usize;
+    let doc: serde_json::Value = serde_json::from_slice(&bytes[20..20 + n]).unwrap();
+    let root = &doc["nodes"][doc["scenes"][0]["nodes"][0].as_u64().unwrap() as usize];
+    assert_eq!(root["name"], "model");
+    assert_eq!(root["scale"][0].as_f64(), Some(0.01));
+    let refused = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["export", spec.to_str().unwrap(), "/tmp/gcad-tests/coin.stl"])
+        .args(["--height", "1"])
+        .output()
+        .expect("runs gcad");
+    assert!(!refused.status.success());
+}

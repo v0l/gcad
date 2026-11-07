@@ -291,6 +291,7 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | LODs in the GLB | supported | `lod 8000 3000 1000`, `lod 40% 10%` | `brush::lod_writes_three_meshes_with_the_asked_triangle_counts`, `brush::lod_shares_count_from_the_full_detail_mesh`, `brush::lod_and_bake_refuse_nonsense`, `gcad2glb::export_and_gcad2glb_write_the_same_bytes_for_a_bake_and_lod` |
 | a sculpted, rigged hero | supported | `examples/mesh/hero.gcad` | `brush::hero_example_sculpts_at_full_detail_and_finishes_to_its_budget` |
 | export budget | supported | `gcad export f.gcad f.glb --tris 20000`, `--max-error 0.02`, `gcad2glb --tris 20000` | `gcad2glb::a_triangle_budget_finishes_every_body_at_export`, `gcad2glb::an_error_bound_keeps_the_surface_within_it`, `gcad2glb::export_tris_flag_matches_gcad2glb` |
+| fit a GLB to a game's units | supported | `gcad export f.gcad f.glb --height 1 --centre`, `--scale 0.01`, `gcad2glb --height 1` | `gcad2glb::export_height_flag_matches_gcad2glb_and_the_library`, `gcad2glb::export_scale_flag_fits_a_solid_part` |
 | inspect close-ups, wireframe and stroke preview | supported | `gcad inspect f.gcad out.png --zoom x,y,z,r --wire --path x,y,z --path x,y,z` | `inspect_view::zoom_frames_a_region_and_wire_draws_the_triangles`, `inspect_view::stroke_path_overlay_lands_on_the_surface` |
 | pick curvature | supported | `--pick x,y` prints curvature and bump/hollow/flat | `inspect_view::pick_reports_the_curvature_of_the_surface` |
 
@@ -358,6 +359,7 @@ Assemblies are `.gasm` files. They bring in the bodies of `.gcad` part files and
 | STL export | supported | `gcad export part.gcad part.stl` | `output::stl` |
 | simulation parts export | supported | `gcad export wind.gsim parts.stl` writes the parts the simulation keeps after `leave` | `output::simulation_parts_export` |
 | PNG views | supported | `gcad render part.gcad part.png` | `output::png` |
+| turntable and pose sheets | supported | `gcad render f.gcad sheet.png --turns 8 --clip walk --times 0,0.25,0.5`: views round the model, one row per clip time, framed the same in every cell | `output::turntable_sheet_has_a_cell_per_angle_and_pose` |
 | STEP import | supported | `import part.step`, `import vendor.step solid=2` | `output::step_import`, `output::step_import_from_opencascade`, `output::step_import_asks_which_solid`, `output::step_import_boxes_what_it_cannot_read`, `output::step_import_reads_a_revolved_circle`, `output::step_import_leaves_unreadable_cavities_solid` |
 | STEP instances placed | supported | `import rig.step solid=4` puts a repeated part where the file places it | `output::step_import_places_instances` |
 | OBJ export | supported | `gcad export part.gcad part.obj` | `output::obj` |

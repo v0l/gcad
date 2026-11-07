@@ -45,8 +45,8 @@ use std::path::PathBuf;
 
 pub use args::label_of;
 pub use assembly::{
-    ASSEMBLY_OPERATIONS, Couple, Joint, JointKind, Mate, Rig, Source, broken, explode_offsets,
-    posed, subtree,
+    ASSEMBLY_OPERATIONS, AssemblyInstance, Couple, Joint, JointKind, Mate, Rig, Source, broken,
+    explode_offsets, posed, subtree,
 };
 pub use bodies::{Material, Mechanics};
 pub use measure::{MassProperties, mass_properties};
@@ -111,6 +111,7 @@ pub struct Model {
     pub library_loaded: bool,
     pub sources: HashMap<String, assembly::Source>,
     pub placements: HashMap<String, Matrix4>,
+    pub assembly_instances: Vec<assembly::AssemblyInstance>,
     pub stand_ins: HashMap<String, String>,
     pub filled: HashMap<String, usize>,
     pub explode: Vec<(String, Vector3)>,
@@ -1176,6 +1177,19 @@ pub fn snapshots_path(
     let lines = read_lines(path)?;
     let snapshots = snapshots_from(start_for(path, vars, 0), &lines, Some(path));
     Ok((lines, snapshots))
+}
+
+/// Include dependencies reached through cached parts and their worker evaluations.
+#[cfg(feature = "game-assets")]
+pub(crate) fn run_path_recorded(
+    path: &std::path::Path,
+    vars: &[(String, f64)],
+) -> Result<(Run, crate::host::Reads)> {
+    let traced = traced(|| run_path(path, vars, None));
+    let run = traced.result?;
+    let reads = run.model.cache.reads_reached(&traced.reads, &traced.uses);
+    crate::host::observe_reads(reads.clone());
+    Ok((run, reads))
 }
 
 pub use stored::{default_dir as default_part_store, store_parts_in};

@@ -259,6 +259,34 @@ fn png() {
 }
 
 #[test]
+fn turntable_sheet_has_a_cell_per_angle_and_pose() {
+    let source = std::fs::read_to_string(format!(
+        "{}/examples/mesh/rigged_creature.gcad",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("example");
+    let model = build(&source);
+    let path = scratch("creature-sheet.png");
+    let rows = render::posed_rows(&model, Some("walk"), &[0.0, 0.5]).expect("poses");
+    render::render_sheet(&[], &rows, 4, &path).expect("renders");
+    let image = image::open(&path).expect("a png").to_rgb8();
+    let cell = image.width() / 4;
+    assert_eq!(image.dimensions(), (cell * 4, cell * 2));
+    let crop = |col: u32, row: u32| {
+        image::imageops::crop_imm(&image, col * cell, row * cell, cell, cell)
+            .to_image()
+            .into_raw()
+    };
+    assert_ne!(crop(0, 0), crop(1, 0), "turning the model changes the view");
+    assert_ne!(
+        crop(0, 0),
+        crop(0, 1),
+        "the clip moves the model between rows"
+    );
+    assert!(render::posed_rows(&model, Some("nope"), &[0.0]).is_err());
+}
+
+#[test]
 fn step_import() {
     let model = build(&part("plate"));
     let path = scratch("import.step");

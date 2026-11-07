@@ -456,7 +456,9 @@ resolution; decimate once with `finish` at the end.
 | `finish` | `decimate=N\|N%` `max_error=` `focus=parts` `weight=` | decimates the whole mesh once at the end, to `N` triangles or as few as keep the surface within `max_error` of the full-detail one, keeping part borders. `focus` keeps the named parts finer (`weight` 10 times as costly to simplify). The reply gives the triangles before and after and how far the surface moved, the most and on average. Put it before `skin` |
 
 `gcad export f.gcad f.glb --tris N` or `--max-error E` (and `gcad2glb --tris N`) do the same as a
-`finish` line for every unskinned body. `gcad inspect --zoom x,y,z,r --wire --path x,y,z` frames a
+`finish` line for every unskinned body. `--height H`, `--scale K` and `--centre` fit a GLB to a game:
+they wrap the scene in a `model` root node scaled to `H` tall (or by `K`), lowest point at 0.
+`gcad inspect --zoom x,y,z,r --wire --path x,y,z` frames a
 close-up, draws the triangles and previews a stroke; `--pick` also prints the curvature there.
 
 The mesh starts as fine as `remesh` made it, the same everywhere. For a game asset, sculpt at
@@ -971,6 +973,7 @@ lines where a rounded corner of a `rect r=` joins its flat sides.
 gcad check part.gcad                  # run every line, print what each did
 gcad query part.gcad 'base.end&base.side' [--line N]
 gcad render part.gcad part.png        # iso, top, front and right views
+gcad render hero.gcad sheet.png --turns 8 --clip run --times 0,0.2,0.4   # turntable, a row per pose
 gcad export part.gcad part.step       # or .stl, .obj, .3mf, .svg (a four-view drawing), .dxf (sheet metal flat pattern)
 gcad export part.gcad part.svg --section y=0   # adds a hatched section across y=0
 gcad check part.gcad --set w=50       # override a `let` variable

@@ -7,7 +7,24 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Wixely's game-assets fork, merged with its history, behind the `game-assets` cargo feature:
+  `.gasset` files, the `gcad asset-*` commands, the asset viewer, sprite sheets, collision
+  shapes, LODs and experimental FBX. Default builds are unchanged. See
+  `docs/game-assets-overview.md`.
+- `gcad export f.gcad f.glb --height H` (or `--scale K`) and `--centre` fit a GLB to a game's
+  units under one `model` root node; `gcad2glb` takes the same flags.
+- `gcad render f.gcad sheet.png --turns N --clip C --times a,b,c` draws a turntable sheet, one
+  row per pose.
+- `tools/bvh-retarget` turns BVH mocap takes into `clip` and `key` lines for a gcad rig.
 - Rigging for mesh bodies: `bone`, `skin auto|part|paint`, `pose`, `clip` and `key`, linear blend skinning, and GLB export with skin and animations.
+- `collision NODE shape=box|sphere|capsule|hull|mesh` in `.gasset` files declares a physics
+  shape for a mesh node without naming an engine. gcad fits boxes, spheres, capsules and
+  capped convex hulls to the node's mesh and writes them to the node's
+  `extras.gcad_collision` in the GLB. Declared nodes are collision only unless they say
+  `render=yes`. Scale clips and skinned meshes are refused because a physics shape cannot
+  follow them. See `docs/game-assets-collision.md`.
+- The asset viewer has Visual, Both and Collision views. Fitted shapes draw as solid
+  surfaces, and clicking one selects its node, with the shape added to the copied reference.
 - Brush `alpha=file.png` greyscale stamps (relative to the part file) and `size=40px` radii in pixels of the last `gcad inspect` view, recorded in a `<file>.view` sidecar.
 
 ## [0.6.1] - 2026-11-03
