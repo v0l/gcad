@@ -642,4 +642,39 @@ fn refine_joints_splits_triangles_near_the_joint_only() {
 fn refine_joints_needs_a_parented_bone() {
     let message = failure("arm: limb 0,0,0 0,0,20 r=3\nremesh 0.4\nbone a head=0,0,0 tail=0,0,20\nrefine joints edge=0.3");
     assert!(message.contains("bone"), "{message}");
+
+const BENT: &str = "arm: limb 0,0,0 0,0,20 r=3\nremesh 0.4\nbone b_up head=0,0,0 tail=0,0,10\nbone b_low parent=b_up tail=0,0,20\nskin auto\n";
+const PUSH: &str = "corrective bulge bone=b_low axis=x from=30 to=90\nselect sphere=0,-3,10 r=3 falloff=3\nmove 0,2,0\n";
+
+#[test]
+fn corrective_ramps_with_the_bone_angle_and_reaches_the_glb() {
+    let model = build(&format!("{BENT}{PUSH}clip bend fps=10\nkey t=0 bone=b_low rotate=0 axis=x\nkey t=1 bone=b_low rotate=120 axis=x"));
+    let rig = rig_of(&model);
+    assert_eq!(rig.correctives.len(), 1);
+    let at = |deg: f64| {
+        let q = gcad::mesh::rig::quat_axis_angle([1.0, 0.0, 0.0], deg).unwrap();
+        rig.corrective_weights(&[(1, q)].into_iter().collect())[0]
+    };
+    assert_eq!(at(10.0), 0.0);
+    assert!((at(60.0) - 0.5).abs() < 1.0e-9);
+    assert_eq!(at(120.0), 1.0);
+    let (json, _) = glb_json(&gcad::export::glb_of(&model).expect("glb"));
+    assert_eq!(json["meshes"][0]["extras"]["targetNames"][0], "bulge");
+    assert!(json["meshes"][0]["primitives"][0]["targets"][0]["POSITION"].is_u64());
+    let channels = json["animations"][0]["channels"].as_array().unwrap();
+    assert!(channels.iter().any(|c| c["target"]["path"] == "weights"));
+}
+
+#[test]
+fn corrective_errors_name_the_problem() {
+    let unskinned = failure(&format!("{ARM}corrective c bone=b_low axis=x from=30 to=90"));
+    assert!(unskinned.contains("skin"), "{unskinned}");
+    let bone = failure(&format!("{BENT}corrective c bone=nope axis=x from=30 to=90"));
+    assert!(bone.contains("b_low"), "{bone}");
+    let range = failure(&format!("{BENT}corrective c bone=b_low axis=x from=30 to=30"));
+    assert!(range.contains("differ"), "{range}");
+    let empty = failure(&format!("{BENT}corrective c bone=b_low axis=x from=30 to=90\nbone tip parent=b_low tail=0,0,25"));
+    assert!(empty.contains("sculpts nothing"), "{empty}");
+    let twice = failure(&format!("{BENT}{PUSH}bone tip parent=b_low tail=0,0,25\n{PUSH}bone t2 parent=tip tail=0,0,30"));
+    assert!(twice.contains("already"), "{twice}");
 }

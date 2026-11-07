@@ -73,7 +73,7 @@ dab, mask) is recorded; the first other line ends it. The ops must keep the vert
 is 0 below `from` degrees of the bone's turn about `axis`, 1 above `to`, linear between. `Rig::posed`
 adds `weight * delta` to the rest mesh before skinning. The GLB carries one morph target per
 corrective (`POSITION` deltas, names in the mesh `extras.targetNames`) and each clip gets a
-`weights` channel sampled at every frame, so engines play the same pose. On `skin_arm` the
+`weights` channel sampled at every frame, so engines play the same pose. The viewer's animation card lists each corrective with its current weight. On `skin_arm` the
 corrective in `examples/mesh/skin_arm_corrective.gcad` takes `skincheck` from 28 flips to 0.
 
 ## Checking a skin

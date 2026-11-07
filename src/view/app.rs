@@ -2733,6 +2733,16 @@ impl App {
                         .line
                         .show(ui, duration, Some(clip.fps), super::timeline::Skin::Card);
                 }
+                if !rig.correctives.is_empty() {
+                    let (pose, _) = playback.pose(rig);
+                    for (c, w) in rig.correctives.iter().zip(rig.corrective_weights(&pose)) {
+                        Line::new()
+                            .legend(&c.name)
+                            .measured(format!("{w:.2}"))
+                            .size(11.0)
+                            .show(ui);
+                    }
+                }
                 ui.add_space(4.0);
                 egui::CollapsingHeader::new("pose bones")
                     .id_salt("pose bones")
