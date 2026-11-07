@@ -118,7 +118,7 @@ getrandom = { version = "0.4", features = ["wasm_js"] }
 egui_kittest = { version = "0.37", features = ["wgpu", "eframe"] }
 
 [patch.crates-io]
-egui_bench = { git = "https://github.com/v0l/egui_bench", rev = "bd43401261d70b6c66b9f29c4aec135fefbc012f" }
+egui_bench = { git = "https://github.com/v0l/egui_bench", rev = "e37138d6c698c1fd6de2284acf23f669b27ab0a9" }
 monstertruck = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }
 monstertruck-core = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }
 monstertruck-traits = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }
