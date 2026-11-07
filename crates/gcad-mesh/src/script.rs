@@ -147,6 +147,14 @@ fn matrix_of(xf: &Xf, y_up: bool) -> Matrix {
 }
 
 impl Body {
+    pub fn rest_mesh(&self) -> &Mesh {
+        &self.mesh
+    }
+
+    pub fn rig(&self) -> Option<&Rig> {
+        self.rig.as_ref()
+    }
+
     pub fn joint_count(&self) -> usize {
         self.joints.len()
     }

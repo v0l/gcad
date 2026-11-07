@@ -4,6 +4,31 @@ use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, MoveKey, Quat, Rig}
 use crate::mesh::{self, P3};
 use crate::parse::{Line, Scope};
 use anyhow::{Result, anyhow, bail};
+use crate::mesh::skin_smooth::{self, SmoothOptions};
+
+fn passes_of(args: &Args<'_>, scope: &Scope, default: usize) -> Result<usize> {
+    match args.optional_number("passes", scope)? {
+        Some(p) if p >= 0.0 && p.fract() == 0.0 && p <= 10000.0 => Ok(p as usize),
+        Some(p) => bail!("passes is a whole number from 0 to 10000, got {p}"),
+        None => Ok(default),
+    }
+}
+
+fn step_of(args: &Args<'_>, scope: &Scope) -> Result<f64> {
+    match args.optional_number("step", scope)? {
+        Some(s) if s > 0.0 && s <= 1.0 => Ok(s),
+        Some(s) => bail!("step is above 0 and at most 1, got {s}"),
+        None => Ok(SmoothOptions::default().step),
+    }
+}
+
+fn flag(args: &Args<'_>, name: &str) -> Result<bool> {
+    match args.values.get(name).copied() {
+        None | Some("false") | Some("0") => Ok(false),
+        Some("true") | Some("1") => Ok(true),
+        Some(other) => bail!("{name} is true or false, got `{other}`"),
+    }
+}
 
 fn quat_mul(a: Quat, b: Quat) -> Quat {
     let [ax, ay, az, aw] = a;
@@ -159,7 +184,8 @@ impl Scene {
             line,
             &["mode"],
             &[
-                "part", "bone", "sphere", "r", "falloff", "strength", "power",
+                "part", "bone", "sphere", "r", "falloff", "strength", "power", "method", "passes",
+                "core", "unrelated", "step", "zone", "joint",
             ],
             false,
         )?;
@@ -170,8 +196,63 @@ impl Scene {
             Some("auto") => {
                 let power = args.optional_number("power", scope)?.unwrap_or(4.0);
                 positive(power, "power")?;
-                rig.auto_skin(&mesh, power);
+                match args.values.get("method").copied().unwrap_or("smooth") {
+                    "distance" => rig.auto_skin(&mesh, power),
+                    "smooth" => {
+                        let defaults = SmoothOptions::default();
+                        let options = SmoothOptions {
+                            power,
+                            passes: passes_of(&args, scope, defaults.passes)?,
+                            step: step_of(&args, scope)?,
+                            core: match args.optional_number("core", scope)? {
+                                Some(c) if (0.0..=1.0).contains(&c) => c,
+                                Some(c) => bail!("core is a fraction of each bone, 0 to 1, got {c}"),
+                                None => defaults.core,
+                            },
+                            unrelated: flag(&args, "unrelated")?,
+                            zone: match args.optional_number("zone", scope)? {
+                                Some(z) if z >= 0.0 => z,
+                                Some(z) => bail!("zone is a fraction of a bone's length, 0 or more, got {z}"),
+                                None => defaults.zone,
+                            },
+                            joint: match args.optional_number("joint", scope)? {
+                                Some(j) if j >= 0.0 => j,
+                                Some(j) => bail!("joint is a multiple of the limb's thickness, 0 or more, got {j}"),
+                                None => defaults.joint,
+                            },
+                        };
+                        skin_smooth::smooth_skin(rig, &mesh, options);
+                    }
+                    other => bail!("`skin auto method=` takes smooth or distance, got `{other}`"),
+                }
                 Ok(self.skin_summary(&mesh))
+            }
+            Some("smooth") => {
+                if rig.skin.is_none() {
+                    bail!("`skin smooth` smooths weights that are there; bind them first with `skin auto`");
+                }
+                let passes = passes_of(&args, scope, 10)?;
+                let step = step_of(&args, scope)?;
+                let bone = args.values.get("bone").map(|b| rig.bone(b)).transpose()?;
+                let sphere = match args.values.get("sphere") {
+                    Some(text) => Some((point3(text, scope)?, positive(args.number("r", scope)?, "r")?)),
+                    None => None,
+                };
+                let skin = rig.skin.as_ref().expect("skinned");
+                let region: Vec<bool> = mesh
+                    .positions
+                    .iter()
+                    .zip(skin)
+                    .map(|(p, w)| {
+                        bone.is_none_or(|b| w.iter().any(|(x, v)| *x == b && *v > 0.0))
+                            && sphere.is_none_or(|(c, r)| mesh::length(mesh::sub(*p, c)) <= r)
+                    })
+                    .collect();
+                let touched = skin_smooth::smooth_existing(rig, &mesh, &region, passes, step);
+                Ok(format!(
+                    "smoothed {touched} vertices over {passes} pass(es); {}",
+                    self.skin_summary(&mesh)
+                ))
             }
             Some("paint") => {
                 let bone = rig.bone(args.text("bone")?)?;
@@ -204,7 +285,7 @@ impl Scene {
                 ))
             }
             Some(other) => {
-                bail!("`skin` takes auto, paint, or `part=name bone=name`, got `{other}`")
+                bail!("`skin` takes auto, smooth, paint, or `part=name bone=name`, got `{other}`")
             }
         }
     }

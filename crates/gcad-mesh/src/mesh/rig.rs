@@ -145,7 +145,7 @@ pub fn slerp(a: Quat, b: Quat, t: f64) -> Quat {
     q.map(|v| v / n)
 }
 
-fn closest_on_segment(p: P3, a: P3, b: P3) -> P3 {
+pub fn closest_on_segment(p: P3, a: P3, b: P3) -> P3 {
     let ab = sub(b, a);
     let len2 = super::dot(ab, ab);
     let t = if len2 > 1.0e-18 {
@@ -260,7 +260,7 @@ fn column_hit(a: P3, b: P3, c: P3, x: f64, y: f64) -> Option<f64> {
     (u >= 0.0 && v >= 0.0 && w >= 0.0).then(|| u * a[2] + v * b[2] + w * c[2])
 }
 
-fn trim(mut weights: Vec<(usize, f64)>) -> Vec<(usize, f64)> {
+pub fn trim(mut weights: Vec<(usize, f64)>) -> Vec<(usize, f64)> {
     weights.retain(|(_, w)| *w > 0.0);
     weights.sort_by(|a, b| b.1.total_cmp(&a.1).then(a.0.cmp(&b.0)));
     weights.truncate(MAX_INFLUENCES);
@@ -436,19 +436,18 @@ impl Rig {
             .get_or_insert_with(|| vec![vec![(0, 1.0)]; vertices])
     }
 
-    pub fn auto_skin(&mut self, mesh: &Mesh, power: f64) {
+    pub fn bone_distances(&self, mesh: &Mesh) -> Vec<Vec<f64>> {
         let (lo, hi) = mesh.bounds().unwrap_or_default();
         let eps = (length(sub(hi, lo)) * 1.0e-3).max(1.0e-9);
-        let bones = self.bones.clone();
         let solid = Solid::of(mesh);
         let normals = mesh.vertex_normals();
-        let weights = mesh
-            .positions
+        mesh.positions
             .iter()
             .zip(&normals)
             .map(|(&p, &n)| {
                 let start = sub(p, scale(n, solid.cell * 0.75));
-                let reach: Vec<(f64, bool)> = bones
+                let reach: Vec<(f64, bool)> = self
+                    .bones
                     .iter()
                     .map(|b| {
                         let q = closest_on_segment(p, b.head, b.tail);
@@ -456,10 +455,19 @@ impl Rig {
                     })
                     .collect();
                 let any_inside = reach.iter().any(|(_, ok)| *ok);
-                let d: Vec<f64> = reach
+                reach
                     .iter()
                     .map(|&(d, ok)| if ok || !any_inside { d } else { f64::INFINITY })
-                    .collect();
+                    .collect()
+            })
+            .collect()
+    }
+
+    pub fn auto_skin(&mut self, mesh: &Mesh, power: f64) {
+        let weights = self
+            .bone_distances(mesh)
+            .into_iter()
+            .map(|d| {
                 let nearest = d.iter().copied().fold(f64::INFINITY, f64::min);
                 trim(
                     d.iter()

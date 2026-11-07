@@ -4,7 +4,9 @@ use std::fmt;
 
 pub const JUMP_LIMIT: f64 = 0.35;
 pub const CONTESTED_MARGIN: f64 = 0.1;
-pub const CORE_FRACTION: f64 = 0.4;
+pub const CORE_FRACTION: f64 = 0.5;
+pub const CORE_CLEAR: f64 = 0.5;
+pub const CORE_JOINT: f64 = 2.0;
 pub const RIGID: f64 = 0.99;
 pub const UNRELATED_MIN: f64 = 0.05;
 pub const SQUASH: f64 = 0.25;
@@ -27,6 +29,7 @@ pub struct PoseQuality {
     pub squashed: usize,
     pub stretched: usize,
     pub worst_pose: String,
+    pub flips: Vec<usize>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -42,6 +45,8 @@ pub struct SkinReport {
     pub cores: Vec<CoreFraction>,
     pub min_core: f64,
     pub quality: PoseQuality,
+    pub steep: Vec<usize>,
+    pub loose: Vec<usize>,
 }
 
 fn weight_of(w: &[(usize, f64)], bone: usize) -> f64 {
@@ -174,6 +179,7 @@ fn quality(mesh: &Mesh, rig: &Rig) -> PoseQuality {
             q.worst_aspect_growth = q.worst_aspect_growth.max(s.aspect / r.aspect);
             if dot(s.normal, expected) < 0.0 {
                 q.flipped += 1;
+                q.flips.push(t[0] as usize);
                 bad += 1;
             }
             if ratio < SQUASH {
@@ -200,10 +206,19 @@ pub fn check(mesh: &Mesh, rig: &Rig) -> Option<SkinReport> {
         vertices: skin.len(),
         ..Default::default()
     };
-    let mut jumps: Vec<f64> = edges(mesh)
+    let all_edges = edges(mesh);
+    let mut jumps: Vec<f64> = all_edges
         .iter()
         .map(|&(a, b)| edge_jump(&skin[a], &skin[b]))
         .collect();
+    report.steep = all_edges
+        .iter()
+        .zip(&jumps)
+        .filter(|(_, j)| **j > JUMP_LIMIT)
+        .flat_map(|(&(a, b), _)| [a, b])
+        .collect();
+    report.steep.sort_unstable();
+    report.steep.dedup();
     report.edges = jumps.len();
     report.steep_edges = jumps.iter().filter(|j| **j > JUMP_LIMIT).count();
     jumps.sort_by(f64::total_cmp);
@@ -231,22 +246,38 @@ pub fn check(mesh: &Mesh, rig: &Rig) -> Option<SkinReport> {
     let lo = 0.5 - CORE_FRACTION / 2.0;
     let hi = 0.5 + CORE_FRACTION / 2.0;
     let mut cores: Vec<(usize, usize)> = vec![(0, 0); rig.bones.len()];
-    for (p, w) in mesh.positions.iter().zip(skin) {
-        let nearest = rig
+    for (v, (p, w)) in mesh.positions.iter().zip(skin).enumerate() {
+        let near: Vec<(usize, (f64, f64))> = rig
             .bones
             .iter()
             .enumerate()
             .map(|(i, b)| (i, segment_t(*p, b.head, b.tail)))
-            .min_by(|a, b| a.1.1.total_cmp(&b.1.1));
-        let Some((bone, (t, _))) = nearest else {
+            .collect();
+        let nearest = near.iter().copied().min_by(|a, b| a.1.1.total_cmp(&b.1.1));
+        let Some((bone, (t, d))) = nearest else {
             continue;
         };
+        if near
+            .iter()
+            .any(|&(i, (_, e))| !related(rig, i, bone) && d > CORE_CLEAR * e)
+        {
+            continue;
+        }
         if t < lo || t > hi {
+            continue;
+        }
+        let b = &rig.bones[bone];
+        let len = length(sub(b.tail, b.head));
+        let head_ok = b.parent.is_none() || t * len >= CORE_JOINT * d;
+        let tail_ok = rig.children(bone).is_empty() || (1.0 - t) * len >= CORE_JOINT * d;
+        if !(head_ok && tail_ok) {
             continue;
         }
         cores[bone].0 += 1;
         if weight_of(w, bone) >= RIGID {
             cores[bone].1 += 1;
+        } else {
+            report.loose.push(v);
         }
     }
     report.cores = rig
