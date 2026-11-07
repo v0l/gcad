@@ -291,6 +291,55 @@ fn skincheck_reports_the_creature() {
 }
 
 #[test]
+fn twist_segments_share_the_roll_and_mirror() {
+    let model = build(
+        "arm_l: limb 2,0,0 12,0,0 r=1.5\nhand_l: blob 13,0,0 r=1.5 blend=0.5\nmirror x of=arm_l\nmirror x of=hand_l\nremesh 0.4\nbone arm_l head=2,0,0 tail=12,0,0 twist=3\nbone hand_l parent=arm_l tail=14,0,0\nmirror x of=arm_l\nskin auto\npose bone=hand_l rotate=90 axis=x",
+    );
+    let rig = rig_of(&model);
+    let names: Vec<&str> = rig.bones.iter().map(|b| b.name.as_str()).collect();
+    assert_eq!(
+        names,
+        [
+            "arm_l",
+            "arm_twist1_l",
+            "arm_twist2_l",
+            "hand_l",
+            "arm_r",
+            "arm_twist1_r",
+            "arm_twist2_r",
+            "hand_r"
+        ]
+    );
+    assert_eq!(rig.bones[3].parent, Some(2));
+    assert_eq!(rig.twists.len(), 2);
+    let pose = rig.effective(&rig.pose);
+    assert!(pose.contains_key(&1) && pose.contains_key(&2));
+    let error = gcad::model::run(
+        &gcad::parse::parse_program(&format!("{LIMB}bone a head=0,0,0 tail=0,0,20 twist=9"))
+            .unwrap(),
+    );
+    let (_, last) = error.steps.last().unwrap();
+    assert!(format!("{:#}", last.as_ref().unwrap_err()).contains("from 1 to 8"));
+}
+
+#[test]
+fn skin_blend_dq_keeps_a_half_turn_round() {
+    let source = format!("{ARM}skin auto\npose bone=b_low rotate=150 axis=z");
+    let radius = |source: &str| {
+        let posed = posed_of(&build(source));
+        posed
+            .positions
+            .iter()
+            .filter(|p| (p[2] - 20.0).abs() < 0.3)
+            .map(|p| (p[0] * p[0] + p[1] * p[1]).sqrt())
+            .fold(f64::INFINITY, f64::min)
+    };
+    let linear = radius(&source);
+    let dq = radius(&format!("{source}\nskin blend dq=1"));
+    assert!(dq > linear * 1.2, "{linear} {dq}");
+}
+
+#[test]
 fn an_unposed_rig_equals_the_rest_mesh() {
     let model = build(&format!("{ARM}skin auto"));
     assert!(*rest_of(&model) == *posed_of(&model));

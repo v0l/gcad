@@ -260,6 +260,8 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | smooth skin weights | supported | `skin smooth sphere=0,0,20 r=5 passes=40` | `rig::skin_smooth_softens_the_seam_between_two_parts` |
 | mirror and normalise skin weights | supported | `skin mirror`, `skin normalize` | `rig::skin_mirror_copies_one_side_with_bones_swapped` |
 | check skin quality | supported | `gcad skincheck creature.gcad` | `rig::skincheck_reports_the_creature` |
+| twist bone segments | supported | `bone fore_l parent=upper_l tail=12,0,0 twist=3` | `rig::twist_segments_share_the_roll_and_mirror` |
+| dual quaternion skinning | supported | `skin blend dq=1` | `rig::skin_blend_dq_keeps_a_half_turn_round` |
 | pose a bone | supported | `pose bone=knee rotate=30 axis=x`, `pose reset` | `rig::an_unposed_rig_equals_the_rest_mesh`, `rig::a_bent_limb_stays_closed_and_keeps_its_volume`, `rig::pose_rotates_about_the_bone_head`, `rig::pose_names_the_bones_when_it_misses`, `rig::pose_without_skin_leaves_the_mesh_alone` |
 | animation clips | supported | `clip walk fps=24`, `key t=0.5 bone=hind_l rotate=25 axis=x`, `pose clip=walk t=0.25` | `rig::clip_keys_are_sampled_between_keyframes`, `rig::key_without_a_clip_is_refused` |
 | clip translation keys | supported | `key t=0.3 bone=hips move=0,0,4` | `rig::move_keys_shift_a_bone_and_reach_the_glb` |

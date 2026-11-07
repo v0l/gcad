@@ -26,8 +26,8 @@ How gcad binds a mesh to its bones, what makes a skin good, and the numbers that
 
 - GLB consumers run linear blend skinning with 4 joints per vertex, so the weights have to look
   right under LBS; that is what `skincheck` measures.
-- Sharp bends (the 120 degree elbow of `skin_arm`) and twists (its 90 degree wrist) still fold or
-  pinch under LBS; twist bones and dual quaternion skinning are the fix.
+- Sharp bends (the 120 degree elbow of `skin_arm`) still fold under LBS. `twist=` segments and
+  `skin blend dq=` fix twists; corrective shapes for bends are #300.
 - Weights are stored as the `skin` lines that made them. There is no binary weights file. For a
   compact game export, use the mesh body as a `.gasset` `source`: its skin goes through the palette
   prune and UNORM16 weight quantise (`examples/game-assets/creature.gasset`).
@@ -55,6 +55,31 @@ binary to use).
   and a `rom` clip with the legs at 50 degrees, the knee at 70, the tail at 35 and the neck at 25.
 - `examples/mesh/skin_arm.gcad`: a two-bone arm and a hand, bent 120 degrees at the elbow, swung 60 at
   the shoulder, and the hand twisted 90.
+
+## Stage 4: twist segments and dual quaternion blending
+
+`bone lower parent=upper tail=0,0,23 twist=3` makes the bone three segments (`lower`, `lower_twist1`,
+`lower_twist2`; with an `_l`/`_r` ending the side stays last, `fore_twist1_l`). The roll of the next bone
+about the limb axis is shared between the segments, so the forearm turns over its length instead of at
+the wrist. The GLB gets the segment rotations baked into every clip at its frame rate, so any player
+shows it with plain LBS. A child given `parent=lower` hangs from the last segment.
+
+`skin blend dq=1` poses with dual quaternion skinning (`dq=0.5` blends it half and half with linear,
+like Blender's DQ blend). It keeps volume in twists and bulges at sharp bends. It changes what gcad
+shows (`pose`, `render`, `inspect`, the viewer, OBJ export, `skincheck`), not the GLB: GLB players skin
+linearly, so the weights must already look right without it.
+
+![wrist at 90 degrees: linear, dual quaternion, twist=3](skin-wrist-twist.png)
+
+| arm, wrist turned 90 degrees | narrowest radius at the wrist (rest about 1.6) |
+|---|---|
+| linear blend | 1.07 |
+| `skin blend dq=1` | 1.51 |
+| `twist=3` on the forearm | 1.46 |
+
+(`tests/skinning.rs` holds both at 15% over linear or more.) With `twist=3` the arm's elbow flips rise
+from 28 to 56: the first segment is a third as long, so its joint zone is shorter. Corrective shapes
+for sharp bends are #300.
 
 ## Before (straight-line distance, `power=4`)
 
