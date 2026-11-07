@@ -1,6 +1,7 @@
 pub mod args;
 pub mod brush_ops;
 pub mod ffi;
+pub mod glb;
 pub mod gltf;
 pub mod interp;
 pub mod mesh;
