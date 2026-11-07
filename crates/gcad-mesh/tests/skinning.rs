@@ -407,6 +407,7 @@ fn refine_joints_needs_bones_and_an_unskinned_mesh() {
     let late = plain.replace("\nclip rom", "\nrefine joints edge=0.3 reach=1.8\nclip rom");
     let message = gcad_mesh::build(&late).err().expect("fails").to_string();
     assert!(message.contains("before `skin auto`"), "{message}");
+}
 
 fn glb_json(glb: &[u8]) -> serde_json::Value {
     let n = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
