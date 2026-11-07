@@ -23,6 +23,7 @@ pub const MESH_OPERATIONS: &[&str] = &[
     "relax",
     "decimate",
     "bone",
+    "corrective",
     "skin",
     "pose",
     "clip",
@@ -79,6 +80,7 @@ pub struct MeshBody {
     pub selections: Vec<Named>,
     pub rig: crate::mesh::rig::Rig,
     pub clip: Option<usize>,
+    pub open_corrective: Option<crate::rig_ops::OpenCorrective>,
     pub brushes: Vec<(String, crate::mesh::stroke::Brush)>,
     pub dyntopo: Option<f64>,
     pub levels: Vec<(String, Arc<Mesh>)>,
@@ -391,6 +393,7 @@ impl Scene {
     }
 
     pub fn finish_mesh_body(&mut self) -> Result<()> {
+        self.close_corrective()?;
         if let Some(mesh) = self.current_mesh()? {
             self.mesh_bodies.push((self.body_name(), mesh));
             if !self.mesh_body.rig.is_empty() {

@@ -57,6 +57,25 @@ The arm (`skin_arm`): no step over 0.35, rigid cores 1.00, and its twisted wrist
   compact game export, use the mesh body as a `.gasset` `source`: its skin goes through the palette
   prune and UNORM16 weight quantise (`examples/game-assets/creature.gasset`).
 
+## Corrective shapes
+
+Sharp bends still fold under LBS. A corrective records a sculpt as a delta on the rest mesh and
+blends it in as the bone turns:
+
+```
+corrective elbow bone=lower_b axis=x from=60 to=120
+select sphere=0,-2,12 r=3 falloff=5
+move 0,2,0
+```
+
+Every sculpt line after `corrective` (select, move, scale, rotate, inflate, smooth, brush, stroke,
+dab, mask) is recorded; the first other line ends it. The ops must keep the vertex count. The weight
+is 0 below `from` degrees of the bone's turn about `axis`, 1 above `to`, linear between. `Rig::posed`
+adds `weight * delta` to the rest mesh before skinning. The GLB carries one morph target per
+corrective (`POSITION` deltas, names in the mesh `extras.targetNames`) and each clip gets a
+`weights` channel sampled at every frame, so engines play the same pose. On `skin_arm` the
+corrective in `examples/mesh/skin_arm_corrective.gcad` takes `skincheck` from 28 flips to 0.
+
 ## Checking a skin
 
 `gcad skincheck file.gcad` prints, for every skinned body:

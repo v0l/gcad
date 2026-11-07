@@ -580,6 +580,7 @@ pub const OPERATIONS: &[&str] = &[
     "relax",
     "decimate",
     "bone",
+    "corrective",
     "skin",
     "clip",
     "key",
@@ -727,6 +728,9 @@ impl Model {
     }
 
     fn apply_op(&mut self, line: &Line) -> Result<String> {
+        if !gcad_mesh::rig_ops::SCULPT_OPS.contains(&line.op.as_str()) {
+            self.scene.close_corrective()?;
+        }
         if self.has_mesh()
             && !MESH_SAFE.contains(&line.op.as_str())
             && !MESH_OPERATIONS.contains(&line.op.as_str())
@@ -829,6 +833,7 @@ impl Model {
             "relax" => self.op_relax(line),
             "decimate" => self.op_decimate(line),
             "bone" => self.op_bone(line),
+            "corrective" => self.scene.op_corrective(&self.scope, line),
             "skin" => self.op_skin(line),
             "clip" => self.op_clip(line),
             "key" => self.op_key(line),

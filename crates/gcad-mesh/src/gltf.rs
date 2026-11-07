@@ -167,6 +167,7 @@ fn weights_of(skin: &Weights, vertices: usize) -> (Vec<u16>, Vec<f32>) {
 type Flattened<'a> = (Vec<P3>, Vec<P3>, Vec<u16>, &'a [[u32; 3]], Vec<u32>);
 
 struct Level {
+    targets: Vec<Vec<P3>>,
     mesh: Mesh,
     skin: Option<Weights>,
     map: Option<Vec<u8>>,
@@ -218,7 +219,11 @@ fn nearest_weights(skin: &Weights, from: &Mesh, to: &Mesh) -> Weights {
 
 fn levels_of(body: &Body<'_>, rig: Option<&Rig>) -> Vec<Level> {
     let skin = rig.and_then(|r| r.skin.clone());
+    let targets = rig
+        .map(|r| r.correctives.iter().map(|c| c.delta.clone()).collect())
+        .unwrap_or_default();
     let mut first = Level {
+        targets,
         mesh: body.mesh.clone(),
         skin: skin.clone(),
         map: None,
@@ -236,6 +241,7 @@ fn levels_of(body: &Body<'_>, rig: Option<&Rig>) -> Vec<Level> {
         for mesh in lod_meshes(body.mesh, detail) {
             let weights = skin.as_ref().map(|s| nearest_weights(s, body.mesh, &mesh));
             out.push(Level {
+                targets: Vec::new(),
                 mesh,
                 skin: weights,
                 map: None,
@@ -331,6 +337,14 @@ fn emit_level(
         ));
         attributes["WEIGHTS_0"] = json!(b.floats(&weights, 4, "VEC4", Some(ARRAY_BUFFER), false));
     }
+    let targets: Vec<Value> = level
+        .targets
+        .iter()
+        .map(|delta| {
+            let moved: Vec<P3> = source.iter().map(|&i| delta[i as usize]).collect();
+            json!({"POSITION": b.floats(&flat(moved.iter().map(|p| y_up(*p))), 3, "VEC3", Some(ARRAY_BUFFER), true)})
+        })
+        .collect();
     let mut primitives = Vec::new();
     for (part, part_name) in mesh.parts.iter().enumerate() {
         let indices: Vec<u32> = triangles
@@ -364,14 +378,30 @@ fn emit_level(
             material["normalTexture"] = json!({"index": t});
         }
         materials.push(material);
-        primitives.push(json!({
+        let mut primitive = json!({
             "attributes": attributes,
             "indices": accessor,
             "material": materials.len() - 1,
             "mode": 4,
-        }));
+        });
+        if !targets.is_empty() {
+            primitive["targets"] = json!(targets);
+        }
+        primitives.push(primitive);
     }
     json!({"name": name, "primitives": primitives})
+}
+
+fn corrective_times(clip: &crate::mesh::rig::Clip) -> Vec<f64> {
+    let duration = clip.duration();
+    let frames = (duration * clip.fps).ceil() as usize;
+    let mut times: Vec<f64> = (0..=frames).map(|k| k as f64 / clip.fps).collect();
+    times.retain(|t| *t < duration - 1.0e-9);
+    times.push(duration);
+    times.extend(clip.keys.iter().map(|k| k.t));
+    times.sort_by(f64::total_cmp);
+    times.dedup_by(|a, b| (*a - *b).abs() < 1.0e-9);
+    times
 }
 
 pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
@@ -408,6 +438,12 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
         }
         let mesh_index = mesh_indices[0];
         let mut node = json!({"name": body.name, "mesh": mesh_index});
+        if let Some(rig) = rig.filter(|r| !r.correctives.is_empty()) {
+            let weights = rig.corrective_weights(&rig.pose);
+            meshes[mesh_index]["weights"] = json!(weights);
+            meshes[mesh_index]["extras"] =
+                json!({"targetNames": rig.correctives.iter().map(|c| c.name.clone()).collect::<Vec<_>>()});
+        }
         let mut lod_nodes = Vec::new();
         for (k, mesh_index) in mesh_indices.iter().enumerate().skip(1) {
             lod_nodes.push((format!("{}_LOD{k}", body.name), *mesh_index));
@@ -506,6 +542,23 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
                     channels.push(json!({
                         "sampler": samplers.len() - 1,
                         "target": {"node": base + bone, "path": "translation"},
+                    }));
+                }
+                if !rig.correctives.is_empty() {
+                    let times = corrective_times(clip);
+                    let mut values: Vec<f32> = Vec::new();
+                    for t in &times {
+                        let pose = rig.sample(clip_index, *t);
+                        values.extend(rig.corrective_weights(&pose).iter().map(|w| *w as f32));
+                    }
+                    let float_times: Vec<f32> = times.iter().map(|t| *t as f32).collect();
+                    let input = b.floats(&float_times, 1, "SCALAR", None, true);
+                    let output = b.floats(&values, 1, "SCALAR", None, false);
+                    samplers
+                        .push(json!({"input": input, "output": output, "interpolation": "LINEAR"}));
+                    channels.push(json!({
+                        "sampler": samplers.len() - 1,
+                        "target": {"node": nodes.len(), "path": "weights"},
                     }));
                 }
                 if !channels.is_empty() {

@@ -63,8 +63,19 @@ impl Clip {
     }
 }
 
+#[derive(Clone, Debug, PartialEq)]
+pub struct Corrective {
+    pub name: String,
+    pub bone: usize,
+    pub axis: P3,
+    pub from: f64,
+    pub to: f64,
+    pub delta: Vec<P3>,
+}
+
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Rig {
+    pub correctives: Vec<Corrective>,
     pub bones: Vec<Bone>,
     pub skin: Option<Weights>,
     pub pose: Pose,
@@ -376,6 +387,43 @@ impl Rig {
             .collect()
     }
 
+    pub fn corrective_weight(&self, corrective: &Corrective, pose: &Pose) -> f64 {
+        let q = pose
+            .get(&corrective.bone)
+            .copied()
+            .unwrap_or(IDENTITY_QUAT);
+        let n = length([corrective.axis[0], corrective.axis[1], corrective.axis[2]]);
+        let along: f64 = (0..3).map(|k| q[k] * corrective.axis[k] / n).sum();
+        let mut angle = (2.0 * along.atan2(q[3])).to_degrees();
+        if angle > 180.0 {
+            angle -= 360.0;
+        } else if angle < -180.0 {
+            angle += 360.0;
+        }
+        let ramp = (angle - corrective.from) / (corrective.to - corrective.from);
+        ramp.clamp(0.0, 1.0)
+    }
+
+    pub fn corrective_weights(&self, pose: &Pose) -> Vec<f64> {
+        self.correctives
+            .iter()
+            .map(|c| self.corrective_weight(c, pose))
+            .collect()
+    }
+
+    pub fn corrected(&self, mesh: &Mesh, pose: &Pose) -> Mesh {
+        let mut out = mesh.clone();
+        for (c, w) in self.correctives.iter().zip(self.corrective_weights(pose)) {
+            if w == 0.0 || c.delta.len() != out.positions.len() {
+                continue;
+            }
+            for (p, d) in out.positions.iter_mut().zip(&c.delta) {
+                *p = add(*p, scale(*d, w));
+            }
+        }
+        out
+    }
+
     pub fn posed(&self, mesh: &Mesh, pose: &Pose) -> Mesh {
         let Some(skin) = self
             .skin
@@ -385,9 +433,14 @@ impl Rig {
             return mesh.clone();
         };
         let xf = self.skin_transforms(pose);
-        let mut out = mesh.clone();
+        let mut out = if self.correctives.is_empty() {
+            mesh.clone()
+        } else {
+            self.corrected(mesh, pose)
+        };
         if self.dq > 0.0 {
-            out.positions = super::skin_dq::pose_positions(&mesh.positions, skin, &xf, self.dq);
+            out.positions =
+                super::skin_dq::pose_positions(&out.positions, skin, &xf, self.dq);
             return out;
         }
         for (p, weights) in out.positions.iter_mut().zip(skin) {
@@ -529,6 +582,16 @@ impl Rig {
                 p(b.head),
                 p(b.tail),
                 n(length(sub(b.tail, b.head))),
+            ));
+        }
+        for c in &self.correctives {
+            out.push_str(&format!(
+                "corrective {} on {} axis {} from {} to {} degrees\n",
+                c.name,
+                self.bones[c.bone].name,
+                p(c.axis),
+                n(c.from),
+                n(c.to)
             ));
         }
         for c in &self.clips {

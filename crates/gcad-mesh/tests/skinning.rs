@@ -407,4 +407,81 @@ fn refine_joints_needs_bones_and_an_unskinned_mesh() {
     let late = plain.replace("\nclip rom", "\nrefine joints edge=0.3 reach=1.8\nclip rom");
     let message = gcad_mesh::build(&late).err().expect("fails").to_string();
     assert!(message.contains("before `skin auto`"), "{message}");
+
+fn glb_json(glb: &[u8]) -> serde_json::Value {
+    let n = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    serde_json::from_slice(&glb[20..20 + n]).expect("json")
+}
+
+fn glb_floats(glb: &[u8], doc: &serde_json::Value, accessor: u64) -> Vec<f32> {
+    let n = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    let bin = &glb[20 + n + 8..];
+    let a = &doc["accessors"][accessor as usize];
+    let view = &doc["bufferViews"][a["bufferView"].as_u64().unwrap() as usize];
+    let start = view["byteOffset"].as_u64().unwrap() as usize;
+    let width = match a["type"].as_str().unwrap() {
+        "SCALAR" => 1,
+        "VEC3" => 3,
+        other => panic!("{other}"),
+    };
+    let count = a["count"].as_u64().unwrap() as usize * width;
+    bin[start..start + count * 4]
+        .chunks(4)
+        .map(|c| f32::from_le_bytes(c.try_into().unwrap()))
+        .collect()
+}
+
+#[test]
+fn a_corrective_removes_the_elbow_flips() {
+    let plain = report(&example("skin_arm"));
+    assert!(plain.quality.flipped > 0);
+    let fixed = report(&example("skin_arm_corrective"));
+    assert_eq!(fixed.quality.flipped, 0);
+}
+
+#[test]
+fn the_morph_target_plays_the_same_pose_as_rig_posed() {
+    let source = example("skin_arm_corrective");
+    let model = gcad_mesh::build(&source).expect("builds");
+    let body = &model.bodies[0];
+    let rig = body.rig().expect("rig");
+    assert_eq!(rig.correctives.len(), 1);
+    let glb = gcad_mesh::to_glb(&source).expect("builds");
+    let doc = glb_json(&glb);
+    let mesh = &doc["meshes"][0];
+    assert_eq!(mesh["extras"]["targetNames"][0], "elbow");
+    let target = mesh["primitives"][0]["targets"][0]["POSITION"].as_u64().unwrap();
+    let delta = glb_floats(&glb, &doc, target);
+    let channel = doc["animations"][0]["channels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|c| c["target"]["path"] == "weights")
+        .expect("weights channel");
+    let sampler = &doc["animations"][0]["samplers"][channel["sampler"].as_u64().unwrap() as usize];
+    let times = glb_floats(&glb, &doc, sampler["input"].as_u64().unwrap());
+    let weights = glb_floats(&glb, &doc, sampler["output"].as_u64().unwrap());
+    let clip = rig.clip("rom").unwrap();
+    let mut elbow_full = false;
+    for (t, w) in times.iter().zip(&weights) {
+        let pose = rig.sample(clip, f64::from(*t));
+        let expected = rig.posed(body.rest_mesh(), &pose);
+        let mut bare = rig.clone();
+        bare.correctives.clear();
+        let mut shifted = body.rest_mesh().clone();
+        for (p, d) in shifted.positions.iter_mut().zip(delta.chunks(3)) {
+            let d = [f64::from(d[0]), -f64::from(d[2]), f64::from(d[1])];
+            for k in 0..3 {
+                p[k] += d[k] * f64::from(*w);
+            }
+        }
+        let played = bare.posed(&shifted, &pose);
+        for (a, b) in played.positions.iter().zip(&expected.positions) {
+            for k in 0..3 {
+                assert!((a[k] - b[k]).abs() < 1.0e-3, "t={t}");
+            }
+        }
+        elbow_full |= *w == 1.0;
+    }
+    assert!(elbow_full);
 }

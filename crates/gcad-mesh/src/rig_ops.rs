@@ -33,6 +33,21 @@ fn flag(args: &Args<'_>, name: &str) -> Result<bool> {
     }
 }
 
+pub const SCULPT_OPS: &[&str] = &[
+    "let", "if", "select", "inflate", "smooth", "crease", "pinch", "flatten", "noise", "relax",
+    "brush", "stroke", "dab", "mask", "hide", "isolate", "show", "move", "scale", "rotate", "group",
+];
+
+#[derive(Clone, Debug)]
+pub struct OpenCorrective {
+    name: String,
+    bone: usize,
+    axis: P3,
+    from: f64,
+    to: f64,
+    base: Vec<P3>,
+}
+
 fn quat_mul(a: Quat, b: Quat) -> Quat {
     let [ax, ay, az, aw] = a;
     let [bx, by, bz, bw] = b;
@@ -136,6 +151,73 @@ impl Scene {
                 ""
             }
         ))
+    }
+
+    pub fn op_corrective(&mut self, scope: &Scope, line: &Line) -> Result<String> {
+        self.close_corrective()?;
+        let args = Args::new(line, &["name"], &["bone", "axis", "from", "to"], false)?;
+        let name = args.text("name")?.to_string();
+        let rig = &self.mesh_body.rig;
+        if rig.correctives.iter().any(|c| c.name == name) {
+            bail!("there is already a corrective called `{name}`");
+        }
+        let bone = rig.bone(args.text("bone")?)?;
+        let axis = direction(args.text("axis")?, scope)?;
+        if mesh::length(axis) < 1.0e-12 {
+            bail!("the corrective axis must not be zero");
+        }
+        let from = args.number("from", scope)?;
+        let to = args.number("to", scope)?;
+        if (to - from).abs() < 1.0e-9 {
+            bail!("`from` and `to` must differ, both are {from}");
+        }
+        let rest = self.sculpted("corrective")?.clone();
+        if !self.mesh_body.rig.skin_fits(&rest) {
+            bail!("`corrective` needs a skinned mesh; put it after `skin auto`");
+        }
+        self.mesh_body.open_corrective = Some(OpenCorrective {
+            name: name.clone(),
+            bone,
+            axis,
+            from,
+            to,
+            base: rest.positions,
+        });
+        Ok(format!(
+            "recording corrective `{name}`; the sculpt lines that follow become its delta"
+        ))
+    }
+
+    pub fn close_corrective(&mut self) -> Result<()> {
+        let Some(open) = self.mesh_body.open_corrective.take() else {
+            return Ok(());
+        };
+        let mesh = self.sculpted("corrective")?;
+        if mesh.positions.len() != open.base.len() {
+            bail!(
+                "corrective `{}` changed the vertex count; use sculpt ops that keep the topology",
+                open.name
+            );
+        }
+        let delta: Vec<P3> = mesh
+            .positions
+            .iter()
+            .zip(&open.base)
+            .map(|(a, b)| mesh::sub(*a, *b))
+            .collect();
+        mesh.positions = open.base;
+        if delta.iter().all(|d| mesh::length(*d) < 1.0e-12) {
+            bail!("corrective `{}` sculpts nothing", open.name);
+        }
+        self.mesh_body.rig.correctives.push(rig::Corrective {
+            name: open.name,
+            bone: open.bone,
+            axis: open.axis,
+            from: open.from,
+            to: open.to,
+            delta,
+        });
+        Ok(())
     }
 
     pub fn mirror_bone(&mut self, axis: usize, at: f64, of: &str) -> Result<String> {

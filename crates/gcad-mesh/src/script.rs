@@ -258,6 +258,7 @@ const SUBSET: &[&str] = &[
     "relax",
     "decimate",
     "bone",
+    "corrective",
     "skin",
     "pose",
     "clip",
@@ -335,6 +336,9 @@ impl Run {
         if solid_ops::OPS.contains(&line.op.as_str()) {
             return self.solids.apply(&mut self.scene, &self.scope, line);
         }
+        if !crate::rig_ops::SCULPT_OPS.contains(&line.op.as_str()) && line.op != "let" && line.op != "if" {
+            self.scene.close_corrective()?;
+        }
         let scope = &self.scope;
         let scene = &mut self.scene;
         match line.op.as_str() {
@@ -361,6 +365,7 @@ impl Run {
             "relax" => scene.op_relax(scope, line),
             "decimate" => scene.op_decimate(scope, line),
             "bone" => scene.op_bone(scope, line),
+            "corrective" => scene.op_corrective(scope, line),
             "skin" => scene.op_skin(scope, line),
             "pose" => scene.op_mesh_pose(scope, line),
             "clip" => scene.op_clip(scope, line),
