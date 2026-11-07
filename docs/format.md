@@ -494,7 +494,8 @@ pose clip=walk t=0.25
 |---|---|---|
 | `bone` | `name` `parent=` `head=x,y,z` `tail=x,y,z` | adds a bone. A child's `head` is its parent's tail unless given. A bone turns about its head |
 | `mirror` | `x` `of=bone` | copies the bone and everything under it to the other side, `_l` names coming back `_r` |
-| `skin auto` | `power=` | weights every vertex to the bones by distance to each bone segment it can reach through the inside of the mesh, so an arm hanging beside the body or a hand beside a leg does not pull it (`power` 4, higher is sharper), at most 4 bones per vertex, weights summing to 1 |
+| `skin auto` | `method=smooth\|distance` `power=` `core=` `joint=` `passes=` `step=` `unrelated=` | weights every vertex to the bones it can reach through the inside of the mesh, so an arm hanging beside the body or a hand beside a leg does not pull it, at most 4 bones per vertex, weights summing to 1, none under 0.01. `smooth` (the default) holds the middle of each bone rigid (`core` 0.5 of its length, and at least `joint` 2 limb thicknesses from a joint), blends only across the joints by smoothing the weights over the surface (`passes` 300 of `step` 1), keeps no weight edge steeper than 0.35, and lets a vertex take weight only from a bone, its parent and its children (`unrelated=true` drops that rule). `distance` is the old per-vertex falloff, `power` 4, higher is sharper; `skin auto method=distance power=4` gives the weights files made before smoothing had |
+| `skin smooth` | `bone=` `sphere=x,y,z r=` `passes=` `step=` | smooths the weights already there over the surface, only where the vertex has weight on `bone` and lies inside the sphere when given (everywhere when neither is), 10 passes by default: softens a hard `skin part=` binding or a painted edge |
 | `skin` | `part=name bone=name` | binds every vertex of a blockout part rigidly to one bone, so it moves only with that bone |
 | `skin paint` | `bone=` `sphere=x,y,z` `r=` `falloff=` `strength=` | moves weight toward a bone inside the sphere, fading out over `falloff` |
 | `pose` | `bone=` `rotate=angle axis=x\|y\|z\|x,y,z` or `rotate=rx,ry,rz` | turns a bone from rest, relative to its parent; the mesh follows by linear blend skinning, so renders, `inspect` and exports show the pose |
@@ -507,7 +508,9 @@ Sculpt before binding: changing the vertex count (`refine`, `decimate`) after `s
 until the skin is bound again. `gcad inspect` prints the skeleton and clips. `gcad export f.gcad f.glb`
 writes a GLB (Y up) with the skin, joints, inverse bind matrices, weights, one material per part and all
 clips, and every solid body beside them as its own mesh in its `color`, with flat faces; the GLB holds the current pose as the node pose, the skin binds the rest shape. OBJ, STL and 3MF
-export the posed mesh.
+export the posed mesh. `gcad skincheck f.gcad` reports how good the skin is (weight jumps across edges,
+rigid cores, unrelated bones, and triangles that flip, squash or stretch over every clip key); see
+`docs/skinning.md`.
 
 ### Placing detail by eye
 

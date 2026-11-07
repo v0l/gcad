@@ -72,13 +72,9 @@ pub fn core_bone(
     }
     let bone = nearest(&distances[vertex])?;
     let d = &distances[vertex];
-    if d
-        .iter()
-        .enumerate()
-        .any(|(i, &x)| {
-            !super::skin_check::related(rig, i, bone) && d[bone] > super::skin_check::CORE_CLEAR * x
-        })
-    {
+    if d.iter().enumerate().any(|(i, &x)| {
+        !super::skin_check::related(rig, i, bone) && d[bone] > super::skin_check::CORE_CLEAR * x
+    }) {
         return None;
     }
     let b = &rig.bones[bone];
@@ -87,7 +83,11 @@ pub fn core_bone(
     let len = super::length(sub(b.tail, b.head));
     let radius = d[bone];
     let clear = |along: f64| along >= joint * radius * PIN_MARGIN;
-    let lo = if b.parent.is_none() { 0.0 } else { 0.5 - core / 2.0 };
+    let lo = if b.parent.is_none() {
+        0.0
+    } else {
+        0.5 - core / 2.0
+    };
     let hi = if rig.children(bone).is_empty() {
         1.0
     } else {
@@ -174,7 +174,10 @@ pub fn soften_steps(
         let mut free = vec![false; around.len()];
         let mut any = false;
         for (v, ring) in around.iter().enumerate() {
-            if ring.iter().any(|&u| row_jump(dense, bones, v, u as usize) > target) {
+            if ring
+                .iter()
+                .any(|&u| row_jump(dense, bones, v, u as usize) > target)
+            {
                 free[v] = true;
                 any = true;
             }
@@ -205,7 +208,11 @@ pub fn soften_steps(
                 .collect();
             free = grown;
         }
-        let fixed: Vec<bool> = free.iter().zip(pinned.iter()).map(|(f, p)| !f || *p).collect();
+        let fixed: Vec<bool> = free
+            .iter()
+            .zip(pinned.iter())
+            .map(|(f, p)| !f || *p)
+            .collect();
         relax(rig, dense, bones, around, &fixed, SOFT_PASSES, 1.0);
     }
 }
@@ -316,13 +323,16 @@ fn erode(rig: &Rig, mesh: &Mesh, around: &[Vec<u32>], labels: &mut [Option<usize
 }
 
 fn mean_edge(mesh: &Mesh, around: &[Vec<u32>]) -> f64 {
-    let (sum, n) = around.iter().enumerate().fold((0.0, 0usize), |(s, n), (v, ring)| {
-        let here: f64 = ring
-            .iter()
-            .map(|&u| super::length(sub(mesh.positions[u as usize], mesh.positions[v])))
-            .sum();
-        (s + here, n + ring.len())
-    });
+    let (sum, n) = around
+        .iter()
+        .enumerate()
+        .fold((0.0, 0usize), |(s, n), (v, ring)| {
+            let here: f64 = ring
+                .iter()
+                .map(|&u| super::length(sub(mesh.positions[u as usize], mesh.positions[v])))
+                .sum();
+            (s + here, n + ring.len())
+        });
     if n == 0 { 0.0 } else { sum / n as f64 }
 }
 
@@ -366,12 +376,26 @@ pub fn smooth_skin(rig: &mut Rig, mesh: &Mesh, options: SmoothOptions) {
     rig.skin = Some(finish(rig, &weights, bones, options.unrelated));
 }
 
-pub fn smooth_existing(rig: &mut Rig, mesh: &Mesh, region: &[bool], passes: usize, step: f64) -> usize {
+pub fn smooth_existing(
+    rig: &mut Rig,
+    mesh: &Mesh,
+    region: &[bool],
+    passes: usize,
+    step: f64,
+) -> usize {
     let bones = rig.bones.len();
     let skin = rig.ensure_skin(mesh.positions.len()).clone();
     let mut weights = dense(&skin, bones);
     let fixed: Vec<bool> = region.iter().map(|r| !r).collect();
-    relax(None, &mut weights, bones, &mesh.neighbours(), &fixed, passes, step);
+    relax(
+        None,
+        &mut weights,
+        bones,
+        &mesh.neighbours(),
+        &fixed,
+        passes,
+        step,
+    );
     let mut out = skin;
     let mut count = 0;
     for (v, w) in out.iter_mut().enumerate() {
@@ -451,7 +475,12 @@ mod tests {
         let mut rig = arm();
         smooth_skin(&mut rig, &mesh, SmoothOptions::default());
         let skin = rig.skin.as_ref().unwrap();
-        let low = |v: usize| skin[v].iter().find(|(b, _)| *b == 1).map_or(0.0, |(_, w)| *w);
+        let low = |v: usize| {
+            skin[v]
+                .iter()
+                .find(|(b, _)| *b == 1)
+                .map_or(0.0, |(_, w)| *w)
+        };
         let at = |z: f64| (z / 0.5) as usize * 8;
         assert_eq!(low(at(2.0)), 0.0);
         assert_eq!(low(at(18.0)), 1.0);
@@ -484,8 +513,14 @@ mod tests {
         let mesh = tube();
         let mut rig = arm();
         let n = mesh.positions.len();
-        rig.skin = Some((0..n).map(|v| vec![(usize::from(v >= n / 2), 1.0)]).collect());
-        let region: Vec<bool> = (0..n).map(|v| (n / 2 - 24..n / 2 + 24).contains(&v)).collect();
+        rig.skin = Some(
+            (0..n)
+                .map(|v| vec![(usize::from(v >= n / 2), 1.0)])
+                .collect(),
+        );
+        let region: Vec<bool> = (0..n)
+            .map(|v| (n / 2 - 24..n / 2 + 24).contains(&v))
+            .collect();
         let touched = smooth_existing(&mut rig, &mesh, &region, 20, 0.5);
         assert_eq!(touched, 48);
         let skin = rig.skin.as_ref().unwrap();

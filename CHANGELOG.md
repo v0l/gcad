@@ -7,6 +7,8 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- `gcad skincheck f.gcad` scores a skin: weight jumps across edges, contested and unrelated weights, rigid cores, and triangles that flip, squash or stretch over every clip key. See `docs/skinning.md`.
+- `skin smooth bone= sphere= r= passes=` smooths the weights already bound.
 - A `.gasset` `source` can be a mesh body: its `bone`, `skin` and `clip` lines become a skin and clips, so sculpted characters get joint pruning, weight quantisation, collision, LOD and FBX. See `examples/game-assets/creature.gasset`.
 - Wixely's game-assets fork, merged with its history, behind the `game-assets` cargo feature:
   `.gasset` files, the `gcad asset-*` commands, the asset viewer, sprite sheets, collision
@@ -27,6 +29,9 @@ All notable changes to gcad are listed here. The format follows
 - The asset viewer has Visual, Both and Collision views. Fitted shapes draw as solid
   surfaces, and clicking one selects its node, with the shape added to the copied reference.
 - Brush `alpha=file.png` greyscale stamps (relative to the part file) and `size=40px` radii in pixels of the last `gcad inspect` view, recorded in a `<file>.view` sidecar.
+
+### Changed
+- `skin auto` now smooths weights over the surface across each joint, keeps the middle of every bone rigid, and takes weight only from a bone's parent and children. The creature's hind legs no longer fold into spikes. `skin auto method=distance power=4` gives the old weights; rigged GLBs made from `skin auto` change.
 
 ## [0.6.1] - 2026-11-03
 

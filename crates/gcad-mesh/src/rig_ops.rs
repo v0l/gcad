@@ -1,10 +1,10 @@
 use crate::args::{Args, direction, point3, positive};
 use crate::interp::{Scene, mirrored_name};
 use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, MoveKey, Quat, Rig};
+use crate::mesh::skin_smooth::{self, SmoothOptions};
 use crate::mesh::{self, P3};
 use crate::parse::{Line, Scope};
 use anyhow::{Result, anyhow, bail};
-use crate::mesh::skin_smooth::{self, SmoothOptions};
 
 fn passes_of(args: &Args<'_>, scope: &Scope, default: usize) -> Result<usize> {
     match args.optional_number("passes", scope)? {
@@ -184,8 +184,20 @@ impl Scene {
             line,
             &["mode"],
             &[
-                "part", "bone", "sphere", "r", "falloff", "strength", "power", "method", "passes",
-                "core", "unrelated", "step", "zone", "joint",
+                "part",
+                "bone",
+                "sphere",
+                "r",
+                "falloff",
+                "strength",
+                "power",
+                "method",
+                "passes",
+                "core",
+                "unrelated",
+                "step",
+                "zone",
+                "joint",
             ],
             false,
         )?;
@@ -206,18 +218,24 @@ impl Scene {
                             step: step_of(&args, scope)?,
                             core: match args.optional_number("core", scope)? {
                                 Some(c) if (0.0..=1.0).contains(&c) => c,
-                                Some(c) => bail!("core is a fraction of each bone, 0 to 1, got {c}"),
+                                Some(c) => {
+                                    bail!("core is a fraction of each bone, 0 to 1, got {c}")
+                                }
                                 None => defaults.core,
                             },
                             unrelated: flag(&args, "unrelated")?,
                             zone: match args.optional_number("zone", scope)? {
                                 Some(z) if z >= 0.0 => z,
-                                Some(z) => bail!("zone is a fraction of a bone's length, 0 or more, got {z}"),
+                                Some(z) => bail!(
+                                    "zone is a fraction of a bone's length, 0 or more, got {z}"
+                                ),
                                 None => defaults.zone,
                             },
                             joint: match args.optional_number("joint", scope)? {
                                 Some(j) if j >= 0.0 => j,
-                                Some(j) => bail!("joint is a multiple of the limb's thickness, 0 or more, got {j}"),
+                                Some(j) => bail!(
+                                    "joint is a multiple of the limb's thickness, 0 or more, got {j}"
+                                ),
                                 None => defaults.joint,
                             },
                         };
@@ -229,13 +247,18 @@ impl Scene {
             }
             Some("smooth") => {
                 if rig.skin.is_none() {
-                    bail!("`skin smooth` smooths weights that are there; bind them first with `skin auto`");
+                    bail!(
+                        "`skin smooth` smooths weights that are there; bind them first with `skin auto`"
+                    );
                 }
                 let passes = passes_of(&args, scope, 10)?;
                 let step = step_of(&args, scope)?;
                 let bone = args.values.get("bone").map(|b| rig.bone(b)).transpose()?;
                 let sphere = match args.values.get("sphere") {
-                    Some(text) => Some((point3(text, scope)?, positive(args.number("r", scope)?, "r")?)),
+                    Some(text) => Some((
+                        point3(text, scope)?,
+                        positive(args.number("r", scope)?, "r")?,
+                    )),
                     None => None,
                 };
                 let skin = rig.skin.as_ref().expect("skinned");

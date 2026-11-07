@@ -26,7 +26,8 @@ fn distance_method_reproduces_the_old_auto_weights_byte_for_byte() {
         ("rigged_creature", 0x9cd7b7c99b5c77d8, 477712),
         ("skin_arm", 0x9be69288ebd5feb5, 259912),
     ] {
-        let source = example(name).replace("\nskin auto\n", "\nskin auto method=distance power=4\n");
+        let source =
+            example(name).replace("\nskin auto\n", "\nskin auto method=distance power=4\n");
         let glb = gcad_mesh::to_glb(&source).expect("builds");
         assert_eq!((glb.len(), fnv(&glb)), (len, hash), "{name}");
     }
@@ -72,7 +73,11 @@ fn smoothed_auto_weights_keep_the_creature_clean() {
     let r = report(&example("rigged_creature"));
     assert_clean("rigged_creature", &r, 8);
     assert!(r.contested < 852 / 2, "{}", r.contested);
-    assert!(r.quality.stretched <= 10 && r.quality.squashed <= 2, "{:?}", r.quality);
+    assert!(
+        r.quality.stretched <= 10 && r.quality.squashed <= 2,
+        "{:?}",
+        r.quality
+    );
 }
 
 #[test]

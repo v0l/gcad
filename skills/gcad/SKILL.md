@@ -545,6 +545,10 @@ Bones, skin weights, poses and clips are one line each, after `remesh` and all s
 for the other side), `skin auto` then `skin part=head bone=head_b` for rigid parts, `clip name fps=`
 with `key t= bone= rotate= axis=` lines, `pose clip=name t=` to look at a frame and `gcad render`
 it, `gcad export f.gcad f.glb` for the game asset. Example: `examples/mesh/rigged_creature.gcad`.
+`skin auto` smooths weights across each joint and keeps bone middles rigid; after binding, run
+`gcad skincheck f.gcad`: aim for no edge over 0.35, 0 unrelated, rigid core near 1 and no flipped
+triangles in any clip key. Fix a bad joint with `skin smooth sphere=x,y,z r= passes=20`, or
+`skin paint` then `skin smooth`. `skin auto joint=` widens (higher) or tightens the joint blend.
 The viewer (`gcad f.gcad`) draws mesh colours, soft borders, gloss and material textures, and on a
 rigged mesh has an animation card: pick a clip to play or scrub it, `pose bones` sliders, a
 `skeleton` overlay and `reset pose`. Use it to look at clips; it keeps the clip and time on save.

@@ -127,7 +127,10 @@ pub fn poses(rig: &Rig) -> Vec<(String, Rig)> {
             let mut posed = rig.clone();
             posed.pose = rig.sample(c, t);
             posed.moved = rig.sample_moves(c, t);
-            out.push((format!("{} t={}", clip.name, (t * 1000.0).round() / 1000.0), posed));
+            out.push((
+                format!("{} t={}", clip.name, (t * 1000.0).round() / 1000.0),
+                posed,
+            ));
         }
     }
     out
@@ -201,7 +204,10 @@ fn quality(mesh: &Mesh, rig: &Rig) -> PoseQuality {
 }
 
 pub fn check(mesh: &Mesh, rig: &Rig) -> Option<SkinReport> {
-    let skin = rig.skin.as_ref().filter(|s| s.len() == mesh.positions.len())?;
+    let skin = rig
+        .skin
+        .as_ref()
+        .filter(|s| s.len() == mesh.positions.len())?;
     let mut report = SkinReport {
         vertices: skin.len(),
         ..Default::default()
