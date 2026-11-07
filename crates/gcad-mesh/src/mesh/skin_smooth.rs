@@ -114,7 +114,7 @@ fn start_weights(rig: &Rig, d: &[f64], power: f64, unrelated: bool) -> Vec<(usiz
     )
 }
 
-fn dense(skin: &Weights, bones: usize) -> Vec<f64> {
+pub fn dense(skin: &Weights, bones: usize) -> Vec<f64> {
     let mut out = vec![0.0; skin.len() * bones];
     for (v, w) in skin.iter().enumerate() {
         for &(b, x) in w {
@@ -265,7 +265,7 @@ pub fn untangle(rig: &Rig, row: &mut [f64]) {
     }
 }
 
-fn finish(rig: &Rig, dense: &[f64], bones: usize, unrelated: bool) -> Weights {
+pub fn finish(rig: &Rig, dense: &[f64], bones: usize, unrelated: bool) -> Weights {
     dense
         .chunks(bones)
         .map(|row| {
@@ -338,14 +338,24 @@ fn mean_edge(mesh: &Mesh, around: &[Vec<u32>]) -> f64 {
 
 pub fn smooth_skin(rig: &mut Rig, mesh: &Mesh, options: SmoothOptions) {
     let distances = rig.bone_distances(mesh);
-    let bones = rig.bones.len();
-    let around = mesh.neighbours();
     let start: Weights = distances
         .iter()
         .map(|d| start_weights(rig, d, options.power, options.unrelated))
         .collect();
+    pin_and_relax(rig, mesh, &distances, start, options);
+}
+
+pub fn pin_and_relax(
+    rig: &mut Rig,
+    mesh: &Mesh,
+    distances: &[Vec<f64>],
+    start: Weights,
+    options: SmoothOptions,
+) {
+    let bones = rig.bones.len();
+    let around = mesh.neighbours();
     let mut labels: Vec<Option<usize>> = (0..start.len())
-        .map(|v| core_bone(rig, mesh, &distances, v, options.core, options.joint))
+        .map(|v| core_bone(rig, mesh, distances, v, options.core, options.joint))
         .collect();
     erode(rig, mesh, &around, &mut labels, options.zone);
     let mut fixed = vec![false; start.len()];

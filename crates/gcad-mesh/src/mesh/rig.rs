@@ -441,26 +441,23 @@ impl Rig {
         let eps = (length(sub(hi, lo)) * 1.0e-3).max(1.0e-9);
         let solid = Solid::of(mesh);
         let normals = mesh.vertex_normals();
-        mesh.positions
-            .iter()
-            .zip(&normals)
-            .map(|(&p, &n)| {
-                let start = sub(p, scale(n, solid.cell * 0.75));
-                let reach: Vec<(f64, bool)> = self
-                    .bones
-                    .iter()
-                    .map(|b| {
-                        let q = closest_on_segment(p, b.head, b.tail);
-                        (length(sub(p, q)) + eps, solid.reaches(start, q))
-                    })
-                    .collect();
-                let any_inside = reach.iter().any(|(_, ok)| *ok);
-                reach
-                    .iter()
-                    .map(|&(d, ok)| if ok || !any_inside { d } else { f64::INFINITY })
-                    .collect()
-            })
-            .collect()
+        super::sdf::collect_indexed(mesh.positions.len(), |v| {
+            let (p, n) = (mesh.positions[v], normals[v]);
+            let start = sub(p, scale(n, solid.cell * 0.75));
+            let reach: Vec<(f64, bool)> = self
+                .bones
+                .iter()
+                .map(|b| {
+                    let q = closest_on_segment(p, b.head, b.tail);
+                    (length(sub(p, q)) + eps, solid.reaches(start, q))
+                })
+                .collect();
+            let any_inside = reach.iter().any(|(_, ok)| *ok);
+            reach
+                .iter()
+                .map(|&(d, ok)| if ok || !any_inside { d } else { f64::INFINITY })
+                .collect()
+        })
     }
 
     pub fn auto_skin(&mut self, mesh: &Mesh, power: f64) {

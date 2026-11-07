@@ -48,7 +48,7 @@ fn skin_smooth_softens_a_hard_part_binding() {
 fn skin_auto_refuses_bad_settings() {
     let base = "arm: limb 0,0,0 0,0,10 r=2\nremesh 0.8\nbone a head=0,0,0 tail=0,0,10\n";
     for (line, words) in [
-        ("skin auto method=heat2", "smooth or distance"),
+        ("skin auto method=heat2", "smooth, heat or distance"),
         ("skin auto core=2", "core is a fraction"),
         ("skin auto passes=1.5", "whole number"),
         ("skin auto unrelated=maybe", "true or false"),
@@ -68,9 +68,49 @@ fn assert_clean(name: &str, r: &SkinReport, flips: usize) {
     assert!(r.quality.flipped <= flips, "{name} {:?}", r.quality);
 }
 
+fn with_method(name: &str, method: &str) -> String {
+    example(name).replace("\nskin auto\n", &format!("\nskin auto method={method}\n"))
+}
+
+#[test]
+fn heat_weights_keep_the_creature_clean() {
+    let r = report(&example("rigged_creature"));
+    assert_clean("rigged_creature", &r, 4);
+    assert!(r.min_core >= 0.99, "{}", r.min_core);
+    assert!(r.contested < 852 / 2, "{}", r.contested);
+    assert!(
+        r.quality.stretched <= 6 && r.quality.squashed == 0,
+        "{:?}",
+        r.quality
+    );
+}
+
+#[test]
+fn heat_weights_keep_the_stress_quadruped_clean() {
+    let r = report(&example("skin_stress"));
+    assert_clean("skin_stress", &r, 6);
+    assert!(r.min_core >= 0.99, "{}", r.min_core);
+    assert!(r.quality.squashed <= 8, "{:?}", r.quality);
+}
+
+#[test]
+fn heat_weights_halve_the_squashed_wrist_of_the_arm() {
+    let r = report(&example("skin_arm"));
+    assert_clean("skin_arm", &r, 30);
+    assert!(r.quality.squashed <= 166 / 2, "{:?}", r.quality);
+}
+
+#[test]
+fn heat_is_the_default_method() {
+    assert_eq!(
+        report(&example("skin_arm")),
+        report(&with_method("skin_arm", "heat"))
+    );
+}
+
 #[test]
 fn smoothed_auto_weights_keep_the_creature_clean() {
-    let r = report(&example("rigged_creature"));
+    let r = report(&with_method("rigged_creature", "smooth"));
     assert_clean("rigged_creature", &r, 8);
     assert!(r.contested < 852 / 2, "{}", r.contested);
     assert!(
@@ -82,13 +122,13 @@ fn smoothed_auto_weights_keep_the_creature_clean() {
 
 #[test]
 fn smoothed_auto_weights_keep_the_stress_quadruped_clean() {
-    let r = report(&example("skin_stress"));
+    let r = report(&with_method("skin_stress", "smooth"));
     assert_clean("skin_stress", &r, 8);
     assert!(r.quality.squashed <= 12, "{:?}", r.quality);
 }
 
 #[test]
 fn smoothed_auto_weights_keep_the_arm_clean() {
-    let r = report(&example("skin_arm"));
+    let r = report(&with_method("skin_arm", "smooth"));
     assert_clean("skin_arm", &r, 16);
 }

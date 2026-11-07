@@ -1,6 +1,7 @@
 use crate::args::{Args, direction, point3, positive};
 use crate::interp::{Scene, mirrored_name};
 use crate::mesh::rig::{self, Bone, Clip, IDENTITY_QUAT, Key, MoveKey, Quat, Rig};
+use crate::mesh::skin_heat;
 use crate::mesh::skin_smooth::{self, SmoothOptions};
 use crate::mesh::{self, P3};
 use crate::parse::{Line, Scope};
@@ -197,6 +198,9 @@ impl Scene {
                 "unrelated",
                 "step",
                 "zone",
+                "heat",
+                "cut",
+                "snap",
                 "joint",
             ],
             false,
@@ -208,40 +212,60 @@ impl Scene {
             Some("auto") => {
                 let power = args.optional_number("power", scope)?.unwrap_or(4.0);
                 positive(power, "power")?;
-                match args.values.get("method").copied().unwrap_or("smooth") {
-                    "distance" => rig.auto_skin(&mesh, power),
-                    "smooth" => {
-                        let defaults = SmoothOptions::default();
-                        let options = SmoothOptions {
-                            power,
-                            passes: passes_of(&args, scope, defaults.passes)?,
-                            step: step_of(&args, scope)?,
-                            core: match args.optional_number("core", scope)? {
-                                Some(c) if (0.0..=1.0).contains(&c) => c,
-                                Some(c) => {
-                                    bail!("core is a fraction of each bone, 0 to 1, got {c}")
-                                }
-                                None => defaults.core,
-                            },
-                            unrelated: flag(&args, "unrelated")?,
-                            zone: match args.optional_number("zone", scope)? {
-                                Some(z) if z >= 0.0 => z,
-                                Some(z) => bail!(
-                                    "zone is a fraction of a bone's length, 0 or more, got {z}"
-                                ),
-                                None => defaults.zone,
-                            },
-                            joint: match args.optional_number("joint", scope)? {
-                                Some(j) if j >= 0.0 => j,
-                                Some(j) => bail!(
-                                    "joint is a multiple of the limb's thickness, 0 or more, got {j}"
-                                ),
-                                None => defaults.joint,
-                            },
+                let method = args.values.get("method").copied().unwrap_or("heat");
+                if method == "distance" {
+                    rig.auto_skin(&mesh, power);
+                    return Ok(self.skin_summary(&mesh));
+                }
+                let defaults = SmoothOptions::default();
+                let options = SmoothOptions {
+                    power,
+                    passes: passes_of(&args, scope, defaults.passes)?,
+                    step: step_of(&args, scope)?,
+                    core: match args.optional_number("core", scope)? {
+                        Some(c) if (0.0..=1.0).contains(&c) => c,
+                        Some(c) => bail!("core is a fraction of each bone, 0 to 1, got {c}"),
+                        None => defaults.core,
+                    },
+                    unrelated: flag(&args, "unrelated")?,
+                    zone: match args.optional_number("zone", scope)? {
+                        Some(z) if z >= 0.0 => z,
+                        Some(z) => {
+                            bail!("zone is a fraction of a bone's length, 0 or more, got {z}")
+                        }
+                        None => defaults.zone,
+                    },
+                    joint: match args.optional_number("joint", scope)? {
+                        Some(j) if j >= 0.0 => j,
+                        Some(j) => {
+                            bail!("joint is a multiple of the limb's thickness, 0 or more, got {j}")
+                        }
+                        None => defaults.joint,
+                    },
+                };
+                match method {
+                    "heat" => {
+                        let strength = match args.optional_number("heat", scope)? {
+                            Some(h) if h > 0.0 => h,
+                            Some(h) => bail!("heat is above 0, got {h}"),
+                            None => skin_heat::HEAT,
                         };
-                        skin_smooth::smooth_skin(rig, &mesh, options);
+                        let cut = match args.optional_number("cut", scope)? {
+                            Some(c) if (0.0..0.5).contains(&c) => c,
+                            Some(c) => bail!("cut is from 0 to below 0.5, got {c}"),
+                            None => skin_heat::CUT,
+                        };
+                        let snap = match args.optional_number("snap", scope)? {
+                            Some(s) if (0.0..=1.0).contains(&s) => s,
+                            Some(s) => bail!("snap is from 0 to 1, got {s}"),
+                            None => skin_heat::SNAP,
+                        };
+                        skin_heat::heat_core_skin(rig, &mesh, strength, cut, snap, options);
                     }
-                    other => bail!("`skin auto method=` takes smooth or distance, got `{other}`"),
+                    "smooth" => skin_smooth::smooth_skin(rig, &mesh, options),
+                    other => {
+                        bail!("`skin auto method=` takes smooth, heat or distance, got `{other}`")
+                    }
                 }
                 Ok(self.skin_summary(&mesh))
             }
