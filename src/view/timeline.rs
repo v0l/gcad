@@ -138,7 +138,11 @@ impl Timeline {
             self.toggle_playing(duration);
         }
         ui.checkbox(&mut self.looping, "Loop");
-        ui.add(egui::Slider::new(&mut self.time, 0.0..=duration).text("Seconds"));
+        ui.add(
+            egui::Slider::new(&mut self.time, 0.0..=duration)
+                .fixed_decimals(2)
+                .text("Seconds"),
+        );
     }
 }
 
@@ -191,6 +195,18 @@ mod tests {
         assert_eq!((t.time, t.playing), (0.25, false));
         t.step(1.0, 5.0);
         assert_eq!(t.time, 1.0);
+    }
+
+    #[test]
+    fn bar_shows_seconds_with_two_decimals() {
+        use egui_kittest::kittest::Queryable as _;
+        let mut harness = egui_kittest::Harness::builder().build_ui_state(
+            |ui, t: &mut Timeline| t.show(ui, 2.0, None, Skin::Bar),
+            Timeline::default(),
+        );
+        harness.run();
+        let value = harness.get_by_role(egui::accesskit::Role::SpinButton).value();
+        assert_eq!(value.as_deref(), Some("0.00"));
     }
 
     #[test]
