@@ -627,3 +627,19 @@ fn rigged_creature_example_poses_and_exports() {
             .starts_with(b"glTF")
     );
 }
+
+#[test]
+fn refine_joints_splits_triangles_near_the_joint_only() {
+    let plain = build(ARM);
+    let refined = build(&format!("{ARM}refine joints edge=0.3 reach=3.5\n"));
+    let (a, b) = (rest_of(&plain), rest_of(&refined));
+    assert!(b.triangles.len() > a.triangles.len());
+    let far = |m: &Mesh| m.positions.iter().filter(|p| (p[2] - 20.0).abs() > 7.0).count();
+    assert_eq!(far(&a), far(&b));
+}
+
+#[test]
+fn refine_joints_needs_a_parented_bone() {
+    let message = failure("arm: limb 0,0,0 0,0,20 r=3\nremesh 0.4\nbone a head=0,0,0 tail=0,0,20\nrefine joints edge=0.3");
+    assert!(message.contains("bone"), "{message}");
+}
