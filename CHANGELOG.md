@@ -31,7 +31,7 @@ All notable changes to gcad are listed here. The format follows
 - Brush `alpha=file.png` greyscale stamps (relative to the part file) and `size=40px` radii in pixels of the last `gcad inspect` view, recorded in a `<file>.view` sidecar.
 
 ### Changed
-- `skin auto` now smooths weights over the surface across each joint, keeps the middle of every bone rigid, and takes weight only from a bone's parent and children. The creature's hind legs no longer fold into spikes. `skin auto method=distance power=4` gives the old weights; rigged GLBs made from `skin auto` change.
+- `skin auto` now uses bone heat weights (the method behind Blender's automatic weights), solved in-crate with a block conjugate gradient: weights follow the surface, the middle of every bone stays rigid, and a vertex takes weight only from a bone's parent and children. The creature's hind legs no longer fold into spikes. `method=smooth` smooths distance weights instead, and `skin auto method=distance power=4` gives the old weights; rigged GLBs made from `skin auto` change.
 
 ## [0.6.1] - 2026-11-03
 

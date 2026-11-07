@@ -37,7 +37,7 @@ binary to use).
 The creature's hind legs and crotch fold into spikes in the walk because neighbouring vertices pick
 different leading bones, and no bone has a rigid core: every vertex blends four bones by distance.
 
-## Stage 1: smoothed weights (`skin auto`, the default now)
+## Stage 1: smoothed weights (`skin auto method=smooth`)
 
 1. Each vertex starts from the distance weights, limited to its nearest bone, that bone's parent and
    its children.
@@ -67,4 +67,40 @@ that bone heat weights (stage 2) and dual quaternion or twist bones (stage 4) ad
 `tests/skinning.rs` in `crates/gcad-mesh` holds these bounds: no edge over 0.35, no unrelated weights,
 rigid cores at 0.85 or more, flips at most 8 on the quadrupeds.
 
-On a 186k-triangle quadruped (93k vertices, 13 bones) `skin auto` takes 2.5 s in a release build.
+On a 186k-triangle quadruped (93k vertices, 13 bones) `skin auto method=smooth` takes 2.5 s in a release build.
+
+## Stage 2: bone heat (`skin auto`, the default now)
+
+The method of Baran and Popovic (2007), which Blender's "automatic weights" uses. For each bone `b`,
+solve on the surface
+
+```
+(L + H) w_b = H p_b
+```
+
+where `L` is the cotangent Laplacian of the mesh, `H` is diagonal with `H_v = heat * area_v / d_v^2`
+(`d_v` the distance from vertex `v` to its nearest bone it can reach through the inside of the mesh),
+and `p_b` is 1 where `b` is that nearest bone (split evenly on a tie). Heat flows along the surface,
+so the other leg across the crotch gets nothing unless the surface joins them. The weights for all
+bones are solved together as one block conjugate gradient (Jacobi preconditioned, started from the
+distance weights, relative tolerance 1e-3) in `crates/gcad-mesh/src/mesh/skin_heat.rs`; no new
+dependencies, and it builds for wasm32.
+
+After the solve: weights shared by two unrelated bones move to the bone that links them, weights under
+`cut` (0.05) are dropped and the rest stretched back to 0..1, the middle of each bone snaps to 100%
+where heat already gives it 80%, and the steps that leaves are smoothed away as in stage 1.
+
+| fixture | max jump | p99 | edges over 0.35 | contested | unrelated | min core | area ratio | aspect growth | flipped | squashed | stretched |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| rigged_creature | 0.278 | 0.210 | 0 | 196 | 0 | 1.00 | 0.567..7.69 | 1.72 | 4 | 0 | 6 |
+| skin_stress | 0.279 | 0.219 | 0 | 196 | 0 | 1.00 | 0.159..3.41 | 6.41 | 6 | 7 | 0 |
+| skin_arm | 0.138 | 0.120 | 0 | 32 | 0 | 1.00 | 0.012..2.09 | 15.5 | 28 | 78 | 0 |
+
+Against stage 1, every bone has a full rigid core, contested vertices drop by a quarter on the
+quadrupeds, the stress knee no longer creases inward, and the arm's squashed wrist and stretched
+elbow halve. The arm's flips go up (13 to 28): the 120 degree elbow fold now collapses over a wider,
+smoother band, the plain LBS limit that twist bones and dual quaternion skinning (stage 4) address.
+
+Time for `gcad check` on the 186k-triangle quadruped, remesh included: 2.3 s with heat, 1.1 s with
+`smooth` (the inside-reach test and the SpMV run in parallel). `gcad2glb`, built without the
+`parallel` feature, takes 4.9 s for the same file: 1.7 s for the reach test, 1.8 s for the solve.
