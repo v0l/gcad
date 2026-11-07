@@ -171,7 +171,7 @@ mod tests {
             "{}",
             angle.to_degrees()
         );
-        assert!(eff.get(&0).is_none());
+        assert!(!eff.contains_key(&0));
         assert_eq!(rig.driven(), vec![1, 2, 3]);
     }
 

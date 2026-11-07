@@ -177,12 +177,18 @@ pub fn solve_block(
                 }
             })
             .collect();
-        for i in 0..n {
-            for c in 0..k {
-                let e = i * k + c;
-                x[e] += alpha[c] * p[e];
-                r[e] -= alpha[c] * ap[e];
-                z[e] = r[e] * pre[i];
+        for (i, scale) in pre.iter().enumerate() {
+            let rows = i * k..(i + 1) * k;
+            let (xs, rs, zs) = (
+                &mut x[rows.clone()],
+                &mut r[rows.clone()],
+                &mut z[rows.clone()],
+            );
+            let (ps, aps) = (&p[rows.clone()], &ap[rows]);
+            for (c, a) in alpha.iter().enumerate() {
+                xs[c] += a * ps[c];
+                rs[c] -= a * aps[c];
+                zs[c] = rs[c] * scale;
             }
         }
         let next = column_dot(&r, &z);
@@ -398,8 +404,8 @@ mod tests {
             ..Default::default()
         };
         let w = heat_weights(&rig, &mesh, HEAT);
-        for v in 0..mesh.positions.len() {
-            assert!((w[0][v] + w[1][v] - 1.0).abs() < 1.0e-4, "{v}");
+        for (v, (a, b)) in w[0].iter().zip(&w[1]).enumerate() {
+            assert!((a + b - 1.0).abs() < 1.0e-4, "{v}");
         }
         let b_at = |row: usize| w[1][row * 12];
         assert!(b_at(2) < 0.01 && b_at(38) > 0.99);

@@ -97,7 +97,7 @@ impl Scene {
         }
         let twist = match args.optional_number("twist", scope)? {
             None => 1,
-            Some(n) if n >= 1.0 && n <= 8.0 && n.fract() == 0.0 => n as usize,
+            Some(n) if (1.0..=8.0).contains(&n) && n.fract() == 0.0 => n as usize,
             Some(n) => bail!("twist is a whole number of segments from 1 to 8, got {n}"),
         };
         let skinned = self.mesh_body.rig.skin.is_some();

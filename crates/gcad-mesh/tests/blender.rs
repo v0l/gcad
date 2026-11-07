@@ -8,6 +8,8 @@ fn example(name: &str) -> String {
     .expect("example")
 }
 
+type Matched = Vec<([f64; 3], Vec<(usize, f64)>)>;
+
 #[test]
 #[ignore = "needs BLENDER_WEIGHTS=dir with <fixture>.json from tools/blender/auto_weights.py"]
 fn blender_automatic_weights_scored_by_skincheck() {
@@ -21,13 +23,17 @@ fn blender_automatic_weights_scored_by_skincheck() {
         let body = &model.bodies[0];
         let mesh = body.rest_mesh();
         let mut rig = body.rig().unwrap().clone();
-        let theirs: Vec<([f64; 3], Vec<(usize, f64)>)> = doc["vertices"]
+        let theirs: Matched = doc["vertices"]
             .as_array()
             .unwrap()
             .iter()
             .map(|v| {
                 let p = v["p"].as_array().unwrap();
-                let p = [p[0].as_f64().unwrap(), p[1].as_f64().unwrap(), p[2].as_f64().unwrap()];
+                let p = [
+                    p[0].as_f64().unwrap(),
+                    p[1].as_f64().unwrap(),
+                    p[2].as_f64().unwrap(),
+                ];
                 let w = v["w"]
                     .as_array()
                     .unwrap()
