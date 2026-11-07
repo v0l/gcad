@@ -7,12 +7,15 @@ fn c_program_builds_and_reads_a_model() {
     let out = PathBuf::from(env!("CARGO_TARGET_TMPDIR"));
     let mut deps = std::env::current_exe().expect("exe");
     deps.pop();
-    let lib_dir = deps.parent().expect("profile dir").to_path_buf();
+    let profile = deps.parent().expect("profile dir").to_path_buf();
+    let release = profile.file_name().is_some_and(|n| n == "release");
+    let target = profile.parent().expect("target dir").join("c-abi");
+    let lib_dir = target.join(if release { "release" } else { "debug" });
     let static_lib = lib_dir.join("libgcad_mesh.a");
     let mut build = Command::new(std::env::var("CARGO").unwrap_or_else(|_| "cargo".into()));
     build.args(["build", "-p", "gcad-mesh", "--lib", "--target-dir"]);
-    build.arg(lib_dir.parent().expect("target dir"));
-    if lib_dir.file_name().is_some_and(|n| n == "release") {
+    build.arg(&target);
+    if release {
         build.arg("--release");
     }
     let built = build.current_dir(&root).output().expect("cargo build");

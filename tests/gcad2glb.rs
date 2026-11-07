@@ -199,9 +199,17 @@ fn export_tris_flag_matches_gcad2glb() {
 
 fn gcad2glb_tool() -> std::path::PathBuf {
     let gcad = std::path::Path::new(env!("CARGO_BIN_EXE_gcad"));
-    let tool = gcad.with_file_name("gcad2glb");
     let profile_dir = gcad.parent().expect("profile dir");
-    let target = profile_dir.parent().expect("target dir");
+    let release = profile_dir.file_name().is_some_and(|n| n == "release");
+    let target = profile_dir
+        .parent()
+        .expect("target dir")
+        .join("gcad2glb-tool");
+    let tool = target
+        .join(if release { "release" } else { "debug" })
+        .join(gcad.file_name().expect("exe name"))
+        .with_file_name("gcad2glb")
+        .with_extension(std::env::consts::EXE_EXTENSION);
     let mut build = std::process::Command::new(env!("CARGO"));
     build
         .args([
@@ -212,8 +220,8 @@ fn gcad2glb_tool() -> std::path::PathBuf {
             "gcad2glb",
             "--target-dir",
         ])
-        .arg(target);
-    if profile_dir.file_name().is_some_and(|n| n == "release") {
+        .arg(&target);
+    if release {
         build.arg("--release");
     }
     let status = build.status().expect("builds gcad2glb");
