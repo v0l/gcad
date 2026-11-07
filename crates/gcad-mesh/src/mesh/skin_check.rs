@@ -128,8 +128,29 @@ pub fn poses(rig: &Rig) -> Vec<(String, Rig)> {
     out
 }
 
+fn dominant_bone(skin: &[Vec<(usize, f64)>], t: [u32; 3]) -> Option<usize> {
+    let mut sums: Vec<(usize, f64)> = Vec::new();
+    for i in t {
+        for &(b, w) in &skin[i as usize] {
+            match sums.iter_mut().find(|(x, _)| *x == b) {
+                Some((_, s)) => *s += w,
+                None => sums.push((b, w)),
+            }
+        }
+    }
+    sums.into_iter()
+        .max_by(|a, b| a.1.total_cmp(&b.1).then(b.0.cmp(&a.0)))
+        .map(|(b, _)| b)
+}
+
 fn quality(mesh: &Mesh, rig: &Rig) -> PoseQuality {
+    let skin = rig.skin.as_deref().unwrap_or_default();
     let rest: Vec<Shape> = mesh.triangles.iter().map(|&t| shape(mesh, t)).collect();
+    let dominant: Vec<Option<usize>> = mesh
+        .triangles
+        .iter()
+        .map(|&t| dominant_bone(skin, t))
+        .collect();
     let mut q = PoseQuality {
         min_area_ratio: 1.0,
         max_area_ratio: 1.0,
@@ -139,17 +160,19 @@ fn quality(mesh: &Mesh, rig: &Rig) -> PoseQuality {
     let mut worst_bad = 0;
     for (name, posed_rig) in poses(rig) {
         let posed = posed_rig.posed(mesh, &posed_rig.pose);
+        let xf = posed_rig.skin_transforms(&posed_rig.pose);
         let mut bad = 0;
-        for (t, r) in mesh.triangles.iter().zip(&rest) {
+        for ((t, r), bone) in mesh.triangles.iter().zip(&rest).zip(&dominant) {
             if r.area < 1.0e-12 {
                 continue;
             }
             let s = shape(&posed, *t);
+            let expected = bone.map_or(r.normal, |b| super::apply(&xf[b].r, r.normal));
             let ratio = s.area / r.area;
             q.min_area_ratio = q.min_area_ratio.min(ratio);
             q.max_area_ratio = q.max_area_ratio.max(ratio);
             q.worst_aspect_growth = q.worst_aspect_growth.max(s.aspect / r.aspect);
-            if dot(s.normal, r.normal) < 0.0 {
+            if dot(s.normal, expected) < 0.0 {
                 q.flipped += 1;
                 bad += 1;
             }
@@ -415,13 +438,24 @@ mod tests {
     }
 
     #[test]
+    fn turning_a_rigid_strip_past_90_degrees_flips_nothing() {
+        let mesh = strip();
+        let mut rig = arm(vec![vec![(0, 1.0)]; mesh.positions.len()]);
+        rig.clips[0].keys.iter_mut().for_each(|k| k.bone = 0);
+        rig.clips[0].keys[1].rotation = quat_axis_angle([1.0, 0.0, 0.0], 150.0).unwrap();
+        let r = check(&mesh, &rig).unwrap();
+        assert_eq!(r.quality.flipped, 0);
+        assert!((r.quality.min_area_ratio - 1.0).abs() < 1.0e-9);
+    }
+
+    #[test]
     fn folding_the_strip_flat_flips_triangles() {
         let mesh = strip();
         let skin = (0..mesh.positions.len())
             .map(|i| vec![(usize::from(i / 2 > 5), 1.0)])
             .collect();
         let mut rig = arm(skin);
-        rig.clips[0].keys[1].rotation = quat_axis_angle([0.0, 0.0, 1.0], 180.0).unwrap();
+        rig.clips[0].keys[1].rotation = quat_axis_angle([0.0, 1.0, 0.0], 180.0).unwrap();
         let r = check(&mesh, &rig).unwrap();
         assert!(r.quality.flipped > 0);
         assert!(r.quality.worst_pose.starts_with("bend t="));

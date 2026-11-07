@@ -13,7 +13,7 @@ How gcad binds a mesh to its bones, what makes a skin good, and the numbers that
 | influences | how many vertices have 0, 1, 2, 3 and 4 bones | at most 4, none with 0 |
 | unrelated | vertices that take at least 5% from a bone that is not their strongest bone, its parent or its child | 0 |
 | rigid core | for the middle 40% of each bone, the share of the vertices nearest that bone that are 99% or more on it | near 1 |
-| posed quality | every clip pose at its keys and halfway between: the smallest and largest triangle area ratio against rest, the worst growth of the aspect ratio, and how many triangles flip, shrink below a quarter or grow past four times | no flips |
+| posed quality | every clip pose at its keys and halfway between: the smallest and largest triangle area ratio against rest, the worst growth of the aspect ratio, and how many triangles flip against their leading bone's turn, shrink below a quarter or grow past four times | no flips |
 
 `tools/skin_shots.sh OUT` renders the fixtures at their worst keys with `gcad inspect` (set `GCAD` to the
 binary to use).
@@ -30,9 +30,9 @@ binary to use).
 
 | fixture | max jump | p99 | edges over 0.35 | contested | unrelated | min core | area ratio | aspect growth | flipped | squashed | stretched |
 |---|---|---|---|---|---|---|---|---|---|---|---|
-| rigged_creature | 1.000 | 0.377 | 198 | 852 | 1084 | 0.00 | 0.056..90.8 | 28.3 | 182 | 14 | 141 |
-| skin_stress | 0.813 | 0.271 | 107 | 794 | 1122 | 0.00 | 0.055..12.8 | 24.2 | 87 | 23 | 82 |
-| skin_arm | 0.152 | 0.099 | 0 | 140 | 0 | 0.00 | 0.155..1.60 | 3.81 | 1469 | 166 | 0 |
+| rigged_creature | 1.000 | 0.377 | 198 | 852 | 1084 | 0.00 | 0.056..90.8 | 28.3 | 198 | 14 | 141 |
+| skin_stress | 0.813 | 0.271 | 107 | 794 | 1122 | 0.00 | 0.055..12.8 | 24.2 | 103 | 23 | 82 |
+| skin_arm | 0.152 | 0.099 | 0 | 140 | 0 | 0.00 | 0.155..1.60 | 3.81 | 0 | 166 | 0 |
 
 The creature's hind legs and crotch fold into spikes in the walk because neighbouring vertices pick
 different leading bones, and no bone has a rigid core: every vertex blends four bones by distance.
