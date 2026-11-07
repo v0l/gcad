@@ -86,7 +86,7 @@ fn errors() {
     assert!(failure("rect 10 10 r=5").contains("under half"));
     assert!(failure("rect 10 10\nextrude 2 depth=3").contains("no `depth` argument"));
     assert!(failure("cut 3").contains("needs a sketch"));
-    assert!(failure("# not an operation").contains("not an operation"));
+    assert!(failure("3d 4").contains("not an operation"));
 }
 
 #[test]
