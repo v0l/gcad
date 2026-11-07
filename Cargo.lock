@@ -2057,6 +2057,7 @@ dependencies = [
  "epaint_default_fonts 0.35.0",
  "faer",
  "flate2",
+ "gcad-calc",
  "gcad-mesh",
  "gcad-sims-proto",
  "getrandom 0.4.3",
@@ -2094,6 +2095,15 @@ dependencies = [
  "winresource",
  "xatlas-rs-v2",
  "yaml-rust2",
+]
+
+[[package]]
+name = "gcad-calc"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "serde",
+ "toml",
 ]
 
 [[package]]

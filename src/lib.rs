@@ -1,7 +1,7 @@
 #[cfg(feature = "game-assets")]
 pub mod asset;
 pub mod bom;
-pub mod calc;
+pub use gcad_calc as calc;
 pub mod drafting;
 pub mod drawing;
 pub mod export;
