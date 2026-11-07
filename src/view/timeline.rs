@@ -165,6 +165,35 @@ mod tests {
     }
 
     #[test]
+    fn speed_scales_advance_and_negative_wraps() {
+        let mut t = Timeline {
+            playing: true,
+            speed: 2.0,
+            ..Default::default()
+        };
+        t.advance(10.0, 1.0);
+        assert!((t.time - 2.0).abs() < 1e-9);
+        t.speed = 0.5;
+        t.advance(10.0, 1.0);
+        assert!((t.time - 2.5).abs() < 1e-9);
+        t.speed = -1.0;
+        t.advance(10.0, 3.0);
+        assert!((t.time - 9.5).abs() < 1e-9);
+    }
+
+    #[test]
+    fn step_moves_by_one_frame_and_clamps() {
+        let mut t = Timeline {
+            playing: true,
+            ..Default::default()
+        };
+        t.step(1.0, 0.25);
+        assert_eq!((t.time, t.playing), (0.25, false));
+        t.step(1.0, 5.0);
+        assert_eq!(t.time, 1.0);
+    }
+
+    #[test]
     fn zero_duration_stops_playing() {
         let mut t = Timeline {
             playing: true,
