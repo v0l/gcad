@@ -1,0 +1,31 @@
+[package]
+name = "gcad-brep"
+description = "The gcad solid language: sketches, features, bodies, assemblies and materials on the monstertruck B-rep kernel"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-calc.workspace = true
+gcad-geom.workspace = true
+gcad-host.workspace = true
+gcad-mesh = { workspace = true, features = ["parallel"] }
+gcad-parse.workspace = true
+gcad-version.workspace = true
+anyhow.workspace = true
+bitcode.workspace = true
+flate2.workspace = true
+image.workspace = true
+monstertruck.workspace = true
+rayon.workspace = true
+roxmltree.workspace = true
+serde.workspace = true
+sha2.workspace = true
+spade.workspace = true
+toml.workspace = true
+yaml-rust2.workspace = true
+
+[features]
+game-assets = []

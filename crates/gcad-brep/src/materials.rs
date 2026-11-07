@@ -264,7 +264,7 @@ pub fn builtins() -> &'static HashMap<String, Entry> {
             })
             .collect();
         for entry in from_toml(
-            include_str!("../../data/materials.toml"),
+            include_str!("../../../data/materials.toml"),
             Path::new("built in"),
         )
         .expect("valid standard material library")

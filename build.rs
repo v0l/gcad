@@ -15,6 +15,7 @@ fn build_version() {
         "--abbrev=12",
         "--",
         "src",
+        "crates",
         "sims-proto",
         "Cargo.toml",
         "Cargo.lock",

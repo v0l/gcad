@@ -1485,7 +1485,7 @@ impl Model {
         ))
     }
 
-    pub(crate) fn op_pose(&mut self, line: &Line) -> Result<String> {
+    pub fn op_pose(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["joint", "value"], &[], false)?;
         let name = args.text("joint")?;
         let index = self

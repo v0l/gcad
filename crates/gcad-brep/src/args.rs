@@ -4,7 +4,7 @@ use monstertruck::modeling::{EuclideanSpace, Point3, Vector3};
 
 pub use gcad_mesh::args::{Args, label_of, positive};
 
-pub(crate) fn point3(text: &str, scope: &Scope) -> Result<Point3> {
+pub fn point3(text: &str, scope: &Scope) -> Result<Point3> {
     match crate::parse::split_top_level(text, ',').as_slice() {
         [x, y, z] => Ok(Point3::new(
             eval(x, scope)?,
@@ -15,7 +15,7 @@ pub(crate) fn point3(text: &str, scope: &Scope) -> Result<Point3> {
     }
 }
 
-pub(crate) fn direction(text: &str, scope: &Scope) -> Result<Vector3> {
+pub fn direction(text: &str, scope: &Scope) -> Result<Vector3> {
     let (sign, name) = match text.strip_prefix('-') {
         Some(rest) => (-1.0, rest),
         None => (1.0, text),

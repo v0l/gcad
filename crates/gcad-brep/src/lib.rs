@@ -35,9 +35,16 @@ pub mod view_sidecar;
 mod weld;
 mod wrap;
 
-use crate::geometry::{self, Frame, Profile, Segment};
+use gcad_calc as calc;
+use gcad_geom::{geometry, offset, packed, select};
+use gcad_host as host;
+use gcad_host::progress;
+use gcad_mesh::mesh;
+use gcad_parse as parse;
+
+use crate::geometry::{Frame, Profile, Segment};
 use crate::parse::{Line, Scope};
-use crate::select::{self, Groups};
+use crate::select::Groups;
 use anyhow::{Result, anyhow, bail};
 use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
@@ -374,7 +381,7 @@ impl CacheEntries {
     }
 }
 
-pub(crate) fn forget_kept() {
+pub fn forget_kept() {
     *KEPT.lock().unwrap_or_else(|e| e.into_inner()) = None;
 }
 
@@ -696,7 +703,7 @@ impl Model {
             .collect()
     }
 
-    pub(crate) fn apply_shared(&mut self, line: &Line) -> Result<String> {
+    pub fn apply_shared(&mut self, line: &Line) -> Result<String> {
         match line.op.as_str() {
             "if" => self.op_if(line),
             _ => self.op_include(line),
@@ -1087,7 +1094,7 @@ pub(crate) fn read_lines(path: &std::path::Path) -> Result<Vec<Line>> {
     crate::parse::parse_program(&source).map_err(|e| anyhow!("{}: {e:#}", path.display()))
 }
 
-pub(crate) fn load_model(
+pub fn load_model(
     path: &std::path::Path,
     vars: &[(String, f64)],
     depth: usize,
@@ -1186,7 +1193,7 @@ pub fn snapshots_path(
 
 /// Include dependencies reached through cached parts and their worker evaluations.
 #[cfg(feature = "game-assets")]
-pub(crate) fn run_path_recorded(
+pub fn run_path_recorded(
     path: &std::path::Path,
     vars: &[(String, f64)],
 ) -> Result<(Run, crate::host::Reads)> {

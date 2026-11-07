@@ -499,7 +499,7 @@ impl Model {
         ))
     }
 
-    pub(crate) fn op_material(&mut self, line: &Line) -> Result<String> {
+    pub fn op_material(&mut self, line: &Line) -> Result<String> {
         let name = if self.assembly {
             let part = line
                 .positional
@@ -621,7 +621,7 @@ impl Model {
         Ok(())
     }
 
-    pub(crate) fn load_library(&mut self, file: &std::path::Path) -> Result<String> {
+    pub fn load_library(&mut self, file: &std::path::Path) -> Result<String> {
         if !crate::host::is_file(file) {
             bail!("no file {}", file.display());
         }

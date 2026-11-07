@@ -120,7 +120,7 @@ fn cornered(points: &[(f64, f64)], size: f64, round: bool) -> Result<Profile> {
 }
 
 impl Model {
-    pub(crate) fn op_let(&mut self, line: &Line) -> Result<String> {
+    pub fn op_let(&mut self, line: &Line) -> Result<String> {
         if !line.positional.is_empty() {
             bail!("`let` takes name=value pairs only");
         }
@@ -838,7 +838,7 @@ impl Model {
         ))
     }
 
-    pub(crate) fn relative(&self, file: &str) -> std::path::PathBuf {
+    pub fn relative(&self, file: &str) -> std::path::PathBuf {
         let file = std::path::PathBuf::from(file);
         match &self.dir {
             Some(dir) if file.is_relative() => dir.join(&file),

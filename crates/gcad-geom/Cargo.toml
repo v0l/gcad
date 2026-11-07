@@ -11,6 +11,7 @@ publish = false
 anyhow.workspace = true
 epaint_default_fonts.workspace = true
 monstertruck.workspace = true
+monstertruck-modeling.workspace = true
 rayon.workspace = true
 serde.workspace = true
 ttf-parser.workspace = true

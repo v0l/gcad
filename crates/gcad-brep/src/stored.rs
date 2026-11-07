@@ -68,7 +68,7 @@ fn key(path: &Path, vars: &[(String, f64)]) -> Option<String> {
         .map(|meta| (meta.len(), meta.modified().ok()));
     Some(format!(
         "part-hierarchy-1|{}|{exe:?}|{}|{vars:?}",
-        env!("GCAD_BUILD_VERSION"),
+        gcad_version::BUILD,
         path.display()
     ))
 }

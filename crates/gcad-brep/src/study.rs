@@ -28,7 +28,6 @@ pub fn is_sim(path: &Path) -> bool {
 }
 
 pub(crate) fn start_study(path: &Path) -> Box<dyn Study> {
-    crate::sim::install();
     let start = START
         .get()
         .expect("a .gsim needs the simulation language, installed by gcad::sim::install");

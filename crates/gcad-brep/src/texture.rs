@@ -125,7 +125,7 @@ fn smooth_noise(u: f32, v: f32, cells: i32) -> f32 {
     low * (1.0 - b) + high * b
 }
 
-pub(crate) fn pattern(name: &str) -> Map {
+pub fn pattern(name: &str) -> Map {
     let size = 256;
     let mut rgba = Vec::with_capacity(size * size * 4);
     for y in 0..size {

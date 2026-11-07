@@ -1,3 +1,4 @@
+doc gcad_brep: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_calc: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_geom: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_host: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -6,6 +7,7 @@ doc gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_parse: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_plot: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_sims_proto: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+doc gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_web: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly_hierarchy.rs assembly_hierarchy: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly.rs assembly: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -45,14 +47,16 @@ tests/solid_silhouette.rs solid_silhouette: ok. 13 passed; 0 failed; 0 ignored; 
 tests/stored.rs stored: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/workplane.rs workplane: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad2glb: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_brep: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_calc: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_geom: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_host: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_mesh: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_mesh_viewer: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-unittests gcad: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad: ok. 41 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_parse: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_plot: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_sims_proto: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_web: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

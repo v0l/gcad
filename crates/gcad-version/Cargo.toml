@@ -1,0 +1,9 @@
+[package]
+name = "gcad-version"
+description = "The gcad build version: package version plus the last commit that touched the code"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+build = "build.rs"

@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
+members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
 
 [workspace.package]
 version = "0.6.1"
@@ -21,19 +21,29 @@ gcad-parse = { path = "crates/gcad-parse" }
 gcad-geom = { path = "crates/gcad-geom" }
 gcad-host = { path = "crates/gcad-host" }
 gcad-plot = { path = "crates/gcad-plot" }
+gcad-brep = { path = "crates/gcad-brep" }
+gcad-version = { path = "crates/gcad-version" }
+gcad-mesh = { path = "crates/gcad-mesh" }
 anyhow = "1.0.104"
 bitcode = { version = "0.6", features = ["serde"] }
 epaint_default_fonts = "0.35"
+flate2 = "1"
 image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 monstertruck = { version = "0.4.1", features = ["solid", "step"] }
+monstertruck-io = { version = "0.4.1", features = ["step"] }
+monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
+monstertruck-topology = "0.4.1"
 rayon = "1.12"
+roxmltree = "0.21.1"
 serde = { version = "1", features = ["derive"] }
 sha2 = "0.10"
 sims-progress = { git = "https://github.com/v0l/sims", rev = "99ab20b26822ac11125e2fefb41a83995ca75b62" }
+spade = "2.15"
 toml = "1.1.8"
 ttf-parser = "0.25"
 web-sys = "0.3"
 web-time = "1"
+yaml-rust2 = "0.13.0"
 
 [dependencies]
 gcad-calc.workspace = true
@@ -41,8 +51,10 @@ gcad-parse.workspace = true
 gcad-geom.workspace = true
 gcad-host.workspace = true
 gcad-plot.workspace = true
+gcad-brep.workspace = true
+gcad-version.workspace = true
 gcad-sims-proto = { path = "sims-proto" }
-gcad-mesh = { path = "crates/gcad-mesh", features = ["parallel"] }
+gcad-mesh = { workspace = true, features = ["parallel"] }
 anyhow.workspace = true
 rayon.workspace = true
 clap = { version = "4.6.7", features = ["derive"] }
@@ -52,15 +64,15 @@ egui_bench = { version = "0.9.5", features = ["viewer3d"] }
 epaint_default_fonts.workspace = true
 image.workspace = true
 monstertruck.workspace = true
-monstertruck-io = { version = "0.4.1", features = ["step"] }
-monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
-monstertruck-topology = "0.4.1"
+monstertruck-io.workspace = true
+monstertruck-modeling.workspace = true
+monstertruck-topology.workspace = true
 serde_json = "1.0.151"
 serde.workspace = true
 bitcode.workspace = true
-flate2 = "1"
+flate2.workspace = true
 sha2.workspace = true
-spade = "2.15"
+spade.workspace = true
 robust = "1.2"
 faer = { version = "0.24", default-features = false, features = ["std", "sparse-linalg"] }
 ttf-parser.workspace = true
@@ -77,13 +89,13 @@ sims-progress.workspace = true
 pollster = "0.4"
 bytemuck = "1"
 toml.workspace = true
-roxmltree = "0.21.1"
-yaml-rust2 = "0.13.0"
+roxmltree.workspace = true
+yaml-rust2.workspace = true
 lopdf = { version = "0.45", default-features = false }
 
 [features]
 gpu-tests = []
-game-assets = ["dep:xatlas-rs-v2"]
+game-assets = ["dep:xatlas-rs-v2", "gcad-brep/game-assets"]
 
 [[example]]
 name = "game_asset_glb"
