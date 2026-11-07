@@ -1,0 +1,20 @@
+shoulder: blob 0,0,0 r=3.2
+upper: limb 0,0,0 0,0,12 r=2.4,2 blend=1.2
+lower: limb 0,0,12 0,0,23 r=2,1.5 blend=1
+hand: blob 0,0,24.5 r=2,1,2.4 blend=0.8
+remesh 0.4
+color #c9a27e
+bone upper_b head=0,0,0 tail=0,0,12
+bone lower_b parent=upper_b tail=0,0,23
+bone hand_b parent=lower_b tail=0,0,26
+skin auto
+clip rom fps=24
+key t=0 bone=lower_b rotate=0 axis=x
+key t=1 bone=lower_b rotate=120 axis=x
+key t=2 bone=lower_b rotate=0 axis=x
+key t=0 bone=hand_b rotate=0 axis=z
+key t=1 bone=hand_b rotate=0 axis=z
+key t=2 bone=hand_b rotate=90 axis=z
+key t=0 bone=upper_b rotate=0 axis=y
+key t=1 bone=upper_b rotate=-60 axis=y
+key t=2 bone=upper_b rotate=0 axis=y

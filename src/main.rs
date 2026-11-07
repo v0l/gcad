@@ -376,6 +376,8 @@ enum Command {
         #[arg(long)]
         time: bool,
     },
+    /// Report skin weight quality per rigged body: weight jumps across edges, contested and unrelated weights, rigid cores, and posed triangle quality over every clip key
+    Skincheck { file: String },
     /// Run the file, then one `measure` line without adding it, like `gcad measure case.gasm space at=0,0,5`
     Measure {
         file: String,
@@ -863,6 +865,29 @@ fn simulate(file: &str, vars: &[(String, f64)], dry_run: bool) -> Result<()> {
     let failed = outcome.failed();
     if !failed.is_empty() {
         bail!("expectation not met: {}", failed.join("; "));
+    }
+    Ok(())
+}
+
+fn skincheck(file: &str, vars: &[(String, f64)]) -> Result<()> {
+    let run = load(file, None, vars)?;
+    finished(&run)?;
+    let rest = run.model.rest_meshes();
+    let mut any = false;
+    for (name, rig) in run.model.rigs() {
+        let Some((_, mesh)) = rest.iter().find(|(n, _)| *n == name) else {
+            continue;
+        };
+        match gcad::mesh::skin_check::check(mesh, rig) {
+            Some(report) => {
+                any = true;
+                print!("body {name}\n{report}");
+            }
+            None => println!("body {name}: not skinned"),
+        }
+    }
+    if !any {
+        bail!("no skinned body; add bones and `skin auto`");
     }
     Ok(())
 }
@@ -1955,6 +1980,7 @@ fn main() -> Result<()> {
         }
         Command::Check { file, time } => check(&file, &vars, time),
         Command::Measure { file, what } => measure(&file, &what.join(" "), &vars),
+        Command::Skincheck { file } => skincheck(&file, &vars),
         Command::Inspect {
             file,
             output,

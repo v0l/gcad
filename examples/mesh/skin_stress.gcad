@@ -1,0 +1,40 @@
+body: blob 0,0,12 r=4,9,4.5
+chest: blob 0,-8,13 r=4.2,4,4.6 blend=2
+head: blob 0,-14,16 r=3.2,3.4,3 blend=1.5
+snout: limb 0,-15,15.5 0,-19,15 r=1.8,1 blend=1
+hips: blob 0,8,12 r=4,4,4.5 blend=2
+tail: limb 0,10,12 0,17,11 0,23,13 r=2,1.5,0.6 blend=1.2
+fore_l: limb 2.6,-8,10 2.6,-8,5 2.6,-8.5,0.8 r=1.7,1.2,1 blend=1
+mirror x of=fore_l
+hind_l: limb 2.6,8,9 2.6,8,5 2.6,8.5,0.8 r=2,1.3,1 blend=1
+mirror x of=hind_l
+remesh 0.5
+color #b98c5f
+bone hips_b head=0,8,12 tail=0,0,12
+bone spine parent=hips_b tail=0,-8,13
+bone neck parent=spine tail=0,-14,16
+bone head_b parent=neck tail=0,-19,15.5
+bone tail1 parent=hips_b head=0,9,12 tail=0,16,11.5
+bone tail2 parent=tail1 tail=0,23,13
+bone fore_l head=2.6,-8,10 parent=spine tail=2.6,-8,5
+bone fore_lower_l parent=fore_l tail=2.6,-8.5,0.8
+mirror x of=fore_l
+bone hind_l head=2.6,8,9 parent=hips_b tail=2.6,8,5
+bone hind_lower_l parent=hind_l tail=2.6,8.5,0.8
+mirror x of=hind_l
+skin auto
+clip rom fps=24
+key t=0 bone=hind_l rotate=-50 axis=x
+key t=1 bone=hind_l rotate=50 axis=x
+key t=0 bone=hind_r rotate=50 axis=x
+key t=1 bone=hind_r rotate=-50 axis=x
+key t=0 bone=hind_lower_l rotate=0 axis=x
+key t=1 bone=hind_lower_l rotate=-70 axis=x
+key t=0 bone=fore_l rotate=45 axis=x
+key t=1 bone=fore_l rotate=-45 axis=x
+key t=0 bone=fore_r rotate=-30 axis=y
+key t=1 bone=fore_r rotate=30 axis=y
+key t=0 bone=tail1 rotate=-35 axis=z
+key t=1 bone=tail1 rotate=35 axis=z
+key t=0 bone=neck rotate=-20 axis=x
+key t=1 bone=neck rotate=25 axis=x
