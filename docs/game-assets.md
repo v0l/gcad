@@ -580,6 +580,20 @@ See `gcad-engines:unity/README.md` for validation and remaining limits.
 Baking currently projects geometric rest normals, not an
 arbitrary source shader or source normal-map detail.
 
+## Mesh-body sources
+
+A `source` whose body is a `gcad-mesh` sculpt (made with `blob`, `limb`, brushes and so on) is taken
+as it is: the mesh body becomes the node's mesh, and its `bone`, `skin`, `clip` and `key` lines
+become a skin. Each bone becomes a scene node named `NODE/BONE` under the mesh node, its `skin`
+weights become the skin weights (at most four influences, normalised), and its clips become scene
+clips with rotation and translation tracks. The usual `tessellate` and `uv` lines are still needed
+for the source but do not change a mesh body. Collision, LOD, sprite sheets, FBX, joint pruning
+(`asset-prune-joints`) and weight quantisation (`asset-quantize-weights`) then work on it like any
+other skinned node, and deformation is the same code as for weight files.
+
+Weights come from the part file, so a `skin NODE weights=...` line for a mesh-body node is refused.
+See `examples/game-assets/creature.gasset`.
+
 ## Explicit skin-palette pruning
 
 Explicit socket, collider and LOD authoring/consumer conventions are documented in

@@ -185,3 +185,13 @@ Measured against the kernel on the eight kids-free-games props (`tests/solid_sil
 - Triangles, gcad-mesh against the kernel GLB: barrier 2608 / 1884, hurdle 1484 / 932, gate 2104 / 1072, train 3144 / 848, coin 284 / 1444, arch 2328 / 1712, road 636 / 636, building (style 4, 5 floors) 1188 / 1188.
 - `gcad_mesh::build`, median of 20, release: barrier 0.24 ms, hurdle 0.14, gate 0.20, train 0.39, coin 0.05, arch 0.26, road 0.17, building 0.44. All eight: 1.9 ms.
 - wasm32 `gcad_mesh.wasm` (release, no wasm-opt): 1,051,538 B before, 1,107,810 B after, +56,272 B (+5.4%).
+
+## GLB writer sharing
+
+`gcad_mesh::glb::Buffer` is the one GLB buffer layer (buffer views, accessors, bounds, chunk packing). The mesh
+exporter in `gltf.rs` and the `.gasset` scene exporter in `src/asset/glb.rs` both use it.
+
+The scene encoding (materials, PBR textures, node tree, skins, root motion, extras) stays in `src/asset/glb.rs`.
+It is written against the asset `Scene`, `Material` and texture types, which live in the kernel crate, so moving
+it would pull those types and monstertruck into gcad-mesh. `gcad2glb --no-default-features` stays at anyhow,
+serde_json and miniz_oxide, with no egui, wgpu or monstertruck.

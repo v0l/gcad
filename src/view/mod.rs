@@ -6,6 +6,7 @@ pub mod asset;
 mod remote_panel;
 mod scene;
 mod textures;
+mod timeline;
 mod units;
 
 pub use app::App;

@@ -8,58 +8,15 @@ use crate::model::texture::Map;
 use anyhow::{Result, ensure};
 use serde_json::{Value, json};
 
-#[derive(Default)]
-struct Buffer {
-    bytes: Vec<u8>,
-    views: Vec<Value>,
-    accessors: Vec<Value>,
-}
+use gcad_mesh::glb::{ARRAY_BUFFER, Buffer, UNSIGNED_SHORT};
 
-impl Buffer {
-    fn view(&mut self, bytes: &[u8], target: Option<u32>) -> usize {
-        while !self.bytes.len().is_multiple_of(4) {
-            self.bytes.push(0);
-        }
-        let mut view =
-            json!({"buffer": 0, "byteOffset": self.bytes.len(), "byteLength": bytes.len()});
-        if let Some(target) = target {
-            view["target"] = json!(target);
-        }
-        self.bytes.extend_from_slice(bytes);
-        let index = self.views.len();
-        self.views.push(view);
-        index
-    }
-
-    fn floats<const N: usize>(
-        &mut self,
-        values: &[[f64; N]],
-        kind: &str,
-        bounds: bool,
-    ) -> Result<usize> {
-        let mut bytes = Vec::new();
-        let mut min = [f32::INFINITY; N];
-        let mut max = [f32::NEG_INFINITY; N];
-        for value in values {
-            for k in 0..N {
-                let v = value[k] as f32;
-                ensure!(v.is_finite(), "attribute exceeds float32 range");
-                min[k] = min[k].min(v);
-                max[k] = max[k].max(v);
-                bytes.extend_from_slice(&v.to_le_bytes());
-            }
-        }
-        let view = self.view(&bytes, Some(34962));
-        let mut accessor =
-            json!({"bufferView": view, "componentType": 5126, "count": values.len(), "type": kind});
-        if bounds {
-            accessor["min"] = json!(min.as_slice());
-            accessor["max"] = json!(max.as_slice());
-        }
-        let index = self.accessors.len();
-        self.accessors.push(accessor);
-        Ok(index)
-    }
+fn vertex_floats<const N: usize>(
+    buffer: &mut Buffer,
+    values: &[[f64; N]],
+    kind: &str,
+    bounds: bool,
+) -> Result<usize> {
+    buffer.checked_floats(values, kind, Some(ARRAY_BUFFER), bounds)
 }
 
 fn basis(v: [f64; 3]) -> [f64; 3] {
@@ -72,15 +29,7 @@ fn animation_floats<const N: usize>(
     kind: &str,
     bounds: bool,
 ) -> Result<usize> {
-    let accessor = buffer.floats(values, kind, bounds)?;
-    buffer
-        .views
-        .last_mut()
-        .unwrap()
-        .as_object_mut()
-        .unwrap()
-        .remove("target");
-    Ok(accessor)
+    buffer.checked_floats(values, kind, None, bounds)
 }
 
 fn animations(scene: &super::scene::Scene, buffer: &mut Buffer) -> Result<Vec<Value>> {
@@ -172,24 +121,17 @@ fn primitive(mesh: &Mesh, material: usize, buffer: &mut Buffer) -> Result<Value>
     };
     converted.validate()?;
     let mut attributes = json!({
-        "POSITION": buffer.floats(&converted.positions, "VEC3", true)?,
-        "NORMAL": buffer.floats(&converted.normals, "VEC3", false)?,
+        "POSITION": vertex_floats(buffer, &converted.positions, "VEC3", true)?,
+        "NORMAL": vertex_floats(buffer, &converted.normals, "VEC3", false)?,
     });
     if let Some(uv) = &converted.texcoords {
-        attributes["TEXCOORD_0"] = json!(buffer.floats(uv, "VEC2", false)?);
+        attributes["TEXCOORD_0"] = json!(vertex_floats(buffer, uv, "VEC2", false)?);
     }
     if let Some(t) = &converted.tangents {
-        attributes["TANGENT"] = json!(buffer.floats(t, "VEC4", false)?);
+        attributes["TANGENT"] = json!(vertex_floats(buffer, t, "VEC4", false)?);
     }
-    let index_bytes: Vec<u8> = mesh
-        .triangles
-        .iter()
-        .flatten()
-        .flat_map(|i| i.to_le_bytes())
-        .collect();
-    let view = buffer.view(&index_bytes, Some(34963));
-    let indices = buffer.accessors.len();
-    buffer.accessors.push(json!({"bufferView": view, "componentType": 5125, "count": index_bytes.len() / 4, "type": "SCALAR"}));
+    let flat: Vec<u32> = mesh.triangles.iter().flatten().copied().collect();
+    let indices = buffer.indices(&flat);
 
     Ok(json!({"attributes": attributes, "indices": indices, "material": material, "mode": 4}))
 }
@@ -458,10 +400,13 @@ pub(crate) fn encode_with_weight_storage(
                 .flat_map(|w| w.joints)
                 .flat_map(u16::to_le_bytes)
                 .collect();
-            let view = buffer.view(&bytes, Some(34962));
-            let joints = buffer.accessors.len();
-            buffer.accessors.push(
-                json!({"bufferView":view,"componentType":5123,"count":weights.len(),"type":"VEC4"}),
+            let joints = buffer.accessor(
+                &bytes,
+                Some(ARRAY_BUFFER),
+                UNSIGNED_SHORT,
+                weights.len(),
+                "VEC4",
+                None,
             );
             let values: Vec<_> = weights.iter().map(|w| w.weights).collect();
             let weights = if unorm16 {
@@ -478,15 +423,18 @@ pub(crate) fn encode_with_weight_storage(
                     .flatten()
                     .flat_map(|v| ((*v * 65535.0).round() as u16).to_le_bytes())
                     .collect();
-                let view = buffer.view(&bytes, Some(34962));
-                let index = buffer.accessors.len();
-                buffer
-                    .accessors
-                    .push(json!({"bufferView":view,"componentType":5123,
-                    "normalized":true,"count":values.len(),"type":"VEC4"}));
+                let index = buffer.accessor(
+                    &bytes,
+                    Some(ARRAY_BUFFER),
+                    UNSIGNED_SHORT,
+                    values.len(),
+                    "VEC4",
+                    None,
+                );
+                buffer.accessors[index]["normalized"] = json!(true);
                 index
             } else {
-                buffer.floats(&values, "VEC4", false)?
+                vertex_floats(&mut buffer, &values, "VEC4", false)?
             };
             value["attributes"]["JOINTS_0"] = json!(joints);
             value["attributes"]["WEIGHTS_0"] = json!(weights);
@@ -525,8 +473,7 @@ pub(crate) fn encode_with_weight_storage(
     let mut document = json!({
         "asset": {"version": "2.0", "generator": "gcad experimental game-assets"},
         "scene": 0, "scenes": [{"nodes": roots}], "nodes": nodes, "meshes": meshes,
-        "materials": materials, "accessors": buffer.accessors, "bufferViews": buffer.views,
-        "buffers": [{"byteLength": buffer.bytes.len()}],
+        "materials": materials,
     });
     if let Some(extras) = extras {
         document["extras"] = extras;
@@ -550,31 +497,7 @@ pub(crate) fn encode_with_weight_storage(
         document["textures"] = json!(textures);
         document["samplers"] = json!(samplers);
     }
-    let mut json_bytes = serde_json::to_vec(&document)?;
-    while json_bytes.len() % 4 != 0 {
-        json_bytes.push(b' ');
-    }
-    while buffer.bytes.len() % 4 != 0 {
-        buffer.bytes.push(0);
-    }
-    let total = 28_u64 + json_bytes.len() as u64 + buffer.bytes.len() as u64;
-    let total = u32::try_from(total)?;
-    let mut result = Vec::new();
-    for word in [
-        0x46546c67,
-        2,
-        total,
-        u32::try_from(json_bytes.len())?,
-        0x4e4f534a,
-    ] {
-        result.extend_from_slice(&word.to_le_bytes());
-    }
-    result.extend_from_slice(&json_bytes);
-    for word in [u32::try_from(buffer.bytes.len())?, 0x004e4942] {
-        result.extend_from_slice(&word.to_le_bytes());
-    }
-    result.extend_from_slice(&buffer.bytes);
-    Ok(result)
+    buffer.finish(document)
 }
 
 #[cfg(test)]
