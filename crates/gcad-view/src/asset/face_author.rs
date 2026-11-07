@@ -315,9 +315,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root =
-            std::path::absolute(format!("target/face-source-{}-{nonce}", std::process::id()))
-                .unwrap();
+        let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target"))
+            .join(format!("face-source-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         std::fs::write(root.join("box.gcad"), "rect 30 20\nbase: extrude 5\n").unwrap();
         std::fs::write(

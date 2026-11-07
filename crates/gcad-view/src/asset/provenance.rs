@@ -208,11 +208,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::path::absolute(format!(
-            "target/asset-conflicts-{}-{nonce}",
-            std::process::id()
-        ))
-        .unwrap();
+        let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target"))
+            .join(format!("asset-conflicts-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let source = root.join("source.bin");
         let optional = root.join("optional.bin");
@@ -339,11 +336,8 @@ mod tests {
             .duration_since(std::time::UNIX_EPOCH)
             .unwrap()
             .as_nanos();
-        let root = std::path::absolute(format!(
-            "target/asset-recording-{}-{nonce}",
-            std::process::id()
-        ))
-        .unwrap();
+        let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../../target"))
+            .join(format!("asset-recording-{}-{nonce}", std::process::id()));
         std::fs::create_dir_all(&root).unwrap();
         let source = root.join("prop.gcad");
         let optional = root.join("optional.toml");

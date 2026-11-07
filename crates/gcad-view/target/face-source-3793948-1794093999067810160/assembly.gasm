@@ -1,3 +1,0 @@
-part item box.gcad
-move item 100,200,300
-rotate item 90 axis=z

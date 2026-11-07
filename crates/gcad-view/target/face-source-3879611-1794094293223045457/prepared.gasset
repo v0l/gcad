@@ -1,8 +1,0 @@
-asset 1
-project .
-source boxes assembly.gasm
-tessellate boxes tolerance=0.1
-normals boxes crease=60
-uv boxes projection=box tile=25 rotation=30
-refine boxes levels=1 triangle_budget=1000
-atlas boxes width=256 height=256 padding=2 density=16 filter=linear
