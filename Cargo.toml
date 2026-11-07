@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-sim", "crates/gcad-remote", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
+members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-sim", "crates/gcad-remote", "crates/gcad-view", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
 
 [workspace.package]
 version = "0.6.1"
@@ -26,6 +26,7 @@ gcad-render = { path = "crates/gcad-render" }
 gcad-drafting = { path = "crates/gcad-drafting" }
 gcad-sim = { path = "crates/gcad-sim" }
 gcad-remote = { path = "crates/gcad-remote" }
+gcad-view = { path = "crates/gcad-view" }
 gcad-sims-proto = { path = "sims-proto" }
 gcad-version = { path = "crates/gcad-version" }
 gcad-mesh = { path = "crates/gcad-mesh" }
@@ -71,51 +72,20 @@ gcad-plot.workspace = true
 gcad-brep.workspace = true
 gcad-render.workspace = true
 gcad-drafting.workspace = true
-gcad-version.workspace = true
 gcad-sim.workspace = true
 gcad-sims-proto.workspace = true
+gcad-view = { workspace = true, optional = true }
 gcad-mesh = { workspace = true, features = ["parallel"] }
 anyhow.workspace = true
-rayon.workspace = true
 clap = { version = "4.6.7", features = ["derive"] }
-eframe = { version = "0.37", default-features = false, features = ["default_fonts", "wgpu"] }
-egui = "0.37"
-egui_bench = { version = "0.9.5", features = ["viewer3d"] }
-epaint_default_fonts.workspace = true
-image.workspace = true
 monstertruck.workspace = true
-monstertruck-io.workspace = true
-monstertruck-modeling.workspace = true
-monstertruck-topology.workspace = true
 serde_json.workspace = true
-serde.workspace = true
-bitcode.workspace = true
-flate2.workspace = true
-sha2.workspace = true
-spade.workspace = true
-robust = "1.2"
-faer.workspace = true
-ttf-parser.workspace = true
-wgpu = "30"
-sims-field.workspace = true
-sims-acoustics.workspace = true
-sims-frame.workspace = true
-sims-thermal.workspace = true
-sims-flow.workspace = true
-sims-magnetic.workspace = true
-sims-fem.workspace = true
-sims-tet.workspace = true
-sims-progress.workspace = true
-pollster = "0.4"
-bytemuck = "1"
-toml.workspace = true
-roxmltree.workspace = true
-yaml-rust2.workspace = true
-lopdf.workspace = true
 
 [features]
-gpu-tests = []
-game-assets = ["dep:xatlas-rs-v2", "gcad-brep/game-assets"]
+default = ["view"]
+view = ["dep:gcad-view"]
+gpu-tests = ["gcad-view?/gpu-tests"]
+game-assets = ["view", "gcad-view/game-assets", "gcad-sim/game-assets"]
 
 [[example]]
 name = "game_asset_glb"
@@ -134,21 +104,13 @@ name = "game_asset_preview_bench"
 required-features = ["game-assets"]
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-xatlas-rs-v2 = { version = "=0.1.4", optional = true }
-eframe = { version = "0.37", default-features = false, features = ["wayland", "clipboard", "links", "x11"] }
-faer = { version = "0.24", features = ["rayon"] }
-notify = "8"
-ureq.workspace = true
 gcad-remote.workspace = true
 
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-wasm-bindgen-futures = "0.4"
-web-sys = { version = "0.3", features = ["Window", "Storage"] }
-web-time = "1"
-getrandom = { version = "0.4", features = ["wasm_js"] }
-
 [dev-dependencies]
-egui_kittest = { version = "0.37", features = ["wgpu", "eframe"] }
+egui_bench = { version = "0.9.5", features = ["viewer3d"] }
+image.workspace = true
+robust = "1.2"
+sha2.workspace = true
 
 [patch.crates-io]
 egui_bench = { git = "https://github.com/v0l/egui_bench", rev = "e37138d6c698c1fd6de2284acf23f669b27ab0a9" }

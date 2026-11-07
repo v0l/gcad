@@ -1,0 +1,3 @@
+part first box.gcad
+part second box.gcad
+move second 100,0,0

@@ -1,0 +1,4 @@
+asset 1
+source box box.gcad body=main
+tessellate box tolerance=0.1
+uv box projection=box tile=25

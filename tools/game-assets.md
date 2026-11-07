@@ -10,7 +10,7 @@ sh tools/game-assets.sh prepare-fixtures
 ```
 
 Run `prepare-fixtures` before `cargo test --features game-assets`: the viewer tests in
-`src/view/asset_*` read weight files it writes under `target/` (for example
+`crates/gcad-view/src/view/asset_*` read weight files it writes under `target/` (for example
 `target/game-asset-plate.v2.weights.json`) and fail without them. Bindings record the gcad
 version and the CAD source hashes, so after changing either, move the old `target/*.weights.json`
 and `target/*.faces.json` aside and prepare them again with the build under test, or the tests

@@ -1,0 +1,11 @@
+asset 1
+project .
+source box box.gcad body=main
+tessellate box tolerance=0.1
+uv box projection=box tile=25
+node first source=box
+node a
+node b
+node outside
+skin first weights=weights.json
+face_weights first end.json joints=a,outside weights=0.25,0.75 boundary=reject-shared

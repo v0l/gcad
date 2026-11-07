@@ -12,7 +12,6 @@ fn desktop_build_uses_the_system_clipboard_and_opens_links() {
             "egui-winit",
             "-p",
             "gcad",
-            "--no-default-features",
         ])
         .current_dir(env!("CARGO_MANIFEST_DIR"))
         .output()

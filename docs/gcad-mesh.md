@@ -189,9 +189,9 @@ Measured against the kernel on the eight kids-free-games props (`tests/solid_sil
 ## GLB writer sharing
 
 `gcad_mesh::glb::Buffer` is the one GLB buffer layer (buffer views, accessors, bounds, chunk packing). The mesh
-exporter in `gltf.rs` and the `.gasset` scene exporter in `src/asset/glb.rs` both use it.
+exporter in `gltf.rs` and the `.gasset` scene exporter in `crates/gcad-view/src/asset/glb.rs` both use it.
 
-The scene encoding (materials, PBR textures, node tree, skins, root motion, extras) stays in `src/asset/glb.rs`.
+The scene encoding (materials, PBR textures, node tree, skins, root motion, extras) stays in `crates/gcad-view/src/asset/glb.rs`.
 It is written against the asset `Scene`, `Material` and texture types, which live in the kernel crate, so moving
 it would pull those types and monstertruck into gcad-mesh. `gcad2glb --no-default-features` stays at anyhow,
 serde_json and miniz_oxide, with no egui, wgpu or monstertruck.

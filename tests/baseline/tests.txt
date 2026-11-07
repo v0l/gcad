@@ -12,6 +12,7 @@ doc gcad_render: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_sim: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_sims_proto: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+doc gcad_view: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_web: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly_hierarchy.rs assembly_hierarchy: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly.rs assembly: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -59,7 +60,7 @@ unittests gcad_host: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered o
 unittests gcad_mesh: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_mesh_viewer: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-unittests gcad: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_parse: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_plot: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_remote: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -67,4 +68,5 @@ unittests gcad_render: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered
 unittests gcad_sim: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_sims_proto: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_view: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_web: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

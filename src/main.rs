@@ -2293,9 +2293,14 @@ fn main() -> Result<()> {
             }
             render::render_with_meshes(&parts, &meshes, &output)
         }
+        #[cfg(feature = "view")]
         Command::View { file, select, line } => {
             gcad::view::run(file.map(Into::into), select, line, vars)
                 .map_err(|error| anyhow!("{error}"))
+        }
+        #[cfg(not(feature = "view"))]
+        Command::View { .. } => {
+            bail!("this gcad was built without the viewer; rebuild with the `view` feature")
         }
     }
 }

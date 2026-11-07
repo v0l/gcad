@@ -1,0 +1,48 @@
+[package]
+name = "gcad-view"
+description = "The gcad desktop and web viewer (egui, wgpu) and the game-asset pipeline"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-calc.workspace = true
+gcad-drafting.workspace = true
+gcad-geom.workspace = true
+gcad-host.workspace = true
+gcad-mesh = { workspace = true, features = ["parallel"] }
+gcad-parse.workspace = true
+gcad-plot.workspace = true
+gcad-render.workspace = true
+gcad-sim.workspace = true
+gcad-sims-proto.workspace = true
+anyhow.workspace = true
+eframe = { version = "0.37", default-features = false, features = ["default_fonts", "wgpu"] }
+egui = "0.37"
+egui_bench = { version = "0.9.5", features = ["viewer3d"] }
+image.workspace = true
+monstertruck.workspace = true
+pollster = "0.4"
+rayon.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+wgpu = "30"
+
+[features]
+gpu-tests = []
+game-assets = ["dep:xatlas-rs-v2", "gcad-sim/game-assets"]
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+gcad-remote.workspace = true
+xatlas-rs-v2 = { version = "=0.1.4", optional = true }
+eframe = { version = "0.37", default-features = false, features = ["wayland", "clipboard", "links", "x11"] }
+notify = "8"
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+
+[dev-dependencies]
+egui_kittest = { version = "0.37", features = ["wgpu", "eframe"] }

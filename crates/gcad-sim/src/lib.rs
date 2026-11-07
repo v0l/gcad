@@ -1,5 +1,6 @@
 pub mod acoustics;
 pub mod conduction;
+pub mod drafting;
 pub mod fem;
 pub mod flow;
 pub mod frame;
@@ -9,6 +10,7 @@ mod language;
 pub mod magnetic;
 pub mod mesh;
 mod mesh_cache;
+pub mod model;
 pub mod skin;
 use gcad_plot::result;
 mod stamp;
@@ -24,7 +26,6 @@ pub use gcad_plot::result::{
 pub use stamp::{inputs, stale, stamp};
 
 use crate as sim;
-use gcad_brep as model;
 use gcad_drafting::drawing;
 use gcad_geom::{geometry, packed, select};
 use gcad_host as host;

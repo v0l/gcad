@@ -1,0 +1,12 @@
+asset 1
+project .
+source box box.gcad body=main
+tessellate box tolerance=0.1
+uv box projection=box tile=25
+refine box levels=1 triangle_budget=1000
+node first source=box
+node second source=box translation=100,0,0
+node bone
+skin first weights=weights.json
+face_material first end.json base_colour=1,0,0,1
+face_material first bottom.json base_colour=0,0,1,1
