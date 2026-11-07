@@ -95,6 +95,16 @@ pub fn parse_line(number: usize, text: &str) -> Result<Line> {
 
 pub type Scope = HashMap<String, f64>;
 
+pub fn label(value: f64) -> String {
+    let text = format!("{value:.4}");
+    let text = text.trim_end_matches('0').trim_end_matches('.');
+    if text == "-0" {
+        "0".to_string()
+    } else {
+        text.to_string()
+    }
+}
+
 pub fn eval(expression: &str, scope: &Scope) -> Result<f64> {
     let tokens = tokenize(expression)?;
     let mut parser = ExprParser {

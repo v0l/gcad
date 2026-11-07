@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 gcad-host.workspace = true
+gcad-parse.workspace = true
 anyhow.workspace = true
 bitcode.workspace = true
 epaint_default_fonts.workspace = true

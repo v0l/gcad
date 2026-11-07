@@ -1321,8 +1321,8 @@ impl Model {
             let teeth = mesh.teeth * ratio.abs();
             format!(
                 "; `{driver}` has {} teeth, {} mm across the pitch circle",
-                crate::plot::label(teeth),
-                crate::plot::label(teeth * mesh.module)
+                crate::parse::label(teeth),
+                crate::parse::label(teeth * mesh.module)
             )
         });
         self.couples.push(Couple {
@@ -1554,7 +1554,7 @@ impl Model {
             crate::progress::Stage::silent()
         };
         for (k, &value) in values.iter().enumerate() {
-            sweeping.progress(k as f64, || format!("at {}", crate::plot::label(value)));
+            sweeping.progress(k as f64, || format!("at {}", crate::parse::label(value)));
             let pose = posed(&self.joints, &self.settled(index, value)?);
             let deltas: Vec<Matrix4> = names
                 .iter()

@@ -74,11 +74,11 @@ fn mesh_reporting(
     size: f64,
     stage: &crate::progress::Stage,
 ) -> Result<(TetMesh, f64)> {
-    if let Some(kept) = crate::model::stored::fetch_mesh(solid, size) {
+    if let Some(kept) = super::mesh_cache::fetch_mesh(solid, size) {
         return Ok(kept);
     }
     let meshed = mesh_fresh(solid, size, stage)?;
-    crate::model::stored::put_mesh(solid, size, &meshed);
+    super::mesh_cache::put_mesh(solid, size, &meshed);
     Ok(meshed)
 }
 

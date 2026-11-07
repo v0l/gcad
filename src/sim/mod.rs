@@ -6,6 +6,7 @@ mod heat;
 pub mod job;
 pub mod magnetic;
 pub mod mesh;
+mod mesh_cache;
 pub mod skin;
 use gcad_plot::result;
 mod stamp;

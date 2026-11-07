@@ -143,7 +143,7 @@ impl Model {
                 Ok(match short {
                     Some((length, _)) => format!(
                         "{summary}; the band is {} mm long, shorter than its radius, and a pin holds every point of it so the part cannot tilt there: a bearing seat wants `bearing`",
-                        crate::plot::label(length)
+                        crate::parse::label(length)
                     ),
                     None => summary,
                 })
@@ -655,12 +655,12 @@ impl Model {
         });
         Ok(format!(
             "{moment} N·m about {},{},{} through {},{},{} on {n} face(s)",
-            crate::plot::label(axis.x),
-            crate::plot::label(axis.y),
-            crate::plot::label(axis.z),
-            crate::plot::label(point.x),
-            crate::plot::label(point.y),
-            crate::plot::label(point.z)
+            crate::parse::label(axis.x),
+            crate::parse::label(axis.y),
+            crate::parse::label(axis.z),
+            crate::parse::label(point.x),
+            crate::parse::label(point.y),
+            crate::parse::label(point.z)
         ))
     }
 
@@ -744,9 +744,9 @@ impl Model {
         };
         Ok(format!(
             "`{shaft}` turns in `{housing}` on a ball row at {},{},{}, carried {carries}, free to turn and tilt; its load reads as `{label}`",
-            crate::plot::label(row.x),
-            crate::plot::label(row.y),
-            crate::plot::label(row.z)
+            crate::parse::label(row.x),
+            crate::parse::label(row.y),
+            crate::parse::label(row.z)
         ))
     }
 
@@ -795,7 +795,7 @@ impl Model {
         };
         self.spec().loads.push(Load { label, faces, push });
         Ok(match push {
-            Push::Force(f) => format!("{} N over {n} face(s)", crate::plot::label(f.magnitude())),
+            Push::Force(f) => format!("{} N over {n} face(s)", crate::parse::label(f.magnitude())),
             Push::Pressure(p) => format!("{p} MPa on {n} face(s)"),
             Push::Torque { .. } => String::new(),
         })

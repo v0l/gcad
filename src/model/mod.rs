@@ -28,9 +28,10 @@ mod skin;
 mod solids;
 mod standard;
 mod step_raw;
-pub(crate) mod stored;
+pub mod stored;
 pub mod texture;
 mod thread;
+pub mod view_sidecar;
 mod weld;
 mod wrap;
 
@@ -1053,8 +1054,8 @@ pub(crate) fn start_for(path: &std::path::Path, vars: &[(String, f64)], depth: u
         }));
     }
     model.depth = depth;
-    model.scene.pixel = crate::inspect::recorded_pixel(path);
-    model.scene.pixel_stale = crate::inspect::view_is_stale(path);
+    model.scene.pixel = view_sidecar::recorded_pixel(path);
+    model.scene.pixel_stale = view_sidecar::view_is_stale(path);
     model
 }
 

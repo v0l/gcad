@@ -36,7 +36,7 @@ impl Axes {
     pub fn summary(&self) -> String {
         let list = |set: [Option<f64>; 3]| -> String {
             set.iter()
-                .map(|v| v.map_or("-".to_string(), crate::plot::label))
+                .map(|v| v.map_or("-".to_string(), crate::parse::label))
                 .collect::<Vec<_>>()
                 .join("/")
         };
@@ -119,7 +119,7 @@ impl Finish {
             ("emission", self.emission),
         ] {
             if let Some(v) = value {
-                parts.push(format!("{key} {}", crate::plot::label(v)));
+                parts.push(format!("{key} {}", crate::parse::label(v)));
             }
         }
         if let Some(texture) = &self.texture {
@@ -133,7 +133,7 @@ impl Finish {
             {
                 parts.push("image maps".into());
             }
-            parts.push(format!("tile {} mm", crate::plot::label(texture.scale())));
+            parts.push(format!("tile {} mm", crate::parse::label(texture.scale())));
         }
         parts.join(", ")
     }
@@ -1013,7 +1013,7 @@ pub fn table(target: Option<&Path>) -> Result<String> {
         found
     };
     rows.sort_by(|a, b| a.name.cmp(&b.name));
-    let value = |v: Option<f64>| v.map_or("-".to_string(), crate::plot::label);
+    let value = |v: Option<f64>| v.map_or("-".to_string(), crate::parse::label);
     let mut lines = vec![format!(
         "{:<24} {:>8} {:>8} {:>6} {:>8} {:>8} {:>8} {:>8}  {}",
         "material", "g/cm³", "E GPa", "nu", "yield", "k", "alpha", "cp", "from"

@@ -258,15 +258,7 @@ pub fn ticks(low: f64, high: f64, about: usize) -> Vec<f64> {
     (first..=last).map(|k| k as f64 * step).collect()
 }
 
-pub fn label(value: f64) -> String {
-    let text = format!("{value:.4}");
-    let text = text.trim_end_matches('0').trim_end_matches('.');
-    if text == "-0" {
-        "0".to_string()
-    } else {
-        text.to_string()
-    }
-}
+pub use gcad_parse::label;
 
 fn panel(canvas: &mut Canvas, series: &Series, top: f64, height: f64, width: f64) {
     let legend = 300.0;
