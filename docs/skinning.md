@@ -2,6 +2,36 @@
 
 How gcad binds a mesh to its bones, what makes a skin good, and the numbers that check it.
 
+![before and after](skin-before-after.png)
+
+## Workflow
+
+1. Sculpt and `remesh` first; `skin` binds the vertices that exist.
+2. `bone` lines, `mirror x of=` for the other side, then `skin auto` (bone heat).
+3. `gcad skincheck f.gcad`. Aim for no edge over 0.35, 0 unrelated, rigid cores near 1 and no
+   flipped triangles over the clips. Write a `clip` with the extreme poses the game will play
+   (a range-of-motion clip) so the check sees them.
+4. Open the file in the viewer (`gcad f.gcad`), turn on the weights card: `bone` shows one bone's
+   weight from blue 0 to red 1, `influences` how many bones each vertex has, `problems` the vertices
+   behind steep edges, loose cores and flips.
+5. Fix joints with the brush: `add` and `remove` paint toward or away from the chosen bone,
+   `smooth` evens the weights out, `mirror x` paints the partner bone on the other side. Each
+   drag appends one `skin paint` or `skin smooth` line to the file, so the edit is text, stays
+   reproducible and shows up in the diff. Shift-drag still pans.
+6. `skin mirror` copies a finished side across; `skin normalize` cleans up after hand edits.
+
+![weights view](skin-weights-view.png) ![weight brush](skin-weights-brush.png)
+
+## Limits
+
+- GLB consumers run linear blend skinning with 4 joints per vertex, so the weights have to look
+  right under LBS; that is what `skincheck` measures.
+- Sharp bends (the 120 degree elbow of `skin_arm`) and twists (its 90 degree wrist) still fold or
+  pinch under LBS; twist bones and dual quaternion skinning are the fix.
+- Weights are stored as the `skin` lines that made them. There is no binary weights file. For a
+  compact game export, use the mesh body as a `.gasset` `source`: its skin goes through the palette
+  prune and UNORM16 weight quantise (`examples/game-assets/creature.gasset`).
+
 ## Checking a skin
 
 `gcad skincheck file.gcad` prints, for every skinned body:

@@ -548,7 +548,9 @@ it, `gcad export f.gcad f.glb` for the game asset. Example: `examples/mesh/rigge
 `skin auto` uses bone heat weights (like Blender's automatic weights) and keeps bone middles rigid; after binding, run
 `gcad skincheck f.gcad`: aim for no edge over 0.35, 0 unrelated, rigid core near 1 and no flipped
 triangles in any clip key. Fix a bad joint with `skin smooth sphere=x,y,z r= passes=20`, or
-`skin paint` then `skin smooth`. `skin auto joint=` widens (higher) or tightens the joint blend;
+`skin paint` then `skin smooth`; `skin paint` takes several points (a stroke), `strength=-0.5` to
+take weight away and `mirror=x`; `skin mirror` copies one side across. A person can paint the same
+lines with the viewer's weights card. `skin auto joint=` widens (higher) or tightens the joint blend;
 `skin auto heat=` above 1 keeps weights nearer the closest bone.
 The viewer (`gcad f.gcad`) draws mesh colours, soft borders, gloss and material textures, and on a
 rigged mesh has an animation card: pick a clip to play or scrub it, `pose bones` sliders, a
