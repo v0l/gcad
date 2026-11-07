@@ -6,17 +6,19 @@ mod heat;
 pub mod job;
 pub mod magnetic;
 pub mod mesh;
-mod result;
 pub mod skin;
+use gcad_plot::result;
+mod stamp;
 pub mod statics;
 pub mod tet;
 mod torque;
 mod vibration;
 pub mod wind;
 
-pub use result::{
-    Curve, Field, Movie, Outcome, Reading, Reel, Series, Slice, Stream, inputs, short, stale, stamp,
+pub use gcad_plot::result::{
+    Curve, Expect, Field, Movie, Outcome, Reading, Reel, Series, Slice, Stream, short,
 };
+pub use stamp::{inputs, stale, stamp};
 
 use crate::model::Model;
 use anyhow::{Result, bail};
@@ -109,14 +111,6 @@ pub struct Payload {
 pub struct Sweep {
     pub joints: Vec<usize>,
     pub steps: usize,
-}
-
-#[derive(Clone, Debug, serde::Serialize, serde::Deserialize)]
-pub struct Expect {
-    pub text: String,
-    pub reading: String,
-    pub below: bool,
-    pub limit: f64,
 }
 
 #[derive(Clone, Default, serde::Serialize, serde::Deserialize)]

@@ -1,4 +1,6 @@
-use crate::sim::{Outcome, Series};
+pub mod result;
+
+use crate::result::{Outcome, Series};
 use anyhow::{Result, bail};
 use image::{Rgb, RgbImage};
 
@@ -389,7 +391,7 @@ pub fn chart(outcome: &Outcome, path: &str) -> Result<()> {
 }
 
 fn by_unit(series: &Series) -> Vec<Series> {
-    let shown: Vec<&crate::sim::Curve> = series
+    let shown: Vec<&crate::result::Curve> = series
         .curves
         .iter()
         .filter(|c| c.values.iter().any(|v| v.is_finite() && v.abs() > 1.0e-9))
@@ -460,7 +462,7 @@ pub fn title(canvas: &mut Canvas, (x, y): (f64, f64), text: &str) {
     canvas.text((x, y), 20.0, text, Anchor::Centre, INK);
 }
 
-pub fn flow_scale(slices: &[crate::sim::Slice]) -> f64 {
+pub fn flow_scale(slices: &[crate::result::Slice]) -> f64 {
     let mut speeds: Vec<f64> = slices
         .iter()
         .flat_map(|s| s.speed.iter().chain(&s.snapshot))
@@ -477,7 +479,7 @@ pub fn flow_scale(slices: &[crate::sim::Slice]) -> f64 {
         .max(1.0e-9)
 }
 
-pub fn flow(slices: &[crate::sim::Slice], path: &str) -> Result<()> {
+pub fn flow(slices: &[crate::result::Slice], path: &str) -> Result<()> {
     if slices.is_empty() {
         bail!("the result has no flow slices; run `gcad sim` again");
     }
@@ -553,7 +555,12 @@ pub fn flow(slices: &[crate::sim::Slice], path: &str) -> Result<()> {
     canvas.save(path)
 }
 
-fn streamlines(canvas: &mut Canvas, slice: &crate::sim::Slice, (x0, y0): (f64, f64), scale: f64) {
+fn streamlines(
+    canvas: &mut Canvas,
+    slice: &crate::result::Slice,
+    (x0, y0): (f64, f64),
+    scale: f64,
+) {
     let (w, h) = (slice.width as f64, slice.height() as f64);
     let at = |x: f64, y: f64| -> Option<(f64, f64)> {
         if x < 0.0 || y < 0.0 || x >= w - 1.0 || y >= h - 1.0 {

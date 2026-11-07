@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
+members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
 
 [workspace.package]
 version = "0.6.1"
@@ -20,8 +20,11 @@ gcad-calc = { path = "crates/gcad-calc" }
 gcad-parse = { path = "crates/gcad-parse" }
 gcad-geom = { path = "crates/gcad-geom" }
 gcad-host = { path = "crates/gcad-host" }
+gcad-plot = { path = "crates/gcad-plot" }
 anyhow = "1.0.104"
+bitcode = { version = "0.6", features = ["serde"] }
 epaint_default_fonts = "0.35"
+image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
 monstertruck = { version = "0.4.1", features = ["solid", "step"] }
 rayon = "1.12"
 serde = { version = "1", features = ["derive"] }
@@ -37,6 +40,7 @@ gcad-calc.workspace = true
 gcad-parse.workspace = true
 gcad-geom.workspace = true
 gcad-host.workspace = true
+gcad-plot.workspace = true
 gcad-sims-proto = { path = "sims-proto" }
 gcad-mesh = { path = "crates/gcad-mesh", features = ["parallel"] }
 anyhow.workspace = true
@@ -46,14 +50,14 @@ eframe = { version = "0.37", default-features = false, features = ["default_font
 egui = "0.37"
 egui_bench = { version = "0.9.5", features = ["viewer3d"] }
 epaint_default_fonts.workspace = true
-image = { version = "0.25.10", default-features = false, features = ["png", "jpeg", "webp"] }
+image.workspace = true
 monstertruck.workspace = true
 monstertruck-io = { version = "0.4.1", features = ["step"] }
 monstertruck-modeling = { version = "0.4.1", features = ["font", "fillet"] }
 monstertruck-topology = "0.4.1"
 serde_json = "1.0.151"
 serde.workspace = true
-bitcode = { version = "0.6", features = ["serde"] }
+bitcode.workspace = true
 flate2 = "1"
 sha2.workspace = true
 spade = "2.15"

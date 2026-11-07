@@ -1,0 +1,17 @@
+[package]
+name = "gcad-plot"
+description = "Simulation results for gcad (readings, series, fields, slices, movies) and the charts drawn from them"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-host.workspace = true
+anyhow.workspace = true
+bitcode.workspace = true
+epaint_default_fonts.workspace = true
+image.workspace = true
+serde.workspace = true
+ttf-parser.workspace = true

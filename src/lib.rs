@@ -16,7 +16,7 @@ pub mod nest;
 pub use gcad_geom::offset;
 pub use gcad_geom::packed;
 pub use gcad_parse as parse;
-pub mod plot;
+pub use gcad_plot as plot;
 pub mod progress;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod remote;
