@@ -1,0 +1,16 @@
+[package]
+name = "gcad-geom"
+description = "Kernel-side geometry for gcad: bounds, meshing helpers, 2D offsets, face selectors, packed solids"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+anyhow.workspace = true
+epaint_default_fonts.workspace = true
+monstertruck.workspace = true
+rayon.workspace = true
+serde.workspace = true
+ttf-parser.workspace = true

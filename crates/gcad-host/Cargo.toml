@@ -1,0 +1,20 @@
+[package]
+name = "gcad-host"
+description = "The gcad file host: real or in-memory files, read recording, revision snapshots, run supersession, progress"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+sha2.workspace = true
+sims-progress.workspace = true
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+toml.workspace = true
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+rayon.workspace = true
+web-sys = { workspace = true, features = ["Window", "Storage"] }
+web-time.workspace = true

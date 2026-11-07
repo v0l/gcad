@@ -2058,6 +2058,8 @@ dependencies = [
  "faer",
  "flate2",
  "gcad-calc",
+ "gcad-geom",
+ "gcad-host",
  "gcad-mesh",
  "gcad-parse",
  "gcad-sims-proto",
@@ -2105,6 +2107,30 @@ dependencies = [
  "anyhow",
  "serde",
  "toml",
+]
+
+[[package]]
+name = "gcad-geom"
+version = "0.6.1"
+dependencies = [
+ "anyhow",
+ "epaint_default_fonts 0.35.0",
+ "monstertruck",
+ "rayon",
+ "serde",
+ "ttf-parser",
+]
+
+[[package]]
+name = "gcad-host"
+version = "0.6.1"
+dependencies = [
+ "rayon",
+ "sha2 0.10.9",
+ "sims-progress",
+ "toml",
+ "web-sys",
+ "web-time",
 ]
 
 [[package]]

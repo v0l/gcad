@@ -1096,7 +1096,7 @@ pub(crate) fn load_model(
     if let Some(spec) = path.to_str().filter(|text| standard::is_standard(text)) {
         return standard_model(spec);
     }
-    let lasting = !crate::sim::is_sim(path) && egui_bench::revision::covering(path).is_none();
+    let lasting = !crate::sim::is_sim(path) && crate::host::covering(path).is_none();
     if lasting && let Some(model) = stored::fetch(path, vars) {
         return Ok(model);
     }

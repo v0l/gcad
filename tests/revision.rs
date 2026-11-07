@@ -38,9 +38,9 @@ fn an_assembly_opens_as_committed_while_the_files_on_disk_have_moved_on() {
 
     let revs = egui_bench::revision::list(&dir, 5).expect("history");
     let snapshot = egui_bench::revision::Snapshot::open(&top, &revs[0].sha).expect("snapshot");
-    egui_bench::revision::set_active(Some(Arc::new(snapshot)));
+    gcad::host::show_revision(Some(Arc::new(snapshot)));
     let committed = volume(&run_path(&top, &[], None).expect("runs at revision").model);
-    egui_bench::revision::set_active(None);
+    gcad::host::show_revision(None);
 
     assert!((committed - 1000.0).abs() < 1.0, "{committed}");
     assert_eq!(

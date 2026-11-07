@@ -1,4 +1,4 @@
-pub use sims_progress::*;
+pub use gcad_host::progress::*;
 
 #[cfg(test)]
 pub(crate) static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());

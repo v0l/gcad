@@ -1041,7 +1041,7 @@ impl App {
 
     #[cfg(not(target_arch = "wasm32"))]
     fn show_snapshot(&mut self, snapshot: Option<std::sync::Arc<egui_bench::revision::Snapshot>>) {
-        egui_bench::revision::set_active(snapshot);
+        crate::host::show_revision(snapshot);
         crate::model::forget_kept();
     }
 
