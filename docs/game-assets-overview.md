@@ -1,6 +1,6 @@
 # Game assets in gcad: overview
 
-> Engine adapters (Unity, Godot), the FBX helper and the renderer patches live in the private repo v0l/gcad-engines. Paths written as `gcad-engines:...` below refer to that repo.
+> Game-engine integrations live in the private repo v0l/gcad-engines: the Bevy loader `gcad-bevy` (built on `gcad2glb`), the Unity package `io.v0l.gcad`, the Godot addon, the FBX helper and the renderer patches. Paths written as `gcad-engines:...` below refer to that repo; its `docs/status.md` says what has been run where. The `consumer unity version=1` profile and the `.gasset` format stay here.
 
 gcad has two ways to make a game asset. Both end in a GLB.
 

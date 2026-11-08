@@ -9,6 +9,10 @@ The crate keeps the name `gcad2glb` and is a library and a binary in one package
 the tool that, and a separate `gcad-assets` crate would be one more name for the same code (and
 would collide with the `game-assets` feature and `gcad::asset`).
 
+For Bevy, `gcad-engines:bevy` (the `gcad-bevy` crate) wraps this library in an asset loader:
+`.gcad`/`.gasm` load as scenes with skins, clips, morph targets and LODs. See
+`gcad-engines:docs/bevy.md`.
+
 ## Depend on it
 
 ```toml
