@@ -48,6 +48,7 @@ tests/remote_job.rs remote_job: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0
 tests/remote_overview.rs remote_overview: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/revision.rs revision: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/rig.rs rig: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/shapes.rs shapes: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/simulation.rs simulation: ok. 105 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out
 tests/simulation.rs simulation: test result_goes_stale ... ok
 tests/sketch.rs sketch: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
