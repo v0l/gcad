@@ -58,8 +58,10 @@ gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] [--height H | --scale 
 `plane plate.end`) goes through `gcad-brep`: solid bodies are tessellated as `gcad export` does and
 join the mesh bodies in one GLB, byte for byte the same as `gcad export f.gcad f.glb`
 (`examples/mesh/bracket_mascot.gcad`, test `gcad2glb::gcad2glb_writes_solids_and_meshes_like_export`).
-Assemblies and simulations are refused. `cargo build -p gcad2glb --no-default-features` leaves out
+Simulations are refused; a `.gasm` assembly gives one mesh per placed part. `cargo build -p gcad2glb --no-default-features` leaves out
 `gcad-brep` and the kernel: it writes meshes only and names the first solid line it refuses.
+The command is a thin wrapper over the `gcad2glb` library, which a game can link to get the same
+models without writing a GLB, solid parts and assemblies included: [gcad2glb.md](gcad2glb.md).
 
 `--height H` scales the model to `H` units tall, `--scale K` by a fixed factor (0.01 for a part
 modelled in centimetres to a game in metres). Both put the lowest point at 0, and `--centre` also

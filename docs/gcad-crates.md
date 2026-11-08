@@ -26,7 +26,7 @@ The picture is `docs/gcad-crates.dot` (made from `cargo metadata`, transitive ed
 | `gcad-sim` | the `.gsim` language, every solver, flow, packed jobs; `gcad_sim::model` and `gcad_sim::drafting` wrap brep and drafting so a `.gsim` opens anywhere | brep, drafting, render, plot, geom, host, parse, version, the sims crates |
 | `gcad-remote` | the paid remote simulation client and worker (not on wasm) | brep, sim |
 | `gcad-view` | the egui and wgpu viewer, the egui host helpers (`wake`, `show_revision`), and the `game-assets` pipeline | everything above |
-| `gcad2glb` | the `gcad2glb` binary | mesh, and brep with its default `brep` feature |
+| `gcad2glb` | the runtime library a game links (`Assets::from_source`/`from_path`: meshes, and with `brep` solids and assemblies, as one `gcad_mesh::Model`) and the `gcad2glb` command over it, see [gcad2glb.md](gcad2glb.md) | mesh, version; brep with the `brep` feature (on for the command, off with `default-features = false`) |
 | `gcad` | the CLI and the facade library that keeps every old path (`gcad::model`, `gcad::sim`, `gcad::export`, ...) | everything; `gcad-view` only with the default `view` feature |
 | `gcad-web`, `gcad-mesh-viewer`, `gcad-sims-proto` | unchanged | |
 
@@ -39,6 +39,9 @@ What was planned and not made, and why:
 - `src/asset` (game assets) did not become `gcad-assets`. It reads the viewer (`view::asset`)
   in its tests and the viewer reads it everywhere, so it sits in gcad-view behind the
   `game-assets` feature.
+- The runtime library is `gcad2glb` itself (lib and bin in one package), not a new
+  `gcad-assets` or `gcad-runtime`: that is the name it is known by, nothing else uses it, and
+  `gcad-assets` would read as the `game-assets` pipeline above.
 
 ## Where new code goes
 
@@ -81,6 +84,7 @@ gcad-sim at 19.2 s building beside the viewer's dependencies.
 | `gcad --features game-assets` | 65.6 MB before, 70.9 MB after |
 | `gcad2glb --no-default-features` (meshes only) | 2.09 MB (1.65 MB stripped), 11 crates |
 | `gcad2glb` (meshes and solids) | 18.9 MB (13.6 MB stripped), no egui, wgpu or solvers |
+| a game binary linking the `gcad2glb` library, meshes only / with `brep` | +1.41 MB / +18.3 MB (+1.06 / +13.0 MB stripped), clean build 5.9 s / 42.4 s |
 | web `gcad_web.wasm` (before wasm-opt) | 30.42 MB before and after |
 
 The default `gcad` binary grew by about 5 MB (3 MB stripped): code now crosses crate boundaries

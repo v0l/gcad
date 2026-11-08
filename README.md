@@ -125,7 +125,8 @@ operations exist, which are still missing and the tests behind each are in
 
 Mesh files export rigged, animated GLBs in every build (`gcad export hero.gcad hero.glb --height 1`,
 or the light `gcad2glb`, see [docs/gcad-mesh.md](docs/gcad-mesh.md); `gcad2glb` also takes files
-with solid bodies). A build with
+with solid bodies). A game can link `gcad2glb` as a library and build those assets at runtime,
+meshes and solids through one API: [docs/gcad2glb.md](docs/gcad2glb.md). A build with
 `--features game-assets` adds Wixely's experimental `.gasset` tools: textured assets from CAD parts,
 UV painting, atlases, collision shapes, LODs, sprite sheets and FBX. Which to use, and how the
 two relate, is in [docs/game-assets-overview.md](docs/game-assets-overview.md); the `.gasset`
