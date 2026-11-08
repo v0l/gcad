@@ -270,6 +270,15 @@ c16ad616dd194194 0 obj examples/magnetic/stator.gcad
 133de22cb3c65285 0 step examples/magnetic/stator.gcad
 b21b6037992387c9 0 stl examples/magnetic/stator.gcad
 4eb15dd5121397f0 0 svg examples/magnetic/stator.gcad
+8937ab663940db6f 0 3mf examples/mesh/bracket_mascot.gcad
+7d189a7ce132973f 0 check examples/mesh/bracket_mascot.gcad
+647ab0ff14e1b7b0 1 dxf examples/mesh/bracket_mascot.gcad
+efdd83af882678a6 0 glb examples/mesh/bracket_mascot.gcad
+c84f1b3a57ed83fe 0 obj examples/mesh/bracket_mascot.gcad
+43a66d719375692e 0 render examples/mesh/bracket_mascot.gcad
+647ab0ff14e1b7b0 1 step examples/mesh/bracket_mascot.gcad
+8251238dea10fbf7 0 stl examples/mesh/bracket_mascot.gcad
+647ab0ff14e1b7b0 1 svg examples/mesh/bracket_mascot.gcad
 cb3b6ce8a816f70a 0 3mf examples/mesh/creature.gcad
 346899cf87d5c887 0 check examples/mesh/creature.gcad
 647ab0ff14e1b7b0 1 dxf examples/mesh/creature.gcad

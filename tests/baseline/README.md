@@ -19,6 +19,10 @@ and with game-assets `check` and GLB of every `.gasset`. STEP timestamps, SVG li
 order (it varies run to run), timings in printed text and the scratch path are
 normalised away. Two runs of each binary gave identical files.
 
+`hashes-game-assets.txt` is recorded after `sh tools/game-assets.sh prepare-fixtures`: about 30
+`.gasset` files read weight and face files it writes under `target/`, and fail without them.
+The binary built from f541e8e gives the same hashes for all of them.
+
 `tests/revision.rs` commits to a scratch repository and fails when git signs commits
 and cannot prompt; run the suite with `GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=commit.gpgsign
 GIT_CONFIG_VALUE_0=false`.

@@ -27,7 +27,7 @@ tests/examples.rs examples: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 fil
 tests/features.rs features: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/fit.rs fit: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/flow.rs flow: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out
-tests/gcad2glb.rs gcad2glb: ok. 14 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/gcad2glb.rs gcad2glb: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/holes.rs holes: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/input_recording.rs input_recording: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/inspect.rs inspect: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

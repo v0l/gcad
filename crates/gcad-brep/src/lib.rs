@@ -9,6 +9,7 @@ mod exact;
 mod fastener;
 mod features;
 mod fuse;
+pub mod glb;
 mod holes;
 mod import;
 pub mod mate;

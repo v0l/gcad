@@ -1,0 +1,19 @@
+let t=4
+rect 60 30
+plate: extrude t
+fillet 1 plate.end&plate.side
+plane plate.end
+hole 6 -20,0 20,0
+color #8a9aa8
+body mascot
+torso: blob 0,0,20 r=6,5,8
+head: blob 0,0,32 r=4.5 blend=1.5
+remesh 0.8
+color #e0a040
+bone spine head=0,0,12 tail=0,0,27
+bone neck parent=spine tail=0,0,36
+skin auto
+clip nod fps=24
+key t=0 bone=neck rotate=0 axis=x
+key t=0.5 bone=neck rotate=25 axis=x
+key t=1 bone=neck rotate=0 axis=x

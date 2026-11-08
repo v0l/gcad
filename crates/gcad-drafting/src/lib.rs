@@ -7,5 +7,5 @@ pub mod nest;
 use gcad_brep as model;
 use gcad_geom::{geometry, select};
 use gcad_host as host;
-use gcad_mesh::{gltf, mesh};
+use gcad_mesh::mesh;
 use gcad_parse as parse;

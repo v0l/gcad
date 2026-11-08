@@ -19,7 +19,3 @@ parallel = ["dep:rayon"]
 
 [lib]
 crate-type = ["rlib", "cdylib", "staticlib"]
-
-[[bin]]
-name = "gcad2glb"
-path = "src/bin/gcad2glb.rs"

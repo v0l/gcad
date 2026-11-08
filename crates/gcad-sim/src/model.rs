@@ -22,10 +22,7 @@ pub fn snapshots_path_kept(path: &Path, vars: &[(String, f64)]) -> Result<KeptRu
 }
 
 #[cfg(feature = "game-assets")]
-pub fn run_path_recorded(
-    path: &Path,
-    vars: &[(String, f64)],
-) -> Result<(Run, crate::host::Reads)> {
+pub fn run_path_recorded(path: &Path, vars: &[(String, f64)]) -> Result<(Run, crate::host::Reads)> {
     crate::install();
     gcad_brep::run_path_recorded(path, vars)
 }

@@ -1,0 +1,16 @@
+[package]
+name = "gcad2glb"
+description = "Write a GLB from a gcad file: meshes, rigs and clips, and with the brep feature solid bodies too"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+gcad-mesh.workspace = true
+gcad-brep = { workspace = true, optional = true }
+
+[features]
+default = ["brep"]
+brep = ["dep:gcad-brep"]

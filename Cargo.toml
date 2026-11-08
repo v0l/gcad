@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-sim", "crates/gcad-remote", "crates/gcad-view", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
+members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-sim", "crates/gcad-remote", "crates/gcad-view", "crates/gcad2glb", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
 
 [workspace.package]
 version = "0.6.1"

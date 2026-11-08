@@ -198,13 +198,18 @@ fn export_tris_flag_matches_gcad2glb() {
 }
 
 fn gcad2glb_tool() -> std::path::PathBuf {
+    built_gcad2glb("gcad2glb-tool", &[])
+}
+
+fn light_gcad2glb_tool() -> std::path::PathBuf {
+    built_gcad2glb("gcad2glb-light", &["--no-default-features"])
+}
+
+fn built_gcad2glb(dir: &str, flags: &[&str]) -> std::path::PathBuf {
     let gcad = std::path::Path::new(env!("CARGO_BIN_EXE_gcad"));
     let profile_dir = gcad.parent().expect("profile dir");
     let release = profile_dir.file_name().is_some_and(|n| n == "release");
-    let target = profile_dir
-        .parent()
-        .expect("target dir")
-        .join("gcad2glb-tool");
+    let target = profile_dir.parent().expect("target dir").join(dir);
     let tool = target
         .join(if release { "release" } else { "debug" })
         .join(gcad.file_name().expect("exe name"))
@@ -215,18 +220,98 @@ fn gcad2glb_tool() -> std::path::PathBuf {
         .args([
             "build",
             "-p",
-            "gcad-mesh",
+            "gcad2glb",
             "--bin",
             "gcad2glb",
             "--target-dir",
         ])
-        .arg(&target);
+        .arg(&target)
+        .args(flags);
     if release {
         build.arg("--release");
     }
     let status = build.status().expect("builds gcad2glb");
     assert!(status.success(), "building gcad2glb");
     tool
+}
+
+fn gcad2glb_of(tool: &std::path::Path, spec: &str, out: &std::path::Path) -> std::process::Output {
+    std::process::Command::new(tool)
+        .args([spec, out.to_str().unwrap()])
+        .output()
+        .expect("runs gcad2glb")
+}
+
+#[test]
+fn gcad2glb_writes_solids_and_meshes_like_export() {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let spec = format!(
+        "{}/examples/mesh/bracket_mascot.gcad",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let (a, b) = (dir.join("mixed-a.glb"), dir.join("mixed-b.glb"));
+    let gcad = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["export", &spec, a.to_str().unwrap()])
+        .output()
+        .expect("runs gcad");
+    assert!(
+        gcad.status.success(),
+        "{}",
+        String::from_utf8_lossy(&gcad.stderr)
+    );
+    let glb = gcad2glb_of(&gcad2glb_tool(), &spec, &b);
+    assert!(
+        glb.status.success(),
+        "{}",
+        String::from_utf8_lossy(&glb.stderr)
+    );
+    let (from_gcad, from_tool) = (std::fs::read(&a).unwrap(), std::fs::read(&b).unwrap());
+    assert!(from_gcad == from_tool, "same file, different bytes");
+    let n = u32::from_le_bytes(from_tool[12..16].try_into().unwrap()) as usize;
+    let doc: serde_json::Value = serde_json::from_slice(&from_tool[20..20 + n]).unwrap();
+    let names: Vec<&str> = doc["meshes"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter_map(|m| m["name"].as_str())
+        .collect();
+    assert!(
+        names.contains(&"main") && names.contains(&"mascot"),
+        "{names:?}"
+    );
+    assert_eq!(doc["skins"].as_array().map(Vec::len), Some(1));
+    assert_eq!(doc["animations"][0]["name"], "nod");
+}
+
+#[test]
+fn light_gcad2glb_refuses_solids_with_the_line_and_matches_on_meshes() {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let root = env!("CARGO_MANIFEST_DIR");
+    let light = light_gcad2glb_tool();
+    let full = gcad2glb_tool();
+    let mixed = format!("{root}/examples/mesh/bracket_mascot.gcad");
+    let refused = gcad2glb_of(&light, &mixed, &dir.join("light-mixed.glb"));
+    assert!(!refused.status.success());
+    let message = String::from_utf8_lossy(&refused.stderr);
+    assert!(
+        message.contains("line 5") && message.contains("without the brep feature"),
+        "{message}"
+    );
+    for name in ["creature", "fox", "rigged_creature", "skin_arm"] {
+        let spec = format!("{root}/examples/mesh/{name}.gcad");
+        let (a, b) = (
+            dir.join(format!("light-{name}.glb")),
+            dir.join(format!("full-{name}.glb")),
+        );
+        assert!(gcad2glb_of(&light, &spec, &a).status.success(), "{name}");
+        assert!(gcad2glb_of(&full, &spec, &b).status.success(), "{name}");
+        assert!(
+            std::fs::read(&a).unwrap() == std::fs::read(&b).unwrap(),
+            "{name}"
+        );
+    }
 }
 
 const BAKED: &str = "ball: blob 0,0,0 r=10\nremesh 0.25\nbrush w type=dam_standard size=0.5 strength=0.3\nstroke w from=-4,0,9.2 to=4,0,9.2\nfinish decimate=1500\nbake normals size=64\nlod 600 200\n";
