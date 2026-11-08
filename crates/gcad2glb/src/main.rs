@@ -7,6 +7,7 @@ use std::time::Duration;
 
 const USAGE: &str = "usage:
   gcad2glb [OPTIONS] [--cache DIR] in.gcad out.glb
+  gcad2glb [OPTIONS] --cache DIR in.gcad          (prints the cached GLB's path)
   gcad2glb key [OPTIONS] in.gcad
   gcad2glb bake [--check] [OPTIONS] SRC_DIR OUT_DIR
   gcad2glb cache prune DIR [--max-bytes N] [--max-age DAYS] [--keep index.json]...
@@ -107,6 +108,22 @@ impl Parsed {
 
 fn convert(args: &[String]) -> Result<ExitCode, String> {
     let parsed = parse(args, &["--cache"], &[])?;
+    if let (Some(dir), [input]) = (parsed.flag("--cache"), parsed.positional.as_slice()) {
+        return Ok(
+            match AssetCache::new(dir).get_or_build_path(input, &parsed.options) {
+                Ok((file, got)) => {
+                    eprintln!(
+                        "{} {}",
+                        if got == Got::Hit { "cached" } else { "built" },
+                        file.display()
+                    );
+                    println!("{}", file.display());
+                    ExitCode::SUCCESS
+                }
+                Err(e) => fail(&format!("{input}: {e}")),
+            },
+        );
+    }
     let [input, output] = parsed.positional.as_slice() else {
         return Err(match parsed.positional.len() {
             n if n > 2 => "too many arguments".into(),

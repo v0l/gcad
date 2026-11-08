@@ -268,6 +268,17 @@ fn the_cli_reports_a_hit_and_prints_the_library_key() {
             .path(key(&path, &options))
             .is_file()
     );
+    let printed = run(&["--height", "1", "--cache", c, p]);
+    assert!(printed.status.success());
+    assert_eq!(
+        String::from_utf8_lossy(&printed.stdout).trim(),
+        AssetCache::new(&cache_dir)
+            .path(key(&path, &options))
+            .display()
+            .to_string(),
+        "with no output the cached path is printed"
+    );
+    assert!(String::from_utf8_lossy(&printed.stderr).starts_with("cached "));
 }
 
 #[test]
