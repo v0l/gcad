@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-const CATEGORIES: [&str; 22] = [
+const CATEGORIES: [&str; 23] = [
     "rig",
     "brush",
     "gcad2glb",
@@ -23,6 +23,7 @@ const CATEGORIES: [&str; 22] = [
     "solid_props",
     "solid_silhouette",
     "arch",
+    "shapes",
 ];
 
 fn root() -> &'static str {
@@ -30,8 +31,11 @@ fn root() -> &'static str {
 }
 
 fn tests_in(category: &str) -> BTreeMap<String, Option<String>> {
-    let source =
-        std::fs::read_to_string(format!("{}/tests/{category}.rs", root())).expect("category file");
+    let file = match category {
+        "shapes" => format!("{}/crates/gcad-mesh/tests/shapes.rs", root()),
+        _ => format!("{}/tests/{category}.rs", root()),
+    };
+    let source = std::fs::read_to_string(file).expect("category file");
     let lines: Vec<&str> = source.lines().collect();
     lines
         .iter()
