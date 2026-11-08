@@ -7,6 +7,11 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- `gcad2glb` writes files that mix solid and mesh bodies, through the new `gcad-brep` crate, byte for byte the same GLB as `gcad export` (`examples/mesh/bracket_mascot.gcad`). `cargo build -p gcad2glb --no-default-features` keeps the mesh-only tool.
+- `cargo build -p gcad --no-default-features` builds the CLI without the viewer (no egui or wgpu).
+
+### Changed
+- gcad is split into a workspace of crates: gcad-parse, gcad-calc, gcad-host, gcad-geom, gcad-plot, gcad-brep, gcad-drafting, gcad-render, gcad-sim, gcad-remote, gcad-view and gcad2glb. Every output is byte-identical and the `gcad::` paths are kept. A change in the viewer rebuilds in 6 s instead of 29 s. See `docs/gcad-crates.md`.
 - `gcad skincheck f.gcad` scores a skin: weight jumps across edges, contested and unrelated weights, rigid cores, slivers in joint zones, and triangles that flip, squash or stretch over every clip key. See `docs/skinning.md`.
 - `skin smooth bone= sphere= r= passes=` smooths the weights already bound; `skin paint` takes a stroke of points, negative strength and `mirror=x`; `skin mirror` and `skin normalize`.
 - The viewer's weights card colours the mesh by one bone's weight, by influence count or by skincheck problems, and its weight brush (add, remove, smooth, mirror) writes `skin paint` and `skin smooth` lines to the file.

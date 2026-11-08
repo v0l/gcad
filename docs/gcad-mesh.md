@@ -53,6 +53,14 @@ rest pose) and returns the joint count, also when `out` is null. `gcad_glb` retu
 gcad2glb [--detail N] [--z-up] [--tris N] [--max-error E] [--height H | --scale K] [--centre] in.gcad out.glb
 ```
 
+`gcad2glb` is its own crate, `crates/gcad2glb`. A file gcad-mesh can build alone goes through
+`gcad_mesh` and gives the same bytes as before. A file it refuses (solid lines such as `hole` or
+`plane plate.end`) goes through `gcad-brep`: solid bodies are tessellated as `gcad export` does and
+join the mesh bodies in one GLB, byte for byte the same as `gcad export f.gcad f.glb`
+(`examples/mesh/bracket_mascot.gcad`, test `gcad2glb::gcad2glb_writes_solids_and_meshes_like_export`).
+Assemblies and simulations are refused. `cargo build -p gcad2glb --no-default-features` leaves out
+`gcad-brep` and the kernel: it writes meshes only and names the first solid line it refuses.
+
 `--height H` scales the model to `H` units tall, `--scale K` by a fixed factor (0.01 for a part
 modelled in centimetres to a game in metres). Both put the lowest point at 0, and `--centre` also
 puts the middle on the vertical axis. They wrap the scene in one root node named `model` that
@@ -193,5 +201,5 @@ exporter in `gltf.rs` and the `.gasset` scene exporter in `crates/gcad-view/src/
 
 The scene encoding (materials, PBR textures, node tree, skins, root motion, extras) stays in `crates/gcad-view/src/asset/glb.rs`.
 It is written against the asset `Scene`, `Material` and texture types, which live in the kernel crate, so moving
-it would pull those types and monstertruck into gcad-mesh. `gcad2glb --no-default-features` stays at anyhow,
-serde_json and miniz_oxide, with no egui, wgpu or monstertruck.
+it would pull those types and monstertruck into gcad-mesh. gcad-mesh and `gcad2glb --no-default-features`
+stay at anyhow, serde_json, miniz_oxide and gcad-parse, with no egui, wgpu or monstertruck.

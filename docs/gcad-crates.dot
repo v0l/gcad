@@ -1,0 +1,23 @@
+digraph gcad {
+	graph [rankdir=BT];
+	node [fontname=Helvetica,
+		fontsize=11,
+		shape=box
+	];
+	gcad -> "gcad-view";
+	"gcad-brep" -> "gcad-calc";
+	"gcad-brep" -> "gcad-geom";
+	"gcad-brep" -> "gcad-host";
+	"gcad-brep" -> "gcad-mesh";
+	"gcad-drafting" -> "gcad-brep";
+	"gcad-mesh" -> "gcad-parse";
+	"gcad-plot" -> "gcad-host";
+	"gcad-plot" -> "gcad-parse";
+	"gcad-remote" -> "gcad-sim";
+	"gcad-render" -> "gcad-brep";
+	"gcad-render" -> "gcad-plot";
+	"gcad-sim" -> "gcad-drafting";
+	"gcad-sim" -> "gcad-render";
+	"gcad-view" -> "gcad-remote";
+	gcad2glb -> "gcad-brep";
+}

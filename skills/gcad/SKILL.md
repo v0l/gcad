@@ -563,7 +563,9 @@ For games, ship the text and build at load: `gcad_mesh::build(include_str!("hero
 `crates/gcad-mesh`, no CAD kernel) gives vertex buffers, joints, weights, clips and
 `bone_matrices(clip, t)` for GPU skinning; `to_glb()` or `gcad2glb in.gcad out.glb` writes the GLB;
 `include/gcad_mesh.h` is the C ABI. Only mesh and rig lines run there, others fail with the line
-number. See `docs/gcad-mesh.md`.
+number. See `docs/gcad-mesh.md`. `gcad2glb` (crate `crates/gcad2glb`) also writes files that mix
+solid and mesh bodies, through `gcad-brep`, with no viewer or simulation code; build it with
+`--no-default-features` for the mesh-only tool. Which crate holds what is in `docs/gcad-crates.md`.
 
 ## Output
 
