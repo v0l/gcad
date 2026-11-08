@@ -3,8 +3,8 @@ use std::process::ExitCode;
 fn main() -> ExitCode {
     let mut input = None;
     let mut output = None;
-    let mut options = gcad_mesh::Options::default();
-    let mut fit = gcad_mesh::gltf::Fit::default();
+    let mut options = gcad2glb::Options::default();
+    let mut fit = gcad2glb::Fit::default();
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
         match arg.as_str() {
@@ -39,27 +39,14 @@ fn main() -> ExitCode {
     let (Some(input), Some(output)) = (input, output) else {
         return usage("needs an input and an output");
     };
-    let source = match std::fs::read_to_string(&input) {
-        Ok(text) => text,
-        Err(e) => {
-            eprintln!("{input}: {e}");
-            return ExitCode::FAILURE;
-        }
-    };
-    let glb = gcad_mesh::build_with(&source, &options)
-        .map_err(|e| e.to_string())
-        .and_then(|model| model.to_glb().map_err(|e| format!("{e:#}")));
-    let glb = match glb {
-        Err(message) => with_solids(std::path::Path::new(&input), &options, message),
-        other => other,
-    }
-    .and_then(|glb| match fit.is_none() {
-        true => Ok(glb),
-        false => gcad_mesh::gltf::fit(&glb, &fit).map_err(|e| format!("{e:#}")),
-    });
-    match glb {
-        Ok(bytes) => match std::fs::write(&output, bytes) {
-            Ok(()) => ExitCode::SUCCESS,
+    match gcad2glb::glb_from_path(std::path::Path::new(&input), &options, &fit) {
+        Ok(glb) => match std::fs::write(&output, glb.bytes) {
+            Ok(()) => {
+                for note in glb.notes {
+                    eprintln!("{note}");
+                }
+                ExitCode::SUCCESS
+            }
             Err(e) => {
                 eprintln!("{output}: {e}");
                 ExitCode::FAILURE
@@ -70,42 +57,6 @@ fn main() -> ExitCode {
             ExitCode::FAILURE
         }
     }
-}
-
-#[cfg(feature = "brep")]
-fn with_solids(
-    path: &std::path::Path,
-    options: &gcad_mesh::Options,
-    refused: String,
-) -> Result<Vec<u8>, String> {
-    if gcad_brep::is_sim(path) {
-        return Err(refused);
-    }
-    let mut run = gcad_brep::run_path(path, &[], None).map_err(|e| format!("{e:#}"))?;
-    if let Some((_, Err(_))) = run.steps.last() {
-        return Err(refused);
-    }
-    if options.detail != 1.0 || !options.y_up {
-        return Err("--detail and --z-up only apply to files without solid operations".into());
-    }
-    if run.model.assembly {
-        return Err("gcad2glb writes part files; export the parts of an assembly".into());
-    }
-    for report in run.model.scene.budget(options.triangles, options.max_error) {
-        eprintln!("{report}");
-    }
-    gcad_brep::glb::glb_of(&run.model).map_err(|e| format!("{e:#}"))
-}
-
-#[cfg(not(feature = "brep"))]
-fn with_solids(
-    _path: &std::path::Path,
-    _options: &gcad_mesh::Options,
-    refused: String,
-) -> Result<Vec<u8>, String> {
-    Err(format!(
-        "{refused}; this gcad2glb was built without the brep feature, so it writes meshes only"
-    ))
 }
 
 fn usage(problem: &str) -> ExitCode {
