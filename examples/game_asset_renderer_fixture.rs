@@ -79,7 +79,11 @@ fn main() -> Result<()> {
             bytes.extend((v as f32).to_le_bytes());
         }
     }
-    for slot in maps {
+    ensure!(
+        maps[3..].iter().all(Vec::is_empty),
+        "GCADAT01 defines only three map slots"
+    );
+    for slot in maps.into_iter().take(3) {
         bytes.extend((slot.len() as u32).to_le_bytes());
         for map in slot {
             bytes.extend((map.width as u32).to_le_bytes());
