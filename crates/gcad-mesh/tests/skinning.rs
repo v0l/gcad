@@ -451,7 +451,9 @@ fn the_morph_target_plays_the_same_pose_as_rig_posed() {
     let doc = glb_json(&glb);
     let mesh = &doc["meshes"][0];
     assert_eq!(mesh["extras"]["targetNames"][0], "elbow");
-    let target = mesh["primitives"][0]["targets"][0]["POSITION"].as_u64().unwrap();
+    let target = mesh["primitives"][0]["targets"][0]["POSITION"]
+        .as_u64()
+        .unwrap();
     let delta = glb_floats(&glb, &doc, target);
     let channel = doc["animations"][0]["channels"]
         .as_array()

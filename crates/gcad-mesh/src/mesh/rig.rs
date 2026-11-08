@@ -388,10 +388,7 @@ impl Rig {
     }
 
     pub fn corrective_weight(&self, corrective: &Corrective, pose: &Pose) -> f64 {
-        let q = pose
-            .get(&corrective.bone)
-            .copied()
-            .unwrap_or(IDENTITY_QUAT);
+        let q = pose.get(&corrective.bone).copied().unwrap_or(IDENTITY_QUAT);
         let n = length([corrective.axis[0], corrective.axis[1], corrective.axis[2]]);
         let along: f64 = (0..3).map(|k| q[k] * corrective.axis[k] / n).sum();
         let mut angle = (2.0 * along.atan2(q[3])).to_degrees();
@@ -439,8 +436,7 @@ impl Rig {
             self.corrected(mesh, pose)
         };
         if self.dq > 0.0 {
-            out.positions =
-                super::skin_dq::pose_positions(&out.positions, skin, &xf, self.dq);
+            out.positions = super::skin_dq::pose_positions(&out.positions, skin, &xf, self.dq);
             return out;
         }
         for (p, weights) in out.positions.iter_mut().zip(skin) {

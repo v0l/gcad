@@ -172,6 +172,10 @@ normal), packs them in shelves, and writes a tangent-space normal map of the ful
 them with `MSFT_lod` on the body's node. `finish keep=creases crease=40` and `keep=uv`
 add boundary quadrics on creased edges and chart borders, `keep=colours` on colour borders.
 
+## Low-poly shells
+
+`blob x,y,z r=rx,ry,rz mode=shell segments=N` makes the shell a UV ellipsoid of `N` segments around and `N/2` rings, `N*N` triangles, instead of meshing it on a grid (about 2000 triangles for a small shell). Game parts built from many small spheres (eyes, heads, cushions, wheels) stay inside a phone budget with it.
+
 ## Flat solid profiles
 
 gcad-mesh also runs a kernel-free subset for crisp, flat-sided props (the kids-free-games runner props):
@@ -181,9 +185,11 @@ gcad-mesh also runs a kernel-free subset for crisp, flat-sided props (the kids-f
 | `plane XY`, `XZ`, `YZ` with `offset=` | world planes only, same axes as the kernel |
 | `rect w h at= r=` | rounded corners become short arcs |
 | `circle d at=` | 24 segments, 32 above 20 mm radius |
+| `ellipse dx dy at=` | 24 segments, 32 above 20 mm radius |
+| `ngon d n at= angle=` | a regular polygon, corners on a circle of diameter `d`: low-poly cylinders and cones |
 | `poly x,y ...` | no `r=` or `c=` corner rounding |
 | `array count= step=` or `angle= at=` | copies the last profile |
-| `extrude d` | negative goes the other way; a profile inside another is a hole |
+| `extrude d scale=` | negative goes the other way; a profile inside another is a hole; `scale` sizes the far end about the sketch origin (0 closes it to a point: a cone) |
 | `repeat label count= step=` | repeats an extrude along the plane |
 | `fillet r label.end&label.side` | also `.start`; the rim only |
 

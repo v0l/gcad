@@ -441,8 +441,7 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
         if let Some(rig) = rig.filter(|r| !r.correctives.is_empty()) {
             let weights = rig.corrective_weights(&rig.pose);
             meshes[mesh_index]["weights"] = json!(weights);
-            meshes[mesh_index]["extras"] =
-                json!({"targetNames": rig.correctives.iter().map(|c| c.name.clone()).collect::<Vec<_>>()});
+            meshes[mesh_index]["extras"] = json!({"targetNames": rig.correctives.iter().map(|c| c.name.clone()).collect::<Vec<_>>()});
         }
         let mut lod_nodes = Vec::new();
         for (k, mesh_index) in mesh_indices.iter().enumerate().skip(1) {

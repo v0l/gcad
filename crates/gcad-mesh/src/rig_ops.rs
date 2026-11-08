@@ -35,7 +35,8 @@ fn flag(args: &Args<'_>, name: &str) -> Result<bool> {
 
 pub const SCULPT_OPS: &[&str] = &[
     "let", "if", "select", "inflate", "smooth", "crease", "pinch", "flatten", "noise", "relax",
-    "brush", "stroke", "dab", "mask", "hide", "isolate", "show", "move", "scale", "rotate", "group",
+    "brush", "stroke", "dab", "mask", "hide", "isolate", "show", "move", "scale", "rotate",
+    "group",
 ];
 
 #[derive(Clone, Debug)]

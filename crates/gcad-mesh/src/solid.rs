@@ -69,6 +69,7 @@ pub struct Extrude {
     pub start_round: f64,
     pub end_round: f64,
     pub copies: Vec<P3>,
+    pub scale: f64,
 }
 
 const SHARP_DEGREES: f64 = 40.0;
@@ -86,6 +87,30 @@ pub fn circle(centre: P2, diameter: f64) -> Vec<P2> {
         .map(|i| {
             let a = std::f64::consts::TAU * i as f64 / n as f64;
             (centre.0 + r * a.cos(), centre.1 + r * a.sin())
+        })
+        .collect()
+}
+
+pub fn ngon(centre: P2, diameter: f64, sides: usize, start_degrees: f64) -> Vec<P2> {
+    let r = diameter / 2.0;
+    let start = start_degrees.to_radians();
+    (0..sides)
+        .map(|i| {
+            let a = start + std::f64::consts::TAU * i as f64 / sides as f64;
+            (centre.0 + r * a.cos(), centre.1 + r * a.sin())
+        })
+        .collect()
+}
+
+pub fn ellipse(centre: P2, width: f64, height: f64) -> Vec<P2> {
+    let n = circle_segments(width.max(height) / 2.0);
+    (0..n)
+        .map(|i| {
+            let a = std::f64::consts::TAU * i as f64 / n as f64;
+            (
+                centre.0 + width / 2.0 * a.cos(),
+                centre.1 + height / 2.0 * a.sin(),
+            )
         })
         .collect()
 }
@@ -417,6 +442,10 @@ fn emit(mesh: &mut Mesh, e: &Extrude, frame: Frame) {
     let sign = if e.depth < 0.0 { -1.0 } else { 1.0 };
     let depth = e.depth.abs();
     let levels = rings(depth, e.start_round, e.end_round);
+    let grown = |p: P2, z: f64| {
+        let k = 1.0 + (e.scale - 1.0) * z / depth;
+        (p.0 * k, p.1 * k)
+    };
     for region in &e.regions {
         let mut loops: Vec<&Vec<P2>> = vec![&region.outer];
         loops.extend(region.holes.iter());
@@ -438,7 +467,7 @@ fn emit(mesh: &mut Mesh, e: &Extrude, frame: Frame) {
                                     }],
                                     by,
                                 )[0];
-                                push(mesh, part, frame.at(flat, sign * z))
+                                push(mesh, part, frame.at(grown(flat, z), sign * z))
                             })
                             .collect()
                     })
@@ -453,6 +482,9 @@ fn emit(mesh: &mut Mesh, e: &Extrude, frame: Frame) {
             }
         }
         for (z, ring_index, up) in [(0.0, 0, false), (depth, levels.len() - 1, true)] {
+            if up && e.scale < EPS {
+                continue;
+            }
             let by = levels[ring_index].0;
             let shrunk: Vec<Vec<P2>> = loops
                 .iter()
@@ -462,7 +494,7 @@ fn emit(mesh: &mut Mesh, e: &Extrude, frame: Frame) {
             let (points, triangles) = triangulate(&shrunk[0], &shrunk[1..]);
             let base = mesh.positions.len() as u32;
             for p in &points {
-                push(mesh, part, frame.at(*p, sign * z));
+                push(mesh, part, frame.at(grown(*p, z), sign * z));
             }
             let flip = up == (sign < 0.0);
             for t in triangles {

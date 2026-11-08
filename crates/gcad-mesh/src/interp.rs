@@ -441,6 +441,7 @@ impl Scene {
             blend,
             combine,
             part,
+            segments: 0,
         });
         Ok(format!(
             "{} primitive(s) in the blockout",
@@ -470,11 +471,19 @@ impl Scene {
         let args = Args::new(
             line,
             &["at", "r"],
-            &["blend", "mode", "rx", "ry", "rz"],
+            &["blend", "mode", "rx", "ry", "rz", "segments"],
             false,
         )?;
         let centre = point3(args.text("at")?, scope)?;
         let radii = numbers(args.text("r")?, scope)?;
+        let segments = match args.optional_number("segments", scope)? {
+            None => 0,
+            Some(n) if n >= 3.0 && n.fract() == 0.0 && n <= 256.0 => n as usize,
+            Some(n) => bail!("segments is a whole number from 3 to 256, got {n}"),
+        };
+        if segments > 0 && args.values.get("mode") != Some(&"shell") {
+            bail!("`segments=` makes a low-poly ellipsoid and goes with `mode=shell`");
+        }
         let radii = match radii[..] {
             [r] => [r; 3],
             [x, y, z] => [x, y, z],
@@ -488,7 +497,11 @@ impl Scene {
             radii,
             rotation: self.rotation_of(scope, &args)?,
         };
-        self.add_primitive(scope, line, shape, &args)
+        let added = self.add_primitive(scope, line, shape, &args)?;
+        if let Some(last) = self.mesh_body.blockout.last_mut() {
+            last.segments = segments;
+        }
+        Ok(added)
     }
 
     pub fn op_block(&mut self, scope: &Scope, line: &Line) -> Result<String> {
@@ -832,7 +845,9 @@ impl Scene {
 
     fn joint_selection(&mut self, args: &Args, scope: &Scope, edge: f64) -> Result<Selection> {
         if self.mesh_body.rig.skin.is_some() {
-            bail!("`refine joints` adds vertices the skin does not cover; run it before `skin auto`");
+            bail!(
+                "`refine joints` adds vertices the skin does not cover; run it before `skin auto`"
+            );
         }
         let reach = match args.optional_number("reach", scope)? {
             Some(r) => positive(r, "reach")?,

@@ -35,6 +35,7 @@ pub struct Primitive {
     pub blend: f64,
     pub combine: Combine,
     pub part: String,
+    pub segments: usize,
 }
 
 fn transposed_apply(m: &[[f64; 3]; 3], v: P3) -> P3 {
@@ -255,6 +256,18 @@ pub fn remesh(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
         let (lo, hi) = shell.shape.bounds();
         let size = (0..3).map(|k| hi[k] - lo[k]).fold(0.0, f64::max);
         let fine = cell.min(size / 24.0).max(size / 160.0);
+        if let (
+            Shape::Ellipsoid {
+                centre,
+                radii,
+                rotation,
+            },
+            n @ 1..,
+        ) = (&shell.shape, shell.segments)
+        {
+            mesh.merge(&ellipsoid_mesh(*centre, *radii, rotation, n, &shell.part));
+            continue;
+        }
         let own = Primitive {
             combine: Combine::Add,
             blend: 0.0,
@@ -266,6 +279,53 @@ pub fn remesh(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
         bail!("there is nothing to mesh: add a `blob`, `limb` or `block` first");
     }
     Ok(mesh)
+}
+
+pub fn ellipsoid_mesh(
+    centre: P3,
+    radii: P3,
+    rotation: &[[f64; 3]; 3],
+    segments: usize,
+    part: &str,
+) -> Mesh {
+    let around = segments.max(3);
+    let rings = (segments / 2).max(2);
+    let point = |theta: f64, phi: f64| {
+        let local = [
+            radii[0] * phi.sin() * theta.cos(),
+            radii[1] * phi.sin() * theta.sin(),
+            radii[2] * phi.cos(),
+        ];
+        add(centre, super::apply(rotation, local))
+    };
+    let mut positions = vec![point(0.0, 0.0)];
+    for r in 1..rings {
+        let phi = std::f64::consts::PI * r as f64 / rings as f64;
+        for a in 0..around {
+            positions.push(point(std::f64::consts::TAU * a as f64 / around as f64, phi));
+        }
+    }
+    positions.push(point(0.0, std::f64::consts::PI));
+    let bottom = (positions.len() - 1) as u32;
+    let at = |r: usize, a: usize| (1 + (r - 1) * around + a % around) as u32;
+    let mut triangles = Vec::new();
+    for a in 0..around {
+        triangles.push([0, at(1, a), at(1, a + 1)]);
+        triangles.push([bottom, at(rings - 1, a + 1), at(rings - 1, a)]);
+    }
+    for r in 1..rings - 1 {
+        for a in 0..around {
+            triangles.push([at(r, a), at(r + 1, a), at(r + 1, a + 1)]);
+            triangles.push([at(r, a), at(r + 1, a + 1), at(r, a + 1)]);
+        }
+    }
+    Mesh {
+        labels: vec![0; positions.len()],
+        positions,
+        triangles,
+        parts: vec![part.to_string()],
+        ..Default::default()
+    }
 }
 
 fn remesh_field(primitives: &[Primitive], cell: f64) -> Result<Mesh> {
@@ -687,6 +747,7 @@ mod tests {
             blend: 0.0,
             combine: Combine::Add,
             part: "ball".into(),
+            segments: 0,
         }
     }
 

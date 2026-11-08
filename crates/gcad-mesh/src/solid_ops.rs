@@ -7,7 +7,7 @@ use anyhow::{Result, anyhow, bail};
 use std::sync::Arc;
 
 pub const OPS: &[&str] = &[
-    "plane", "rect", "circle", "poly", "array", "extrude", "fillet", "repeat",
+    "plane", "rect", "circle", "ellipse", "ngon", "poly", "array", "extrude", "fillet", "repeat",
 ];
 
 pub struct Solids {
@@ -40,6 +40,8 @@ impl Solids {
             "plane" => self.plane(scope, line),
             "rect" => self.rect(scope, line),
             "circle" => self.circle(scope, line),
+            "ellipse" => self.ellipse(scope, line),
+            "ngon" => self.ngon(scope, line),
             "poly" => self.poly(scope, line),
             "array" => self.array(scope, line),
             "extrude" => self.extrude(scene, scope, line),
@@ -90,6 +92,28 @@ impl Solids {
         let diameter = positive(args.number("d", scope)?, "d")?;
         let centre = args.point("at", scope)?;
         self.add(solid::circle(centre, diameter));
+        Ok(())
+    }
+
+    fn ellipse(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let args = Args::new(line, &["dx", "dy"], &["at"], false)?;
+        let width = positive(args.number("dx", scope)?, "dx")?;
+        let height = positive(args.number("dy", scope)?, "dy")?;
+        let centre = args.point("at", scope)?;
+        self.add(solid::ellipse(centre, width, height));
+        Ok(())
+    }
+
+    fn ngon(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let args = Args::new(line, &["d", "n"], &["at", "angle"], false)?;
+        let diameter = positive(args.number("d", scope)?, "d")?;
+        let sides = args.number("n", scope)?;
+        if sides < 3.0 || sides.fract() != 0.0 {
+            bail!("n must be a whole number of at least 3, got {sides}");
+        }
+        let centre = args.point("at", scope)?;
+        let angle = args.optional_number("angle", scope)?.unwrap_or(0.0);
+        self.add(solid::ngon(centre, diameter, sides as usize, angle));
         Ok(())
     }
 
@@ -161,8 +185,13 @@ impl Solids {
     }
 
     fn extrude(&mut self, scene: &mut Scene, scope: &Scope, line: &Line) -> Result<()> {
-        let args = Args::new(line, &["d"], &[], false)?;
+        let args = Args::new(line, &["d"], &["scale"], false)?;
         let depth = args.number("d", scope)?;
+        let scale = match args.optional_number("scale", scope)? {
+            Some(scale) if scale >= 0.0 => scale,
+            Some(scale) => bail!("scale is 0 (a point) or more, got {scale}"),
+            None => 1.0,
+        };
         if depth.abs() < 1.0e-9 {
             bail!("`extrude` needs a distance other than 0");
         }
@@ -185,6 +214,7 @@ impl Solids {
             start_round: 0.0,
             end_round: 0.0,
             copies: Vec::new(),
+            scale,
         });
         self.publish(scene);
         Ok(())
