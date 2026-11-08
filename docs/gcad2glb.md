@@ -107,9 +107,29 @@ file), `text` (the source line, up to 80 characters) and `message`. `Display` pr
 
 Building is pure: the same text and options give the same model and bytes. `cache_key(source,
 &options)` is a 64-bit FNV-1a hash of the gcad version (`gcad2glb::VERSION`, the package version
-plus the last code commit), the text and every option. It is stable across runs and machines, so
-a game can keep built models or GLBs on disk under it. A file built with `from_path` that reads
-other files (`part`, stamps) should fold those files into the text it hashes.
+plus the last code commit), the text and every option. It is stable across runs and machines.
+
+The key every engine uses is `Sources::key`: `Sources::from_path(file)` (or `Sources::read(name,
+text, read)` for a game's own asset reader) follows `include` lines and the files the text names
+(`part x.gcad`, stamps, fonts), and the key is `cache_key` of the expanded text folded with the
+path and bytes of each of those files. A build runs only when the source, an include, a named
+file, the options or the gcad version changed.
+
+`AssetCache::new(dir)` keeps `<dir>/<key>.glb` (the bytes `to_glb` writes) with a `<key>.json`
+sidecar (gcad version, source, options hash, the hash of each read file). Writes go to a temp file
+and are renamed, so processes racing on one key leave one whole file. A file that is not a whole
+GLB is removed and rebuilt. A read touches the file's mtime; `prune(max_bytes, max_age, keep)`
+removes entries older than `max_age` or past `max_bytes` (newest kept first), never one in
+`keep`. `cache::bake(src, out, options_for)` builds every `.gcad`/`.gasm` under `src` that is
+not only included by another into `out/<key>.glb` plus `out/index.json` (asset path to key and
+options hash), and `cache::check` lists sources with no entry or a stale one.
+
+```
+gcad2glb --cache DIR in.gcad out.glb            # hit: copy, no build
+gcad2glb key [OPTIONS] in.gcad                  # print the key
+gcad2glb bake [--check] [OPTIONS] SRC_DIR OUT_DIR
+gcad2glb cache prune DIR [--max-bytes N] [--max-age DAYS] [--keep index.json]
+```
 
 ## Size and build time
 

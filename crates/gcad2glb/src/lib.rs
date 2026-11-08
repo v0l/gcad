@@ -1,6 +1,12 @@
 use std::ops::Deref;
 use std::path::Path;
 
+pub mod cache;
+pub mod sources;
+
+pub use cache::{AssetCache, Got, Index};
+pub use sources::Sources;
+
 #[cfg(feature = "brep")]
 pub use gcad_brep;
 pub use gcad_mesh;
@@ -115,7 +121,7 @@ pub fn cache_key_with(version: &str, source: &str, options: &Options) -> u64 {
     hash.0
 }
 
-struct Fnv(u64);
+pub(crate) struct Fnv(u64);
 
 impl Default for Fnv {
     fn default() -> Self {
@@ -124,18 +130,18 @@ impl Default for Fnv {
 }
 
 impl Fnv {
-    fn bytes(&mut self, bytes: &[u8]) {
+    pub(crate) fn bytes(&mut self, bytes: &[u8]) {
         for b in bytes {
             self.0 ^= *b as u64;
             self.0 = self.0.wrapping_mul(0x0000_0100_0000_01b3);
         }
     }
 
-    fn count(&mut self, n: usize) {
+    pub(crate) fn count(&mut self, n: usize) {
         self.bytes(&(n as u64).to_le_bytes());
     }
 
-    fn text(&mut self, text: &str) {
+    pub(crate) fn text(&mut self, text: &str) {
         self.count(text.len());
         self.bytes(text.as_bytes());
     }
@@ -155,7 +161,7 @@ impl Fnv {
     }
 }
 
-fn plain(message: impl Into<String>) -> Error {
+pub(crate) fn plain(message: impl Into<String>) -> Error {
     Error {
         line: 0,
         text: String::new(),
@@ -212,6 +218,20 @@ impl Assets {
             },
         };
         Assets::finish(model, notes, options)
+    }
+
+    pub fn from_sources(
+        sources: &Sources,
+        path: Option<&Path>,
+        options: &Options,
+    ) -> Result<Assets, Error> {
+        let source = sources.source()?;
+        let assembly = path.and_then(kind_of).as_deref() == Some("gasm");
+        let by_path = cfg!(feature = "brep") && (assembly || sources.has_references());
+        match path.filter(|_| by_path) {
+            Some(path) => Assets::from_path(path, options),
+            None => Assets::from_source(&source, options),
+        }
     }
 
     fn finish(mut model: Model, notes: Vec<String>, options: &Options) -> Result<Assets, Error> {

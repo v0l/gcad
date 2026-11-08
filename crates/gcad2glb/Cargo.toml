@@ -11,9 +11,9 @@ publish = false
 gcad-mesh.workspace = true
 gcad-version.workspace = true
 gcad-brep = { workspace = true, optional = true }
+serde_json.workspace = true
 
 [dev-dependencies]
-serde_json.workspace = true
 
 [features]
 default = ["brep"]
