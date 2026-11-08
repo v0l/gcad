@@ -2151,7 +2151,8 @@ pass, including source/chain immutability and exact conversion at every level.
 
 `game_asset_renderer_fixture` exports a bounded new-file-only binary fixture from
 gcad's actual atlas packer, mip baker and preview conversion: two charts, three
-map slots and four levels. The candidate renderer compares this with independent
+map slots and four levels. The file is exactly 130872 bytes (GCADAT01 defines three
+slots; the writer errors if a fourth or fifth is filled). The candidate renderer compares this with independent
 constant-material chart references at 128, 32 and 8 pixels square. This exposed
 an MSAA-edge regression: pixel-centre UV interpolation can extrapolate outside a
 partially covered triangle, beyond its chart sampling footprint. The original

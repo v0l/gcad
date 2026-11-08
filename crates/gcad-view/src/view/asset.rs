@@ -40,6 +40,9 @@ mod selection;
 mod shader_tests;
 #[path = "asset_sprites.rs"]
 pub mod sprites;
+#[path = "asset_fixture.rs"]
+mod fixture;
+pub use fixture::renderer_fixture;
 #[path = "asset_stage.rs"]
 mod stage;
 #[path = "asset_visuals.rs"]
