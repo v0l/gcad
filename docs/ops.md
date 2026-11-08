@@ -476,3 +476,190 @@ The plan for the rest is in `docs/simulation.md`.
 | example building simulations | supported | `examples/frame/portal.gsim`, `examples/conduction/tie.gsim`, `examples/acoustics/room.gsim` | `simulation::building_example_simulations` |
 | building simulations on remote runners | supported | `gcad sim x.gsim --remote` packs frame and acoustics jobs like any other | `simulation::building_kinds_run_remotely`, `simulation::new_kinds_have_no_mesh_to_converge` |
 | wind on an assembly | supported | `part pair.gasm` in a `sim flow` reads `front.drag`, `back.drag` | `simulation::wind_shelters_a_part_behind` |
+
+## Building datums and walls
+
+Architecture stage A (gcad #348). The design is in `docs/architecture.md`; the tests are in `tests/arch.rs`.
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| units and building header | missing | `units mm`, `building "Name" north=20 datum=0` | `arch::units_and_building_header` |
+| levels | missing | `level L1 2700 "First"`, then `base=L0 top=L1-300` anywhere a height goes | `arch::levels_are_heights` |
+| grids | missing | `grid A x=0`, `grid 1 y=0`, then `A1`, `A1+0,500` anywhere a point goes | `arch::grids_are_coordinates` |
+| grids from a file | missing | `gridfile grids.csv` | `arch::grids_from_a_file` |
+| layered wall types | missing | `wall_type ext brick:100 pir:100 block:100` (outside to inside, materials from the library), one body per layer `w1.brick` | `arch::wall_is_its_layers` |
+| straight walls | missing | `w1: wall x,y x,y type=ext base=L0 top=L1 justify=outside\|centre\|inside offset=-150` | `arch::wall_justification_and_offset` |
+| closed wall loops | missing | `wall A1 B1 B2 A2 closed type=ext` | `arch::closed_wall_loop` |
+| polyline and arc walls | missing | `wall x,y x,y x,y`, `wall arc x,y x,y x,y` | `arch::polyline_and_arc_walls` |
+| walls from a sketch | missing | `rect ...` then `wall profile type=` | `arch::wall_from_a_sketch_profile` |
+| sloped and battered walls | missing | `top_offset=0,600`, `batter=1` | `arch::sloped_and_battered_walls` |
+| pilasters | missing | `pilaster=300x200@2000` | `arch::wall_with_pilasters` |
+| automatic wall joins | missing | walls that meet join (L, T, cross) with no gap or overlap | `arch::tee_join_has_no_gap_or_overlap` |
+| wall join overrides | missing | `wall_join w1 w2 mitre\|butt\|tee` | `arch::wall_join_overrides` |
+| stacked walls | missing | `type=ext:0..900,int:900..L1` | `arch::stacked_wall` |
+| wall sweeps | missing | `wall_sweep w1.inside rect 15x100 at=0` (skirting, cornice, coping) | `arch::wall_sweep_runs_along_the_wall` |
+| wall cuts | missing | `wall_cut w1 rect 1000 500 at=2000,2450` | `arch::wall_cut_by_a_profile` |
+| wall faces as selectors | missing | `w1.outside`, `w1.inside`, `w1.top`, `w1.ends` | `arch::wall_faces_are_selectors` |
+
+## Doors and windows
+
+Architecture stage A (gcad #348). An opening is hosted by a wall: placed by `at=`, the distance along the wall to the opening's centre, it cuts every layer and moves with the wall.
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| hosted openings | missing | `o1: opening on=w1 at=1200 w=900 h=2100 sill=0` | `arch::opening_cuts_every_layer` |
+| openings move with their wall | missing | move the wall's points and the opening follows | `arch::moving_a_wall_moves_its_openings` |
+| opening checks | missing | an opening past the wall's end or top, or over another, fails | `arch::openings_that_leave_the_wall_or_overlap_fail` |
+| doors | missing | `d1: door on=w1 at=1200 w=900 h=2100 hinge=left in\|out frame=70x45 leaf=44 threshold=0 mark=D01`, bodies `d1.frame`, `d1.leaf` | `arch::door_has_frame_leaf_and_mark` |
+| door swings | missing | `swing=left\|right\|double\|slide\|fold` | `arch::door_swings` |
+| windows | missing | `win1: window on=w1 at=3000 w=1200 h=1200 sill=900 panes=2x1 frame=60 mullion=40 glazing=double\|triple mark=W01`, glass as its own bodies | `arch::window_panes_and_glass` |
+| window heads | missing | `head=flat\|arch\|segment\|round` | `arch::window_head_shapes` |
+| garage doors | missing | `garage_door on=w1 at= w= h= panels=4` | `arch::garage_door` |
+| library openings as parts | missing | `door on=w1 ... part=flush.gcad`, the file's `w`, `h` set from the line | `arch::door_from_a_part_file` |
+
+## Floors and roofs
+
+Architecture stage B (gcad #349).
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| slabs and slab openings | missing | `s1: slab L1 A1 B1 B2 A2 type=concrete:200`, `slab_opening s1 x,y ...` | `arch::slab_with_an_opening` |
+| layered slabs | missing | `type=concrete:200+screed:50+tile:10`, top of the last layer on the level | `arch::layered_slab_is_its_layers` |
+| sloped slabs | missing | `slope=0.02 falls_to=x,y` | `arch::sloped_slab_falls_to_a_point` |
+| ceilings | missing | `c1: ceiling room=hall h=2400 type=gypsum:13` | `arch::ceiling_in_a_room` |
+| floor finishes | missing | `f1: floor_finish room=hall type=oak:20` | `arch::floor_finish_in_a_room` |
+| foundations | missing | `foundation strip outer w=600 d=900`, `foundation pad x,y w= l= d=` | `arch::strip_and_pad_foundations` |
+| ground slabs | missing | `ground_slab outer type=concrete:150+pir:100` | `arch::ground_slab_inside_the_walls` |
+| gable roofs | missing | `r1: roof outer type=gable pitch=45 overhang=450 thickness=200 ridge=x base=L1` | `arch::gable_roof_ridge_and_area` |
+| roof types | missing | `type=hip\|half_hip\|shed\|flat\|mansard\|gambrel\|barrel` | `arch::roof_types` |
+| per-edge pitch | missing | `pitch_edge r1.eave.1 60` | `arch::per_edge_pitch` |
+| walls trim to the roof | missing | `roof ... walls=outer` | `arch::walls_trim_to_the_roof_underside` |
+| roof edges as selectors | missing | `r1.ridge`, `r1.hip`, `r1.valley`, `r1.eave`, `r1.verge` | `arch::roof_edges_are_selectors` |
+| roof joins | missing | `roof_join r2 r1` | `arch::roof_join_meets_two_roofs` |
+| roof by extrusion | missing | a profile, then `roof extrude 3000 thickness=200` | `arch::roof_extruded_from_a_profile` |
+| dormers | missing | `dormer on=r1 at=x,y w=1200 type=gable` | `arch::dormer_on_a_roof` |
+| skylights | missing | `skylight on=r1 at=x,y w=780 h=980` | `arch::skylight_on_a_roof` |
+| chimneys | missing | `chimney x,y w=600 d=600 up_to=r1 over=900` | `arch::chimney_through_the_roof` |
+| gutters and downpipes | missing | `gutter along=r1.eave.1 w=100 slope=0.005`, `downpipe from=gu.end d=68 to=L0` | `arch::gutter_and_downpipe` |
+| parapets | missing | `parapet outer h=600 coping=50` | `arch::parapet_on_a_flat_roof` |
+
+## Stairs, ramps and railings
+
+Architecture stage B (gcad #349).
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| stairs | missing | `st1: stair from=L0 to=L1 at=x,y dir=0 width=1000 rise=auto tread=auto rule=2R+T=630 max_rise=180`, risers and treads reported | `arch::straight_stair_follows_the_rule` |
+| stair shapes | missing | `shape=straight\|L\|U\|winder\|spiral landing=900`, bodies `st1.flight.N`, `st1.landing.N` | `arch::stair_shapes` |
+| stringers and nosing | missing | `stringer=closed\|open\|mono nosing=20` | `arch::stair_stringers_and_nosing` |
+| stair checks | missing | too steep for the rule, headroom under 2000 | `arch::steep_stair_and_low_headroom_fail` |
+| stair cut | missing | `stair_cut st1 s1 headroom=2000` | `arch::stair_cut_opens_the_slab` |
+| ramps | missing | `ramp from=x,y,z to=x,y,z slope=1:12 width=1200 landing=1500 every=10000` | `arch::ramp_slope_and_landings` |
+| ladders | missing | `ladder x,y,z x,y,z width=400 rungs=@300` | `arch::ladder_rungs` |
+| railings | missing | `railing path x,y,z ... height=900 post=50@1500 baluster=12@120 top=round:40 material=steel` | `arch::railing_posts_and_balusters` |
+| railings along a stair or slab edge | missing | `railing along=st1.edge` | `arch::railing_along_a_stair` |
+| glass balustrades and handrails | missing | `railing ... glass=12 post=none`, `handrail path ... d=40 bracket=@1000` | `arch::glass_balustrade_and_handrail` |
+
+## Building structure and facade
+
+Architecture stage B (gcad #349). Profiles are the `member` sections.
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| columns | missing | `c1: column A1 rect 300x300\|round 300\|<member section> base=L0 top=L1 material=` | `arch::columns_at_grid_crossings` |
+| column grids | missing | `column_grid rect 200x200 base=L0 top=L1` | `arch::column_at_every_grid_crossing` |
+| beams | missing | `b1: beam A1 B1 bar 200x400 z=L1 material=c24` (top of beam on `z`) | `arch::beam_between_grid_points` |
+| joists | missing | `joist <outline> bar 47x200 spacing=400 dir=y z=L1` | `arch::joists_across_a_floor` |
+| trusses | missing | `truss x,y,z x,y,z type=king\|queen\|fink pitch=30 member=bar 47x150 spacing=600 count=10` | `arch::truss_member_counts` |
+| braces | missing | `brace A1 B1 rod 20 from=L0 to=L1 type=x` | `arch::brace_between_columns` |
+| footings | missing | `footing c1 1200x1200x500` | `arch::footing_under_a_column` |
+| curtain walls | missing | `curtainwall x,y x,y height=L1 grid=1500x900 mullion=50x100 glass=double door=cell:2,1` | `arch::curtain_wall_grid` |
+| louvres and shading fins | missing | `louvre x,y x,y z=900..2100 blade=150x20@100 angle=45`, `shading_fin x,y x,y depth=400 t=20@500` | `arch::louvres_and_fins` |
+| balconies | missing | `balcony on=outer at=4000 level=L1 w=3000 d=1200 slab=concrete:200 railing=1100` | `arch::balcony_slab_and_railing` |
+
+## Rooms and schedules
+
+Architecture stage C (gcad #350).
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| rooms | missing | `kitchen: room at=x,y name="Kitchen" floor=tile ceiling=plaster wall=paint level=L0`, boundary from the walls, area, perimeter and volume | `arch::room_found_from_the_walls` |
+| room checks | missing | a room whose walls do not close fails | `arch::unclosed_room_fails` |
+| room separators | missing | `room_separator x,y x,y` | `arch::room_separator_splits_a_space` |
+| net and gross areas | missing | `area_scheme gross\|net\|rentable`, `gcad schedule f rooms\|areas --csv` | `arch::net_and_gross_area` |
+| zones | missing | `zone day hall living` | `arch::zones_sum_their_rooms` |
+| rooms on several levels | missing | `room ... level=L1` | `arch::rooms_on_two_levels` |
+| door and window schedules | missing | `gcad schedule f doors\|windows --csv\|--json\|--svg` | `arch::door_and_window_schedule` |
+| wall schedules | missing | `gcad schedule f walls`, gross and net area after openings | `arch::wall_schedule_nets_out_openings` |
+| quantities by material and layer | missing | `gcad schedule f materials` | `arch::material_quantities_by_layer` |
+| slab, roof, stair and column schedules | missing | `gcad schedule f slabs\|roofs\|stairs\|columns` | `arch::element_schedules` |
+| finish schedules | missing | `gcad schedule f finishes` | `arch::finish_schedule` |
+| cost columns | missing | `--rates rates.toml` (price per `m2`, `m3`, `m`, `item`) | `arch::cost_columns_from_rates` |
+| stable schedules | missing | rows sorted by name, the same bytes every run | `arch::schedule_csv_is_sorted_and_stable` |
+| schedules in drawings | missing | `schedule doors place=x,y` in a `.gdwg` | `arch::schedule_table_on_a_sheet` |
+| building elements in the BOM | missing | `gcad bom house.gasm` lists layers and leaves | `arch::bom_lists_building_elements` |
+
+## Architectural drawings
+
+Architecture stage D (gcad #351). Lines of a `.gdwg` file.
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| floor plans | missing | `plan L0 cut=1200 scale=1:50`: poche of cut walls and columns, door swings, window symbols | `arch::plan_draws_the_cut` |
+| plan symbols | missing | `plan ... grids=1 levels=1`, `northarrow`, `scalebar` | `arch::plan_symbols` |
+| stair arrows | missing | UP or DN text, arrow and break line on a plan | `arch::plan_stair_arrow` |
+| reflected ceiling plans | missing | `rcp L0` | `arch::reflected_ceiling_plan` |
+| elevations | missing | `elevation from=+y\|-y\|+x\|-x` with level marks | `arch::elevation_with_level_marks` |
+| building sections | missing | `section a-a x,y x,y` with layer hatches | `arch::section_through_two_points` |
+| material hatches | missing | `hatch brick pattern=brick` (ISO 128 table by material) | `arch::hatch_fill_area_matches_the_layer` |
+| tags | missing | `tag door\|window\|wall\|stair\|column` | `arch::tags_carry_the_marks` |
+| room tags | missing | `tag room`: name and area | `arch::room_tags_show_the_area` |
+| automatic dimensions | missing | `dim auto walls\|openings\|grid side=-y` | `arch::auto_dims_sum_to_the_overall` |
+| detail viewports | missing | `viewport window=u0,v0,u1,v1 scale=1:5 label=` | `arch::viewport_detail_at_a_new_scale` |
+| sheet sets | missing | `sheet ... number=A-101`, `drawinglist` | `arch::sheet_set_with_a_drawing_list` |
+| DXF plans with layers | missing | `gcad export plan.gdwg plan.dxf`, layers `A-WALL`, `A-DOOR`, `A-GLAZ`, `A-GRID` | `arch::plan_dxf_has_layers_by_class` |
+
+## IFC
+
+Architecture stage E (gcad #352).
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| IFC4 export | missing | `gcad export house.gasm house.ifc`: project, site, building, storeys, walls, doors, windows, openings with voids and fills | `arch::ifc_has_the_spatial_structure` |
+| IFC wall layers | missing | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon` | `arch::ifc_wall_layers` |
+| IFC element classes | missing | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
+| stable GlobalIds | missing | ids derived from element names | `arch::ifc_global_ids_are_stable` |
+| IFC syntax | missing | unique ids, balanced parentheses, every reference defined | `arch::ifc_step_syntax_is_valid` |
+| IFC import | missing | `import model.ifc` as a read-only underlay | `arch::ifc_round_trip` |
+| IFC checks | missing | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
+| image underlays | missing | `underlay plan.png scale=1:100 dpi=100` | `arch::image_underlay` |
+
+## Site and analysis
+
+Architecture stage F (gcad #353).
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| terrain | missing | `t1: terrain points site.csv\|contour site.dxf\|grid 20000x20000 slope=0.1,0 depth=1000` | `arch::terrain_from_points` |
+| pads and cut and fill | missing | `pad <outline> level=1000`, `cut_fill t1 p1` | `arch::cut_and_fill_of_a_pad` |
+| site boundary | missing | `site_boundary x,y ... setback=3000` | `arch::site_boundary_area_and_setback` |
+| roads, retaining walls and trees | missing | `road x,y x,y width=3500 type=asphalt:100`, `retaining x,y x,y h=1200 t=250`, `tree x,y h=6000 spread=4000` | `arch::site_elements` |
+| U-values | missing | `check uvalue w1` (layer conductivities from the material library, Rsi 0.13, Rse 0.04) | `arch::u_value_of_a_wall` |
+| heat loss | missing | `check heatloss dt=20` | `arch::heat_loss_estimate` |
+| thermal bridges | missing | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
+| daylight | missing | `check daylight min=0.1` (glazing to floor area per room) | `arch::daylight_ratio` |
+| stair and ramp rules | missing | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
+| door widths and turning circles | missing | `check doors clear=775 turning=1500` | `arch::door_clear_width_check` |
+| egress, room and compartment checks | missing | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
+| sun position | missing | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
+| shadow study | missing | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall` |
+
+## Buildings in gcad-mesh
+
+Architecture stage G (gcad #354): the same lines build flat meshes with no kernel, for games.
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| mesh walls and openings | missing | `wall`, `door`, `window` through `gcad_mesh::build` | `arch::mesh_wall_matches_the_kernel` |
+| mesh house within budget | missing | walls, slab, roof, stair under 4000 triangles and 5 ms | `arch::mesh_house_within_budget` |
+| door nodes | missing | `d1.leaf` a named body pivoting at its hinge | `arch::mesh_door_is_a_hinged_node` |

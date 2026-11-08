@@ -15,6 +15,7 @@ doc gcad_sims_proto: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered o
 doc gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_view: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_web: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/arch.rs arch: ok. 0 passed; 0 failed; 117 ignored; 0 measured; 0 filtered out
 tests/assembly_hierarchy.rs assembly_hierarchy: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly.rs assembly: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assets.rs assets: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
