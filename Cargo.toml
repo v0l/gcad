@@ -107,6 +107,7 @@ required-features = ["game-assets"]
 gcad-remote.workspace = true
 
 [dev-dependencies]
+gcad2glb = { path = "crates/gcad2glb" }
 egui_bench = { version = "0.9.5", features = ["viewer3d"] }
 image.workspace = true
 robust = "1.2"

@@ -11,6 +11,9 @@ All notable changes to gcad are listed here. The format follows
 - `gcad2glb` writes files that mix solid and mesh bodies, through the new `gcad-brep` crate, byte for byte the same GLB as `gcad export` (`examples/mesh/bracket_mascot.gcad`). `cargo build -p gcad2glb --no-default-features` keeps the mesh-only tool.
 - `cargo build -p gcad --no-default-features` builds the CLI without the viewer (no egui or wgpu).
 
+### Fixed
+- `gcad2glb` wrote flat-solid files (`rect`, `circle`, `extrude` only, like the kids-free-games props) through gcad-mesh's flat extruder, so its GLB differed from `gcad export`; it now runs them through gcad-brep and the bytes match.
+
 ### Changed
 - gcad is split into a workspace of crates: gcad-parse, gcad-calc, gcad-host, gcad-geom, gcad-plot, gcad-brep, gcad-drafting, gcad-render, gcad-sim, gcad-remote, gcad-view and gcad2glb. Every output is byte-identical and the `gcad::` paths are kept. A change in the viewer rebuilds in 6 s instead of 29 s. See `docs/gcad-crates.md`.
 - `gcad skincheck f.gcad` scores a skin: weight jumps across edges, contested and unrelated weights, rigid cores, slivers in joint zones, and triangles that flip, squash or stretch over every clip key. See `docs/skinning.md`.

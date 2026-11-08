@@ -168,12 +168,27 @@ fn kind_of(path: &Path) -> Option<String> {
         .map(|e| e.to_string_lossy().to_ascii_lowercase())
 }
 
+fn kernel_first(source: &str, options: &Options) -> bool {
+    cfg!(feature = "brep") && options.detail == 1.0 && has_flat_solids(source)
+}
+
+fn has_flat_solids(source: &str) -> bool {
+    let solid = |word: &str| gcad_mesh::solid_ops::OPS.contains(&word);
+    gcad_mesh::parse::parse_program(source).is_ok_and(|lines| {
+        lines.iter().any(|line| {
+            solid(&line.op) || (line.op == "if" && line.text.split_whitespace().any(solid))
+        })
+    })
+}
+
 impl Assets {
     pub fn from_source(source: &str, options: &Options) -> Result<Assets, Error> {
-        let built = gcad_mesh::build_with(source, &options.mesh());
-        let (model, notes) = match built {
-            Ok(model) => (model, Vec::new()),
-            Err(refused) => solids::from_source(source, options, refused)?,
+        let (model, notes) = match kernel_first(source, options) {
+            true => solids::from_source(source, options, None)?,
+            false => match gcad_mesh::build_with(source, &options.mesh()) {
+                Ok(model) => (model, Vec::new()),
+                Err(refused) => solids::from_source(source, options, Some(refused))?,
+            },
         };
         Assets::finish(model, notes, options)
     }
@@ -190,6 +205,7 @@ impl Assets {
             .map_err(|e| plain(format!("reading {}: {e}", path.display())))?;
         let (model, notes) = match kind.as_deref() {
             Some("gasm") => solids::from_path(path, options, None)?,
+            _ if kernel_first(&source, options) => solids::from_path(path, options, None)?,
             _ => match gcad_mesh::build_with(&source, &options.mesh()) {
                 Ok(model) => (model, Vec::new()),
                 Err(refused) => solids::from_path(path, options, Some(refused))?,
@@ -302,12 +318,16 @@ mod solids {
         Ok((gcad_brep::glb::mesh_model(&run.model, options.y_up), notes))
     }
 
-    pub fn from_source(source: &str, options: &Options, refused: Error) -> Result<Built, Error> {
+    pub fn from_source(
+        source: &str,
+        options: &Options,
+        refused: Option<Error>,
+    ) -> Result<Built, Error> {
         let lines = gcad_mesh::parse::parse_program(source).map_err(|e| plain(format!("{e:#}")))?;
         finished(
             gcad_brep::run_full(None, &options.vars, &lines),
             options,
-            Some(refused),
+            refused,
         )
     }
 
@@ -339,8 +359,14 @@ mod solids {
         }
     }
 
-    pub fn from_source(_source: &str, _options: &Options, refused: Error) -> Result<Built, Error> {
-        Err(without(refused))
+    pub fn from_source(
+        _source: &str,
+        _options: &Options,
+        refused: Option<Error>,
+    ) -> Result<Built, Error> {
+        Err(without(
+            refused.unwrap_or_else(|| super::plain("a solid file")),
+        ))
     }
 
     pub fn from_path(

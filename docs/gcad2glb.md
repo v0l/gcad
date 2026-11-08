@@ -24,7 +24,9 @@ monstertruck kernel, so copy gcad's `[patch.crates-io]` monstertruck lines into 
 by default.
 
 Without `brep`, a solid file fails with the first solid line and says the library was built
-without the brep feature.
+without the brep feature. Flat solids (`plane`, `rect`, `circle`, `poly`, `array`, `extrude`,
+`fillet`, `repeat`) still build without it, through gcad-mesh's own flat extruder, which
+tessellates differently from the kernel: the shape is the same, the triangles and bytes are not.
 
 ## Use it
 
@@ -55,10 +57,11 @@ fn mushroom() -> Result<(), gcad2glb::Error> {
 `crates/gcad2glb/examples/prop.rs` is the same, run with
 `cargo run -p gcad2glb --no-default-features --example prop`.
 
-- `Assets::from_source(text, &options)` builds text. A file gcad-mesh can build goes through
-  gcad-mesh; one it refuses goes through gcad-brep (with `brep`), which runs solid and mesh
-  bodies together exactly as `gcad export` does. Text has no folder, so `part` lines and stamps
-  that name other files need `from_path`.
+- `Assets::from_source(text, &options)` builds text. With `brep`, a file with any solid line
+  (flat `rect`/`circle`/`extrude` included) runs through gcad-brep, which runs solid and mesh
+  bodies together exactly as `gcad export` does; a file of mesh lines, or any file without
+  `brep`, goes through gcad-mesh. Text has no folder, so `part` lines and stamps that name other
+  files need `from_path`.
 - `Assets::from_path(path, &options)` reads a file; `part` lines and stamps are relative to it. `.gasm` assemblies always go through gcad-brep and give one body per placed
   part. `.gsim` files are refused.
 - `Assets` derefs to `gcad_mesh::Model`, so code written for `gcad_mesh::build_with` (the

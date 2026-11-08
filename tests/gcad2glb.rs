@@ -393,6 +393,88 @@ fn export_height_flag_matches_gcad2glb_and_the_library() {
     assert!(std::fs::read(&b).unwrap() == expected);
 }
 
+const COIN: &str = "let r=50 t=12\nplane XZ offset=-t/2\ncircle 2*r at=0,r\ncoin: extrude t\ncolor #f2a900\nbody face\nplane XZ offset=-t/2-1.5\ncircle 2*r-16 at=0,r\nface: extrude t+3\ncolor #ffc21a\n";
+
+#[test]
+fn flat_solids_match_export_through_the_tool_and_the_library() {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let spec = dir.join("flat-coin.gcad");
+    std::fs::write(&spec, COIN).expect("writes");
+    let (a, b) = (dir.join("flat-coin-a.glb"), dir.join("flat-coin-b.glb"));
+    let flags = ["--height", "1", "--centre"];
+    let gcad = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["export", spec.to_str().unwrap(), a.to_str().unwrap()])
+        .args(flags)
+        .output()
+        .expect("runs gcad");
+    assert!(
+        gcad.status.success(),
+        "{}",
+        String::from_utf8_lossy(&gcad.stderr)
+    );
+    let tool = std::process::Command::new(gcad2glb_tool())
+        .args(flags)
+        .args([spec.to_str().unwrap(), b.to_str().unwrap()])
+        .output()
+        .expect("runs gcad2glb");
+    assert!(
+        tool.status.success(),
+        "{}",
+        String::from_utf8_lossy(&tool.stderr)
+    );
+    let options = gcad2glb::Options {
+        fit: gcad2glb::Fit {
+            height: Some(1.0),
+            centre: true,
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+    let from_text = gcad2glb::Assets::from_source(COIN, &options)
+        .and_then(|a| a.to_glb())
+        .expect("builds");
+    let exported = std::fs::read(&a).unwrap();
+    assert_eq!(exported.len(), std::fs::read(&b).unwrap().len());
+    assert!(exported == std::fs::read(&b).unwrap(), "tool differs");
+    assert!(exported == from_text, "library differs");
+}
+
+#[test]
+fn the_library_matches_export_with_set_and_scale_on_a_solid_part() {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let spec = dir.join("set-plate.gcad");
+    std::fs::write(
+        &spec,
+        "let w=60\nrect w 30\nplate: extrude 4\nplane plate.end\nhole 6 -20,0 20,0\n",
+    )
+    .expect("writes");
+    let out = dir.join("set-plate.glb");
+    let gcad = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["export", spec.to_str().unwrap(), out.to_str().unwrap()])
+        .args(["--set", "w=90", "--scale", "0.01", "--centre"])
+        .output()
+        .expect("runs gcad");
+    assert!(
+        gcad.status.success(),
+        "{}",
+        String::from_utf8_lossy(&gcad.stderr)
+    );
+    let options = gcad2glb::Options {
+        fit: gcad2glb::Fit {
+            scale: Some(0.01),
+            centre: true,
+            ..Default::default()
+        },
+        ..gcad2glb::Options::default().set("w", 90.0)
+    };
+    let assets = gcad2glb::Assets::from_path(&spec, &options).expect("builds");
+    let (lo, hi) = assets.bounds().unwrap();
+    assert!((hi[0] - lo[0] - 90.0).abs() < 1e-3);
+    assert!(std::fs::read(&out).unwrap() == assets.to_glb().expect("writes"));
+}
+
 #[test]
 fn export_scale_flag_fits_a_solid_part() {
     let dir = std::env::temp_dir().join("gcad-tests");
