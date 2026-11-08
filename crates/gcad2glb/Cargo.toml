@@ -1,6 +1,6 @@
 [package]
 name = "gcad2glb"
-description = "Write a GLB from a gcad file: meshes, rigs and clips, and with the brep feature solid bodies too"
+description = "Turn gcad files (meshes, rigs, clips and, with the brep feature, solid parts and assemblies) into game assets at runtime, and the gcad2glb tool that writes them as GLB"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -9,8 +9,13 @@ publish = false
 
 [dependencies]
 gcad-mesh.workspace = true
+gcad-version.workspace = true
 gcad-brep = { workspace = true, optional = true }
+
+[dev-dependencies]
+serde_json.workspace = true
 
 [features]
 default = ["brep"]
 brep = ["dep:gcad-brep"]
+parallel = ["gcad-mesh/parallel"]

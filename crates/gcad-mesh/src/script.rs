@@ -84,12 +84,48 @@ pub struct MoveTrack {
 }
 
 #[derive(Clone, Debug)]
+pub struct WeightTrack {
+    pub times: Vec<f32>,
+    pub weights: Vec<Vec<f32>>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Clip {
     pub name: String,
     pub fps: f32,
     pub duration: f32,
     pub tracks: Vec<Track>,
     pub moves: Vec<MoveTrack>,
+    pub weights: Option<WeightTrack>,
+}
+
+#[derive(Clone, Debug)]
+pub struct MorphTarget {
+    pub name: String,
+    pub deltas: Vec<[f32; 3]>,
+}
+
+#[derive(Clone, Debug)]
+pub struct NormalMap {
+    pub size: usize,
+    pub png: Vec<u8>,
+    pub positions: Vec<[f32; 3]>,
+    pub normals: Vec<[f32; 3]>,
+    pub uvs: Vec<[f32; 2]>,
+    pub tangents: Vec<[f32; 4]>,
+    pub source: Vec<u32>,
+    pub indices: Vec<u32>,
+    pub parts: Vec<Part>,
+}
+
+pub struct RawBody {
+    pub name: String,
+    pub mesh: Arc<Mesh>,
+    pub rig: Option<Rig>,
+    pub tints: Vec<[f64; 3]>,
+    pub gloss: Vec<f64>,
+    pub colours: Vec<[f32; 3]>,
+    pub detail: Option<crate::interp::Detail>,
 }
 
 #[derive(Clone, Debug)]
@@ -104,6 +140,8 @@ pub struct Body {
     pub joint_indices: Vec<[u16; 4]>,
     pub joint_weights: Vec<[f32; 4]>,
     pub clips: Vec<Clip>,
+    pub targets: Vec<MorphTarget>,
+    pub target_weights: Vec<f32>,
     y_up: bool,
     mesh: Arc<Mesh>,
     rig: Option<Rig>,
@@ -147,12 +185,110 @@ fn matrix_of(xf: &Xf, y_up: bool) -> Matrix {
 }
 
 impl Body {
+    pub fn new(raw: RawBody, y_up: bool) -> Body {
+        body_of(raw, y_up)
+    }
+
     pub fn rest_mesh(&self) -> &Mesh {
         &self.mesh
     }
 
     pub fn rig(&self) -> Option<&Rig> {
         self.rig.as_ref()
+    }
+
+    pub fn detail(&self) -> Option<&crate::interp::Detail> {
+        self.detail.as_ref()
+    }
+
+    pub fn set_lods(&mut self, lods: Vec<crate::interp::LodSize>) {
+        let detail = self.detail.get_or_insert_with(Default::default);
+        detail.lods = lods;
+        if detail.is_empty() && detail.full.is_none() {
+            self.detail = None;
+        }
+    }
+
+    pub fn set_bake_size(&mut self, size: usize) -> bool {
+        match self.detail.as_mut().and_then(|d| d.bake.as_mut()) {
+            Some(bake) => {
+                *bake = size;
+                true
+            }
+            None => false,
+        }
+    }
+
+    pub fn lods(&self) -> Vec<Body> {
+        let Some(detail) = &self.detail else {
+            return Vec::new();
+        };
+        let skin = self.rig.as_ref().and_then(|r| r.skin.as_ref());
+        gltf::lod_meshes(&self.mesh, detail)
+            .into_iter()
+            .enumerate()
+            .map(|(k, mesh)| {
+                let rig = self.rig.as_ref().map(|r| Rig {
+                    skin: skin.map(|s| gltf::nearest_weights(s, &self.mesh, &mesh)),
+                    correctives: Vec::new(),
+                    ..r.clone()
+                });
+                body_of(
+                    RawBody {
+                        name: format!("{}_LOD{}", self.name, k + 1),
+                        mesh: Arc::new(mesh),
+                        rig,
+                        tints: self.tints.clone(),
+                        gloss: self.gloss.clone(),
+                        colours: Vec::new(),
+                        detail: None,
+                    },
+                    self.y_up,
+                )
+            })
+            .collect()
+    }
+
+    pub fn normal_map(&self) -> Option<NormalMap> {
+        let detail = self.detail.as_ref()?;
+        let size = detail.bake?;
+        let high = detail.full.as_deref().unwrap_or(&self.mesh);
+        let baked = crate::mesh::bake::bake_normals(&self.mesh, high, size);
+        let e = &baked.expanded;
+        let labels: Vec<u16> = e
+            .source
+            .iter()
+            .map(|&i| self.mesh.labels[i as usize])
+            .collect();
+        let (indices, parts) = parts_of(
+            &self.mesh.parts,
+            &e.triangles,
+            &labels,
+            &self.tints,
+            &self.gloss,
+        );
+        Some(NormalMap {
+            size,
+            png: baked.png(),
+            positions: e
+                .positions
+                .iter()
+                .map(|p| f3(to_up(*p, self.y_up)))
+                .collect(),
+            normals: e.normals.iter().map(|n| f3(to_up(*n, self.y_up))).collect(),
+            uvs: e.uvs.iter().map(|q| [q[0] as f32, q[1] as f32]).collect(),
+            tangents: e
+                .tangents
+                .iter()
+                .map(|t| {
+                    let v = f3(to_up([t[0], t[1], t[2]], self.y_up));
+                    [v[0], v[1], v[2], t[3] as f32]
+                })
+                .collect(),
+            source: e.source.clone(),
+            indices,
+            parts,
+        })
     }
 
     pub fn joint_count(&self) -> usize {
@@ -336,7 +472,10 @@ impl Run {
         if solid_ops::OPS.contains(&line.op.as_str()) {
             return self.solids.apply(&mut self.scene, &self.scope, line);
         }
-        if !crate::rig_ops::SCULPT_OPS.contains(&line.op.as_str()) && line.op != "let" && line.op != "if" {
+        if !crate::rig_ops::SCULPT_OPS.contains(&line.op.as_str())
+            && line.op != "let"
+            && line.op != "if"
+        {
             self.scene.close_corrective()?;
         }
         let scope = &self.scope;
@@ -479,13 +618,15 @@ fn collect(run: &Run, y_up: bool) -> Model {
                 .map(|(_, _, c, _)| c.iter().map(|c| f3(*c)).collect())
                 .unwrap_or_default();
             body_of(
-                name.clone(),
-                mesh,
-                scene.rig_of(&name).cloned(),
-                part_tints,
-                gloss,
-                vertex_colours,
-                scene.detail_of(&name),
+                RawBody {
+                    name: name.clone(),
+                    mesh,
+                    rig: scene.rig_of(&name).cloned(),
+                    tints: part_tints,
+                    gloss,
+                    colours: vertex_colours,
+                    detail: scene.detail_of(&name),
+                },
                 y_up,
             )
         })
@@ -493,31 +634,21 @@ fn collect(run: &Run, y_up: bool) -> Model {
     Model { bodies }
 }
 
-#[allow(clippy::too_many_arguments)]
-fn body_of(
-    name: String,
-    mesh: Arc<Mesh>,
-    rig: Option<Rig>,
-    tints: Vec<[f64; 3]>,
-    gloss: Vec<f64>,
-    colours: Vec<[f32; 3]>,
-    detail: Option<crate::interp::Detail>,
-    y_up: bool,
-) -> Body {
-    let positions = mesh.positions.iter().map(|p| f3(to_up(*p, y_up))).collect();
-    let normals = mesh
-        .vertex_normals()
-        .into_iter()
-        .map(|n| f3(to_up(n, y_up)))
-        .collect();
+fn parts_of(
+    names: &[String],
+    triangles: &[[u32; 3]],
+    labels: &[u16],
+    tints: &[[f64; 3]],
+    gloss: &[f64],
+) -> (Vec<u32>, Vec<Part>) {
     let mut indices = Vec::new();
     let mut parts = Vec::new();
-    for (part, part_name) in mesh.parts.iter().enumerate() {
+    for (part, part_name) in names.iter().enumerate() {
         let first = indices.len();
         indices.extend(
-            mesh.triangles
+            triangles
                 .iter()
-                .filter(|t| mesh.labels[t[0] as usize] as usize == part)
+                .filter(|t| labels[t[0] as usize] as usize == part)
                 .flatten(),
         );
         if indices.len() == first {
@@ -531,12 +662,49 @@ fn body_of(
             index_count: indices.len() - first,
         });
     }
+    (indices, parts)
+}
+
+fn body_of(raw: RawBody, y_up: bool) -> Body {
+    let RawBody {
+        name,
+        mesh,
+        rig,
+        tints,
+        gloss,
+        colours,
+        detail,
+    } = raw;
+    let positions = mesh.positions.iter().map(|p| f3(to_up(*p, y_up))).collect();
+    let normals = mesh
+        .vertex_normals()
+        .into_iter()
+        .map(|n| f3(to_up(n, y_up)))
+        .collect();
+    let (indices, parts) = parts_of(&mesh.parts, &mesh.triangles, &mesh.labels, &tints, &gloss);
     let active = rig.filter(|r| r.skin_fits(&mesh));
     let mut joints = Vec::new();
     let mut joint_indices = Vec::new();
     let mut joint_weights = Vec::new();
     let mut clips = Vec::new();
+    let mut targets = Vec::new();
+    let mut target_weights = Vec::new();
     if let Some(rig) = &active {
+        targets = rig
+            .correctives
+            .iter()
+            .map(|c| MorphTarget {
+                name: c.name.clone(),
+                deltas: c.delta.iter().map(|d| f3(to_up(*d, y_up))).collect(),
+            })
+            .collect();
+        if !targets.is_empty() {
+            target_weights = rig
+                .corrective_weights(&rig.pose)
+                .into_iter()
+                .map(|w| w as f32)
+                .collect();
+        }
         joints = rig
             .bones
             .iter()
@@ -596,6 +764,21 @@ fn body_of(
                         })
                     })
                     .collect(),
+                weights: (!rig.correctives.is_empty()).then(|| {
+                    let times = gltf::corrective_times(clip);
+                    WeightTrack {
+                        weights: times
+                            .iter()
+                            .map(|t| {
+                                rig.corrective_weights(&rig.sample(clip_index, *t))
+                                    .into_iter()
+                                    .map(|w| w as f32)
+                                    .collect()
+                            })
+                            .collect(),
+                        times: times.iter().map(|t| *t as f32).collect(),
+                    }
+                }),
             })
             .collect();
     }
@@ -610,6 +793,8 @@ fn body_of(
         joint_indices,
         joint_weights,
         clips,
+        targets,
+        target_weights,
         y_up,
         mesh,
         rig: active,

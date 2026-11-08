@@ -1,57 +1,66 @@
 use crate::Model;
 use crate::geometry;
 use anyhow::Result;
-use gcad_mesh::gltf;
 use monstertruck::modeling::*;
-
-type Colour = [f64; 3];
+use std::sync::Arc;
 
 pub fn glb_of(model: &Model) -> Result<Vec<u8>> {
+    mesh_model(model, true).to_glb()
+}
+
+pub fn mesh_model(model: &Model, y_up: bool) -> gcad_mesh::Model {
     let rest = model.rest_meshes();
     let tints = model.mesh_tints();
+    let shading = model.mesh_shading();
     let parts = model.named_parts();
     let size = parts
         .iter()
         .map(|(_, solid, _)| geometry::bounds(solid).diameter())
         .fold(0.0, f64::max);
     let tolerance = (size * GLB_TOLERANCE).max(1.0e-4);
-    let solids: Vec<(String, crate::mesh::Mesh, Colour)> = parts
+    let mut bodies: Vec<gcad_mesh::Body> = parts
         .into_iter()
         .map(|(name, solid, colour)| {
-            (
-                name.clone(),
-                faceted_mesh(solid, &name, tolerance),
-                colour.unwrap_or([0.7, 0.7, 0.7]),
+            let mesh = faceted_mesh(solid, &name, tolerance);
+            gcad_mesh::Body::new(
+                gcad_mesh::RawBody {
+                    name,
+                    mesh: Arc::new(mesh),
+                    rig: None,
+                    tints: vec![colour.unwrap_or([0.7, 0.7, 0.7])],
+                    gloss: vec![0.0],
+                    colours: Vec::new(),
+                    detail: None,
+                },
+                y_up,
             )
         })
         .collect();
-    let mut bodies: Vec<gltf::Body<'_>> = solids
-        .iter()
-        .map(|(name, mesh, colour)| gltf::Body {
-            name: name.clone(),
-            mesh,
-            rig: None,
-            colours: vec![*colour],
-            gloss: vec![0.0],
-            detail: None,
-        })
-        .collect();
-    bodies.extend(rest.iter().map(|(name, mesh)| {
+    bodies.extend(rest.into_iter().map(|(name, mesh)| {
         let colours = tints
             .iter()
-            .find(|(n, ..)| n == name)
+            .find(|(n, ..)| *n == name)
             .map(|(_, _, t)| t.clone())
             .unwrap_or_default();
-        gltf::Body {
-            name: name.clone(),
-            mesh,
-            rig: model.rig_of(name),
-            colours,
-            gloss: model.part_gloss_of(name, mesh),
-            detail: model.scene.detail_of(name),
-        }
+        let vertex_colours = shading
+            .iter()
+            .find(|(n, ..)| *n == name)
+            .map(|(_, _, c, _)| c.iter().map(|c| c.map(|v| v as f32)).collect())
+            .unwrap_or_default();
+        gcad_mesh::Body::new(
+            gcad_mesh::RawBody {
+                rig: model.rig_of(&name).cloned(),
+                gloss: model.part_gloss_of(&name, &mesh),
+                detail: model.scene.detail_of(&name),
+                name,
+                mesh,
+                tints: colours,
+                colours: vertex_colours,
+            },
+            y_up,
+        )
     }));
-    gltf::glb(&bodies)
+    gcad_mesh::Model { bodies }
 }
 
 const GLB_TOLERANCE: f64 = 3e-3;

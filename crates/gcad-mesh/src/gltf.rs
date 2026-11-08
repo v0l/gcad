@@ -196,7 +196,7 @@ pub fn lod_meshes(base: &Mesh, detail: &Detail) -> Vec<Mesh> {
         .collect()
 }
 
-fn nearest_weights(skin: &Weights, from: &Mesh, to: &Mesh) -> Weights {
+pub(crate) fn nearest_weights(skin: &Weights, from: &Mesh, to: &Mesh) -> Weights {
     let grid = crate::mesh::grid::Grid::new(&from.positions, 1.0);
     let cell = from
         .bounds()
@@ -392,7 +392,7 @@ fn emit_level(
     json!({"name": name, "primitives": primitives})
 }
 
-fn corrective_times(clip: &crate::mesh::rig::Clip) -> Vec<f64> {
+pub(crate) fn corrective_times(clip: &crate::mesh::rig::Clip) -> Vec<f64> {
     let duration = clip.duration();
     let frames = (duration * clip.fps).ceil() as usize;
     let mut times: Vec<f64> = (0..=frames).map(|k| k as f64 / clip.fps).collect();
