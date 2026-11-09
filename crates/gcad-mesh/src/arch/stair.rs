@@ -336,7 +336,10 @@ mod tests {
         let ring = stringer_profile(&s, 14, 50.0, 300.0, 2700.0);
         let top = ring.iter().map(|p| p.1).fold(0.0, f64::max);
         assert!((top - 2700.0).abs() < 1.0e-9);
-        assert!(ring.iter().all(|p| p.0 >= 0.0 && p.0 <= 14.0 * 270.0 + 1.0e-9));
+        assert!(
+            ring.iter()
+                .all(|p| p.0 >= 0.0 && p.0 <= 14.0 * 270.0 + 1.0e-9)
+        );
     }
 
     #[test]

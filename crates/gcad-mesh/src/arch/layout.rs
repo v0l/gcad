@@ -291,6 +291,32 @@ impl Chain {
         }
     }
 
+    pub fn band_pieces(
+        &self,
+        lo: f64,
+        hi: f64,
+        start: Option<Cut>,
+        end: Option<Cut>,
+    ) -> Vec<Vec<P2>> {
+        let right: Vec<P2> = self
+            .offset(lo, start, end)
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
+        let left: Vec<P2> = self
+            .offset(hi, start, end)
+            .into_iter()
+            .map(|(p, _)| p)
+            .collect();
+        let n = right.len();
+        (0..self.segments())
+            .map(|i| {
+                let j = (i + 1) % n;
+                vec![right[i], right[j], left[j], left[i]]
+            })
+            .collect()
+    }
+
     pub fn project(&self, p: P2) -> Option<(usize, f64, f64)> {
         (0..self.segments())
             .filter_map(|i| {
@@ -485,6 +511,21 @@ mod tests {
         };
         let (ring, _) = chain.band(-50.0, 50.0, None, None, &[pier]);
         assert!((area(&ring) - (4000.0 * 100.0 + 300.0 * 200.0)).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn closed_band_pieces_add_up_to_the_band() {
+        let chain = Chain::new(
+            vec![(0.0, 0.0), (8000.0, 0.0), (8000.0, 6000.0), (0.0, 6000.0)],
+            true,
+        )
+        .unwrap();
+        let total: f64 = chain
+            .band_pieces(0.0, 300.0, None, None)
+            .iter()
+            .map(|p| signed_area(p).abs())
+            .sum();
+        assert!((total - (8000.0 * 6000.0 - 7400.0 * 5400.0)).abs() < 1.0e-6);
     }
 
     #[test]

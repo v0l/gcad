@@ -249,8 +249,14 @@ impl Wall {
             rings
         };
         let (z0, z1) = (self.base + tier.from, self.base + tier.to);
-        let bottom = ring(band.0, band.1, &|_| z0, z0 * 0.0 + (z0 - self.base) * lean);
         let topped = tier.to >= self.top - self.base - 1.0e-9;
+        if topped && !self.under.is_empty() {
+            let pieces = self.line.band_pieces(band.0, band.1, cuts.0, cuts.1);
+            let shell = gcad_mesh::arch::roof::column_shell(&pieces, z0, self.top, &self.under)
+                .map_err(|e| anyhow!(e))?;
+            return super::roof::shell_solid(&shell);
+        }
+        let bottom = ring(band.0, band.1, &|_| z0, z0 * 0.0 + (z0 - self.base) * lean);
         let top_z = |s: f64| if topped { self.top_at(s) } else { z1 };
         let top = ring(band.0, band.1, &top_z, (z1 - self.base) * lean);
         let fix = |rings: Vec<Vec<Point3>>| -> Vec<Vec<Point3>> {
@@ -431,6 +437,7 @@ impl Model {
             top_offset: (0.0, 0.0),
             batter: 0.0,
             pilasters: Vec::new(),
+            under: Vec::new(),
         };
         for (key, text) in &line.named {
             let number =
@@ -769,6 +776,7 @@ impl Model {
                 top_offset: (0.0, 0.0),
                 batter: 0.0,
                 pilasters: Vec::new(),
+                under: Vec::new(),
                 tiers: vec![tier.clone()],
                 ..wall
             };

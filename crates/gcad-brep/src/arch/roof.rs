@@ -13,6 +13,24 @@ use monstertruck::modeling::*;
 
 const EDGE_KINDS: &[&str] = &["ridge", "hip", "valley", "eave", "verge", "curb"];
 
+pub(crate) fn shell_solid(shell: &gcad_mesh::arch::roof::Shell) -> Result<Solid> {
+    let polygons: Vec<Vec<Vec<Point3>>> = shell
+        .faces
+        .iter()
+        .map(|f| {
+            vec![
+                f.iter()
+                    .map(|&i| {
+                        let p = shell.points[i];
+                        Point3::new(p[0], p[1], p[2])
+                    })
+                    .collect(),
+            ]
+        })
+        .collect();
+    Ok(crate::solids::oriented(planar_solid(&polygons)?))
+}
+
 impl Roof {
     pub(crate) fn planes(&self) -> Result<Vec<Plane>> {
         roof_planes(
@@ -70,21 +88,7 @@ impl Roof {
     fn solid(&self) -> Result<Solid> {
         let shell =
             roof_shell(&self.eaves(), &self.planes()?, self.thickness).map_err(|e| anyhow!(e))?;
-        let polygons: Vec<Vec<Vec<Point3>>> = shell
-            .faces
-            .iter()
-            .map(|f| {
-                vec![
-                    f.iter()
-                        .map(|&i| {
-                            let p = shell.points[i];
-                            Point3::new(p[0], p[1], p[2])
-                        })
-                        .collect(),
-                ]
-            })
-            .collect();
-        Ok(crate::solids::oriented(planar_solid(&polygons)?))
+        shell_solid(&shell)
     }
 }
 
@@ -140,6 +144,7 @@ impl Model {
             material: "clay-tile".into(),
         };
         let mut ridge = None;
+        let mut trims: Vec<String> = Vec::new();
         for (key, text) in &line.named {
             let number =
                 |model: &Model| eval(text, &model.scope).with_context(|| format!("`{key}={text}`"));
@@ -150,6 +155,7 @@ impl Model {
                 "thickness" => roof.thickness = number(self)?,
                 "base" => roof.base = number(self)?,
                 "material" => roof.material = text.clone(),
+                "walls" => trims = text.split(',').map(str::to_string).collect(),
                 "ridge" => {
                     ridge = Some(match text.as_str() {
                         "x" => (1.0, 0.0),
@@ -158,7 +164,7 @@ impl Model {
                     })
                 }
                 other => bail!(
-                    "`roof` takes type=, pitch=, overhang=, thickness=, base=, ridge= and material=, not `{other}=`"
+                    "`roof` takes type=, pitch=, overhang=, thickness=, base=, ridge=, walls= and material=, not `{other}=`"
                 ),
             }
         }
@@ -185,8 +191,24 @@ impl Model {
         let kind = roof.kind.clone();
         self.arch.roofs.push(roof);
         let top = self.build_roof(&name)?;
+        let mut trimmed = String::new();
+        if !trims.is_empty() {
+            let planes = self.roof(&name).expect("a roof").planes()?;
+            for wall in &trims {
+                let slot = self
+                    .arch
+                    .walls
+                    .iter_mut()
+                    .find(|w| w.name == *wall)
+                    .ok_or_else(|| anyhow!("`walls={wall}`: there is no wall `{wall}`"))?;
+                slot.under = planes.clone();
+            }
+            self.rebuild_walls()
+                .with_context(|| format!("trimming {} to `{name}`", trims.join(", ")))?;
+            trimmed = format!(", {} built up to its underside", trims.join(", "));
+        }
         Ok(format!(
-            "{kind} roof {name}, top at {}",
+            "{kind} roof {name}, top at {}{trimmed}",
             crate::parse::label(top)
         ))
     }

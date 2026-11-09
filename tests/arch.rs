@@ -806,7 +806,16 @@ fn per_edge_pitch() {
 }
 
 #[test]
-#[ignore = "missing: walls trim to the roof"]
+fn trimmed_wall_export_is_the_same_every_run() {
+    export_twice(
+        "trimmed_wall_export_is_the_same_every_run",
+        &with(
+            "r1: roof outer type=hip pitch=35 overhang=300 thickness=200 base=L1 walls=outer\npitch_edge r1.eave.1 50",
+        ),
+    );
+}
+
+#[test]
 fn walls_trim_to_the_roof_underside() {
     let model = build(&with(
         "r1: roof outer type=gable pitch=45 overhang=0 thickness=200 ridge=x base=L1 walls=outer",

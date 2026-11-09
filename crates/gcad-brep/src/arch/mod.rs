@@ -51,6 +51,7 @@ pub struct Wall {
     pub top_offset: (f64, f64),
     pub batter: f64,
     pub pilasters: Vec<(f64, f64, f64)>,
+    pub under: Vec<gcad_mesh::arch::roof::Plane>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
