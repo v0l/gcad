@@ -91,3 +91,5 @@ SKILL.md now sends props, vehicles, buildings and game assets to `meshes.md` and
 | heldout | anvil, teapot, biplane, bulldozer, barn | 6.0 | 0.89 | 6.8 | 0.6 |
 
 Judge scores are flat against the 5.4 baseline; the change moves mesh op use, not yet the score. One seed, so below 0.5 is noise.
+
+Reverted (#461): the user rated every mesh render under 3 and the CAD solids "decent". The judge gave the same meshes 5 to 7, so the 6.0 above does not show an improvement, and routing props, vehicles and buildings to mesh blockouts moved them from the model type users rate better to the one they rate worse. SKILL.md again sends them to parts and solids; only characters and creatures go to `meshes.md`.
