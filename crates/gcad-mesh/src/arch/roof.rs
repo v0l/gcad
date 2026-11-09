@@ -333,13 +333,129 @@ pub fn longest_edge(footprint: &[P2]) -> P2 {
 
 pub fn gable_planes(footprint: &[P2], base: f64, pitch: f64, ridge: P2) -> Vec<Plane> {
     let ring = ccw_ring(footprint.to_vec());
+    roof_planes("gable", &ring, base, &vec![pitch; ring.len()], ridge).unwrap_or_default()
+}
+
+pub const ROOF_KINDS: &[&str] = &[
+    "gable", "hip", "half_hip", "shed", "flat", "mansard", "gambrel", "barrel",
+];
+
+const BARREL_PIECES: usize = 8;
+
+fn steep(pitch: f64) -> f64 {
+    pitch + (90.0 - pitch) / 2.0
+}
+
+fn broken(a: P2, b: P2, base: f64, pitch: f64, inset: f64) -> [Plane; 2] {
+    let low = steep(pitch);
+    let curb = base + inset * low.to_radians().tan();
+    [
+        Plane::rising_from(a, b, base, low),
+        Plane::rising_from(a, b, curb - inset * pitch.to_radians().tan(), pitch),
+    ]
+}
+
+fn across(ring: &[P2], ridge: P2) -> (P2, f64, f64) {
+    let n = left(unit(ridge));
+    let (lo, hi) = ring
+        .iter()
+        .map(|&p| dot(n, p))
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(lo, hi), u| {
+            (lo.min(u), hi.max(u))
+        });
+    (n, lo, hi)
+}
+
+fn barrel_planes(ring: &[P2], base: f64, pitch: f64, ridge: P2) -> Vec<Plane> {
+    let (n, lo, hi) = across(ring, ridge);
+    let half = (hi - lo) / 2.0;
+    let spring = pitch.to_radians();
+    let r = half / spring.sin();
+    let zc = base - r * spring.cos();
+    let mid = lo + half;
+    let mut planes = vec![Plane::level(zc + r)];
+    for k in 1..=BARREL_PIECES {
+        let theta = spring * k as f64 / BARREL_PIECES as f64;
+        for side in [-1.0, 1.0] {
+            let u = mid + side * r * theta.sin();
+            let z = zc + r * theta.cos();
+            let slope = -side * theta.tan();
+            planes.push(Plane {
+                c: z - slope * u,
+                g: scale(n, slope),
+            });
+        }
+    }
+    planes
+}
+
+pub fn roof_planes(
+    kind: &str,
+    ring: &[P2],
+    base: f64,
+    pitches: &[f64],
+    ridge: P2,
+) -> Result<Vec<Plane>, String> {
     let n = ring.len();
-    eaves_along(&ring, ridge)
-        .into_iter()
-        .enumerate()
-        .filter(|&(_, eave)| eave)
-        .map(|(i, _)| Plane::rising_from(ring[i], ring[(i + 1) % n], base, pitch))
-        .collect()
+    if pitches.len() != n {
+        return Err("a roof needs one pitch per outline edge".into());
+    }
+    let eaves = eaves_along(ring, ridge);
+    let edge = |i: usize| (ring[i], ring[(i + 1) % n]);
+    let (_, lo, hi) = across(ring, ridge);
+    let inset = (hi - lo) / 6.0;
+    let rise_of = |i: usize| (hi - lo) / 2.0 * pitches[i].to_radians().tan();
+    let mut planes = Vec::new();
+    match kind {
+        "flat" => planes.push(Plane::level(base)),
+        "gable" | "hip" | "half_hip" => {
+            for i in 0..n {
+                let (a, b) = edge(i);
+                if eaves[i] || kind == "hip" {
+                    planes.push(Plane::rising_from(a, b, base, pitches[i]));
+                } else if kind == "half_hip" {
+                    let main = (0..n).find(|&j| eaves[j]).unwrap_or(i);
+                    planes.push(Plane::rising_from(
+                        a,
+                        b,
+                        base + rise_of(main) / 2.0,
+                        pitches[i],
+                    ));
+                }
+            }
+        }
+        "shed" => {
+            let r = unit(ridge);
+            let low = (0..n)
+                .filter(|&i| eaves[i])
+                .find(|&i| dot(sub(ring[(i + 1) % n], ring[i]), r) > 0.0)
+                .ok_or("a shed roof needs an eave edge along the ridge direction")?;
+            let (a, b) = edge(low);
+            planes.push(Plane::rising_from(a, b, base, pitches[low]));
+        }
+        "mansard" | "gambrel" => {
+            for i in 0..n {
+                if eaves[i] || kind == "mansard" {
+                    let (a, b) = edge(i);
+                    planes.extend(broken(a, b, base, pitches[i], inset));
+                }
+            }
+        }
+        "barrel" => {
+            let main = (0..n).find(|&j| eaves[j]).unwrap_or(0);
+            planes = barrel_planes(ring, base, pitches[main], ridge);
+        }
+        other => {
+            return Err(format!(
+                "no roof type `{other}`; roof types are {}",
+                ROOF_KINDS.join(", ")
+            ));
+        }
+    }
+    if planes.is_empty() {
+        return Err("this outline has no eave along the ridge direction".into());
+    }
+    Ok(planes)
 }
 
 #[cfg(test)]
@@ -390,6 +506,50 @@ mod tests {
         assert!(shell.is_closed());
         assert!((top(&shell) - (5700.0 + 200.0 * 2f64.sqrt())).abs() < 1.0e-9);
         assert!(shell.volume() > 0.0);
+    }
+
+    #[test]
+    fn every_kind_closes_and_tops_out_sensibly() {
+        let ring = rect(8000.0, 6000.0);
+        for kind in ROOF_KINDS {
+            let planes = roof_planes(kind, &ring, 2700.0, &[35.0; 4], (1.0, 0.0)).unwrap();
+            let shell = roof_shell(&offset_ring(&ring, 450.0), &planes, 200.0).unwrap();
+            assert!(shell.is_closed(), "{kind}");
+            assert!(shell.volume() > 0.0, "{kind}");
+            let high = top(&shell);
+            assert!(
+                high > 2700.0 && high < 2700.0 + 3000.0 * 2.0,
+                "{kind} {high}"
+            );
+        }
+    }
+
+    #[test]
+    fn a_flat_roof_is_a_slab() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("flat", &ring, 2700.0, &[0.0; 4], (1.0, 0.0)).unwrap();
+        let shell = roof_shell(&ring, &planes, 200.0).unwrap();
+        assert!((shell.volume() - 8000.0 * 6000.0 * 200.0).abs() < 1.0e-3);
+    }
+
+    #[test]
+    fn a_shed_rises_across_the_whole_depth() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("shed", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let shell = roof_shell(&ring, &planes, 200.0).unwrap();
+        assert!((top(&shell) - (2700.0 + 6000.0 + 200.0 * 2f64.sqrt())).abs() < 1.0e-9);
+        let slope = 6000.0 * 2f64.sqrt();
+        assert!((shell.volume() - 8000.0 * slope * 200.0).abs() < 1.0e-3);
+    }
+
+    #[test]
+    fn a_barrel_springs_from_the_eaves() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("barrel", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let r = 3000.0 / 45f64.to_radians().sin();
+        let crown = 2700.0 - r * 45f64.to_radians().cos() + r;
+        assert!((envelope(&planes, (4000.0, 3000.0)) - crown).abs() < 1.0e-9);
+        assert!((envelope(&planes, (4000.0, 0.0)) - 2700.0).abs() < 1.0e-9);
     }
 
     #[test]

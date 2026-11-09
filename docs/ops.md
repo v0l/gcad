@@ -538,7 +538,7 @@ Architecture stage B (gcad #349).
 | foundations | supported | `foundation strip outer w=600 d=900`, `foundation pad x,y w= l= d=` | `arch::strip_and_pad_foundations`, `arch::foundation_export_is_the_same_every_run` |
 | ground slabs | supported | `ground_slab outer type=concrete:150+pir:100` | `arch::ground_slab_inside_the_walls` |
 | gable roofs | supported | `r1: roof outer type=gable pitch=45 overhang=450 thickness=200 ridge=x base=L1` | `arch::gable_roof_ridge_and_area`, `arch::roof_export_is_the_same_every_run` |
-| roof types | missing | `type=hip\|half_hip\|shed\|flat\|mansard\|gambrel\|barrel` | `arch::roof_types` |
+| roof types | supported | `type=hip\|half_hip\|shed\|flat\|mansard\|gambrel\|barrel` | `arch::roof_types` |
 | per-edge pitch | missing | `pitch_edge r1.eave.1 60` | `arch::per_edge_pitch` |
 | walls trim to the roof | missing | `roof ... walls=outer` | `arch::walls_trim_to_the_roof_underside` |
 | roof edges as selectors | missing | `r1.ridge`, `r1.hip`, `r1.valley`, `r1.eave`, `r1.verge` | `arch::roof_edges_are_selectors` |

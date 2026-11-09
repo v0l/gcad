@@ -5,19 +5,21 @@ use crate::parse::{Line, eval};
 use anyhow::{Context, Result, anyhow, bail};
 use gcad_mesh::arch::P2;
 use gcad_mesh::arch::layout::signed_area;
-use gcad_mesh::arch::roof::{Plane, ccw_ring, gable_planes, longest_edge, offset_ring, roof_shell};
+use gcad_mesh::arch::roof::{
+    Plane, ROOF_KINDS, ccw_ring, longest_edge, offset_ring, roof_planes, roof_shell,
+};
 use monstertruck::modeling::*;
 
-const KINDS: &[&str] = &["gable"];
-
 impl Roof {
-    fn planes(&self) -> Vec<Plane> {
-        gable_planes(&self.outline, self.base, self.pitch, self.ridge)
+    fn planes(&self) -> Result<Vec<Plane>> {
+        let pitches = vec![self.pitch; self.outline.len()];
+        roof_planes(&self.kind, &self.outline, self.base, &pitches, self.ridge)
+            .map_err(|e| anyhow!(e))
     }
 
     fn solid(&self) -> Result<Solid> {
         let eaves = offset_ring(&self.outline, self.overhang);
-        let shell = roof_shell(&eaves, &self.planes(), self.thickness).map_err(|e| anyhow!(e))?;
+        let shell = roof_shell(&eaves, &self.planes()?, self.thickness).map_err(|e| anyhow!(e))?;
         let polygons: Vec<Vec<Vec<Point3>>> = shell
             .faces
             .iter()
@@ -109,13 +111,15 @@ impl Model {
                 ),
             }
         }
-        if !KINDS.contains(&roof.kind.as_str()) {
-            bail!("a roof needs `type=`, one of {}", KINDS.join(", "));
+        if !ROOF_KINDS.contains(&roof.kind.as_str()) {
+            bail!("a roof needs `type=`, one of {}", ROOF_KINDS.join(", "));
         }
         if roof.base.is_nan() {
             bail!("a roof needs `base=`, the level of its eaves like `base=L1`");
         }
-        if !(roof.pitch > 0.0 && roof.pitch < 90.0) {
+        if roof.kind == "flat" && roof.pitch.is_nan() {
+            roof.pitch = 0.0;
+        } else if !(roof.pitch > 0.0 && roof.pitch < 90.0) {
             bail!(
                 "a {} roof needs `pitch=` in degrees above 0 and under 90",
                 roof.kind

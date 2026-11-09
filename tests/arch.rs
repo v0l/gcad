@@ -769,12 +769,13 @@ fn gable_roof_ridge_and_area() {
 fn roof_export_is_the_same_every_run() {
     export_twice(
         "roof_export_is_the_same_every_run",
-        &with("r1: roof outer type=gable pitch=40 overhang=450 thickness=200 ridge=x base=L1"),
+        &with(
+            "r1: roof outer type=gable pitch=40 overhang=450 thickness=200 ridge=x base=L1\nr2: roof 0,7000 4000,7000 4000,10000 0,10000 closed type=mansard pitch=30 base=L1\nr3: roof 5000,7000 9000,7000 9000,10000 5000,10000 closed type=barrel pitch=40 base=L1",
+        ),
     );
 }
 
 #[test]
-#[ignore = "missing: roof types"]
 fn roof_types() {
     for kind in [
         "hip", "half_hip", "shed", "flat", "mansard", "gambrel", "barrel",
