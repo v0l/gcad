@@ -1,0 +1,6 @@
+body_a: blob 0,0,0 r=8,5,7
+arm: blob 9,0,3 r=4,4.4,2.6 ry=26 blend=0.6
+remesh 0.22
+plate: select body_a falloff=1
+pinch 0.15 toward=0,-8,0
+color #b8c0c8

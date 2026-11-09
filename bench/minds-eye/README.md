@@ -93,3 +93,20 @@ SKILL.md now sends props, vehicles, buildings and game assets to `meshes.md` and
 Judge scores are flat against the 5.4 baseline; the change moves mesh op use, not yet the score. One seed, so below 0.5 is noise.
 
 Reverted (#461): the user rated every mesh render under 3 and the CAD solids "decent". The judge gave the same meshes 5 to 7, so the 6.0 above does not show an improvement, and routing props, vehicles and buildings to mesh blockouts moved them from the model type users rate better to the one they rate worse. SKILL.md again sends them to parts and solids; only characters and creatures go to `meshes.md`.
+
+## Judge recalibration (#461)
+
+The user rated the 7 mesh runs (5 fox, 2 knight) at 2 and called the CAD runs decent. `results/ratings.json` holds that (13 runs are "decent" with no number). The v1 judge gave the mesh runs a mean of 5.71, 3.7 points too high, and scored the decent CAD runs 5.62, so it could not tell the two groups apart (AUC 0.48, where 0.5 is chance).
+
+v2 shows three fixed anchor renders first (`anchors/score2.png`, `score5.png`, `score8.png`) and scores on that scale. Same 20 runs, same model:
+
+| judge | mean on the 7 mesh runs (user: 2) | mean abs error | within 1 | mean on decent CAD | decent above mesh (AUC) |
+| --- | --- | --- | --- | --- | --- |
+| v1 | 5.71 | 3.71 | 0% | 5.62 | 0.48 |
+| v2 | 3.00 | 1.00 | 57% | 5.08 | 0.92 |
+
+The 2 anchor is one of the 7 rated runs (plan fox-s0), so that row scores 2 by construction; excluding it the mean error is 1.17. The 5 and 8 anchors are provisional CAD renders; the user has not given numbers for them or for the ceiling models in `ceiling/`. Replace the images in `anchors/` and rerun `./run agreement results/ratings.json` when they do. Old result files keep their v1 scores; rescore with `JUDGE_VERSION=v2` before comparing configs.
+
+## Mesh ceiling (#461)
+
+`ceiling/fox.gcad` and `ceiling/knight.gcad` are the best gcad-mesh results from a hand-tuned high-model session (renders in `docs/minds-eye-ceiling-*.png`). The fox is clearly better than any agent fox: correct sitting pose, wedge head, soft-edged markings. The knight is a toy-like blockout. The limit is the agent and skill for the fox, and the tool for the knight and for finish (metal, plates, fur): see gcad issues #463 to #466.

@@ -1,0 +1,9 @@
+a: blob 0,0,0 r=5
+remesh 0.3
+color #b8c0c8
+material steel
+body s
+plane XY
+circle 10 at=14,0
+e: extrude 10
+material steel

@@ -7,7 +7,8 @@ from PIL import Image
 from agent_api import provider, chat, image_part
 from metrics import gcad
 
-JUDGE_VERSION = "v1"
+JUDGE_VERSION = os.environ.get("JUDGE_VERSION", "v2")
+ANCHORS = os.path.join(os.path.dirname(os.path.abspath(__file__)), "anchors")
 JUDGE_MODEL = os.environ.get("JUDGE_MODEL", "code-x-high")
 JUDGE_PROVIDER = os.environ.get("JUDGE_PROVIDER", "yalr")
 
@@ -18,6 +19,16 @@ Rubric items:
 
 The first image shows four views of the model (iso, top, front, right). The second shows six views turning round the model.
 For each rubric item say whether it is present and recognisable (true or false). Then give an overall score from 1 to 10 for how good a game asset or part this is: 1 is nothing recognisable, 3 is a pile of primitives, 5 is a recognisable but crude blockout, 7 is a good clean asset, 10 is professional. Be strict and use the whole range.
+Reply with JSON only: {{"items": [true or false for each rubric item in order], "overall": n, "why": "one sentence"}}"""
+
+ANCHOR_PROMPT = """You judge 3D models made by an AI agent for a game or CAD request. Ignore background and lighting.
+The first three images are fixed reference renders that a person rated, and they define the scale: image 1 is a 2 out of 10 (a smooth blob figure: recognisable, but it looks like clay lumps, with no crisp form, no real detail and no finish), image 2 is a 5 (a clean CAD solid with every part present and tidy, but plain), image 3 is an 8 (a precise, finished part with fillets, holes and clean detail). Organic and soft blobby models are held to the same standard: only models that look as finished as the 8 score 8, and a model that looks like the 2 scores 2 or lower, whatever the request. Use the whole range and do not drift above the anchors.
+Request: "{prompt}"
+Rubric items:
+{rubric}
+
+The fourth image shows four views of the model to score (iso, top, front, right). The fifth shows six views turning round it.
+For each rubric item say whether it is present and recognisable (true or false). Then give an overall score from 1 to 10 for how good a game asset or part this is, on the scale of the three references.
 Reply with JSON only: {{"items": [true or false for each rubric item in order], "overall": n, "why": "one sentence"}}"""
 
 PAIR_PROMPT = """Two 3D models were made for the same request: "{prompt}"
@@ -49,9 +60,20 @@ def ask(content):
     return json.loads(text[text.index("{"): text.rindex("}") + 1])
 
 
-def score(task, images):
-    prompt = SCORE_PROMPT.format(prompt=task["prompt"], rubric=numbered(task["rubric"]))
-    j = ask([image_part(images[0], 1280), image_part(images[1], 1600), {"type": "text", "text": prompt}])
+def anchor_images():
+    return [os.path.join(ANCHORS, f"score{n}.png") for n in (2, 5, 8)]
+
+
+def score(task, images, anchors=None):
+    if anchors is None:
+        anchors = JUDGE_VERSION != "v1"
+    if anchors:
+        prompt = ANCHOR_PROMPT.format(prompt=task["prompt"], rubric=numbered(task["rubric"]))
+        refs = [image_part(p, 800) for p in anchor_images()]
+    else:
+        prompt = SCORE_PROMPT.format(prompt=task["prompt"], rubric=numbered(task["rubric"]))
+        refs = []
+    j = ask(refs + [image_part(images[0], 1280), image_part(images[1], 1600), {"type": "text", "text": prompt}])
     items = [bool(x) for x in j["items"]][: len(task["rubric"])]
     items += [False] * (len(task["rubric"]) - len(items))
     return {"items": items, "rubric_fraction": round(sum(items) / len(items), 3),

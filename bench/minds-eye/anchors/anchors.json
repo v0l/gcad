@@ -1,0 +1,17 @@
+{
+ "2": {
+  "image": "anchors/score2.png",
+  "run": "2026-11-09-new-render-plan/fox-s0",
+  "rated_by": "user (mesh renders all under 3, set to 2)"
+ },
+ "5": {
+  "image": "anchors/score5.png",
+  "run": "2026-11-09-baseline-medium/rocket-s0",
+  "rated_by": "provisional: CAD solid the user called decent, awaiting the user's number"
+ },
+ "8": {
+  "image": "anchors/score8.png",
+  "run": "2026-11-09-new-render-reference-b/bracket-s0",
+  "rated_by": "provisional: best CAD part, awaiting the user's number"
+ }
+}

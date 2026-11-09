@@ -110,6 +110,50 @@ is the C ABI. Only mesh and rig lines run there. `gcad check-mesh part.gcad` bui
 prop both ways and fails if a body's volume or size differs by more than 3%. See `docs/gcad-mesh.md`; `gcad2glb` also writes
 files mixing solid and mesh bodies. Crate layout is in `docs/gcad-crates.md`.
 
+## Worked example: a sitting fox
+
+What separated this from the agents' foxes (`bench/minds-eye/ceiling/fox.gcad`, full file with sculpt and colours): a `limb` spine and a `limb` tail that curls round the feet, thin straight forelegs, haunches as flat wide blobs on the floor, a wedge head (muzzle and jaw as tapering `limb` lines), ears flattened and cupped after `remesh`, eyes and nose as `mode=shell`, markings as parts with `soft=`, and about fifteen renders. Build the whole animal at once, render, then correct the proportion that is off.
+
+```gcad
+let hz=23 hy=-3.6
+hips: blob 0,3.2,5.6 r=4.6,5,5 blend=2
+torso: limb 0,2.4,7 0,-0.6,12.5 0,-1.8,16.5 r=4.6,3.8,3.1 blend=2.5
+chest: blob 0,-3,13.2 r=3.3,2.6,4.6 blend=2
+haunch_l: blob 3.6,3.6,4.6 r=2.6,4.6,4.2 rx=-20 blend=1.6
+mirror x of=haunch_l
+neck: limb 0,-1.8,16.5 0,hy+0.4,hz-2.6 r=2.8,2.4 blend=1.6
+head: blob 0,hy,hz r=3.3,3,2.8 blend=1.4
+muzzle: limb 0,hy-2,hz-0.6 0,hy-6,hz-1.2 r=1.5,0.55 blend=1.2
+ear_l: limb 1.9,hy+0.4,hz+1.9 2.9,hy+0.7,hz+4.6 3.5,hy+0.8,hz+6.4 r=1.6,0.95,0.12 blend=0.9
+mirror x of=ear_l
+leg_l: limb 1.7,-2.6,11 1.7,-3.4,5.5 1.7,-3.7,1.2 r=1.25,0.85,0.75 blend=1.2
+mirror x of=leg_l
+tail: limb 0,7.6,3 3.6,9.2,2.4 7.2,6.6,2.2 7.8,1.4,2.1 6,-3.2,1.9 r=1.2,2.4,2.9,2.6,1.6 blend=1.4
+tip: limb 6,-3.2,1.9 4.6,-5.4,1.8 r=1.6,0.5 blend=1
+nose: blob 0,hy-6.25,hz-0.95 r=0.62,0.5,0.45 mode=shell
+eye_l: blob 1.6,hy-2.05,hz+0.55 r=0.95,0.42,0.6 rz=-30 ry=-14 mode=shell
+mirror x of=eye_l
+remesh 0.12
+relax 4
+ear_cup: select ear_l mirror=x falloff=0.6
+scale 1,0.42,1
+select all
+color #c9581c
+color #f3ede3 part=chest soft=1.8
+color #f3ede3 part=tip soft=0.8
+color #2a1a12 part=leg_l soft=1.5
+color #2a1a12 part=leg_r soft=1.5
+color #3a2216 part=ear_l soft=1
+color #3a2216 part=ear_r soft=1
+color #15100c part=nose gloss=0.9
+color #d89a2a part=eye_l gloss=0.6
+color #d89a2a part=eye_r gloss=0.6
+```
+
+Flat-sided parts (armour plates, crates, signs) are `block` lines, not blobs: `cuirass: block 0,0,53 size=15,9.6,10.4 round=2.6 blend=1`. A sphere used as a plate reads as a lump.
+
+Known limits (open issues): mesh parts have no metal material, so armour reads as grey plastic; there is no plate op that thickens a surface patch; no fur; `pinch` or `scale` on a selection that borders a blended part tears the seam, so select the part and its neighbour together.
+
 ## Examples
 
 `examples/mesh/creature.gcad` (blockout and sculpt), `fox.gcad` (anatomy, colours, `--set

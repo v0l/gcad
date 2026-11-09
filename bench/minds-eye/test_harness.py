@@ -95,5 +95,16 @@ class Built(unittest.TestCase):
         self.assertGreater(silhouette_overlap(png, png)["iou"], 0.99)
 
 
+class Agreement(unittest.TestCase):
+    def test_stats_split_rated_and_decent_runs(self):
+        rows = [(2, 3.0, "a"), (2, 5.0, "b"), ("decent", 6.0, "c"), ("decent", 2.0, "d")]
+        out = harness.agreement_stats(rows)
+        self.assertEqual(out["n_rated"], 2)
+        self.assertEqual(out["n_decent"], 2)
+        self.assertEqual(out["mean_abs_error_rated"], 2.0)
+        self.assertEqual(out["within_1_rated"], 0.0)
+        self.assertEqual(out["decent_above_rated_auc"], 0.5)
+
+
 if __name__ == "__main__":
     unittest.main()

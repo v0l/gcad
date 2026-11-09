@@ -1,0 +1,118 @@
+hips: block 0,0,39.5 size=12,8,6 round=2.6
+belly: block 0,-0.2,46.4 size=12,8.6,7.6 round=2.4 blend=0.8
+lame1: block 0,-0.2,46.6 size=12.6,9.2,1.6 round=0.6 mode=shell
+lame2: block 0,-0.2,44.8 size=12.4,9,1.6 round=0.6 mode=shell
+cuirass: block 0,-0.4,53.5 size=15,9.6,10.4 round=2.6 blend=1
+keel: limb 0,-4.9,49 0,-5,57.4 r=0.45 blend=0.5
+gorget: limb 0,0,58.5 0,0,62.5 r=4.2,3.4 blend=0.8
+helm: block 0,0.2,67.4 size=8.6,9.4,9.6 round=3 blend=0.8
+crown: blob 0,0.4,70 r=4.4,4.9,3.4 blend=1
+faceplate: block 0,-3.6,66.6 size=6.4,2.4,7 round=1.2 rz=0 blend=0.6
+crest: limb 0,-2.4,72.4 0,0.6,74.8 0,4.4,73 0,5.6,68.6 r=0.8,1.5,1.3,0.7 blend=0.5
+pauldron_l: blob 9.4,0,57.4 r=4.2,4.8,2.6 ry=26 blend=0.5
+pauldron2_l: block 11.4,0,55 size=5,9,1.4 round=0.6 ry=46 mode=shell
+pauldron3_l: block 12.4,0,52.8 size=3.6,8.4,1.2 round=0.5 ry=64 mode=shell
+mirror x of=pauldron_l
+mirror x of=pauldron2_l
+mirror x of=pauldron3_l
+arm_l: limb 9.8,0,55.4 11,-0.4,49 11.4,-2.6,43.8 r=2.3,2.1,1.9 blend=1
+mirror x of=arm_l
+couter_l: blob 11,0.4,49 r=2.3,2.4,2 blend=0.5
+mirror x of=couter_l
+gauntlet_l: limb 11.4,-2.8,44.2 11.6,-4.2,40.8 r=2.2,1.9 blend=0.5
+fist_l: block 11.6,-4.8,39.6 size=3,3.4,3 round=1.2 blend=0.6
+gauntlet_r: limb -11.4,-2.8,44.2 -11.4,-4.8,42.4 r=2.2,1.9 blend=0.5
+fist_r: block -11.4,-6.2,41.8 size=3,3.2,3.2 round=1.2 blend=0.6
+tasset_l: block 4.6,-1.4,36.6 size=5.6,8.4,4.6 round=0.8 ry=14 mode=shell
+mirror x of=tasset_l
+thigh_l: limb 3.6,0,37 4,-0.4,24.5 r=3.1,2.6 blend=1
+mirror x of=thigh_l
+poleyn_l: blob 4,-1.6,23.8 r=2.6,2.2,2.4 blend=0.4
+mirror x of=poleyn_l
+greave_l: limb 4,-0.2,23 4.2,0.4,6.4 r=2.7,2.1 blend=0.7
+mirror x of=greave_l
+sabaton_l: block 4.2,-1.2,2.4 size=4.6,6.6,3.6 round=1.4 blend=1
+toecap_l: limb 4.2,-3.6,1.8 4.2,-6.4,1.2 r=2,0.8 blend=0.8
+mirror x of=sabaton_l
+mirror x of=toecap_l
+visor_slot: block 0,-4.9,68.4 size=5.6,0.6,0.5 round=0.2 mode=shell
+breath_l: block 1.4,-4.85,65.6 size=0.35,0.6,2 round=0.15 mode=shell
+mirror x of=breath_l
+belt: block 0,-0.2,42.9 size=12.8,9.4,1.2 round=0.6 mode=shell
+buckle: block 0,-4.9,42.9 size=2,0.6,1.8 round=0.3 mode=shell
+grip: limb -11.4,-6.2,44 -11.4,-6.2,39.4 r=0.6 mode=shell
+pommel: blob -11.4,-6.2,38.6 r=0.95 mode=shell segments=24
+remesh 0.22
+relax 4
+brush dam type=dam_standard size=0.3 strength=0.12 lazy=0.4 mirror=x
+color #9aa3ad
+color #c4ccd4 part=cuirass gloss=0.8
+color #c4ccd4 part=keel gloss=0.8
+color #b8c0c8 part=belly gloss=0.7
+color #c4ccd4 part=helm gloss=0.8
+color #c4ccd4 part=crown gloss=0.8
+color #b8c0c8 part=faceplate gloss=0.8
+color #c4ccd4 part=pauldron_l gloss=0.8
+color #c4ccd4 part=pauldron_r gloss=0.8
+color #aab2ba part=pauldron2_l gloss=0.7
+color #aab2ba part=pauldron2_r gloss=0.7
+color #c4ccd4 part=pauldron3_l gloss=0.8
+color #c4ccd4 part=pauldron3_r gloss=0.8
+color #aab2ba part=lame1 gloss=0.7
+color #aab2ba part=lame2 gloss=0.7
+color #8e969e part=toecap_l gloss=0.6
+color #8e969e part=toecap_r gloss=0.6
+color #c4ccd4 part=greave_l gloss=0.8
+color #c4ccd4 part=greave_r gloss=0.8
+color #c4ccd4 part=poleyn_l gloss=0.8
+color #c4ccd4 part=poleyn_r gloss=0.8
+color #c4ccd4 part=couter_l gloss=0.8
+color #c4ccd4 part=couter_r gloss=0.8
+color #aab2ba part=tasset_l gloss=0.7
+color #aab2ba part=tasset_r gloss=0.7
+color #6e7680 part=gorget gloss=0.5
+color #4a4f56 part=hips gloss=0.4
+color #b8231e part=crest
+color #8e969e part=sabaton_l gloss=0.6
+color #8e969e part=sabaton_r gloss=0.6
+color #4a4f56 part=gauntlet_l gloss=0.5
+color #4a4f56 part=gauntlet_r gloss=0.5
+color #4a4f56 part=fist_l gloss=0.5
+color #4a4f56 part=fist_r gloss=0.5
+color #0c0c0c part=visor_slot
+color #0c0c0c part=breath_l
+color #0c0c0c part=breath_r
+color #3a2416 part=belt
+color #d4a838 part=buckle gloss=0.8
+color #3a2416 part=grip
+color #d4a838 part=pommel gloss=0.8
+body sword
+plane XZ offset=6.2
+poly -11.4,45 -10.5,46 -10.6,66 -11.4,69 -12.2,66 -12.3,46
+blade: extrude 0.5 both
+color #dfe5ea
+body hilt
+plane XZ offset=6.2
+rect 7 1 at=-11.4,44.3 r=0.4
+guard: extrude 1.2 both
+color #d4a838
+body shield
+plane YZ offset=13.8
+poly -10,52 4,52 4,40 0,32 -3,30 -6,32 -10,40 r=1.5
+face: extrude 1
+color #1f3f8a
+body emblem
+plane YZ offset=14.8
+poly -4.5,48 -1.5,48 -1.5,40 -3,36 -4.5,40
+sign: extrude 0.3
+color #d4a838
+body tabard
+plane XZ offset=6.4
+poly -3.6,42 3.6,42 3.2,29 0,28 -3.2,29
+cloth: extrude 0.4
+color #8a1c1c
+body cross
+plane XZ offset=6.8
+poly -0.6,32 0.6,32 0.6,36.4 2.2,36.4 2.2,37.6 0.6,37.6 0.6,39.4 -0.6,39.4 -0.6,37.6 -2.2,37.6 -2.2,36.4 -0.6,36.4
+x: extrude 0.3
+color #d4a838

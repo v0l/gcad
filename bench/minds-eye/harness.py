@@ -251,25 +251,43 @@ def cmd_pairwise(args):
     print(json.dumps({k: v for k, v in out.items() if k != "votes"}, indent=1))
 
 
+def agreement_stats(rows):
+    numeric = [(h, m) for h, m, _ in rows if isinstance(h, (int, float))]
+    decent = [m for h, m, _ in rows if h == "decent"]
+    low = [m for h, m in numeric]
+    out = {"n": len(rows), "n_rated": len(numeric), "n_decent": len(decent)}
+    if numeric:
+        out["mean_abs_error_rated"] = round(sum(abs(h - m) for h, m in numeric) / len(numeric), 2)
+        out["within_1_rated"] = round(sum(abs(h - m) <= 1 for h, m in numeric) / len(numeric), 2)
+        out["mean_judge_on_rated"] = round(sum(low) / len(low), 2)
+        out["mean_user_on_rated"] = round(sum(h for h, _ in numeric) / len(numeric), 2)
+    if decent:
+        out["mean_judge_on_decent"] = round(sum(decent) / len(decent), 2)
+    if decent and low:
+        pairs = [(d, l) for d in decent for l in low]
+        wins = sum(d > l for d, l in pairs) + 0.5 * sum(d == l for d, l in pairs)
+        out["decent_above_rated_auc"] = round(wins / len(pairs), 3)
+        out["gap_decent_minus_rated"] = round(sum(decent) / len(decent) - sum(low) / len(low), 2)
+    return out
+
+
 def cmd_agreement(args):
     ratings = json.load(open(args.ratings))
-    paired = []
+    tasks = {t["id"]: t for t in load_tasks(["tuning", "heldout"])}
+    rows = []
     for name, human in ratings.items():
-        task_id = name.split("/")[0].rsplit("-s", 1)[0]
-        task = {t["id"]: t for t in load_tasks(["tuning", "heldout"])}[task_id]
+        if human is None:
+            continue
+        task = tasks[name.split("/")[1].rsplit("-s", 1)[0]]
         folder = os.path.join(RESULTS, "runs", name)
         views = [os.path.join(folder, "views4.png"), os.path.join(folder, "views6.png")]
         j = judge.score(task, views)
-        paired.append((human, j["overall"]))
+        rows.append((human, j["overall"], name))
         print(name, human, j["overall"], flush=True)
-    n = len(paired)
-    h = [p[0] for p in paired]
-    m = [p[1] for p in paired]
-    mean_abs = sum(abs(a - b) for a, b in paired) / n
-    within1 = sum(abs(a - b) <= 1 for a, b in paired) / n
-    out = {"n": n, "pearson": pearson(h, m), "spearman": pearson(ranks(h), ranks(m)), "mean_abs_error": round(mean_abs, 2),
-           "within_1": round(within1, 2), "judge": f"{judge.JUDGE_VERSION}:{judge.JUDGE_MODEL}"}
-    json.dump(out, open(os.path.join(RESULTS, f"{datetime.date.today().isoformat()}-agreement.json"), "w"), indent=1)
+    out = agreement_stats(rows)
+    out["judge"] = f"{judge.JUDGE_VERSION}:{judge.JUDGE_MODEL}"
+    out["scores"] = {n: m for _, m, n in rows}
+    json.dump(out, open(os.path.join(RESULTS, f"{datetime.date.today().isoformat()}-agreement-{judge.JUDGE_VERSION}.json"), "w"), indent=1)
     print(json.dumps(out, indent=1))
 
 
