@@ -7,7 +7,8 @@ use anyhow::{Result, anyhow, bail};
 use std::sync::Arc;
 
 pub const OPS: &[&str] = &[
-    "plane", "rect", "circle", "ellipse", "ngon", "torus", "poly", "array", "extrude", "fillet", "repeat",
+    "plane", "rect", "circle", "ellipse", "ngon", "torus", "poly", "array", "extrude", "fillet",
+    "repeat",
 ];
 
 pub struct Solids {
@@ -140,7 +141,8 @@ impl Solids {
         let centre = args.point("at", scope)?;
         self.require_solid_body(scene)?;
         let label = label_of(line);
-        if self.tori.iter().any(|t| t.label == label) || self.extrudes.iter().any(|e| e.label == label)
+        if self.tori.iter().any(|t| t.label == label)
+            || self.extrudes.iter().any(|e| e.label == label)
         {
             bail!("there is already a shape called `{label}`");
         }
@@ -225,7 +227,7 @@ impl Solids {
     }
 
     fn extrude(&mut self, scene: &mut Scene, scope: &Scope, line: &Line) -> Result<()> {
-        let args = Args::new(line, &["d"], &["scale"], false)?;
+        let args = Args::new(line, &["d"], &["scale", "open"], false)?;
         let depth = args.number("d", scope)?;
         let scale = match args.optional_number("scale", scope)? {
             Some(scale) if scale >= 0.0 => scale,
@@ -255,6 +257,7 @@ impl Solids {
             end_round: 0.0,
             copies: Vec::new(),
             scale,
+            open: args.optional_number("open", scope)?.unwrap_or(0.0) != 0.0,
         });
         self.publish(scene);
         Ok(())

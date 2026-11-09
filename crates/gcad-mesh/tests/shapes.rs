@@ -133,3 +133,9 @@ fn a_torus_tube_must_be_thinner_than_its_ring() {
     let err = build_with("torus 1 1\n", &z_up()).err().expect("refused");
     assert!(err.to_string().contains("thinner"), "{err}");
 }
+
+#[test]
+fn an_open_extrude_is_a_single_wall_without_caps() {
+    assert_eq!(triangles("ngon 2 8\nt: extrude 1 open=1\n"), 8 * 2);
+    assert_eq!(triangles("ngon 2 8\nt: extrude 1\n"), 8 * 2 + 6 * 2);
+}

@@ -70,6 +70,7 @@ pub struct Extrude {
     pub end_round: f64,
     pub copies: Vec<P3>,
     pub scale: f64,
+    pub open: bool,
 }
 
 const SHARP_DEGREES: f64 = 40.0;
@@ -450,10 +451,7 @@ pub fn torus_into(mesh: &mut Mesh, t: &Torus) {
         for j in 0..t.sides {
             let b = std::f64::consts::TAU * j as f64 / t.sides as f64;
             let radius = major + minor * b.cos();
-            let flat = (
-                t.centre.0 + radius * a.cos(),
-                t.centre.1 + radius * a.sin(),
-            );
+            let flat = (t.centre.0 + radius * a.cos(), t.centre.1 + radius * a.sin());
             push(mesh, part, t.frame.at(flat, minor * b.sin()));
         }
     }
@@ -521,7 +519,7 @@ fn emit(mesh: &mut Mesh, e: &Extrude, frame: Frame) {
             }
         }
         for (z, ring_index, up) in [(0.0, 0, false), (depth, levels.len() - 1, true)] {
-            if up && e.scale < EPS {
+            if e.open || (up && e.scale < EPS) {
                 continue;
             }
             let by = levels[ring_index].0;

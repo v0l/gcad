@@ -7,6 +7,7 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- gcad-mesh `extrude d open=1` leaves the end caps off: a single-sided wall (glass tubes).
 - gcad-mesh `torus d tube at= around= sides=` makes a ring in the current plane (rims, tyres, handles) as its own part.
 - gcad-mesh runs `ngon`, `ellipse` and `extrude ... scale=` (frustums and cones) without the kernel, and `blob ... mode=shell segments=N` makes a low-poly UV ellipsoid shell (`N*N` triangles) for game props.
 - The plan for buildings: `docs/architecture.md` (levels, grids, layered walls, hosted doors and windows, slabs, roofs, stairs, rooms, schedules, plans, IFC, site checks, and the mesh subset for games) and the operations in `docs/ops.md` as `missing`, each with its test already written and ignored in `tests/arch.rs`.

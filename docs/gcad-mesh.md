@@ -187,6 +187,7 @@ gcad-mesh also runs a kernel-free subset for crisp, flat-sided props (the kids-f
 | `circle d at=` | 24 segments, 32 above 20 mm radius |
 | `ellipse dx dy at=` | 24 segments, 32 above 20 mm radius |
 | `ngon d n at= angle=` | a regular polygon, corners on a circle of diameter `d`: low-poly cylinders and cones |
+| `extrude d open=1` | no end caps: a single outward wall |
 | `torus d tube at= around= sides=` | a ring of diameter `d` (centre of the tube) with a round tube of diameter `tube`, lying flat in the plane; its own part named by the label |
 | `poly x,y ...` | no `r=` or `c=` corner rounding |
 | `array count= step=` or `angle= at=` | copies the last profile |
