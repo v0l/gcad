@@ -717,8 +717,8 @@ d142009cdf6c6afc 0 render examples/truck/wheel.gcad
 b3bfb5634d439df1 0 step examples/truck/wheel.gcad
 55bdae65a51022aa 0 stl examples/truck/wheel.gcad
 b0d2d33cd77c51ca 0 svg examples/truck/wheel.gcad
-ad31a3141044cef5 0 job tests/fixtures/jobs/static.job
-0fc5cccb0d28482d 0 job tests/fixtures/jobs/thermal.job
+e121fa2b7d159e28 0 job tests/fixtures/jobs/static.job
+034c6a4e905a553c 0 job tests/fixtures/jobs/thermal.job
 bc3d2df958651dcf 0 3mf tests/fixtures/props/arch.gcad
 c6b44c073b6446b0 0 check tests/fixtures/props/arch.gcad
 647ab0ff14e1b7b0 1 dxf tests/fixtures/props/arch.gcad
