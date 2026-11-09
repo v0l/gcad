@@ -909,7 +909,6 @@ fn roof_extruded_from_a_profile() {
 }
 
 #[test]
-#[ignore = "missing: stairs"]
 fn straight_stair_follows_the_rule() {
     let text = summary(
         "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=0 shape=straight width=1000 rise=auto tread=auto rule=2R+T=630 max_rise=180",
@@ -928,6 +927,26 @@ fn straight_stair_follows_the_rule() {
     near(hi[1] - lo[1], 1000.0, 1.0e-6);
     near(hi[2], TOP_TREAD, 1.0e-6);
     near(lo[2], 0.0, 1.0e-6);
+}
+
+#[test]
+fn stair_export_is_the_same_every_run() {
+    export_twice(
+        "stair_export_is_the_same_every_run",
+        "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=30 width=1000 stringer=closed nosing=20\nst2: stair from=L0 to=L1 at=3000,0 dir=90 width=900 stringer=mono",
+    );
+}
+
+#[test]
+fn stair_flight_volume_is_its_profile() {
+    let model = build(
+        "level L0 0\nlevel L1 2700\nst1: stair from=L0 to=L1 at=0,0 dir=0 width=1000 max_rise=180",
+    );
+    let (n, r, t) = (14.0_f64, 180.0_f64, 270.0_f64);
+    let depth = 150.0 / r.atan2(t).cos();
+    let foot = depth * t / r;
+    let area = t * r * n * (n + 1.0) / 2.0 - r / (2.0 * t) * (n * t - foot).powi(2);
+    near(volume_of(&model, "st1.flight"), area * 1000.0, 1.0e-3);
 }
 
 #[test]
@@ -952,7 +971,6 @@ fn stair_shapes() {
 }
 
 #[test]
-#[ignore = "missing: stair stringers and nosing"]
 fn stair_stringers_and_nosing() {
     for (stringer, count) in [("closed", 2), ("open", 2), ("mono", 1)] {
         let model = build(&format!(
@@ -963,7 +981,6 @@ fn stair_stringers_and_nosing() {
 }
 
 #[test]
-#[ignore = "missing: stair checks"]
 fn steep_stair_and_low_headroom_fail() {
     assert!(
         failure("level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=0 risers=10")

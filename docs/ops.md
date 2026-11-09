@@ -556,10 +556,10 @@ Architecture stage B (gcad #349).
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| stairs | missing | `st1: stair from=L0 to=L1 at=x,y dir=0 width=1000 rise=auto tread=auto rule=2R+T=630 max_rise=180`, risers and treads reported | `arch::straight_stair_follows_the_rule` |
+| stairs | supported | `st1: stair from=L0 to=L1 at=x,y dir=0 width=1000 rise=auto tread=auto rule=2R+T=630 max_rise=180`, risers and treads reported | `arch::straight_stair_follows_the_rule`, `arch::stair_flight_volume_is_its_profile`, `arch::stair_export_is_the_same_every_run` |
 | stair shapes | missing | `shape=straight\|L\|U\|winder\|spiral landing=900`, bodies `st1.flight.N`, `st1.landing.N` | `arch::stair_shapes` |
-| stringers and nosing | missing | `stringer=closed\|open\|mono nosing=20` | `arch::stair_stringers_and_nosing` |
-| stair checks | missing | too steep for the rule, headroom under 2000 | `arch::steep_stair_and_low_headroom_fail` |
+| stringers and nosing | supported | `stringer=closed\|open\|mono nosing=20` | `arch::stair_stringers_and_nosing` |
+| stair checks | supported | too steep for the rule, headroom under 2000 | `arch::steep_stair_and_low_headroom_fail` |
 | stair cut | missing | `stair_cut st1 s1 headroom=2000` | `arch::stair_cut_opens_the_slab` |
 | ramps | missing | `ramp from=x,y,z to=x,y,z slope=1:12 width=1200 landing=1500 every=10000` | `arch::ramp_slope_and_landings` |
 | ladders | missing | `ladder x,y,z x,y,z width=400 rungs=@300` | `arch::ladder_rungs` |

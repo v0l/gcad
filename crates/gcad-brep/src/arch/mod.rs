@@ -2,6 +2,7 @@ mod datum;
 mod opening;
 mod room;
 mod slab;
+mod stair;
 mod structure;
 mod wall;
 
@@ -128,6 +129,23 @@ pub struct Room {
 }
 
 #[derive(Clone, Debug)]
+pub struct Flight {
+    pub start: gcad_mesh::arch::P2,
+    pub dir: gcad_mesh::arch::P2,
+    pub z0: f64,
+    pub treads: usize,
+}
+
+#[derive(Clone, Debug)]
+pub struct Stair {
+    pub name: String,
+    pub base: f64,
+    pub width: f64,
+    pub steps: gcad_mesh::arch::Steps,
+    pub flights: Vec<Flight>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Built {
     pub owner: String,
     pub key: String,
@@ -148,6 +166,7 @@ pub struct Arch {
     pub sweeps: Vec<Sweep>,
     pub slabs: Vec<Slab>,
     pub rooms: Vec<Room>,
+    pub stairs: Vec<Stair>,
     pub built: Vec<Built>,
 }
 

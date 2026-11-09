@@ -1,3 +1,5 @@
+use super::P2;
+
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct StairRule {
     pub sum: f64,
@@ -47,6 +49,60 @@ impl Steps {
         let s = (ceiling - headroom - self.rise) * self.tread / self.rise;
         (s < self.going()).then_some(s.max(0.0))
     }
+}
+
+pub fn flight_profile(steps: &Steps, treads: usize, nosing: f64, waist: f64) -> Vec<P2> {
+    let (r, t) = (steps.rise, steps.tread);
+    let lip = (r / 4.0).min(40.0);
+    let mut ring = vec![(0.0, 0.0)];
+    for k in 0..treads {
+        let (s, z) = (k as f64 * t, k as f64 * r);
+        if nosing > 0.0 {
+            ring.push((s, z + r - lip));
+            ring.push((s - nosing, z + r - lip));
+            ring.push((s - nosing, z + r));
+        } else {
+            ring.push((s, z + r));
+        }
+        ring.push((s + t, z + r));
+    }
+    let going = treads as f64 * t;
+    let depth = waist / steps.pitch().to_radians().cos();
+    ring.push((going, going * r / t - depth));
+    ring.push(((depth * t / r).min(going), 0.0));
+    ring
+}
+
+fn clip(ring: Vec<P2>, keep: impl Fn(P2) -> f64) -> Vec<P2> {
+    let n = ring.len();
+    let mut out = Vec::new();
+    for i in 0..n {
+        let (a, b) = (ring[i], ring[(i + 1) % n]);
+        let (fa, fb) = (keep(a), keep(b));
+        if fa >= 0.0 {
+            out.push(a);
+        }
+        if (fa >= 0.0) != (fb >= 0.0) {
+            let k = fa / (fa - fb);
+            out.push((a.0 + (b.0 - a.0) * k, a.1 + (b.1 - a.1) * k));
+        }
+    }
+    out
+}
+
+pub fn stringer_profile(steps: &Steps, treads: usize, above: f64, depth: f64, top: f64) -> Vec<P2> {
+    let (r, t) = (steps.rise, steps.tread);
+    let going = treads as f64 * t;
+    let line = |s: f64| r + s * r / t;
+    let ring = vec![
+        (-t, line(-t) - depth),
+        (going, line(going) - depth),
+        (going, line(going) + above),
+        (-t, line(-t) + above),
+    ];
+    let ring = clip(ring, |p| p.1);
+    let ring = clip(ring, |p| p.0);
+    clip(ring, |p| top - p.1)
 }
 
 pub fn parse_rule(text: &str) -> Result<f64, String> {
@@ -129,6 +185,34 @@ mod tests {
         let s = steps(3000.0, &rule, Some(10), None).unwrap();
         assert!(check(&s, &rule).unwrap_err().contains("2R+T"));
         assert!(steps(3000.0, &rule, Some(5), None).is_err());
+    }
+
+    fn area(ring: &[P2]) -> f64 {
+        super::super::layout::signed_area(ring)
+    }
+
+    #[test]
+    fn a_flight_is_its_steps_over_a_waist() {
+        let s = steps(2700.0, &StairRule::default(), None, None).unwrap();
+        let (n, r, t) = (14.0, 180.0, 270.0);
+        let ring = flight_profile(&s, 14, 0.0, 150.0);
+        let depth = 150.0 / s.pitch().to_radians().cos();
+        let foot = depth * t / r;
+        let expected = t * r * n * (n + 1.0) / 2.0 - r / (2.0 * t) * (n * t - foot).powi(2);
+        assert!((area(&ring) + expected).abs() < 1.0e-6, "{}", area(&ring));
+        let top = ring.iter().map(|p| p.1).fold(0.0, f64::max);
+        assert!((top - n * r).abs() < 1.0e-9);
+        let nosed = flight_profile(&s, 14, 20.0, 150.0);
+        assert!((area(&nosed) - area(&ring) + n * 20.0 * 40.0).abs() < 1.0e-6);
+    }
+
+    #[test]
+    fn a_stringer_stops_at_the_floor_above() {
+        let s = steps(2700.0, &StairRule::default(), None, None).unwrap();
+        let ring = stringer_profile(&s, 14, 50.0, 300.0, 2700.0);
+        let top = ring.iter().map(|p| p.1).fold(0.0, f64::max);
+        assert!((top - 2700.0).abs() < 1.0e-9);
+        assert!(ring.iter().all(|p| p.0 >= 0.0 && p.0 <= 14.0 * 270.0 + 1.0e-9));
     }
 
     #[test]
