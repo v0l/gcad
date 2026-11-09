@@ -1,1 +1,1 @@
-{"name":"high","agent":"api","tier":"high"}
+{"name":"new-render-high","agent":"api","tier":"high","render":true}

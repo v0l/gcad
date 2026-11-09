@@ -43,6 +43,8 @@ def load_config(path):
     cfg.setdefault("render", False)
     cfg.setdefault("reference", False)
     cfg.setdefault("plan", False)
+    if not os.path.isabs(cfg["skill"]):
+        cfg["skill"] = os.path.join(HERE, cfg["skill"])
     cfg["budget"] = {**DEFAULT_BUDGET, **cfg.get("budget", {})}
     cfg.setdefault("model", TIERS.get(cfg["tier"], cfg["tier"]))
     return cfg
@@ -57,6 +59,7 @@ def system_prompt(cfg):
         rules.append(PLAN_RULES)
     if cfg["reference"]:
         rules.append(REFERENCE_RULES)
+    rules.append("The skill folder is copied to ./skill: its references/ files can be read with read_file when SKILL.md points at them.")
     return "\n\n".join(rules) + "\n\n# Skill\n\n" + skill
 
 

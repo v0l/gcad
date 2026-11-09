@@ -1,1 +1,1 @@
-{"name":"medium-plan","agent":"api","tier":"medium","plan":true}
+{"name":"new-render-plan","agent":"api","tier":"medium","render":true,"plan":true}

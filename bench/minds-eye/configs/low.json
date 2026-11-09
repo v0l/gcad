@@ -1,1 +1,1 @@
-{"name":"low","agent":"api","tier":"low"}
+{"name":"new-render-low","agent":"api","tier":"low","render":true}
