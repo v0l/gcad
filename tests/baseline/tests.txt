@@ -15,7 +15,7 @@ doc gcad_sims_proto: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered o
 doc gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_view: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_web: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/arch.rs arch: ok. 26 passed; 0 failed; 91 ignored; 0 measured; 0 filtered out
+tests/arch.rs arch: ok. 27 passed; 0 failed; 91 ignored; 0 measured; 0 filtered out
 tests/assembly_hierarchy.rs assembly_hierarchy: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly.rs assembly: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assets.rs assets: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -29,7 +29,7 @@ tests/calc.rs calc: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered o
 tests/calc_thread.rs calc_thread: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/dependencies.rs dependencies: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/examples.rs examples: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/features.rs features: ok. 86 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/features.rs features: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/fit.rs fit: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/flow.rs flow: ok. 0 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out
 tests/gcad2glb.rs gcad2glb: ok. 18 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

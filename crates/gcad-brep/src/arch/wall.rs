@@ -27,8 +27,85 @@ pub(crate) fn loft(bottom: &[Vec<Point3>], top: &[Vec<Point3>]) -> Result<Solid>
             .map(|ring| ring.iter().rev().copied().collect())
             .collect(),
     );
-    let solid = crate::import::polygon_solid(&polygons)?;
+    let solid = planar_solid(&polygons)?;
     Ok(crate::solids::oriented(solid))
+}
+
+fn planar_solid(polygons: &[Polygon]) -> Result<Solid> {
+    let mut points: Vec<Point3> = Vec::new();
+    let mut index: std::collections::HashMap<[i64; 3], usize> = Default::default();
+    let mut vertex_of = |p: Point3| -> usize {
+        let key = [p.x, p.y, p.z].map(|c| (c * 1.0e6).round() as i64);
+        *index.entry(key).or_insert_with(|| {
+            points.push(p);
+            points.len() - 1
+        })
+    };
+    let rings: Vec<Vec<Vec<usize>>> = polygons
+        .iter()
+        .map(|face| {
+            face.iter()
+                .map(|ring| {
+                    let mut ids: Vec<usize> = ring.iter().map(|p| vertex_of(*p)).collect();
+                    ids.dedup();
+                    while ids.len() > 1 && ids.first() == ids.last() {
+                        ids.pop();
+                    }
+                    ids
+                })
+                .filter(|ids| ids.len() >= 3)
+                .collect()
+        })
+        .collect();
+    let vertices: Vec<Vertex> = points.iter().map(|p| Vertex::new(*p)).collect();
+    let mut edges: std::collections::HashMap<(usize, usize), Edge> = Default::default();
+    let mut edge = |a: usize, b: usize| -> Edge {
+        if let Some(e) = edges.get(&(b, a)) {
+            return e.inverse();
+        }
+        edges
+            .entry((a, b))
+            .or_insert_with(|| {
+                Edge::new(
+                    &vertices[a],
+                    &vertices[b],
+                    Curve::Line(Line(points[a], points[b])),
+                )
+            })
+            .clone()
+    };
+    let mut faces = Vec::new();
+    for face in rings.iter().filter(|f| !f.is_empty()) {
+        let outer: Vec<Point3> = face[0].iter().map(|&i| points[i]).collect();
+        let normal = (0..outer.len())
+            .fold(Vector3::zero(), |n, k| {
+                n + outer[k]
+                    .to_vec()
+                    .cross(outer[(k + 1) % outer.len()].to_vec())
+            })
+            .normalize();
+        let origin = outer[0];
+        let seed = if normal.x.abs() < 0.9 {
+            Vector3::unit_x()
+        } else {
+            Vector3::unit_y()
+        };
+        let u = (seed - normal * seed.dot(normal)).normalize();
+        let v = normal.cross(u);
+        let wires: Vec<Wire> = face
+            .iter()
+            .map(|ids| {
+                (0..ids.len())
+                    .map(|k| edge(ids[k], ids[(k + 1) % ids.len()]))
+                    .collect()
+            })
+            .collect();
+        let plane = Plane::new(origin, origin + u, origin + v);
+        faces.push(
+            Face::try_new(wires, Surface::Plane(plane)).map_err(|e| anyhow!("a wall face: {e}"))?,
+        );
+    }
+    Solid::try_new(vec![faces.into()]).map_err(|e| anyhow!("a wall piece does not close: {e}"))
 }
 
 pub(crate) fn ccw(mut ring: Vec<P2>) -> Vec<P2> {

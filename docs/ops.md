@@ -494,7 +494,7 @@ Architecture stage A (gcad #348). The design is in `docs/architecture.md`; the t
 | levels | supported | `level L1 2700 "First"`, then `base=L0 top=L1-300` anywhere a height goes | `arch::levels_are_heights` |
 | grids | supported | `grid A x=0`, `grid 1 y=0`, then `A1`, `A1+0,500` anywhere a point goes | `arch::grids_are_coordinates` |
 | grids from a file | supported | `gridfile grids.csv` | `arch::grids_from_a_file` |
-| layered wall types | supported | `wall_type ext brick:100 pir:100 block:100` (outside to inside, materials from the library), one body per layer `w1.brick` | `arch::wall_is_its_layers` |
+| layered wall types | supported | `wall_type ext brick:100 pir:100 block:100` (outside to inside, materials from the library), one body per layer `w1.brick` | `arch::wall_is_its_layers`, `arch::wall_export_is_the_same_every_run` |
 | straight walls | supported | `w1: wall x,y x,y type=ext base=L0 top=L1 justify=outside\|centre\|inside offset=-150` | `arch::wall_justification_and_offset` |
 | closed wall loops | supported | `wall A1 B1 B2 A2 closed type=ext` | `arch::closed_wall_loop` |
 | polyline and arc walls | supported | `wall x,y x,y x,y`, `wall arc x,y x,y x,y` | `arch::polyline_and_arc_walls` |

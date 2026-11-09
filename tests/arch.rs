@@ -270,6 +270,19 @@ fn wall_is_its_layers() {
 }
 
 #[test]
+fn wall_export_is_the_same_every_run() {
+    let dir = std::path::PathBuf::from(scratch("wall_export_is_the_same_every_run"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join("house.gcad"), building()).expect("house");
+    let bytes = |name: &str| {
+        let (ok, text) = gcad(&dir, &["export", "house.gcad", name]);
+        assert!(ok, "{text}");
+        std::fs::read(dir.join(name)).expect("stl")
+    };
+    assert_eq!(bytes("a.stl"), bytes("b.stl"));
+}
+
+#[test]
 fn wall_justification_and_offset() {
     let line = |j: &str| build(&datums(&format!("w1: wall 0,0 4000,0 type=ext top=L1 {j}")));
     assert_bounds(
