@@ -713,4 +713,39 @@ fn a_metal_sphere_renders_differently_from_a_glossy_one() {
     let glossy = draw("color #c0c0c0 part=ball gloss=0.8", "gloss-ball.png");
     let differing = metal.pixels().zip(glossy.pixels()).filter(|(a, b)| a != b).count();
     assert!(differing > 20_000, "only {differing} pixels differ");
+
+fn worst_aspect(mesh: &gcad::mesh::Mesh, near_point: [f64; 3], radius: f64) -> f64 {
+    use gcad::mesh::{cross, length, sub};
+    let mut worst: f64 = 0.0;
+    for t in &mesh.triangles {
+        let [a, b, c] = t.map(|i| mesh.positions[i as usize]);
+        let centre = [
+            (a[0] + b[0] + c[0]) / 3.0,
+            (a[1] + b[1] + c[1]) / 3.0,
+            (a[2] + b[2] + c[2]) / 3.0,
+        ];
+        if length(sub(centre, near_point)) > radius {
+            continue;
+        }
+        let longest = length(sub(a, b)).max(length(sub(b, c))).max(length(sub(c, a)));
+        let area = 0.5 * length(cross(sub(b, a), sub(c, a)));
+        let aspect = longest * longest / (area * 3.0_f64.sqrt() / 2.0 * 2.0).max(1.0e-12);
+        worst = worst.max(aspect);
+    }
+    worst
+}
+
+#[test]
+fn part_pinch_fades_across_the_blend_seam() {
+    let base = "body_a: blob 0,0,0 r=8,5,7\narm: blob 9,0,3 r=4,4.4,2.6 ry=26 blend=0.6\nremesh 0.22";
+    let worst = |falloff: &str| {
+        let model = build(&format!(
+            "{base}\nplate: select body_a falloff={falloff}\npinch 0.15 toward=0,-8,0"
+        ));
+        worst_aspect(&mesh_of(&model), [6.0, 0.0, 3.0], 6.0)
+    };
+    let abrupt = worst("0.01");
+    let eased = worst("6");
+    assert!(eased < abrupt * 0.5, "abrupt {abrupt} eased {eased}");
+    assert!(eased < 60.0, "eased {eased}");
 }

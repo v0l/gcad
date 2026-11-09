@@ -353,11 +353,31 @@ impl Selection {
         } else {
             surface_distance(mesh, &core, falloff)
         };
+        let straddle = falloff > 0.0 && !part_regions.is_empty();
+        let depth: Vec<f64> = if straddle {
+            let outside: Vec<bool> = core.iter().map(|c| !c).collect();
+            surface_distance(mesh, &outside, falloff)
+        } else {
+            Vec::new()
+        };
         let weights: Vec<f64> = distance
             .iter()
             .enumerate()
             .map(|(i, &d)| {
-                let w = if d <= 0.0 {
+                let w = if straddle {
+                    if d <= 0.0 {
+                        let inner = depth[i];
+                        if inner < falloff {
+                            weighting.profile.at(0.5 - 0.5 * inner / falloff)
+                        } else {
+                            1.0
+                        }
+                    } else if d < falloff {
+                        weighting.profile.at(0.5 + 0.5 * d / falloff)
+                    } else {
+                        0.0
+                    }
+                } else if d <= 0.0 {
                     1.0
                 } else if falloff > 0.0 && d < falloff {
                     weighting.profile.at(d / falloff)
