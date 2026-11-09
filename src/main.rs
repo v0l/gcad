@@ -378,6 +378,13 @@ enum Command {
     },
     /// Report skin weight quality per rigged body: weight jumps across edges, contested and unrelated weights, rigid cores, and posed triangle quality over every clip key
     Skincheck { file: String },
+    /// Build the file with the kernel and with kernel-free gcad-mesh and compare each body's bounding box, volume and colour
+    CheckMesh {
+        file: String,
+        /// Largest share of the volume or of the body's size the two may differ by
+        #[arg(long, default_value_t = 0.015)]
+        bound: f64,
+    },
     /// Run the file, then one `measure` line without adding it, like `gcad measure case.gasm space at=0,0,5`
     Measure {
         file: String,
@@ -884,6 +891,55 @@ fn skincheck(file: &str, vars: &[(String, f64)]) -> Result<()> {
     }
     if !any {
         bail!("no skinned body; add bones and `skin auto`");
+    }
+    Ok(())
+}
+
+fn check_mesh(file: &str, vars: &[(String, f64)], bound: f64) -> Result<()> {
+    use gcad::model::parity;
+    let source = std::fs::read_to_string(file)?;
+    let options = gcad_mesh::Options {
+        y_up: false,
+        vars: vars.to_vec(),
+        ..Default::default()
+    };
+    let mesh = match gcad_mesh::build_with(&source, &options) {
+        Ok(model) => model,
+        Err(refused) => {
+            println!("gcad-mesh does not build it: {refused}");
+            return Ok(());
+        }
+    };
+    let run = load(file, None, vars)?;
+    finished(&run)?;
+    let differences = parity::compare(&parity::kernel(&run.model), &parity::measured(&mesh))
+        .map_err(|e| anyhow::anyhow!(e))?;
+    println!(
+        "{:<16} {:>12} {:>12} {:>9} {:>9} {:>7}",
+        "body", "kernel vol", "mesh vol", "vol %", "bbox %", "colour"
+    );
+    let mut over = Vec::new();
+    for d in &differences {
+        println!(
+            "{:<16} {:>12.4} {:>12.4} {:>9.4} {:>9.4} {:>7.3}",
+            d.body,
+            d.kernel_volume,
+            d.mesh_volume,
+            d.volume() * 100.0,
+            d.bbox_share() * 100.0,
+            d.colour
+        );
+        if !d.within(bound) {
+            over.push(d.body.clone());
+        }
+    }
+    if !over.is_empty() {
+        bail!(
+            "{} differ by more than {:.2}%: {}",
+            over.len(),
+            bound * 100.0,
+            over.join(", ")
+        );
     }
     Ok(())
 }
@@ -1977,6 +2033,7 @@ fn main() -> Result<()> {
         Command::Check { file, time } => check(&file, &vars, time),
         Command::Measure { file, what } => measure(&file, &what.join(" "), &vars),
         Command::Skincheck { file } => skincheck(&file, &vars),
+        Command::CheckMesh { file, bound } => check_mesh(&file, &vars, bound),
         Command::Inspect {
             file,
             output,

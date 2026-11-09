@@ -110,8 +110,11 @@ pub fn compare(
     kernel: &[Measured],
     mesh: &[Measured],
 ) -> std::result::Result<Vec<Difference>, String> {
-    let names =
-        |bodies: &[Measured]| -> Vec<String> { bodies.iter().map(|b| b.name.clone()).collect() };
+    let names = |bodies: &[Measured]| -> Vec<String> {
+        let mut names: Vec<String> = bodies.iter().map(|b| b.name.clone()).collect();
+        names.sort();
+        names
+    };
     if names(kernel) != names(mesh) {
         return Err(format!(
             "the kernel builds bodies {:?}, gcad-mesh {:?}",
@@ -119,9 +122,9 @@ pub fn compare(
             names(mesh)
         ));
     }
-    Ok(kernel
+    Ok(mesh
         .iter()
-        .zip(mesh)
+        .filter_map(|m| kernel.iter().find(|k| k.name == m.name).map(|k| (k, m)))
         .map(|(k, m)| Difference {
             body: k.name.clone(),
             size: k.size(),

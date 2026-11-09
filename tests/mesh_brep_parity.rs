@@ -451,3 +451,45 @@ fn compare_names_bodies_that_only_one_side_builds() {
     let err = parity::compare(&k, &m).err().expect("differs");
     assert!(err.contains("\"b\""), "{err}");
 }
+
+fn check_mesh(source: &str, name: &str, extra: &[&str]) -> std::process::Output {
+    let dir = std::env::temp_dir().join("gcad-tests");
+    std::fs::create_dir_all(&dir).expect("dir");
+    let path = dir.join(name);
+    std::fs::write(&path, source).expect("writes");
+    std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .arg("check-mesh")
+        .arg(&path)
+        .args(extra)
+        .output()
+        .expect("runs gcad")
+}
+
+#[test]
+fn check_mesh_reports_each_body_and_passes_within_the_bound() {
+    let out = check_mesh(
+        "ngon 4 6\np: extrude 2 scale=0\nbody b\ncircle 10\nq: extrude 1\ncolor #ff0000\n",
+        "check-mesh-ok.gcad",
+        &[],
+    );
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}{}", String::from_utf8_lossy(&out.stderr));
+    assert!(text.lines().any(|l| l.starts_with("main ")), "{text}");
+    assert!(text.lines().any(|l| l.starts_with("b ")), "{text}");
+}
+
+#[test]
+fn check_mesh_fails_above_the_bound() {
+    let out = check_mesh("circle 10\np: extrude 1\n", "check-mesh-tight.gcad", &["--bound", "0.001"]);
+    assert!(!out.status.success());
+    let err = String::from_utf8_lossy(&out.stderr);
+    assert!(err.contains("main"), "{err}");
+}
+
+#[test]
+fn check_mesh_skips_files_gcad_mesh_does_not_build() {
+    let out = check_mesh("rect 10 10\np: extrude 3\nchamfer 1 p.end\n", "check-mesh-kernel.gcad", &[]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("gcad-mesh does not build it"), "{text}");
+}
