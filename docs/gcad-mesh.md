@@ -195,6 +195,8 @@ gcad-mesh also runs a kernel-free subset for crisp, flat-sided props (the kids-f
 | `repeat label count= step=` | repeats an extrude along the plane |
 | `fillet r label.end&label.side` | also `.start`; the rim only |
 
+`gcad check-mesh file.gcad` builds a file both ways and prints, per body, the kernel solid's exact volume, the kernel GLB's volume and the gcad-mesh volume, the difference between the exact and mesh volumes and the largest bounding-box difference as a share of the body's size, and the largest colour difference; it exits non-zero above `--bound` (3% by default, as `tests/solid_props.rs`). Rim fillets differ by up to 2.4% (four bevel rings against the true arc). Lone circles and ellipses in the kernel GLB are 32 segments and sit up to 0.65% under the true area, gcad-mesh's are 24 (32 above 20 mm radius) and sit 1.1% (0.6%) under, so small round parts differ by about 0.5-1%. Polygons (`ngon`, `poly`, `rect`) give the same corners, volume and winding on both sides. `blob ... mode=shell` has no kernel twin: the kernel hands blockouts to gcad-mesh, so both GLBs carry the same shell (`tests/mesh_brep_parity.rs`). The kernel has no open extrude; `extrude open=1` is checked against the closed kernel prism minus its caps.
+
 Each `body` holds its own extrusions, and bodies are never combined: no booleans. Normals are flat per face; a fillet is four bevel rings that follow the arc.
 
 Measured against the kernel on the eight kids-free-games props (`tests/solid_silhouette.rs`, release):

@@ -7,6 +7,7 @@ pub struct Measured {
     pub lo: [f64; 3],
     pub hi: [f64; 3],
     pub volume: f64,
+    pub glb_volume: f64,
 }
 
 impl Measured {
@@ -24,6 +25,7 @@ pub struct Difference {
     pub size: f64,
     pub bbox: f64,
     pub kernel_volume: f64,
+    pub kernel_glb_volume: f64,
     pub mesh_volume: f64,
     pub colour: f64,
 }
@@ -78,13 +80,36 @@ pub fn measured(model: &gcad_mesh::Model) -> Vec<Measured> {
                 lo,
                 hi,
                 volume: volume_of(body),
+                glb_volume: volume_of(body),
             }
         })
         .collect()
 }
 
 pub fn kernel(model: &Model) -> Vec<Measured> {
-    measured(&crate::glb::mesh_model(model, false))
+    let solids: Vec<(
+        String,
+        monstertruck::modeling::BoundingBox<monstertruck::modeling::Point3>,
+        f64,
+    )> = model
+        .named_parts()
+        .into_iter()
+        .map(|(name, solid, _)| {
+            let bounds = crate::geometry::bounds(solid);
+            let fine = crate::geometry::volume_at(solid, bounds.diameter() * 2.0e-5);
+            (name, bounds, fine)
+        })
+        .collect();
+    let mut bodies = measured(&crate::glb::mesh_model(model, false));
+    for body in &mut bodies {
+        if let Some((_, bounds, fine)) = solids.iter().find(|(n, ..)| *n == body.name) {
+            let (lo, hi) = (bounds.min(), bounds.max());
+            body.lo = [lo.x, lo.y, lo.z];
+            body.hi = [hi.x, hi.y, hi.z];
+            body.volume = *fine;
+        }
+    }
+    bodies
 }
 
 fn colour_gap(kernel: &Measured, mesh: &Measured) -> f64 {
@@ -132,6 +157,7 @@ pub fn compare(
                 .map(|i| (k.lo[i] - m.lo[i]).abs().max((k.hi[i] - m.hi[i]).abs()))
                 .fold(0.0, f64::max),
             kernel_volume: k.volume,
+            kernel_glb_volume: k.glb_volume,
             mesh_volume: m.volume,
             colour: colour_gap(k, m),
         })

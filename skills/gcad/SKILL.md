@@ -565,7 +565,8 @@ For games, ship the text and build at load: `gcad_mesh::build(include_str!("hero
 `include/gcad_mesh.h` is the C ABI. Only mesh and rig lines run there, others fail with the line
 number. See `docs/gcad-mesh.md`. `gcad2glb` (crate `crates/gcad2glb`) also writes files that mix
 solid and mesh bodies, through `gcad-brep`, with no viewer or simulation code; build it with
-`--no-default-features` for the mesh-only tool. Which crate holds what is in `docs/gcad-crates.md`.
+`--no-default-features` for the mesh-only tool. `gcad check-mesh part.gcad` builds a flat-solid
+prop both ways and fails if a body's volume or size differs by more than 3%. Which crate holds what is in `docs/gcad-crates.md`.
 
 ## Output
 

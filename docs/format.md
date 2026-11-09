@@ -111,9 +111,10 @@ Features:
 
 | operation | parameters | does |
 |---|---|---|
-| `extrude` | `d`, `next` or `upto=faces` `offset=`, `both`, `draft=`, `thin=`, `twist=`, `scale=`, `mode=add\|cut\|intersect` | adds the sketch along the plane normal (negative `d` goes the other way); `both` centres it on the plane; `upto` stops at a flat face, `offset` past it; `next` stops at the first face the sketch reaches; `draft` tapers it inward by degrees; `thin` makes walls that thick inside the profile; `twist` turns the sketch that many degrees by the end, counterclockwise looking back down the extrude, and `scale` sizes it by the end, both about the sketch origin and with a plain distance only |
+| `extrude` | `d`, `next` or `upto=faces` `offset=`, `both`, `draft=`, `thin=`, `twist=`, `scale=`, `mode=add\|cut\|intersect` | adds the sketch along the plane normal (negative `d` goes the other way); `both` centres it on the plane; `upto` stops at a flat face, `offset` past it; `next` stops at the first face the sketch reaches; `draft` tapers it inward by degrees; `thin` makes walls that thick inside the profile; `twist` turns the sketch that many degrees by the end, counterclockwise looking back down the extrude, and `scale` sizes it by the end, both about the sketch origin and with a plain distance only (`scale=0` closes a profile without holes to a point: a cone) |
 | `cut` | `d` or `thru`, `draft=` | removes the sketch from the solid, going into it against the plane normal |
 | `revolve` | `angle` `axis=x\|y\|name` `mode=` | spins the sketch about the workplane's x or y axis through its origin, or a named `axis` |
+| `torus` | `d tube` `at=x,y` | adds a ring lying in the workplane: `d` is the diameter of the tube's centre line, `tube` the tube's diameter; `around=` and `sides=` only set gcad-mesh's facets |
 | `path` | `x,y,z x,y,z ...` `r=` or `smooth` | sets the sweep path in world coordinates; corners are bent with radius `r`, or `smooth` makes one curve through the points |
 | `helix` | `r= pitch= turns=` `at=x,y` | sets a helical sweep path about the workplane normal |
 | `sweep` | `mode=` `twist=` `scale=` | carries the sketch from the path start along the path, turning it `twist` degrees and sizing it to `scale` by the end |

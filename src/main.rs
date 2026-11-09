@@ -382,7 +382,7 @@ enum Command {
     CheckMesh {
         file: String,
         /// Largest share of the volume or of the body's size the two may differ by
-        #[arg(long, default_value_t = 0.015)]
+        #[arg(long, default_value_t = 0.03)]
         bound: f64,
     },
     /// Run the file, then one `measure` line without adding it, like `gcad measure case.gasm space at=0,0,5`
@@ -915,15 +915,16 @@ fn check_mesh(file: &str, vars: &[(String, f64)], bound: f64) -> Result<()> {
     let differences = parity::compare(&parity::kernel(&run.model), &parity::measured(&mesh))
         .map_err(|e| anyhow::anyhow!(e))?;
     println!(
-        "{:<16} {:>12} {:>12} {:>9} {:>9} {:>7}",
-        "body", "kernel vol", "mesh vol", "vol %", "bbox %", "colour"
+        "{:<16} {:>14} {:>14} {:>14} {:>9} {:>9} {:>7}",
+        "body", "kernel vol", "kernel glb vol", "mesh vol", "vol %", "bbox %", "colour"
     );
     let mut over = Vec::new();
     for d in &differences {
         println!(
-            "{:<16} {:>12.4} {:>12.4} {:>9.4} {:>9.4} {:>7.3}",
+            "{:<16} {:>14.4} {:>14.4} {:>14.4} {:>9.4} {:>9.4} {:>7.3}",
             d.body,
             d.kernel_volume,
+            d.kernel_glb_volume,
             d.mesh_volume,
             d.volume() * 100.0,
             d.bbox_share() * 100.0,
