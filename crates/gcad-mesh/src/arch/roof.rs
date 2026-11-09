@@ -312,6 +312,84 @@ pub fn roof_shell(footprint: &[P2], planes: &[Plane], thickness: f64) -> Result<
     Ok(shell)
 }
 
+pub fn column_shell(
+    pieces: &[Vec<P2>],
+    z0: f64,
+    floor: f64,
+    planes: &[Plane],
+) -> Result<Shell, String> {
+    let pieces: Vec<Vec<P2>> = pieces.iter().map(|p| ccw_ring(p.clone())).collect();
+    let mut tops: Vec<(Vec<P2>, Plane)> = Vec::new();
+    for piece in &pieces {
+        if !is_convex(piece) {
+            return Err("a wall piece under the roof is not convex".into());
+        }
+        for (i, cell) in cells(piece, planes) {
+            let plane = planes[i];
+            let level = Plane::level(floor);
+            let dg = plane.g;
+            let dc = plane.c - floor;
+            let above = clip(&cell, |p| -(dc + dot(dg, p)));
+            let below = clip(&cell, |p| dc + dot(dg, p));
+            for (part, on) in [(above, plane), (below, level)] {
+                if part.len() >= 3 && signed_area(&part).abs() > 1.0e-6 {
+                    tops.push((part, on));
+                }
+            }
+        }
+    }
+    let top_at = |p: P2| envelope(planes, p).max(floor);
+    let mut polygons: Vec<Vec<P3>> = Vec::new();
+    for piece in &pieces {
+        polygons.push(piece.iter().rev().map(|&p| [p.0, p.1, z0]).collect());
+    }
+    for (part, plane) in &tops {
+        polygons.push(part.iter().map(|&p| [p.0, p.1, plane.at(p)]).collect());
+    }
+    let breaks: Vec<P2> = tops
+        .iter()
+        .flat_map(|(part, _)| part.iter().copied())
+        .collect();
+    for (k, piece) in pieces.iter().enumerate() {
+        let m = piece.len();
+        for e in 0..m {
+            let (a, b) = (piece[e], piece[(e + 1) % m]);
+            let shared = pieces.iter().enumerate().any(|(j, other)| {
+                j != k
+                    && (0..other.len())
+                        .any(|f| same_segment((other[f], other[(f + 1) % other.len()]), a, b))
+            });
+            if shared {
+                continue;
+            }
+            let d = sub(b, a);
+            let l = length(d);
+            let mut along: Vec<f64> = vec![0.0, l];
+            for &p in &breaks {
+                let v = sub(p, a);
+                let t = dot(v, d) / l;
+                if cross(d, v).abs() / l <= 10.0 * WELD && t > WELD && t < l - WELD {
+                    along.push(t);
+                }
+            }
+            along.sort_by(f64::total_cmp);
+            along.dedup_by(|x, y| (*x - *y).abs() <= WELD);
+            let at = |t: f64| add(a, scale(d, t / l));
+            let mut face: Vec<P3> = vec![[a.0, a.1, z0], [b.0, b.1, z0]];
+            face.extend(along.iter().rev().map(|&t| {
+                let p = at(t);
+                [p.0, p.1, top_at(p)]
+            }));
+            polygons.push(face);
+        }
+    }
+    let shell = Shell::from_polygons(polygons);
+    if !shell.is_closed() {
+        return Err("the wall does not close under the roof".into());
+    }
+    Ok(shell)
+}
+
 pub fn eaves_along(footprint: &[P2], ridge: P2) -> Vec<bool> {
     let n = footprint.len();
     let r = unit(ridge);
@@ -321,6 +399,88 @@ pub fn eaves_along(footprint: &[P2], ridge: P2) -> Vec<bool> {
             dot(d, r).abs() >= std::f64::consts::FRAC_1_SQRT_2 - 1.0e-9
         })
         .collect()
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct RoofEdge {
+    pub kind: &'static str,
+    pub a: P3,
+    pub b: P3,
+    pub outline_edge: Option<usize>,
+}
+
+fn on_segment(p: P2, a: P2, b: P2) -> bool {
+    let d = sub(b, a);
+    let l = length(d);
+    let t = dot(sub(p, a), d) / l;
+    cross(d, sub(p, a)).abs() / l <= 10.0 * WELD && t >= -WELD && t <= l + WELD
+}
+
+fn same_segment(s: (P2, P2), p: P2, q: P2) -> bool {
+    let close = |a: P2, b: P2| length(sub(a, b)) <= 10.0 * WELD;
+    (close(s.0, p) && close(s.1, q)) || (close(s.0, q) && close(s.1, p))
+}
+
+pub fn roof_edges(footprint: &[P2], planes: &[Plane], thickness: f64) -> Vec<RoofEdge> {
+    let ring = ccw_ring(footprint.to_vec());
+    let tops: Vec<Plane> = planes.iter().map(|p| p.lifted(thickness)).collect();
+    let lift = |p: P2| [p.0, p.1, envelope(&tops, p)];
+    let n = ring.len();
+    let side = |e: usize| (ring[e], ring[(e + 1) % n]);
+    let mut out = Vec::new();
+    for e in 0..n {
+        let (a, b) = side(e);
+        let mid = scale(add(a, b), 0.5);
+        let (za, zb, zm) = (lift(a)[2], lift(b)[2], lift(mid)[2]);
+        let level = (za - zb).abs() <= 1.0e-6 && (za - zm).abs() <= 1.0e-6;
+        out.push(RoofEdge {
+            kind: if level { "eave" } else { "verge" },
+            a: lift(a),
+            b: lift(b),
+            outline_edge: Some(e),
+        });
+    }
+    let mut seen: Vec<(P2, P2)> = Vec::new();
+    for (i, cell) in cells(&ring, &tops) {
+        let m = cell.len();
+        for k in 0..m {
+            let (p, q) = (cell[k], cell[(k + 1) % m]);
+            let boundary = (0..n).any(|e| {
+                let (a, b) = side(e);
+                on_segment(p, a, b) && on_segment(q, a, b)
+            });
+            if length(sub(q, p)) <= 10.0 * WELD
+                || boundary
+                || seen.iter().any(|&s| same_segment(s, p, q))
+            {
+                continue;
+            }
+            seen.push((p, q));
+            let mid = scale(add(p, q), 0.5);
+            let other = tops
+                .iter()
+                .enumerate()
+                .find(|&(j, plane)| j != i && (plane.at(mid) - tops[i].at(mid)).abs() <= 1.0e-6);
+            let (pa, pb) = (lift(p), lift(q));
+            let parallel = other.is_some_and(|(_, o)| {
+                cross(o.g, tops[i].g).abs() <= 1.0e-9 && dot(o.g, tops[i].g) > 0.0
+            });
+            let kind = if (pa[2] - pb[2]).abs() > 1.0e-6 {
+                "hip"
+            } else if parallel {
+                "curb"
+            } else {
+                "ridge"
+            };
+            out.push(RoofEdge {
+                kind,
+                a: pa,
+                b: pb,
+                outline_edge: None,
+            });
+        }
+    }
+    out
 }
 
 pub fn longest_edge(footprint: &[P2]) -> P2 {
@@ -550,6 +710,52 @@ mod tests {
         let crown = 2700.0 - r * 45f64.to_radians().cos() + r;
         assert!((envelope(&planes, (4000.0, 3000.0)) - crown).abs() < 1.0e-9);
         assert!((envelope(&planes, (4000.0, 0.0)) - 2700.0).abs() < 1.0e-9);
+    }
+
+    #[test]
+    fn a_hip_has_one_ridge_four_hips_and_four_eaves() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("hip", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let edges = roof_edges(&ring, &planes, 200.0);
+        let count = |kind: &str| edges.iter().filter(|e| e.kind == kind).count();
+        assert_eq!((count("ridge"), count("hip"), count("eave")), (1, 4, 4));
+        let ridge = edges.iter().find(|e| e.kind == "ridge").unwrap();
+        assert!(((ridge.a[0] - ridge.b[0]).abs() - 2000.0).abs() < 1.0e-6);
+        let gable = roof_planes("gable", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let edges = roof_edges(&ring, &gable, 200.0);
+        let count = |kind: &str| edges.iter().filter(|e| e.kind == kind).count();
+        assert_eq!((count("ridge"), count("verge"), count("eave")), (1, 2, 2));
+    }
+
+    #[test]
+    fn a_gable_end_wall_fills_the_triangle() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("gable", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let end = vec![(0.0, 0.0), (300.0, 0.0), (300.0, 6000.0), (0.0, 6000.0)];
+        let shell = column_shell(&[end], 0.0, 2700.0, &planes).unwrap();
+        assert!(shell.is_closed());
+        let expected = 300.0 * 6000.0 * 2700.0 + 300.0 * 3000.0 * 3000.0;
+        assert!((shell.volume() - expected).abs() < 1.0e-3);
+        let halves = vec![
+            vec![(0.0, 0.0), (300.0, 0.0), (300.0, 3000.0), (0.0, 3000.0)],
+            vec![
+                (0.0, 3000.0),
+                (300.0, 3000.0),
+                (300.0, 6000.0),
+                (0.0, 6000.0),
+            ],
+        ];
+        let split = column_shell(&halves, 0.0, 2700.0, &planes).unwrap();
+        assert!(split.is_closed());
+        assert!((split.volume() - expected).abs() < 1.0e-3);
+        let low = vec![
+            (4000.0, 2000.0),
+            (4100.0, 2000.0),
+            (4100.0, 2100.0),
+            (4000.0, 2100.0),
+        ];
+        let lifted = column_shell(&[low], 0.0, 9000.0, &planes).unwrap();
+        assert!((lifted.volume() - 100.0 * 100.0 * 9000.0).abs() < 1.0e-3);
     }
 
     #[test]

@@ -289,9 +289,14 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `ramp` | `from=x,y,z to=x,y,z slope=1:12 width=1200 landing=1500 every=0 material=concrete` | a 200 thick ramp centred on the line from `from` to `to`; with `every` the slope is split into the fewest equal runs no longer than `every`, with a flat `landing` between them; fails when the slope left is steeper than `slope`; bodies `name.run.N`, `name.landing.N` |
 | `ladder` | `x,y,z x,y,z width=400 rungs=@300 material=steel` | two 60x20 rails `width` apart from the first point to the second and a 25 round rung every `rungs` between them; bodies `name.rail.N`, `name.rung.N` |
 | `roof` | `wall\|points closed` `type=gable\|hip\|half_hip\|shed\|flat\|mansard\|gambrel\|barrel pitch= base= overhang=0 thickness=200 ridge=x\|y material=clay-tile` | a roof over the outside face of a closed wall (or a convex outline), eaves at `base` on the outline, rising at `pitch` degrees; `overhang` carries the planes out past the outline, the ridge runs along `ridge` (default the longest edge). A shed rises from its first eave along the ridge, a half hip's end planes start halfway up, mansard and gambrel break a sixth of the width in at the steeper pitch halfway to vertical, a barrel is an arc springing at `pitch` from the eaves; flat needs no pitch |
+| `pitch_edge` | `r1.eave.N degrees` | sets the pitch of the roof plane rising from that outline edge (an eave or verge) and rebuilds the roof |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.
+Roof edges are selectors too, along the top of the roof: `r1.ridge`, `r1.hip`, `r1.valley`,
+`r1.eave`, `r1.verge`, `r1.curb` (the break of a mansard or gambrel), and one of them as
+`r1.eave.1`. Eaves and verges are numbered round the outline, the rest in the order they
+are found.
 
 
 ## Material libraries

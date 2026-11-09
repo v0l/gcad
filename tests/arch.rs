@@ -797,7 +797,6 @@ fn roof_types() {
 }
 
 #[test]
-#[ignore = "missing: per-edge pitch"]
 fn per_edge_pitch() {
     let model = build(&with(
         "r1: roof outer type=hip pitch=45 overhang=0 thickness=200 base=L1\npitch_edge r1.eave.1 60",
@@ -884,7 +883,6 @@ fn parapet_on_a_flat_roof() {
 }
 
 #[test]
-#[ignore = "missing: ridges, hips and valleys as named edges"]
 fn roof_edges_are_selectors() {
     let text = summary(&with(
         "r1: roof outer type=hip pitch=45 overhang=0 thickness=200 base=L1\nmeasure box r1.ridge",

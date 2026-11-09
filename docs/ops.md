@@ -539,9 +539,9 @@ Architecture stage B (gcad #349).
 | ground slabs | supported | `ground_slab outer type=concrete:150+pir:100` | `arch::ground_slab_inside_the_walls` |
 | gable roofs | supported | `r1: roof outer type=gable pitch=45 overhang=450 thickness=200 ridge=x base=L1` | `arch::gable_roof_ridge_and_area`, `arch::roof_export_is_the_same_every_run` |
 | roof types | supported | `type=hip\|half_hip\|shed\|flat\|mansard\|gambrel\|barrel` | `arch::roof_types` |
-| per-edge pitch | missing | `pitch_edge r1.eave.1 60` | `arch::per_edge_pitch` |
+| per-edge pitch | supported | `pitch_edge r1.eave.1 60` | `arch::per_edge_pitch` |
 | walls trim to the roof | missing | `roof ... walls=outer` | `arch::walls_trim_to_the_roof_underside` |
-| roof edges as selectors | missing | `r1.ridge`, `r1.hip`, `r1.valley`, `r1.eave`, `r1.verge` | `arch::roof_edges_are_selectors` |
+| roof edges as selectors | supported | `r1.ridge`, `r1.hip`, `r1.valley`, `r1.eave`, `r1.verge` | `arch::roof_edges_are_selectors` |
 | roof joins | missing | `roof_join r2 r1` | `arch::roof_join_meets_two_roofs` |
 | roof by extrusion | missing | a profile, then `roof extrude 3000 thickness=200` | `arch::roof_extruded_from_a_profile` |
 | dormers | missing | `dormer on=r1 at=x,y w=1200 type=gable` | `arch::dormer_on_a_roof` |

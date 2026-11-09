@@ -130,6 +130,7 @@ pub struct Roof {
     pub outline: Vec<gcad_mesh::arch::P2>,
     pub overhang: f64,
     pub pitch: f64,
+    pub pitches: Vec<f64>,
     pub base: f64,
     pub ridge: gcad_mesh::arch::P2,
     pub thickness: f64,

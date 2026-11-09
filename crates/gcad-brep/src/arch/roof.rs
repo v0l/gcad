@@ -6,20 +6,70 @@ use anyhow::{Context, Result, anyhow, bail};
 use gcad_mesh::arch::P2;
 use gcad_mesh::arch::layout::signed_area;
 use gcad_mesh::arch::roof::{
-    Plane, ROOF_KINDS, ccw_ring, longest_edge, offset_ring, roof_planes, roof_shell,
+    Plane, ROOF_KINDS, RoofEdge, ccw_ring, longest_edge, offset_ring, roof_edges, roof_planes,
+    roof_shell,
 };
 use monstertruck::modeling::*;
 
+const EDGE_KINDS: &[&str] = &["ridge", "hip", "valley", "eave", "verge", "curb"];
+
 impl Roof {
-    fn planes(&self) -> Result<Vec<Plane>> {
-        let pitches = vec![self.pitch; self.outline.len()];
-        roof_planes(&self.kind, &self.outline, self.base, &pitches, self.ridge)
-            .map_err(|e| anyhow!(e))
+    pub(crate) fn planes(&self) -> Result<Vec<Plane>> {
+        roof_planes(
+            &self.kind,
+            &self.outline,
+            self.base,
+            &self.pitches,
+            self.ridge,
+        )
+        .map_err(|e| anyhow!(e))
+    }
+
+    pub(crate) fn eaves(&self) -> Vec<P2> {
+        offset_ring(&self.outline, self.overhang)
+    }
+
+    pub(crate) fn edges(&self) -> Result<Vec<RoofEdge>> {
+        Ok(roof_edges(&self.eaves(), &self.planes()?, self.thickness))
+    }
+
+    pub(crate) fn edges_named(&self, rest: &[&str]) -> Result<Vec<RoofEdge>> {
+        let [kind, number @ ..] = rest else {
+            bail!(
+                "a roof edge selector is `{}.KIND` or `{}.KIND.N`, KIND one of {}",
+                self.name,
+                self.name,
+                EDGE_KINDS.join(", ")
+            );
+        };
+        if !EDGE_KINDS.contains(kind) {
+            bail!("roof edges are {}, not `{kind}`", EDGE_KINDS.join(", "));
+        }
+        let all: Vec<RoofEdge> = self
+            .edges()?
+            .into_iter()
+            .filter(|e| e.kind == *kind)
+            .collect();
+        match number {
+            [] if all.is_empty() => bail!("`{}` has no {kind} edges", self.name),
+            [] => Ok(all),
+            [n] => {
+                let k: usize = n
+                    .parse()
+                    .ok()
+                    .filter(|k| *k >= 1)
+                    .ok_or_else(|| anyhow!("`{n}` is not an edge number from 1"))?;
+                all.get(k - 1).cloned().map(|e| vec![e]).ok_or_else(|| {
+                    anyhow!("`{}` has {} {kind} edges, not {k}", self.name, all.len())
+                })
+            }
+            _ => bail!("write `{}.{kind}.N`", self.name),
+        }
     }
 
     fn solid(&self) -> Result<Solid> {
-        let eaves = offset_ring(&self.outline, self.overhang);
-        let shell = roof_shell(&eaves, &self.planes()?, self.thickness).map_err(|e| anyhow!(e))?;
+        let shell =
+            roof_shell(&self.eaves(), &self.planes()?, self.thickness).map_err(|e| anyhow!(e))?;
         let polygons: Vec<Vec<Vec<Point3>>> = shell
             .faces
             .iter()
@@ -83,6 +133,7 @@ impl Model {
             outline,
             overhang: 0.0,
             pitch: f64::NAN,
+            pitches: Vec::new(),
             base: f64::NAN,
             ridge: (0.0, 0.0),
             thickness: 200.0,
@@ -129,16 +180,68 @@ impl Model {
             bail!("a roof's thickness must be above zero and its overhang not below zero");
         }
         roof.ridge = ridge.unwrap_or_else(|| longest_edge(&roof.outline));
+        roof.pitches = vec![roof.pitch; roof.outline.len()];
         self.ensure_library()?;
-        let solid = roof.solid().with_context(|| format!("building `{name}`"))?;
-        let top = crate::geometry::bounds(&solid).max().z;
-        let material = roof.material.clone();
         let kind = roof.kind.clone();
         self.arch.roofs.push(roof);
-        self.put_body(name.clone(), solid, &material)?;
-        self.note_built(&name, &name);
+        let top = self.build_roof(&name)?;
         Ok(format!(
             "{kind} roof {name}, top at {}",
+            crate::parse::label(top)
+        ))
+    }
+
+    pub(crate) fn roof(&self, name: &str) -> Option<&Roof> {
+        self.arch.roofs.iter().find(|r| r.name == name)
+    }
+
+    pub(crate) fn build_roof(&mut self, name: &str) -> Result<f64> {
+        let roof = self.roof(name).cloned().expect("a roof");
+        let solid = roof.solid().with_context(|| format!("building `{name}`"))?;
+        let top = crate::geometry::bounds(&solid).max().z;
+        self.put_body(name.to_string(), solid, &roof.material)?;
+        self.note_built(name, name);
+        Ok(top)
+    }
+
+    pub(crate) fn roof_edge_selection(&self, selector: &str) -> Option<Result<Vec<RoofEdge>>> {
+        let mut parts = selector.split('.');
+        let roof = self.roof(parts.next()?)?;
+        let rest: Vec<&str> = parts.collect();
+        if rest.is_empty() {
+            return None;
+        }
+        Some(roof.edges_named(&rest))
+    }
+
+    pub(crate) fn op_pitch_edge(&mut self, line: &Line) -> Result<String> {
+        let [selector, angle] = line.positional.as_slice() else {
+            bail!("write `pitch_edge r1.eave.1 60`");
+        };
+        let pitch = eval(angle, &self.scope).with_context(|| format!("the pitch `{angle}`"))?;
+        if !(pitch > 0.0 && pitch < 90.0) {
+            bail!("a pitch is in degrees above 0 and under 90");
+        }
+        let edges = self
+            .roof_edge_selection(selector)
+            .ok_or_else(|| anyhow!("`{selector}` is not a roof edge like `r1.eave.1`"))??;
+        let name = selector.split('.').next().expect("a name").to_string();
+        let index = self
+            .arch
+            .roofs
+            .iter()
+            .position(|r| r.name == name)
+            .expect("a roof");
+        for edge in &edges {
+            let Some(e) = edge.outline_edge else {
+                bail!("`pitch_edge` sets the pitch of eaves and verges, not ridges or hips");
+            };
+            self.arch.roofs[index].pitches[e] = pitch;
+        }
+        let top = self.build_roof(&name)?;
+        Ok(format!(
+            "{selector} at {} degrees, {name} top at {}",
+            crate::parse::label(pitch),
             crate::parse::label(top)
         ))
     }

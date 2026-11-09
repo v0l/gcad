@@ -108,6 +108,14 @@ impl Model {
     }
 
     fn faces_span(&self, selector: &str) -> Result<Span> {
+        if let Some(edges) = self.roof_edge_selection(selector) {
+            let points = edges?
+                .into_iter()
+                .flat_map(|e| [e.a, e.b])
+                .map(|p| Point3::new(p[0], p[1], p[2]));
+            return Span::around(points)
+                .ok_or_else(|| anyhow::anyhow!("`{selector}` matched no edges"));
+        }
         if let Some(faces) = self.wall_faces(selector) {
             let points = faces?.into_iter().flat_map(|face| {
                 face.edge_iter()
