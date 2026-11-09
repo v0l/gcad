@@ -1,5 +1,6 @@
 mod datum;
 mod opening;
+mod roof;
 mod room;
 mod slab;
 mod stair;
@@ -122,6 +123,19 @@ pub struct Slab {
 }
 
 #[derive(Clone, Debug)]
+pub struct Roof {
+    pub name: String,
+    pub kind: String,
+    pub outline: Vec<gcad_mesh::arch::P2>,
+    pub overhang: f64,
+    pub pitch: f64,
+    pub base: f64,
+    pub ridge: gcad_mesh::arch::P2,
+    pub thickness: f64,
+    pub material: String,
+}
+
+#[derive(Clone, Debug)]
 pub struct Room {
     pub name: String,
     pub level: f64,
@@ -165,6 +179,7 @@ pub struct Arch {
     pub openings: Vec<Opening>,
     pub sweeps: Vec<Sweep>,
     pub slabs: Vec<Slab>,
+    pub roofs: Vec<Roof>,
     pub rooms: Vec<Room>,
     pub stairs: Vec<Stair>,
     pub built: Vec<Built>,

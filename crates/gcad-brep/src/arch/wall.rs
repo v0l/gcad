@@ -31,7 +31,7 @@ pub(crate) fn loft(bottom: &[Vec<Point3>], top: &[Vec<Point3>]) -> Result<Solid>
     Ok(crate::solids::oriented(solid))
 }
 
-fn planar_solid(polygons: &[Polygon]) -> Result<Solid> {
+pub(crate) fn planar_solid(polygons: &[Polygon]) -> Result<Solid> {
     let mut points: Vec<Point3> = Vec::new();
     let mut index: std::collections::HashMap<[i64; 3], usize> = Default::default();
     let mut vertex_of = |p: Point3| -> usize {
