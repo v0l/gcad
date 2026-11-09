@@ -563,9 +563,9 @@ Architecture stage B (gcad #349).
 | stair cut | supported | `stair_cut st1 s1 headroom=2000` | `arch::stair_cut_opens_the_slab` |
 | ramps | supported | `ramp from=x,y,z to=x,y,z slope=1:12 width=1200 landing=1500 every=10000` | `arch::ramp_slope_and_landings`, `arch::ramp_volume_and_export_are_steady` |
 | ladders | supported | `ladder x,y,z x,y,z width=400 rungs=@300` | `arch::ladder_rungs` |
-| railings | missing | `railing path x,y,z ... height=900 post=50@1500 baluster=12@120 top=round:40 material=steel` | `arch::railing_posts_and_balusters` |
-| railings along a stair or slab edge | missing | `railing along=st1.edge` | `arch::railing_along_a_stair` |
-| glass balustrades and handrails | missing | `railing ... glass=12 post=none`, `handrail path ... d=40 bracket=@1000` | `arch::glass_balustrade_and_handrail` |
+| railings | supported | `railing path x,y,z ... height=900 post=50@1500 baluster=12@120 top=round:40 material=steel` | `arch::railing_posts_and_balusters`, `arch::railing_export_is_the_same_every_run` |
+| railings along a stair or slab edge | supported | `railing along=st1.edge` | `arch::railing_along_a_stair` |
+| glass balustrades and handrails | supported | `railing ... glass=12 post=none`, `handrail path ... d=40 bracket=@1000` | `arch::glass_balustrade_and_handrail` |
 
 ## Building structure and facade
 

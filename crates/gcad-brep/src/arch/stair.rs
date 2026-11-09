@@ -5,7 +5,7 @@ use crate::Model;
 use crate::parse::{Line, eval, eval_point};
 use anyhow::{Context, Result, anyhow, bail};
 use gcad_mesh::arch::P2;
-use gcad_mesh::arch::layout::{add, left, scale};
+use gcad_mesh::arch::layout::{add, left, meet, scale};
 use gcad_mesh::arch::stair::{
     StairRule, Steps, check, flight_profile, hull, parse_rule, split_treads, steps,
     stringer_profile,
@@ -52,6 +52,43 @@ impl Flight {
         };
         loft(&ring(u0), &ring(u1))
     }
+}
+
+fn edge_of(steps: &Steps, flights: &[Flight], pieces: &[Piece], o: &Options) -> Vec<[f64; 3]> {
+    let width = o.width;
+    let inset = width.min(100.0) / 2.0;
+    let mut edge = Vec::new();
+    if flights.is_empty() {
+        return pieces
+            .iter()
+            .map(|p| {
+                let q = p.ring[0];
+                [q.0, q.1, p.top]
+            })
+            .collect();
+    }
+    let t = steps.tread;
+    for (i, f) in flights.iter().enumerate() {
+        let last = f.treads.saturating_sub(1) as f64 * t;
+        let (start, end) = (f.plan(0.0, inset), f.plan(last, inset));
+        let top = f.z0 + f.treads as f64 * steps.rise;
+        edge.push([start.0, start.1, f.z0 + steps.rise]);
+        edge.push([end.0, end.1, top]);
+        if let Some(next) = flights.get(i + 1) {
+            let to = next.plan(0.0, inset);
+            match meet(end, f.dir, to, next.dir) {
+                Some(m) => edge.push([m.0, m.1, top]),
+                None => {
+                    let depth = o.landing.unwrap_or(width) - inset;
+                    let a = add(end, scale(f.dir, t + depth));
+                    let b = add(to, scale(f.dir, depth));
+                    edge.push([a.0, a.1, top]);
+                    edge.push([b.0, b.1, top]);
+                }
+            }
+        }
+    }
+    edge
 }
 
 fn layout(o: &Options, steps: &Steps) -> Result<(Vec<Flight>, Vec<Piece>)> {
@@ -366,6 +403,7 @@ impl Model {
         let steps = steps(height, &o.rule, risers, o.tread).map_err(|e| anyhow!(e))?;
         check(&steps, &o.rule).map_err(|e| anyhow!(e))?;
         let (flights, pieces) = layout(&o, &steps)?;
+        let edge = edge_of(&steps, &flights, &pieces, &o);
         let stair = Stair {
             name: name.clone(),
             base: o.from,
@@ -373,6 +411,7 @@ impl Model {
             steps,
             flights,
             pieces,
+            edge,
         };
         if let Some(problem) = self.headroom_clash(&stair, o.headroom) {
             bail!("{problem}");

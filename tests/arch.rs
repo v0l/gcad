@@ -1085,7 +1085,6 @@ fn ramp_volume_and_export_are_steady() {
 }
 
 #[test]
-#[ignore = "missing: railings"]
 fn railing_posts_and_balusters() {
     let model = build(
         "rl1: railing path 0,0,0 3000,0,0 height=900 post=50@1500 baluster=12@120 top=round:40",
@@ -1097,7 +1096,6 @@ fn railing_posts_and_balusters() {
 }
 
 #[test]
-#[ignore = "missing: railings along a stair"]
 fn railing_along_a_stair() {
     let model = build(
         "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=0 width=1000 max_rise=180\nrl1: railing along=st1.edge height=900 post=50@1500",
@@ -1107,7 +1105,6 @@ fn railing_along_a_stair() {
 }
 
 #[test]
-#[ignore = "missing: glass balustrades and handrails"]
 fn glass_balustrade_and_handrail() {
     let model = build(
         "gb: railing path 0,0,0 3000,0,0 height=1100 glass=12 post=none\nhr: handrail path 0,100,0 3000,100,0 height=900 d=40 bracket=@1000",
@@ -1118,6 +1115,14 @@ fn glass_balustrade_and_handrail() {
         2.0e-2,
     );
     assert_eq!(count_of(&model, "hr.bracket"), 4);
+}
+
+#[test]
+fn railing_export_is_the_same_every_run() {
+    export_twice(
+        "railing_export_is_the_same_every_run",
+        "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=0 shape=L width=1000\nrl1: railing along=st1.edge height=900 post=50@1500 baluster=12@120\ngb: railing path 0,3000,0 3000,3000,0 3000,5000,0 height=1100 glass=12 post=none\nhr: handrail path 0,3100,0 3000,3100,0 height=900 d=40 bracket=@1000",
+    );
 }
 
 #[test]

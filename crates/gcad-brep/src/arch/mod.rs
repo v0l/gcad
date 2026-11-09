@@ -1,6 +1,7 @@
 mod access;
 mod datum;
 mod opening;
+mod railing;
 mod roof;
 mod room;
 mod slab;
@@ -170,6 +171,7 @@ pub struct Stair {
     pub steps: gcad_mesh::arch::Steps,
     pub flights: Vec<Flight>,
     pub pieces: Vec<Piece>,
+    pub edge: Vec<[f64; 3]>,
 }
 
 #[derive(Clone, Debug)]

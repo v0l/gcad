@@ -229,6 +229,45 @@ pub fn rung_count(length: f64, spacing: f64) -> usize {
     ((length / spacing - 1.0e-9).ceil() as usize).saturating_sub(1)
 }
 
+pub type P3 = [f64; 3];
+
+pub fn path_length(path: &[P3]) -> f64 {
+    path.windows(2).map(|w| span(w[0], w[1])).sum()
+}
+
+fn span(a: P3, b: P3) -> f64 {
+    ((b[0] - a[0]).powi(2) + (b[1] - a[1]).powi(2) + (b[2] - a[2]).powi(2)).sqrt()
+}
+
+pub fn point_along(path: &[P3], s: f64) -> P3 {
+    let mut left = s;
+    for w in path.windows(2) {
+        let l = span(w[0], w[1]);
+        if left <= l || std::ptr::eq(w, path.windows(2).last().unwrap_or(w)) {
+            let k = if l > 0.0 { (left / l).clamp(0.0, 1.0) } else { 0.0 };
+            return [0, 1, 2].map(|i| w[0][i] + (w[1][i] - w[0][i]) * k);
+        }
+        left -= l;
+    }
+    path[path.len() - 1]
+}
+
+pub fn post_stations(length: f64, spacing: f64) -> Vec<f64> {
+    let bays = ((length / spacing - 1.0e-9).ceil() as usize).max(1);
+    (0..=bays).map(|k| length * k as f64 / bays as f64).collect()
+}
+
+pub fn infill_stations(posts: &[f64], spacing: f64) -> Vec<f64> {
+    posts
+        .windows(2)
+        .flat_map(|w| {
+            let n = rung_count(w[1] - w[0], spacing);
+            let gap = (w[1] - w[0]) / (n + 1) as f64;
+            (1..=n).map(move |k| w[0] + gap * k as f64)
+        })
+        .collect()
+}
+
 pub fn parse_rule(text: &str) -> Result<f64, String> {
     let sum = text
         .strip_prefix("2R+T=")
@@ -380,6 +419,18 @@ mod tests {
     fn rungs_fill_between_the_ends() {
         assert_eq!(rung_count(3000.0, 300.0), 9);
         assert_eq!(rung_count(3100.0, 300.0), 10);
+    }
+
+    #[test]
+    fn posts_and_balusters_share_the_bays() {
+        let posts = post_stations(3000.0, 1500.0);
+        assert_eq!(posts, vec![0.0, 1500.0, 3000.0]);
+        assert_eq!(infill_stations(&posts, 120.0).len(), 24);
+        assert_eq!(post_stations(3100.0, 1500.0).len(), 4);
+        let path = [[0.0, 0.0, 0.0], [3.0, 4.0, 0.0], [3.0, 4.0, 10.0]];
+        assert_eq!(path_length(&path), 15.0);
+        assert_eq!(point_along(&path, 10.0), [3.0, 4.0, 5.0]);
+        assert_eq!(point_along(&path, 2.5), [1.5, 2.0, 0.0]);
     }
 
     #[test]
