@@ -929,7 +929,6 @@ fn chimney_export_is_the_same_every_run() {
 }
 
 #[test]
-#[ignore = "missing: gutters and downpipes"]
 fn gutter_and_downpipe() {
     let model = build(&with(
         "r1: roof outer type=gable pitch=45 overhang=300 thickness=200 ridge=x base=L1\ngu: gutter along=r1.eave.1 w=100 slope=0.005\ndp: downpipe from=gu.end d=68 to=L0",
@@ -938,16 +937,49 @@ fn gutter_and_downpipe() {
     near(hi[0] - lo[0], OUT_X + 600.0, 1.0e-3);
     let (lo, _) = body_bounds(&model, "dp");
     near(lo[2], 0.0, 1.0e-6);
+    near(
+        volume_of(&model, "gu"),
+        (OUT_X + 600.0) * 100.0 * 75.0,
+        1.0e-4,
+    );
+    let (_, hi) = body_bounds(&model, "dp");
+    near(hi[2], 2400.0 - 75.0 - (OUT_X + 600.0) * 0.005, 1.0e-6);
 }
 
 #[test]
-#[ignore = "missing: parapets"]
+fn gutter_export_is_the_same_every_run() {
+    export_twice(
+        "gutter_export_is_the_same_every_run",
+        &with(
+            "r1: roof outer type=gable pitch=45 overhang=300 thickness=200 ridge=x base=L1\ngu: gutter along=r1.eave.1 w=100 slope=0.005\ndp: downpipe from=gu.end d=68 to=L0",
+        ),
+    );
+}
+
+#[test]
 fn parapet_on_a_flat_roof() {
     let model = build(&with(
         "r1: roof outer type=flat thickness=200 base=L1\npa: parapet outer h=600 coping=50",
     ));
     let (_, hi) = body_bounds(&model, "pa");
     near(hi[2], 2700.0 + 600.0 + 50.0, 1.0e-6);
+    let a = model.named_body("r1").expect("r1");
+    let b = model.named_body("pa").expect("pa");
+    assert!(gcad::geometry::overlap_volume(&a, &b, 64) < 1.0e-3);
+    let inside = (OUT_X - 2.0 * T) * (OUT_Y - 2.0 * T);
+    near(volume_of(&model, "r1"), inside * 200.0, 1.0e-6);
+    let ring = OUT_X * OUT_Y - inside;
+    near(volume_of(&model, "pa"), ring * 650.0, 1.0e-6);
+}
+
+#[test]
+fn parapet_export_is_the_same_every_run() {
+    export_twice(
+        "parapet_export_is_the_same_every_run",
+        &with(
+            "r1: roof outer type=flat thickness=200 base=L1\npa: parapet outer h=600 coping=50 overhang=40",
+        ),
+    );
 }
 
 #[test]

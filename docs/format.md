@@ -301,6 +301,9 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `dormer` | `on= at=x,y w= type=gable front= pitch= material=` | a gable dormer standing on the roof plane under `at`: its front rises `front` above the roof top there (default 1200, less if the ridge would pass the main roof's), `w` wide inside plus the roof thickness, its roof running back until it meets the main roof |
 | `skylight` | `on= at=x,y w= h=` | an opening through the roof plane under `at`, `w` across and `h` up the slope, with a glass body flush with the roof top |
 | `chimney` | `x,y w= d=w up_to=roof over=900 base=0 material=brick` | a stack from `base` to `over` above the highest point of the roof's top over it, cut through the roof; without `up_to` it stops at `base + over` |
+| `gutter` | `along=r1.eave.N w=100 slope=0 material=pvc` | a gutter `w` wide and three quarters as deep hung outside the eave, its top on the roof's underside line there, falling `slope` toward the eave's end; its outlet is `name.end` |
+| `downpipe` | `from=gu.end d=68 to=L0 material=pvc` | a round pipe from the gutter's outlet down to `to` |
+| `parapet` | `wall h= coping=0 overhang=0 material= coping_material=limestone` | the wall carried on `h` above its top, capped by a `coping` (as its own `name.coping` body when it overhangs); a flat roof at the wall's top over its inside is refitted to the inside face |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.

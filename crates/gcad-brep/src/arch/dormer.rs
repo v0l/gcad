@@ -220,6 +220,231 @@ impl Model {
         ))
     }
 
+    pub(crate) fn op_gutter(&mut self, line: &Line) -> Result<String> {
+        let name = line.label.clone().ok_or_else(|| {
+            anyhow!("a gutter needs a label, like `gu: gutter along=r1.eave.1 w=100 slope=0.005`")
+        })?;
+        self.check_free_name(&name)?;
+        let mut along = None;
+        let mut material = "pvc".to_string();
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "along" => along = Some(text.clone()),
+                "w" | "slope" => {}
+                "material" => material = text.clone(),
+                other => bail!("`gutter` takes along=, w=, slope= and material=, not `{other}=`"),
+            }
+        }
+        let along =
+            along.ok_or_else(|| anyhow!("a gutter needs `along=`, an eave like `r1.eave.1`"))?;
+        let edges = self
+            .roof_edge_selection(&along)
+            .ok_or_else(|| anyhow!("`along={along}` is not a roof edge like `r1.eave.1`"))??;
+        let [edge] = edges.as_slice() else {
+            bail!("`along=` names one eave, like `r1.eave.1`");
+        };
+        if edge.kind != "eave" {
+            bail!(
+                "a gutter runs along an eave, and `{along}` is a {}",
+                edge.kind
+            );
+        }
+        let roof = self
+            .roof(along.split('.').next().expect("a name"))
+            .cloned()
+            .expect("a roof");
+        let w = self.number(line, "w")?.unwrap_or(100.0);
+        let slope = self.number(line, "slope")?.unwrap_or(0.0);
+        if !(w > 0.0) || !(0.0..0.1).contains(&slope) {
+            bail!("a gutter's w= must be above zero and its slope= between 0 and 0.1");
+        }
+        let e = edge.outline_edge.expect("an outline edge");
+        let eaves = roof.eaves();
+        let n = eaves.len();
+        let (a, b) = (eaves[e], eaves[(e + 1) % n]);
+        let dir = unit(sub(b, a));
+        let out = scale(left(dir), -1.0);
+        let z = roof
+            .planes()?
+            .iter()
+            .map(|p| p.at(a))
+            .fold(f64::INFINITY, f64::min);
+        let run = gcad_mesh::arch::layout::length(sub(b, a));
+        let fall = run * slope;
+        let at = |s: f64, d: f64, dz: f64| {
+            let p = add(add(a, scale(dir, s)), scale(out, d));
+            monstertruck::modeling::Point3::new(p.0, p.1, z + dz - fall * s / run)
+        };
+        let depth = w * 0.75;
+        let section = [(0.0, 0.0), (w, 0.0), (w, -depth), (0.0, -depth)];
+        let ring = |s: f64| -> Vec<monstertruck::modeling::Point3> {
+            section.iter().map(|&(d, dz)| at(s, d, dz)).collect()
+        };
+        let solid = super::wall::loft(&[ring(0.0)], &[ring(run)])?;
+        self.ensure_library()?;
+        self.put_body(name.clone(), solid, &material)?;
+        self.note_built(&name, &name);
+        let end = add(b, scale(out, w / 2.0));
+        self.scope.insert(format!("{name}.end.x"), end.0);
+        self.scope.insert(format!("{name}.end.y"), end.1);
+        self.scope.insert(format!("{name}.end.z"), z - depth - fall);
+        Ok(format!(
+            "gutter {name} along {along}: {} long, falls {} to its end",
+            crate::parse::label(run),
+            crate::parse::label(fall)
+        ))
+    }
+
+    pub(crate) fn op_downpipe(&mut self, line: &Line) -> Result<String> {
+        let name = line.label.clone().ok_or_else(|| {
+            anyhow!("a downpipe needs a label, like `dp: downpipe from=gu.end d=68 to=L0`")
+        })?;
+        self.check_free_name(&name)?;
+        let mut from = None;
+        let mut material = "pvc".to_string();
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "from" => from = Some(text.clone()),
+                "d" | "to" => {}
+                "material" => material = text.clone(),
+                other => bail!("`downpipe` takes from=, d=, to= and material=, not `{other}=`"),
+            }
+        }
+        let from = from.ok_or_else(|| anyhow!("a downpipe needs `from=`, like `from=gu.end`"))?;
+        let get = |axis: &str| self.scope.get(&format!("{from}.{axis}")).copied();
+        let (Some(x), Some(y), Some(top)) = (get("x"), get("y"), get("z")) else {
+            bail!("`from={from}` is not a gutter end like `gu.end`");
+        };
+        let d = self.number(line, "d")?.unwrap_or(68.0);
+        let bottom = self.number(line, "to")?.unwrap_or(0.0);
+        if !(d > 0.0) || bottom >= top {
+            bail!("a downpipe needs d= above zero and to= below the gutter");
+        }
+        let ring: Vec<P2> = (0..32)
+            .map(|k| {
+                let t = std::f64::consts::TAU * k as f64 / 32.0;
+                (x + d / 2.0 * t.cos(), y + d / 2.0 * t.sin())
+            })
+            .collect();
+        let solid = super::slab::prism(&ring, &[], bottom, top)?;
+        self.ensure_library()?;
+        self.put_body(name.clone(), solid, &material)?;
+        self.note_built(&name, &name);
+        Ok(format!(
+            "downpipe {name} from {from}: {} long",
+            crate::parse::label(top - bottom)
+        ))
+    }
+
+    pub(crate) fn op_parapet(&mut self, line: &Line) -> Result<String> {
+        let name = line.label.clone().ok_or_else(|| {
+            anyhow!("a parapet needs a label, like `pa: parapet outer h=600 coping=50`")
+        })?;
+        self.check_free_name(&name)?;
+        let [host] = line.positional.as_slice() else {
+            bail!("write `pa: parapet WALL h=600 coping=50`");
+        };
+        let mut material = None;
+        let mut coping_material = None;
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "h" | "coping" | "overhang" => {}
+                "material" => material = Some(text.clone()),
+                "coping_material" => coping_material = Some(text.clone()),
+                other => bail!(
+                    "`parapet` takes h=, coping=, overhang=, material= and coping_material=, not `{other}=`"
+                ),
+            }
+        }
+        let wall =
+            self.arch.wall(host).cloned().ok_or_else(|| {
+                anyhow!("a parapet stands on a wall, and there is no wall `{host}`")
+            })?;
+        let h = self
+            .number(line, "h")?
+            .ok_or_else(|| anyhow!("a parapet needs `h=`, its height"))?;
+        let coping = self.number(line, "coping")?.unwrap_or(0.0);
+        let overhang = self.number(line, "overhang")?.unwrap_or(0.0);
+        if !(h > 0.0) || coping < 0.0 || overhang < 0.0 {
+            bail!("a parapet's h= must be above zero and coping= and overhang= not below zero");
+        }
+        let top = wall.top;
+        let (lo, hi) = wall.outer_span();
+        let material = material.unwrap_or_else(|| {
+            let tier = wall.tiers.last().expect("a tier");
+            tier.layers
+                .iter()
+                .find(|l| l.material != "air")
+                .map(|l| l.material.clone())
+                .unwrap_or_else(|| "brick".into())
+        });
+        let band = |lo: f64, hi: f64| -> (Vec<P2>, Vec<Vec<P2>>) {
+            let (outer, hole) = wall.line.band(lo, hi, None, None, &[]);
+            let flat = |r: Vec<(P2, f64)>| r.into_iter().map(|(p, _)| p).collect::<Vec<P2>>();
+            (flat(outer), hole.map(flat).into_iter().collect())
+        };
+        let (outer, holes) = band(lo, hi);
+        self.ensure_library()?;
+        let inner = self.inner_ring(&wall).ok();
+        let over = |r: &super::Roof| {
+            let n = r.outline.len() as f64;
+            let c = r
+                .outline
+                .iter()
+                .fold((0.0, 0.0), |s, p| (s.0 + p.0 / n, s.1 + p.1 / n));
+            inner
+                .as_ref()
+                .is_some_and(|ring| gcad_mesh::arch::roof::inside(c, ring))
+        };
+        let flats: Vec<String> = self
+            .arch
+            .roofs
+            .iter()
+            .filter(|r| r.kind == "flat" && r.joins.is_none() && (r.base - top).abs() < 1.0e-6)
+            .filter(|r| over(r))
+            .map(|r| r.name.clone())
+            .collect();
+        if let Some(inner) = inner {
+            for roof in &flats {
+                let index = self
+                    .arch
+                    .roofs
+                    .iter()
+                    .position(|r| r.name == *roof)
+                    .expect("a roof");
+                let previous = self.arch.roofs[index].clone();
+                let slot = &mut self.arch.roofs[index];
+                slot.outline = gcad_mesh::arch::roof::ccw_ring(inner.clone());
+                slot.overhang = 0.0;
+                slot.pitches = vec![slot.pitch; slot.outline.len()];
+                if let Err(e) = self.build_roof(roof) {
+                    self.arch.roofs[index] = previous;
+                    return Err(e.context(format!("fitting `{roof}` inside `{name}`")));
+                }
+            }
+        }
+        let upstand = if overhang > 0.0 { h } else { h + coping };
+        let body = super::slab::prism(&outer, &holes, top, top + upstand)?;
+        self.put_body(name.clone(), body, &material)?;
+        self.note_built(&name, &name);
+        if coping > 0.0 && overhang > 0.0 {
+            let (outer, holes) = band(lo - overhang, hi + overhang);
+            let cap = super::slab::prism(&outer, &holes, top + h, top + h + coping)?;
+            let cap_name = format!("{name}.coping");
+            self.put_body(
+                cap_name.clone(),
+                cap,
+                coping_material.as_deref().unwrap_or("limestone"),
+            )?;
+            self.note_built(&name, &cap_name);
+        }
+        Ok(format!(
+            "parapet {name} on {host}: {} high, top at {}",
+            crate::parse::label(h + coping),
+            crate::parse::label(top + h + coping)
+        ))
+    }
+
     pub(crate) fn op_dormer(&mut self, line: &Line) -> Result<String> {
         let name = line.label.clone().ok_or_else(|| {
             anyhow!(
