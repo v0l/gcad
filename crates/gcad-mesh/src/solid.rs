@@ -430,6 +430,45 @@ fn runs(corners: &[Corner]) -> (Vec<Vec<usize>>, bool) {
     (runs, false)
 }
 
+#[derive(Clone, Debug)]
+pub struct Torus {
+    pub label: String,
+    pub frame: Frame,
+    pub centre: P2,
+    pub ring: f64,
+    pub tube: f64,
+    pub around: usize,
+    pub sides: usize,
+}
+
+pub fn torus_into(mesh: &mut Mesh, t: &Torus) {
+    let part = mesh.part_index(&t.label);
+    let (major, minor) = (t.ring / 2.0, t.tube / 2.0);
+    let base = mesh.positions.len() as u32;
+    for i in 0..t.around {
+        let a = std::f64::consts::TAU * i as f64 / t.around as f64;
+        for j in 0..t.sides {
+            let b = std::f64::consts::TAU * j as f64 / t.sides as f64;
+            let radius = major + minor * b.cos();
+            let flat = (
+                t.centre.0 + radius * a.cos(),
+                t.centre.1 + radius * a.sin(),
+            );
+            push(mesh, part, t.frame.at(flat, minor * b.sin()));
+        }
+    }
+    let at = |i: usize, j: usize| base + ((i % t.around) * t.sides + j % t.sides) as u32;
+    for i in 0..t.around {
+        for j in 0..t.sides {
+            quad(
+                mesh,
+                [at(i, j), at(i + 1, j), at(i + 1, j + 1), at(i, j + 1)],
+                false,
+            );
+        }
+    }
+}
+
 pub fn extrude_into(mesh: &mut Mesh, e: &Extrude) {
     emit(mesh, e, e.frame);
     for by in &e.copies {

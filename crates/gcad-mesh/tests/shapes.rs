@@ -105,3 +105,31 @@ fn low_poly_shells_keep_their_part_names_and_colours() {
         .collect();
     assert_eq!(names, ["a", "b"]);
 }
+
+#[test]
+fn a_torus_has_the_volume_of_a_ring_and_its_own_part() {
+    let source = "rim: torus 4 1 around=64 sides=32\n";
+    let v = volume(source);
+    let exact = 2.0 * std::f64::consts::PI.powi(2) * 2.0 * 0.25;
+    assert!((v - exact).abs() < exact * 0.02, "{v} vs {exact}");
+    assert_eq!(triangles(source), 64 * 32 * 2);
+    let model = build_with(source, &z_up()).expect("builds");
+    assert_eq!(model.bodies[0].parts[0].name, "rim");
+}
+
+#[test]
+fn a_torus_lies_in_its_plane_at_its_offset() {
+    let model = build_with("plane XY offset=3\ntorus 4 1 at=1,2\n", &z_up()).expect("builds");
+    let ps = &model.bodies[0].positions;
+    let lo = |k: usize| ps.iter().map(|p| p[k]).fold(f32::INFINITY, f32::min);
+    let hi = |k: usize| ps.iter().map(|p| p[k]).fold(f32::NEG_INFINITY, f32::max);
+    assert!((hi(2) - 3.5).abs() < 1.0e-5 && (lo(2) - 2.5).abs() < 1.0e-5);
+    assert!((hi(0) - 3.5).abs() < 1.0e-5 && (lo(0) + 1.5).abs() < 1.0e-5);
+    assert!((hi(1) - 4.5).abs() < 0.1 && (lo(1) + 0.5).abs() < 0.1);
+}
+
+#[test]
+fn a_torus_tube_must_be_thinner_than_its_ring() {
+    let err = build_with("torus 1 1\n", &z_up()).err().expect("refused");
+    assert!(err.to_string().contains("thinner"), "{err}");
+}

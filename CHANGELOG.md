@@ -7,6 +7,7 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- gcad-mesh `torus d tube at= around= sides=` makes a ring in the current plane (rims, tyres, handles) as its own part.
 - gcad-mesh runs `ngon`, `ellipse` and `extrude ... scale=` (frustums and cones) without the kernel, and `blob ... mode=shell segments=N` makes a low-poly UV ellipsoid shell (`N*N` triangles) for game props.
 - The plan for buildings: `docs/architecture.md` (levels, grids, layered walls, hosted doors and windows, slabs, roofs, stairs, rooms, schedules, plans, IFC, site checks, and the mesh subset for games) and the operations in `docs/ops.md` as `missing`, each with its test already written and ignored in `tests/arch.rs`.
 - `gcad2glb` is a library a game links to build `.gcad` and `.gasm` files at runtime: `gcad2glb::Assets::from_source` and `from_path` give bodies, parts, skins, clips, morph targets with per-clip weights, LODs and baked normal maps for mesh and solid files alike, plus `bounds`, `fit`, `to_glb` (the same bytes as `gcad export`) and a stable `cache_key`. The mesh-only build (`default-features = false`) adds about 1 MB to a game and builds for wasm32; `brep` adds solids and assemblies. The `gcad2glb` command is now a thin wrapper over it and also writes `.gasm` assemblies, one mesh per placed part. See `docs/gcad2glb.md`.

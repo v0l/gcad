@@ -2,12 +2,12 @@ use crate::args::{Args, label_of, positive};
 use crate::interp::Scene;
 use crate::mesh::Mesh;
 use crate::parse::{Line, Scope, eval_point};
-use crate::solid::{self, Extrude, Frame, P2};
+use crate::solid::{self, Extrude, Frame, P2, Torus};
 use anyhow::{Result, anyhow, bail};
 use std::sync::Arc;
 
 pub const OPS: &[&str] = &[
-    "plane", "rect", "circle", "ellipse", "ngon", "poly", "array", "extrude", "fillet", "repeat",
+    "plane", "rect", "circle", "ellipse", "ngon", "torus", "poly", "array", "extrude", "fillet", "repeat",
 ];
 
 pub struct Solids {
@@ -15,6 +15,7 @@ pub struct Solids {
     sketch: Vec<Vec<P2>>,
     last: Option<Vec<P2>>,
     extrudes: Vec<Extrude>,
+    tori: Vec<Torus>,
 }
 
 impl Default for Solids {
@@ -24,6 +25,7 @@ impl Default for Solids {
             sketch: Vec::new(),
             last: None,
             extrudes: Vec::new(),
+            tori: Vec::new(),
         }
     }
 }
@@ -31,6 +33,7 @@ impl Default for Solids {
 impl Solids {
     pub fn new_body(&mut self) {
         self.extrudes.clear();
+        self.tori.clear();
         self.sketch.clear();
         self.last = None;
     }
@@ -42,6 +45,7 @@ impl Solids {
             "circle" => self.circle(scope, line),
             "ellipse" => self.ellipse(scope, line),
             "ngon" => self.ngon(scope, line),
+            "torus" => self.torus(scene, scope, line),
             "poly" => self.poly(scope, line),
             "array" => self.array(scope, line),
             "extrude" => self.extrude(scene, scope, line),
@@ -117,6 +121,42 @@ impl Solids {
         Ok(())
     }
 
+    fn torus(&mut self, scene: &mut Scene, scope: &Scope, line: &Line) -> Result<()> {
+        let args = Args::new(line, &["d", "tube"], &["at", "around", "sides"], false)?;
+        let ring = positive(args.number("d", scope)?, "d")?;
+        let tube = positive(args.number("tube", scope)?, "tube")?;
+        if tube >= ring {
+            bail!("tube {tube} must be thinner than the ring diameter {ring}");
+        }
+        let whole = |name: &str, default: usize| -> Result<usize> {
+            match args.optional_number(name, scope)? {
+                None => Ok(default),
+                Some(n) if n >= 3.0 && n.fract() == 0.0 => Ok(n as usize),
+                Some(n) => bail!("{name} is a whole number of at least 3, got {n}"),
+            }
+        };
+        let around = whole("around", 24)?;
+        let sides = whole("sides", 8)?;
+        let centre = args.point("at", scope)?;
+        self.require_solid_body(scene)?;
+        let label = label_of(line);
+        if self.tori.iter().any(|t| t.label == label) || self.extrudes.iter().any(|e| e.label == label)
+        {
+            bail!("there is already a shape called `{label}`");
+        }
+        self.tori.push(Torus {
+            label,
+            frame: self.frame,
+            centre,
+            ring,
+            tube,
+            around,
+            sides,
+        });
+        self.publish(scene);
+        Ok(())
+    }
+
     fn poly(&mut self, scope: &Scope, line: &Line) -> Result<()> {
         if !line.named.is_empty() {
             bail!("gcad-mesh `poly` takes points only, without `r=` or `c=`");
@@ -176,7 +216,7 @@ impl Solids {
     }
 
     fn require_solid_body(&self, scene: &Scene) -> Result<()> {
-        if self.extrudes.is_empty() && scene.has_mesh() {
+        if self.extrudes.is_empty() && self.tori.is_empty() && scene.has_mesh() {
             bail!(
                 "`extrude` adds to a body of extrusions; this body already holds a sculpted mesh"
             );
@@ -287,6 +327,9 @@ impl Solids {
         let mut mesh = Mesh::default();
         for extrude in &self.extrudes {
             solid::extrude_into(&mut mesh, extrude);
+        }
+        for torus in &self.tori {
+            solid::torus_into(&mut mesh, torus);
         }
         scene.mesh_body.mesh = Some(Arc::new(mesh));
     }

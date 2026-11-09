@@ -320,6 +320,7 @@ the kernel build.
 | profile array | supported | `array count=4 step=180,0` | `solid_props::buildings_match_kernel`, `solid_silhouette::building_silhouettes_match_kernel` |
 | profile inside a profile is a hole | supported | `rect 40 40` then `circle 10` | `solid_props::profile_inside_another_is_a_hole`, `solid_props::arch_matches_kernel` |
 | mesh ellipse, ngon | supported | `ellipse 4 2`, `ngon 2 6 angle=30` | `shapes::an_ellipse_extrudes_to_its_area`, `shapes::an_ngon_extrudes_into_a_prism_of_that_many_sides` |
+| mesh torus | supported | `rim: torus 4 1 around=32 sides=12` | `shapes::a_torus_has_the_volume_of_a_ring_and_its_own_part`, `shapes::a_torus_lies_in_its_plane_at_its_offset`, `shapes::a_torus_tube_must_be_thinner_than_its_ring` |
 | mesh extrude to a frustum or cone | supported | `extrude 3 scale=0.5`, `extrude 3 scale=0` | `shapes::extrude_scale_makes_a_frustum_and_zero_makes_a_cone` |
 | low-poly shell | supported | `eye: blob 0,0,0 r=1,1,0.5 mode=shell segments=12` | `shapes::a_shell_blob_with_segments_is_a_low_poly_ellipsoid`, `shapes::segments_need_a_shell`, `shapes::low_poly_shells_keep_their_part_names_and_colours` |
 | mesh extrude | supported | `extrude 8`, `extrude -4` | `solid_props::train_matches_kernel`, `solid_props::road_matches_kernel`, `solid_silhouette::road_silhouette_matches_kernel` |
