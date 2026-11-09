@@ -1,0 +1,1 @@
+{"name":"codex","agent":"cli","command":["codex","exec","--full-auto","{prompt}"]}
