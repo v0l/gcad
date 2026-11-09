@@ -276,6 +276,9 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `slab_opening` | `slab points` | a hole through every layer of the slab, inside its edge |
 | `foundation` | `strip wall w= d=` \| `pad x,y w= l= d=`, `top=` `material=concrete` | a strip `w` wide centred under a closed wall loop, top at the wall's base; a pad `w` by `l` (`l` is `w` unless given) centred on the point, top at 0; both `d` deep |
 | `ground_slab` | `wall type=mat:t+mat:t` `top=` | a slab filling the inside faces of a closed wall loop, top on the wall's base unless `top=` |
+| `room` | `name at=x,y level=` | finds the rectangle of wall faces around the point on that level; a room that is not a rectangle of wall faces fails for now |
+| `ceiling` | `room= h= type=mat:t+mat:t` | layers filling the room, the bottom `h` above the room's level |
+| `floor_finish` | `room= type=mat:t+mat:t` | layers filling the room, the bottom on the room's level |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.

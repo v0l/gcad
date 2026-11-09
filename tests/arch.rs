@@ -684,7 +684,6 @@ fn slab_export_is_the_same_every_run() {
 }
 
 #[test]
-#[ignore = "missing: ceilings"]
 fn ceiling_in_a_room() {
     let model = build(&with(
         "room hall at=2000,3000\nc1: ceiling room=hall h=2400 type=gypsum:13",
@@ -696,12 +695,29 @@ fn ceiling_in_a_room() {
 }
 
 #[test]
-#[ignore = "missing: floor finishes"]
 fn floor_finish_in_a_room() {
     let model = build(&with(
         "room hall at=2000,3000\nf1: floor_finish room=hall type=oak:20",
     ));
     near(volume_of(&model, "f1"), 3650.0 * 5400.0 * 20.0, 1.0e-5);
+}
+
+#[test]
+fn room_that_is_not_a_rectangle_fails() {
+    let l_shape = "w: wall 0,0 4000,0 4000,3000 2000,3000 2000,1500 0,1500 closed type=int justify=centre top=L1\n";
+    assert!(failure(&datums(&format!("{l_shape}room r at=1000,700"))).contains("rectangle"));
+    assert!(failure(&datums("room r at=1000,700")).contains("no walls"));
+    assert!(failure(&with("c1: ceiling room=nope h=2400 type=gypsum:13")).contains("nope"));
+}
+
+#[test]
+fn ceiling_export_is_the_same_every_run() {
+    export_twice(
+        "ceiling_export_is_the_same_every_run",
+        &with(
+            "room hall at=2000,3000\nc1: ceiling room=hall h=2400 type=gypsum:13\nf1: floor_finish room=hall type=screed:50+oak:20",
+        ),
+    );
 }
 
 #[test]

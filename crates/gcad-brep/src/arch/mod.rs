@@ -1,5 +1,6 @@
 mod datum;
 mod opening;
+mod room;
 mod slab;
 mod wall;
 
@@ -119,6 +120,13 @@ pub struct Slab {
 }
 
 #[derive(Clone, Debug)]
+pub struct Room {
+    pub name: String,
+    pub level: f64,
+    pub rect: [f64; 4],
+}
+
+#[derive(Clone, Debug)]
 pub struct Built {
     pub owner: String,
     pub key: String,
@@ -138,6 +146,7 @@ pub struct Arch {
     pub openings: Vec<Opening>,
     pub sweeps: Vec<Sweep>,
     pub slabs: Vec<Slab>,
+    pub rooms: Vec<Room>,
     pub built: Vec<Built>,
 }
 

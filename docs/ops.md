@@ -533,8 +533,8 @@ Architecture stage B (gcad #349).
 | slabs and slab openings | supported | `s1: slab L1 A1 B1 B2 A2 type=concrete:200`, `slab_opening s1 x,y ...` | `arch::slab_with_an_opening`, `arch::slab_export_is_the_same_every_run` |
 | layered slabs | supported | `type=concrete:200+screed:50+tile:10`, top of the last layer on the level | `arch::layered_slab_is_its_layers` |
 | sloped slabs | supported | `slope=0.02 falls_to=x,y` | `arch::sloped_slab_falls_to_a_point` |
-| ceilings | missing | `c1: ceiling room=hall h=2400 type=gypsum:13` | `arch::ceiling_in_a_room` |
-| floor finishes | missing | `f1: floor_finish room=hall type=oak:20` | `arch::floor_finish_in_a_room` |
+| ceilings | supported | `c1: ceiling room=hall h=2400 type=gypsum:13` | `arch::ceiling_in_a_room`, `arch::room_that_is_not_a_rectangle_fails`, `arch::ceiling_export_is_the_same_every_run` |
+| floor finishes | supported | `f1: floor_finish room=hall type=oak:20` | `arch::floor_finish_in_a_room` |
 | foundations | supported | `foundation strip outer w=600 d=900`, `foundation pad x,y w= l= d=` | `arch::strip_and_pad_foundations`, `arch::foundation_export_is_the_same_every_run` |
 | ground slabs | supported | `ground_slab outer type=concrete:150+pir:100` | `arch::ground_slab_inside_the_walls` |
 | gable roofs | missing | `r1: roof outer type=gable pitch=45 overhang=450 thickness=200 ridge=x base=L1` | `arch::gable_roof_ridge_and_area` |

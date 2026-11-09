@@ -544,7 +544,7 @@ impl Model {
             .collect()
     }
 
-    fn end_cuts(&self, lines: &[WallLine], index: usize) -> (Option<Cut>, Option<Cut>) {
+    pub(crate) fn end_cuts(&self, lines: &[WallLine], index: usize) -> (Option<Cut>, Option<Cut>) {
         let forced: Vec<(usize, usize, Join)> = self
             .arch
             .joins
