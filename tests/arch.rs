@@ -1014,7 +1014,7 @@ fn stair_cut_opens_the_slab() {
 #[ignore = "missing: ramps"]
 fn ramp_slope_and_landings() {
     let text = summary(
-        "rp1: ramp from=0,0,0 to=12000,0,600 slope=1:20 width=1200 landing=1500 every=10000",
+        "rp1: ramp from=0,0,0 to=13500,0,600 slope=1:20 width=1200 landing=1500 every=10000",
     );
     assert!(text.contains("1 landing"), "{text}");
     assert!(failure("rp1: ramp from=0,0,0 to=6000,0,600 slope=1:20 width=1200").contains("1:10"));
