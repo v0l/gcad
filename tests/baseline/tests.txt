@@ -53,6 +53,7 @@ tests/shapes.rs shapes: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filter
 tests/simulation.rs simulation: ok. 105 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out
 tests/simulation.rs simulation: test result_goes_stale ... ok
 tests/sketch.rs sketch: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/skill_doc.rs skill_doc: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/skinning.rs skinning: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/solid_props.rs solid_props: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/solid_silhouette.rs solid_silhouette: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
