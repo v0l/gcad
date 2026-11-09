@@ -1,0 +1,30 @@
+units mm
+building "Example house" north=20 datum=0
+level L0 0 "Ground"
+level L1 2800 "First"
+level L2 5600 "Roof"
+grid A x=0
+grid B x=5000
+grid C x=10000
+grid 1 y=0
+grid 2 y=4000
+grid 3 y=8000
+wall_type ext brick:102 air:50 pir:100 block:100 plaster:13
+wall_type int plaster:13 block:100 plaster:13
+outer: wall A1 C1 C3 A3 closed type=ext base=L0 top=L1 justify=outside
+cross: wall A2 C2 type=int base=L0 top=L1
+split: wall B1 B2 type=int base=L0 top=L1
+hall: wall 6500,4000 6500,8000 type=int base=L0 top=L1
+wc: wall 6500,6000 C2+0,2000 type=int base=L0 top=L1
+D01: door on=outer at=7500 w=900 h=2100 swing=left mark=D01
+D02: door on=outer at=21000 w=900 h=2100 swing=right mark=D02
+D03: door on=cross at=2000 w=826 h=2040 mark=D03
+D04: door on=cross at=7500 w=826 h=2040 mark=D04
+D05: door on=split at=2000 w=826 h=2040 mark=D05
+D06: door on=wc at=1200 w=726 h=2040 mark=D06
+W01: window on=outer at=2500 w=1500 h=1200 sill=900 panes=2x1 mark=W01
+W02: window on=outer at=12000 w=1200 h=1200 sill=900 head=round mark=W02
+W03: window on=outer at=16000 w=1200 h=1200 sill=900 panes=2x1 mark=W03
+W04: window on=outer at=24500 w=1500 h=1200 sill=900 panes=2x1 mark=W04
+W05: window on=outer at=33000 w=600 h=900 sill=1200 mark=W05
+W06: window on=outer at=29000 w=1500 h=1200 sill=900 panes=3x1 mark=W06

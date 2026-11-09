@@ -7,6 +7,8 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Buildings, stage A (#348): `units`, `building`, `level` and `grid` datums usable as heights and points (`top=L1-300`, `A1+0,500`), `gridfile`, layered `wall_type`s and `wall`s (straight, polyline, closed, arc, from a profile, justified, offset, sloped, battered, with pilasters, stacked types) with one body per layer, automatic L and T joins and `wall_join`, `wall_sweep`, `wall_cut`, and hosted `opening`, `door`, `window` and `garage_door` that cut every layer, move with their wall and can come from a part file. Wall faces work as selectors. See `examples/architecture/house.gcad`.
+- The material library has `block`, `plaster` and `tile`; `air` in a wall type is a cavity with no body.
 - `gcad check-mesh file.gcad [--bound 0.03]` builds a file with the kernel and with gcad-mesh and reports each body's volume, bounding box and colour difference, failing above the bound.
 - The kernel runs `extrude d open=1` (a wall without caps, as its own body), `torus d tube at=` and `extrude d scale=0` (a cone), so files using them build the same through `gcad export` and the mesh-only path.
 

@@ -490,23 +490,23 @@ Architecture stage A (gcad #348). The design is in `docs/architecture.md`; the t
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| units and building header | missing | `units mm`, `building "Name" north=20 datum=0` | `arch::units_and_building_header` |
-| levels | missing | `level L1 2700 "First"`, then `base=L0 top=L1-300` anywhere a height goes | `arch::levels_are_heights` |
-| grids | missing | `grid A x=0`, `grid 1 y=0`, then `A1`, `A1+0,500` anywhere a point goes | `arch::grids_are_coordinates` |
-| grids from a file | missing | `gridfile grids.csv` | `arch::grids_from_a_file` |
-| layered wall types | missing | `wall_type ext brick:100 pir:100 block:100` (outside to inside, materials from the library), one body per layer `w1.brick` | `arch::wall_is_its_layers` |
-| straight walls | missing | `w1: wall x,y x,y type=ext base=L0 top=L1 justify=outside\|centre\|inside offset=-150` | `arch::wall_justification_and_offset` |
-| closed wall loops | missing | `wall A1 B1 B2 A2 closed type=ext` | `arch::closed_wall_loop` |
-| polyline and arc walls | missing | `wall x,y x,y x,y`, `wall arc x,y x,y x,y` | `arch::polyline_and_arc_walls` |
-| walls from a sketch | missing | `rect ...` then `wall profile type=` | `arch::wall_from_a_sketch_profile` |
-| sloped and battered walls | missing | `top_offset=0,600`, `batter=1` | `arch::sloped_and_battered_walls` |
-| pilasters | missing | `pilaster=300x200@2000` | `arch::wall_with_pilasters` |
-| automatic wall joins | missing | walls that meet join (L, T, cross) with no gap or overlap | `arch::tee_join_has_no_gap_or_overlap` |
-| wall join overrides | missing | `wall_join w1 w2 mitre\|butt\|tee` | `arch::wall_join_overrides` |
-| stacked walls | missing | `type=ext:0..900,int:900..L1` | `arch::stacked_wall` |
-| wall sweeps | missing | `wall_sweep w1.inside rect 15x100 at=0` (skirting, cornice, coping) | `arch::wall_sweep_runs_along_the_wall` |
-| wall cuts | missing | `wall_cut w1 rect 1000 500 at=2000,2450` | `arch::wall_cut_by_a_profile` |
-| wall faces as selectors | missing | `w1.outside`, `w1.inside`, `w1.top`, `w1.ends` | `arch::wall_faces_are_selectors` |
+| units and building header | supported | `units mm`, `building "Name" north=20 datum=0` | `arch::units_and_building_header` |
+| levels | supported | `level L1 2700 "First"`, then `base=L0 top=L1-300` anywhere a height goes | `arch::levels_are_heights` |
+| grids | supported | `grid A x=0`, `grid 1 y=0`, then `A1`, `A1+0,500` anywhere a point goes | `arch::grids_are_coordinates` |
+| grids from a file | supported | `gridfile grids.csv` | `arch::grids_from_a_file` |
+| layered wall types | supported | `wall_type ext brick:100 pir:100 block:100` (outside to inside, materials from the library), one body per layer `w1.brick` | `arch::wall_is_its_layers` |
+| straight walls | supported | `w1: wall x,y x,y type=ext base=L0 top=L1 justify=outside\|centre\|inside offset=-150` | `arch::wall_justification_and_offset` |
+| closed wall loops | supported | `wall A1 B1 B2 A2 closed type=ext` | `arch::closed_wall_loop` |
+| polyline and arc walls | supported | `wall x,y x,y x,y`, `wall arc x,y x,y x,y` | `arch::polyline_and_arc_walls` |
+| walls from a sketch | supported | `rect ...` then `wall profile type=` | `arch::wall_from_a_sketch_profile` |
+| sloped and battered walls | supported | `top_offset=0,600`, `batter=1` | `arch::sloped_and_battered_walls` |
+| pilasters | supported | `pilaster=300x200@2000` | `arch::wall_with_pilasters` |
+| automatic wall joins | supported | walls that meet join (L, T, cross) with no gap or overlap | `arch::tee_join_has_no_gap_or_overlap` |
+| wall join overrides | supported | `wall_join w1 w2 mitre\|butt\|tee` | `arch::wall_join_overrides` |
+| stacked walls | supported | `type=ext:0..900,int:900..L1` | `arch::stacked_wall` |
+| wall sweeps | supported | `wall_sweep w1.inside rect 15x100 at=0` (skirting, cornice, coping) | `arch::wall_sweep_runs_along_the_wall` |
+| wall cuts | supported | `wall_cut w1 rect 1000 500 at=2000,2450` | `arch::wall_cut_by_a_profile` |
+| wall faces as selectors | supported | `w1.outside`, `w1.inside`, `w1.top`, `w1.ends` | `arch::wall_faces_are_selectors` |
 
 ## Doors and windows
 
@@ -514,15 +514,15 @@ Architecture stage A (gcad #348). An opening is hosted by a wall: placed by `at=
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| hosted openings | missing | `o1: opening on=w1 at=1200 w=900 h=2100 sill=0` | `arch::opening_cuts_every_layer` |
-| openings move with their wall | missing | move the wall's points and the opening follows | `arch::moving_a_wall_moves_its_openings` |
-| opening checks | missing | an opening past the wall's end or top, or over another, fails | `arch::openings_that_leave_the_wall_or_overlap_fail` |
-| doors | missing | `d1: door on=w1 at=1200 w=900 h=2100 hinge=left in\|out frame=70x45 leaf=44 threshold=0 mark=D01`, bodies `d1.frame`, `d1.leaf` | `arch::door_has_frame_leaf_and_mark` |
-| door swings | missing | `swing=left\|right\|double\|slide\|fold` | `arch::door_swings` |
-| windows | missing | `win1: window on=w1 at=3000 w=1200 h=1200 sill=900 panes=2x1 frame=60 mullion=40 glazing=double\|triple mark=W01`, glass as its own bodies | `arch::window_panes_and_glass` |
-| window heads | missing | `head=flat\|arch\|segment\|round` | `arch::window_head_shapes` |
-| garage doors | missing | `garage_door on=w1 at= w= h= panels=4` | `arch::garage_door` |
-| library openings as parts | missing | `door on=w1 ... part=flush.gcad`, the file's `w`, `h` set from the line | `arch::door_from_a_part_file` |
+| hosted openings | supported | `o1: opening on=w1 at=1200 w=900 h=2100 sill=0` | `arch::opening_cuts_every_layer` |
+| openings move with their wall | supported | move the wall's points and the opening follows | `arch::moving_a_wall_moves_its_openings` |
+| opening checks | supported | an opening past the wall's end or top, or over another, fails | `arch::openings_that_leave_the_wall_or_overlap_fail` |
+| doors | supported | `d1: door on=w1 at=1200 w=900 h=2100 hinge=left in\|out frame=70x45 leaf=44 threshold=0 mark=D01`, bodies `d1.frame`, `d1.leaf` | `arch::door_has_frame_leaf_and_mark` |
+| door swings | supported | `swing=left\|right\|double\|slide\|fold` | `arch::door_swings` |
+| windows | supported | `win1: window on=w1 at=3000 w=1200 h=1200 sill=900 panes=2x1 frame=60 mullion=40 glazing=double\|triple mark=W01`, glass as its own bodies | `arch::window_panes_and_glass` |
+| window heads | supported | `head=flat\|arch\|segment\|round` | `arch::window_head_shapes` |
+| garage doors | supported | `garage_door on=w1 at= w= h= panels=4` | `arch::garage_door` |
+| library openings as parts | supported | `door on=w1 ... part=flush.gcad`, the file's `w`, `h` set from the line | `arch::door_from_a_part_file` |
 
 ## Floors and roofs
 

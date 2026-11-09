@@ -254,6 +254,28 @@ Profiles drawn inside another profile in the same sketch become holes in it.
 A sketch for `sweep` is drawn around the workplane origin; `sweep` moves it to the first
 path point (or the start of the helix) and turns it to face along the path.
 
+Buildings (the model is in [architecture.md](architecture.md)):
+
+| operation | parameters | does |
+|---|---|---|
+| `units` | `mm` | says lengths are millimetres; nothing else is accepted yet |
+| `building` | `"Name"` `north=` `datum=` | names the building; `north` is degrees from +y to true north counterclockwise, `datum` the height of z=0 on the site |
+| `level` | `name height "title"` | a named height; the name is a number from then on, so `top=L1-300` works |
+| `grid` | `name x=\|y=` | a grid line; each crossing of an x and a y line is a point, `A1`, and `A1+0,500` offsets it |
+| `gridfile` | `file.csv` | grid lines from `name,axis,offset` rows |
+| `wall_type` | `name material:thickness ...` | layers outside to inside; `air` is a cavity with no body |
+| `wall` | `points` `closed` \| `arc a b c` \| `profile`, `type=` `base=` `top=` `justify=outside\|centre\|inside` `offset=` `top_offset=a,b` `batter=` `pilaster=WxD@at` | one body per layer, named `wall.material` (`.2` for a repeat); the outside is on the right walking from point to point; `type=ext:0..900,int:900..L1` stacks types; ends that meet another wall mitre at an L and stop at the other wall's face at a T |
+| `wall_join` | `a b mitre\|butt\|tee` | sets how two walls meet; with `butt` the first runs through |
+| `wall_sweep` | `wall.inside\|outside\|top rect WxH` `at=` `material=` | a skirting, cornice or coping along the wall |
+| `wall_cut` | `wall profile ...` | cuts a profile through every layer; x along the wall from its first point, y up from its base |
+| `opening` | `on= at= w= h= sill= head=flat\|arch\|segment\|round` | a hole through every layer, centred `at` along the wall; it moves with the wall and fails if it leaves the wall or overlaps another |
+| `door` | `on= at= w= h= swing=left\|right\|double\|slide\|fold in\|out frame=70x45 leaf=44 threshold= mark= part=file.gcad` | an opening with `name.frame` and `name.leaf` (`name.leaf.2`...) bodies; `part=` builds it from a file with `w`, `h` and the line's other values set |
+| `window` | `on= at= w= h= sill=900 panes=CxR frame=60 mullion=40 glazing=single\|double\|triple head= mark=` | an opening with `name.frame`, `name.glass.N` and `name.mullion` bodies; glass is its own see-through body |
+| `garage_door` | `on= at= w= h= panels=4` | an opening with `name.panel.N` bodies |
+
+Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
+`w1.ends`, and per layer `w1.brick.outside`.
+
 
 ## Material libraries
 

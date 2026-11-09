@@ -199,7 +199,6 @@ fn datums(extra: &str) -> String {
 }
 
 #[test]
-#[ignore = "missing: units and building header"]
 fn units_and_building_header() {
     let text = summary("units mm\nbuilding \"Test house\" north=20 datum=150");
     assert!(text.contains("Test house"), "{text}");
@@ -209,7 +208,6 @@ fn units_and_building_header() {
 }
 
 #[test]
-#[ignore = "missing: levels"]
 fn levels_are_heights() {
     let model = build(&datums("w1: wall 0,0 4000,0 type=int base=L0 top=L1"));
     assert_bounds(&model, [0.0, -50.0, 0.0], [4000.0, 50.0, 2700.0]);
@@ -222,7 +220,6 @@ fn levels_are_heights() {
 }
 
 #[test]
-#[ignore = "missing: grids"]
 fn grids_are_coordinates() {
     let model = build(&datums("w1: wall A1 B1 type=int base=L0 top=L1"));
     assert_bounds(&model, [0.0, -50.0, 0.0], [4000.0, 50.0, 2700.0]);
@@ -234,7 +231,6 @@ fn grids_are_coordinates() {
 }
 
 #[test]
-#[ignore = "missing: grid file"]
 fn grids_from_a_file() {
     let dir = house_files(
         "grids_from_a_file",
@@ -252,7 +248,6 @@ fn grids_from_a_file() {
 }
 
 #[test]
-#[ignore = "missing: layered wall types"]
 fn wall_is_its_layers() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=ext base=L0 top=L1 justify=outside",
@@ -275,7 +270,6 @@ fn wall_is_its_layers() {
 }
 
 #[test]
-#[ignore = "missing: wall justification and offset"]
 fn wall_justification_and_offset() {
     let line = |j: &str| build(&datums(&format!("w1: wall 0,0 4000,0 type=ext top=L1 {j}")));
     assert_bounds(
@@ -302,7 +296,6 @@ fn wall_justification_and_offset() {
 }
 
 #[test]
-#[ignore = "missing: closed wall loops with mitred corners"]
 fn closed_wall_loop() {
     let model = build(&building());
     let ring = OUT_X * OUT_Y - (OUT_X - 2.0 * T) * (OUT_Y - 2.0 * T);
@@ -323,7 +316,6 @@ fn closed_wall_loop() {
 }
 
 #[test]
-#[ignore = "missing: polyline and arc walls"]
 fn polyline_and_arc_walls() {
     let l = build(&datums(
         "w1: wall 0,0 4000,0 4000,3000 type=int top=L1 justify=centre",
@@ -338,7 +330,6 @@ fn polyline_and_arc_walls() {
 }
 
 #[test]
-#[ignore = "missing: walls from a sketch profile"]
 fn wall_from_a_sketch_profile() {
     let model = build(&datums(
         "rect 4000 3000 at=2000,1500\nw3: wall profile type=int top=L1 justify=outside",
@@ -348,7 +339,6 @@ fn wall_from_a_sketch_profile() {
 }
 
 #[test]
-#[ignore = "missing: sloped and battered walls"]
 fn sloped_and_battered_walls() {
     let sloped = build(&datums(
         "w1: wall 0,0 4000,0 type=int top=L1 top_offset=0,600 justify=centre",
@@ -367,7 +357,6 @@ fn sloped_and_battered_walls() {
 }
 
 #[test]
-#[ignore = "missing: pilasters"]
 fn wall_with_pilasters() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=int top=L1 justify=centre pilaster=300x200@2000",
@@ -380,7 +369,6 @@ fn wall_with_pilasters() {
 }
 
 #[test]
-#[ignore = "missing: automatic wall joins"]
 fn tee_join_has_no_gap_or_overlap() {
     let model = build(&building());
     near(
@@ -396,7 +384,6 @@ fn tee_join_has_no_gap_or_overlap() {
 }
 
 #[test]
-#[ignore = "missing: wall join overrides"]
 fn wall_join_overrides() {
     let corner = |how: &str| {
         build(&datums(&format!(
@@ -423,7 +410,6 @@ fn wall_join_overrides() {
 }
 
 #[test]
-#[ignore = "missing: stacked walls"]
 fn stacked_wall() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=ext:0..900,int:900..L1 top=L1 justify=inside",
@@ -436,7 +422,6 @@ fn stacked_wall() {
 }
 
 #[test]
-#[ignore = "missing: wall sweeps"]
 fn wall_sweep_runs_along_the_wall() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=int top=L1 justify=centre\nskirt: wall_sweep w1.inside rect 15x100 at=0",
@@ -445,7 +430,6 @@ fn wall_sweep_runs_along_the_wall() {
 }
 
 #[test]
-#[ignore = "missing: wall cuts"]
 fn wall_cut_by_a_profile() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=int top=L1 justify=centre\nwall_cut w1 rect 1000 500 at=2000,2450",
@@ -458,7 +442,6 @@ fn wall_cut_by_a_profile() {
 }
 
 #[test]
-#[ignore = "missing: wall faces as selectors"]
 fn wall_faces_are_selectors() {
     let text = summary(&datums(
         "w1: wall 0,0 4000,0 type=ext top=L1 justify=outside\nmeasure w1.outside w1.inside",
@@ -471,7 +454,6 @@ fn wall_faces_are_selectors() {
 }
 
 #[test]
-#[ignore = "missing: hosted openings"]
 fn opening_cuts_every_layer() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=ext top=L1 justify=outside\no1: opening on=w1 at=1200 w=900 h=2100 sill=0",
@@ -486,7 +468,6 @@ fn opening_cuts_every_layer() {
 }
 
 #[test]
-#[ignore = "missing: openings move with their wall"]
 fn moving_a_wall_moves_its_openings() {
     let at = |y: f64| {
         build(&datums(&format!(
@@ -500,7 +481,6 @@ fn moving_a_wall_moves_its_openings() {
 }
 
 #[test]
-#[ignore = "missing: opening checks"]
 fn openings_that_leave_the_wall_or_overlap_fail() {
     let wall = "w1: wall 0,0 4000,0 type=ext top=L1 justify=outside\n";
     assert!(
@@ -525,7 +505,6 @@ fn openings_that_leave_the_wall_or_overlap_fail() {
 }
 
 #[test]
-#[ignore = "missing: doors"]
 fn door_has_frame_leaf_and_mark() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=ext top=L1 justify=outside\nd1: door on=w1 at=1200 w=900 h=2100 swing=left hinge=left in frame=70x45 leaf=44 mark=D01",
@@ -541,7 +520,6 @@ fn door_has_frame_leaf_and_mark() {
 }
 
 #[test]
-#[ignore = "missing: door swings"]
 fn door_swings() {
     for swing in ["left", "right", "double", "slide", "fold"] {
         let model = build(&datums(&format!(
@@ -564,7 +542,6 @@ fn door_swings() {
 }
 
 #[test]
-#[ignore = "missing: windows"]
 fn window_panes_and_glass() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=ext top=L1 justify=outside\nwin1: window on=w1 at=2000 w=1200 h=1200 sill=900 panes=2x1 frame=60 mullion=40 glazing=double mark=W01",
@@ -581,7 +558,6 @@ fn window_panes_and_glass() {
 }
 
 #[test]
-#[ignore = "missing: window heads"]
 fn window_head_shapes() {
     let area = |head: &str| {
         let model = build(&datums(&format!(
@@ -595,7 +571,6 @@ fn window_head_shapes() {
 }
 
 #[test]
-#[ignore = "missing: garage doors"]
 fn garage_door() {
     let model = build(&datums(
         "w1: wall 0,0 4000,0 type=ext top=L1 justify=outside\ng1: garage_door on=w1 at=2000 w=2400 h=2100 panels=4",
@@ -609,7 +584,6 @@ fn garage_door() {
 }
 
 #[test]
-#[ignore = "missing: library openings as parts"]
 fn door_from_a_part_file() {
     let dir = house_files(
         "door_from_a_part_file",
