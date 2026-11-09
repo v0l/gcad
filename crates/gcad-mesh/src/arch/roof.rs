@@ -390,6 +390,310 @@ pub fn column_shell(
     Ok(shell)
 }
 
+pub fn extruded_profile(top: &[P2], thickness: f64) -> Result<Vec<P2>, String> {
+    let mut chain = top.to_vec();
+    if chain.len() < 2 {
+        return Err("a roof profile needs two or more points along its top".into());
+    }
+    if chain[0].0 > chain[chain.len() - 1].0 {
+        chain.reverse();
+    }
+    let m = chain.len();
+    let line = |k: usize| {
+        let d = unit(sub(chain[k + 1], chain[k]));
+        (add(chain[k], scale(left(d), -thickness)), d)
+    };
+    let plumb = (0.0, 1.0);
+    let under: Vec<P2> = (0..m)
+        .map(|k| {
+            let (p, d) = line(k.min(m - 2));
+            if k == 0 || k == m - 1 {
+                meet(p, d, chain[k], plumb).unwrap_or(p)
+            } else {
+                let (q, e) = line(k - 1);
+                meet(q, e, p, d).unwrap_or(p)
+            }
+        })
+        .collect();
+    let mut out = chain;
+    out.extend(under.into_iter().rev());
+    if signed_area(&out).abs() < 1.0e-6 {
+        return Err("the roof profile has no area".into());
+    }
+    Ok(ccw_ring(out))
+}
+
+pub fn convex_hull(points: &[P2]) -> Vec<P2> {
+    let mut pts = points.to_vec();
+    pts.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    pts.dedup_by(|a, b| length(sub(*a, *b)) <= WELD);
+    if pts.len() < 3 {
+        return pts;
+    }
+    let mut hull: Vec<P2> = Vec::new();
+    for pass in 0..2 {
+        let start = hull.len();
+        let order: Vec<P2> = if pass == 0 {
+            pts.clone()
+        } else {
+            pts.iter().rev().copied().collect()
+        };
+        for p in order {
+            while hull.len() >= start + 2 {
+                let (a, b) = (hull[hull.len() - 2], hull[hull.len() - 1]);
+                if cross(sub(b, a), sub(p, b)) <= 1.0e-9 {
+                    hull.pop();
+                } else {
+                    break;
+                }
+            }
+            hull.push(p);
+        }
+        hull.pop();
+    }
+    hull
+}
+
+pub fn switch_lines(sets: &[&[Plane]]) -> Vec<Plane> {
+    let all: Vec<Plane> = sets.iter().flat_map(|s| s.iter().copied()).collect();
+    let mut out = Vec::new();
+    for i in 0..all.len() {
+        for j in i + 1..all.len() {
+            let g = sub(all[i].g, all[j].g);
+            if length(g) > 1.0e-12 {
+                out.push(Plane {
+                    c: all[i].c - all[j].c,
+                    g,
+                });
+            }
+        }
+    }
+    out
+}
+
+pub fn edge_lines(ring: &[P2]) -> Vec<Plane> {
+    let n = ring.len();
+    (0..n)
+        .map(|i| {
+            let (a, b) = (ring[i], ring[(i + 1) % n]);
+            let g = left(unit(sub(b, a)));
+            Plane { c: -dot(g, a), g }
+        })
+        .collect()
+}
+
+pub fn between_shell(
+    region: &[P2],
+    lines: &[Plane],
+    surfaces: &dyn Fn(P2) -> Option<(Plane, Plane)>,
+    seed: Option<&[P2]>,
+) -> Result<Shell, String> {
+    let region = ccw_ring(region.to_vec());
+    if !is_convex(&region) {
+        return Err("the region under a roof is not convex".into());
+    }
+    let mut pieces = vec![region];
+    for line in lines {
+        let f = |p: P2| line.at(p);
+        let mut next = Vec::new();
+        for piece in &pieces {
+            for part in [clip(piece, f), clip(piece, |p| -f(p))] {
+                if part.len() >= 3 && signed_area(&part).abs() > 1.0e-6 {
+                    next.push(part);
+                }
+            }
+        }
+        pieces = next;
+    }
+    let mut kept: Vec<(Vec<P2>, Plane, Plane)> = Vec::new();
+    for piece in pieces {
+        let n = piece.len() as f64;
+        let c = piece
+            .iter()
+            .fold((0.0, 0.0), |s, p| (s.0 + p.0 / n, s.1 + p.1 / n));
+        if let Some((lower, upper)) = surfaces(c)
+            && upper.at(c) - lower.at(c) > 1.0e-9
+        {
+            kept.push((piece, lower, upper));
+        }
+    }
+    if kept.is_empty() {
+        return Err("nothing is left between the two surfaces".into());
+    }
+    if let Some(seed) = seed {
+        kept = connected_to(kept, seed);
+    }
+    let mut polygons: Vec<Vec<P3>> = Vec::new();
+    for (piece, lower, upper) in &kept {
+        polygons.push(
+            piece
+                .iter()
+                .rev()
+                .map(|&p| [p.0, p.1, lower.at(p)])
+                .collect(),
+        );
+        polygons.push(piece.iter().map(|&p| [p.0, p.1, upper.at(p)]).collect());
+    }
+    for (k, (piece, lower, upper)) in kept.iter().enumerate() {
+        let m = piece.len();
+        for e in 0..m {
+            let (a, b) = (piece[e], piece[(e + 1) % m]);
+            let other = kept.iter().enumerate().find(|(j, (other, _, _))| {
+                *j != k
+                    && (0..other.len())
+                        .any(|f| same_segment((other[f], other[(f + 1) % other.len()]), a, b))
+            });
+            let span = |p: P2| (lower.at(p), upper.at(p));
+            let parts: Vec<[(f64, f64); 2]> = match other {
+                None => vec![[span(a), span(b)]],
+                Some((_, (_, olo, oup))) => {
+                    let below = |p: P2| (lower.at(p), upper.at(p).min(olo.at(p)));
+                    let above = |p: P2| (lower.at(p).max(oup.at(p)), upper.at(p));
+                    vec![[below(a), below(b)], [above(a), above(b)]]
+                }
+            };
+            for [(a0, a1), (b0, b1)] in parts {
+                if a1 - a0 <= WELD && b1 - b0 <= WELD {
+                    continue;
+                }
+                let (a1, b1) = (a1.max(a0), b1.max(b0));
+                polygons.push(vec![
+                    [a.0, a.1, a0],
+                    [b.0, b.1, b0],
+                    [b.0, b.1, b1],
+                    [a.0, a.1, a1],
+                ]);
+            }
+        }
+    }
+    let shell = Shell::from_polygons(polygons);
+    if !shell.is_closed() {
+        return Err("the joined roof does not close into a solid".into());
+    }
+    Ok(shell)
+}
+
+pub fn lowest(planes: &[Plane], p: P2) -> Plane {
+    *planes
+        .iter()
+        .min_by(|a, b| a.at(p).total_cmp(&b.at(p)))
+        .expect("a plane")
+}
+
+pub fn joined_shell(
+    own: (&[P2], &[Plane], P2),
+    host: (&[P2], &[Plane]),
+    thickness: f64,
+) -> Result<Shell, String> {
+    let (eaves, planes, ridge) = own;
+    let (host_eaves, host_planes) = host;
+    let centre = |ring: &[P2]| {
+        let n = ring.len() as f64;
+        ring.iter()
+            .fold((0.0, 0.0), |s, p| (s.0 + p.0 / n, s.1 + p.1 / n))
+    };
+    let r = unit(ridge);
+    let toward = dot(sub(centre(host_eaves), centre(eaves)), r);
+    if toward.abs() < 1.0e-9 {
+        return Err("the roof's ridge does not run toward the roof it joins".into());
+    }
+    let d = scale(r, toward.signum());
+    let reach = host_eaves
+        .iter()
+        .map(|&p| dot(sub(p, centre(eaves)), d))
+        .fold(f64::NEG_INFINITY, f64::max);
+    let mut points = eaves.to_vec();
+    points.extend(eaves.iter().map(|&p| add(p, scale(d, reach))));
+    let region = convex_hull(&points);
+    let under: Vec<Plane> = planes
+        .iter()
+        .copied()
+        .filter(|p| length(p.g) < 1.0e-12 || dot(unit(p.g), d) > -0.5)
+        .collect();
+    if under.is_empty() {
+        return Err("the roof has no planes left to carry into the join".into());
+    }
+    let over: Vec<Plane> = under.iter().map(|p| p.lifted(thickness)).collect();
+    let host_top: Vec<Plane> = host_planes.iter().map(|p| p.lifted(thickness)).collect();
+    let host_ring = ccw_ring(host_eaves.to_vec());
+    let mut lines = switch_lines(&[&under, &host_top]);
+    lines.extend(switch_lines(&[&over, &host_top]));
+    lines.extend(switch_lines(&[&under]));
+    lines.extend(switch_lines(&[&over]));
+    lines.extend(edge_lines(&host_ring));
+    lines.extend(edge_lines(&ccw_ring(eaves.to_vec())));
+    let own_ring = ccw_ring(eaves.to_vec());
+    let surfaces = |c: P2| {
+        let on_host = inside(c, &host_ring);
+        if !on_host && !inside(c, &own_ring) {
+            return None;
+        }
+        let bottom = lowest(&under, c);
+        let top = lowest(&over, c);
+        let lower = if on_host {
+            let t = lowest(&host_top, c);
+            if t.at(c) > bottom.at(c) { t } else { bottom }
+        } else {
+            bottom
+        };
+        Some((lower, top))
+    };
+    between_shell(&region, &lines, &surfaces, Some(&own_ring))
+}
+
+fn centre_of(ring: &[P2]) -> P2 {
+    let n = ring.len() as f64;
+    ring.iter()
+        .fold((0.0, 0.0), |s, p| (s.0 + p.0 / n, s.1 + p.1 / n))
+}
+
+fn touches(a: &[P2], b: &[P2]) -> bool {
+    (0..a.len()).any(|i| {
+        let (p, q) = (a[i], a[(i + 1) % a.len()]);
+        (0..b.len()).any(|j| same_segment((b[j], b[(j + 1) % b.len()]), p, q))
+    })
+}
+
+fn connected_to(kept: Vec<(Vec<P2>, Plane, Plane)>, seed: &[P2]) -> Vec<(Vec<P2>, Plane, Plane)> {
+    let mut reached: Vec<bool> = kept
+        .iter()
+        .map(|(piece, _, _)| inside(centre_of(piece), seed))
+        .collect();
+    loop {
+        let mut grew = false;
+        for i in 0..kept.len() {
+            if reached[i] {
+                continue;
+            }
+            if (0..kept.len()).any(|j| reached[j] && touches(&kept[i].0, &kept[j].0)) {
+                reached[i] = true;
+                grew = true;
+            }
+        }
+        if !grew {
+            break;
+        }
+    }
+    kept.into_iter()
+        .zip(reached)
+        .filter_map(|(k, r)| r.then_some(k))
+        .collect()
+}
+
+pub fn inside(point: P2, polygon: &[P2]) -> bool {
+    let n = polygon.len();
+    let mut result = false;
+    for i in 0..n {
+        let (a, b) = (polygon[i], polygon[(i + 1) % n]);
+        if (a.1 > point.1) != (b.1 > point.1)
+            && point.0 < (b.0 - a.0) * (point.1 - a.1) / (b.1 - a.1) + a.0
+        {
+            result = !result;
+        }
+    }
+    result
+}
+
 pub fn eaves_along(footprint: &[P2], ridge: P2) -> Vec<bool> {
     let n = footprint.len();
     let r = unit(ridge);
@@ -756,6 +1060,60 @@ mod tests {
         ];
         let lifted = column_shell(&[low], 0.0, 9000.0, &planes).unwrap();
         assert!((lifted.volume() - 100.0 * 100.0 * 9000.0).abs() < 1.0e-3);
+    }
+
+    #[test]
+    fn a_joined_gable_sits_on_the_main_roof() {
+        let main = rect(8000.0, 6000.0);
+        let main_planes = roof_planes("gable", &main, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let wing = vec![
+            (3000.0, 6000.0),
+            (5000.0, 6000.0),
+            (5000.0, 8000.0),
+            (3000.0, 8000.0),
+        ];
+        let wing_planes = roof_planes("gable", &wing, 2700.0, &[45.0; 4], (0.0, 1.0)).unwrap();
+        let alone = roof_shell(&wing, &wing_planes, 200.0).unwrap().volume();
+        let joined = joined_shell(
+            (&wing, &wing_planes, (0.0, 1.0)),
+            (&main, &main_planes),
+            200.0,
+        )
+        .unwrap();
+        assert!(joined.is_closed());
+        let host_top: Vec<Plane> = main_planes.iter().map(|p| p.lifted(200.0)).collect();
+        let wing_top: Vec<Plane> = wing_planes.iter().map(|p| p.lifted(200.0)).collect();
+        let mut extra = 0.0;
+        let steps = 400;
+        let (dx, dy) = (2000.0 / steps as f64, 3000.0 / steps as f64);
+        for i in 0..steps {
+            for j in 0..steps {
+                let p = (
+                    3000.0 + (i as f64 + 0.5) * dx,
+                    3000.0 + (j as f64 + 0.5) * dy,
+                );
+                let lo = envelope(&wing_planes, p).max(envelope(&host_top, p));
+                extra += (envelope(&wing_top, p) - lo).max(0.0) * dx * dy;
+            }
+        }
+        assert!(
+            ((joined.volume() - alone) - extra).abs() < 2.0e-3 * extra,
+            "{} {extra}",
+            joined.volume() - alone
+        );
+        assert!(extra > 0.0);
+    }
+
+    #[test]
+    fn an_extruded_profile_hangs_under_its_top() {
+        let top = [(0.0, 2700.0), (2000.0, 4700.0), (4000.0, 2700.0)];
+        let section = extruded_profile(&top, 200.0).unwrap();
+        let band = 4000.0 * 200.0 * 2f64.sqrt();
+        assert!(
+            (signed_area(&section) - band).abs() < 1.0e-6,
+            "{}",
+            signed_area(&section)
+        );
     }
 
     #[test]

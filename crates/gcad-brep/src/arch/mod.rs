@@ -136,6 +136,7 @@ pub struct Roof {
     pub ridge: gcad_mesh::arch::P2,
     pub thickness: f64,
     pub material: String,
+    pub joins: Option<String>,
 }
 
 #[derive(Clone, Debug)]

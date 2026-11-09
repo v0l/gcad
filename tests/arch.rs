@@ -903,7 +903,6 @@ fn roof_edges_are_selectors() {
 }
 
 #[test]
-#[ignore = "missing: roof joins"]
 fn roof_join_meets_two_roofs() {
     let model = build(&with(
         "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\nr2: roof 3000,6000 5000,6000 5000,8000 3000,8000 closed type=gable pitch=45 thickness=200 ridge=y base=L1\nroof_join r2 r1",
@@ -911,16 +910,59 @@ fn roof_join_meets_two_roofs() {
     let a = model.named_body("r1").expect("r1");
     let b = model.named_body("r2").expect("r2");
     assert!(gcad::geometry::overlap_volume(&a, &b, 64) < 1.0e-3);
+    let alone = volume_of(
+        &build(&with(
+            "r2: roof 3000,6000 5000,6000 5000,8000 3000,8000 closed type=gable pitch=45 thickness=200 ridge=y base=L1",
+        )),
+        "r2",
+    );
+    let lift = 200.0 * 2f64.sqrt();
+    let mut extra = 0.0;
+    let steps = 400;
+    let (dx, dy) = (2000.0 / steps as f64, 3000.0 / steps as f64);
+    for i in 0..steps {
+        for j in 0..steps {
+            let (x, y) = (
+                3000.0 + (i as f64 + 0.5) * dx,
+                3000.0 + (j as f64 + 0.5) * dy,
+            );
+            let wing = 2700.0 + (x - 3000.0).min(5000.0 - x);
+            let host = 2700.0 + y.min(6000.0 - y) + lift;
+            extra += (wing + lift - wing.max(host)).max(0.0) * dx * dy;
+        }
+    }
+    near(volume_of(&model, "r2") - alone, extra, 5.0e-3);
 }
 
 #[test]
-#[ignore = "missing: roof by extrusion"]
 fn roof_extruded_from_a_profile() {
     let model = build(&datums(
         "plane XZ\npoly 0,2700 2000,4700 4000,2700\nr1: roof extrude 3000 thickness=200",
     ));
     let (lo, hi) = body_bounds(&model, "r1");
     near(hi[1] - lo[1], 3000.0, 1.0e-6);
+}
+
+#[test]
+fn extruded_roof_volume_is_its_section_times_length() {
+    let model = build(&datums(
+        "plane XZ\npoly 0,2700 2000,4700 4000,2700\nr1: roof extrude 3000 thickness=200",
+    ));
+    near(
+        volume_of(&model, "r1"),
+        4000.0 * 200.0 * 2f64.sqrt() * 3000.0,
+        1.0e-4,
+    );
+}
+
+#[test]
+fn joined_roof_export_is_the_same_every_run() {
+    export_twice(
+        "joined_roof_export_is_the_same_every_run",
+        &with(
+            "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\nr2: roof 3000,6000 5000,6000 5000,8000 3000,8000 closed type=gable pitch=45 thickness=200 ridge=y base=L1\nroof_join r2 r1\nplane XZ\npoly 0,2700 2000,4700 4000,2700\nr3: roof extrude 3000 thickness=200",
+        ),
+    );
 }
 
 #[test]

@@ -542,8 +542,8 @@ Architecture stage B (gcad #349).
 | per-edge pitch | supported | `pitch_edge r1.eave.1 60` | `arch::per_edge_pitch` |
 | walls trim to the roof | supported | `roof ... walls=outer` | `arch::walls_trim_to_the_roof_underside`, `arch::trimmed_wall_export_is_the_same_every_run` |
 | roof edges as selectors | supported | `r1.ridge`, `r1.hip`, `r1.valley`, `r1.eave`, `r1.verge` | `arch::roof_edges_are_selectors` |
-| roof joins | missing | `roof_join r2 r1` | `arch::roof_join_meets_two_roofs` |
-| roof by extrusion | missing | a profile, then `roof extrude 3000 thickness=200` | `arch::roof_extruded_from_a_profile` |
+| roof joins | supported | `roof_join r2 r1` | `arch::roof_join_meets_two_roofs`, `arch::joined_roof_export_is_the_same_every_run` |
+| roof by extrusion | supported | a profile, then `roof extrude 3000 thickness=200` | `arch::roof_extruded_from_a_profile`, `arch::extruded_roof_volume_is_its_section_times_length` |
 | dormers | missing | `dormer on=r1 at=x,y w=1200 type=gable` | `arch::dormer_on_a_roof` |
 | skylights | missing | `skylight on=r1 at=x,y w=780 h=980` | `arch::skylight_on_a_roof` |
 | chimneys | missing | `chimney x,y w=600 d=600 up_to=r1 over=900` | `arch::chimney_through_the_roof` |

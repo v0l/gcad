@@ -6,8 +6,8 @@ use anyhow::{Context, Result, anyhow, bail};
 use gcad_mesh::arch::P2;
 use gcad_mesh::arch::layout::signed_area;
 use gcad_mesh::arch::roof::{
-    Plane, ROOF_KINDS, RoofEdge, ccw_ring, longest_edge, offset_ring, roof_edges, roof_planes,
-    roof_shell,
+    Plane, ROOF_KINDS, RoofEdge, ccw_ring, extruded_profile, joined_shell, longest_edge,
+    offset_ring, roof_edges, roof_planes, roof_shell,
 };
 use monstertruck::modeling::*;
 
@@ -125,11 +125,62 @@ impl Model {
         }
     }
 
+    pub(crate) fn op_roof_extrude(&mut self, line: &Line, name: String) -> Result<String> {
+        let [_, length] = line.positional.as_slice() else {
+            bail!(
+                "write `poly` with the roof's top line, then `r1: roof extrude LENGTH thickness=200`"
+            );
+        };
+        let length = eval(length, &self.scope).with_context(|| format!("the length `{length}`"))?;
+        if !(length > 0.0) {
+            bail!("a roof extrusion's length must be above zero");
+        }
+        let mut thickness = 200.0;
+        let mut material = "clay-tile".to_string();
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "thickness" => {
+                    thickness =
+                        eval(text, &self.scope).with_context(|| format!("`thickness={text}`"))?
+                }
+                "material" => material = text.clone(),
+                other => bail!("`roof extrude` takes thickness= and material=, not `{other}=`"),
+            }
+        }
+        if !(thickness > 0.0) {
+            bail!("a roof's thickness must be above zero");
+        }
+        let (frame, profiles) = self.take_sketch("roof extrude")?;
+        let [crate::geometry::Profile::Polygon { points }] = profiles.as_slice() else {
+            bail!("`roof extrude` takes one `poly`, the points along the top of the roof");
+        };
+        let section = extruded_profile(points, thickness).map_err(|e| anyhow!(e))?;
+        let ring = |d: f64| -> Vec<Point3> {
+            section
+                .iter()
+                .map(|&(u, v)| frame.at(u, v) + frame.normal * d)
+                .collect()
+        };
+        let solid = super::wall::loft(&[ring(0.0)], &[ring(length)])?;
+        self.ensure_library()?;
+        let top = crate::geometry::bounds(&solid).max().z;
+        self.put_body(name.clone(), solid, &material)?;
+        self.note_built(&name, &name);
+        Ok(format!(
+            "roof {name} extruded {}, top at {}",
+            crate::parse::label(length),
+            crate::parse::label(top)
+        ))
+    }
+
     pub(crate) fn op_roof(&mut self, line: &Line) -> Result<String> {
         let name = line.label.clone().ok_or_else(|| {
             anyhow!("a roof needs a label, like `r1: roof outer type=gable pitch=45 base=L1`")
         })?;
         self.check_free_name(&name)?;
+        if line.positional.first().is_some_and(|w| w == "extrude") {
+            return self.op_roof_extrude(line, name);
+        }
         let outline = ccw_ring(self.roof_outline(&line.positional)?);
         let mut roof = Roof {
             name: name.clone(),
@@ -142,6 +193,7 @@ impl Model {
             ridge: (0.0, 0.0),
             thickness: 200.0,
             material: "clay-tile".into(),
+            joins: None,
         };
         let mut ridge = None;
         let mut trims: Vec<String> = Vec::new();
@@ -219,7 +271,23 @@ impl Model {
 
     pub(crate) fn build_roof(&mut self, name: &str) -> Result<f64> {
         let roof = self.roof(name).cloned().expect("a roof");
-        let solid = roof.solid().with_context(|| format!("building `{name}`"))?;
+        let solid = match &roof.joins {
+            None => roof.solid(),
+            Some(host) => {
+                let host = self
+                    .roof(host)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("no roof `{host}` to join"))?;
+                let shell = joined_shell(
+                    (&roof.eaves(), &roof.planes()?, roof.ridge),
+                    (&host.eaves(), &host.planes()?),
+                    roof.thickness,
+                )
+                .map_err(|e| anyhow!(e))?;
+                shell_solid(&shell)
+            }
+        }
+        .with_context(|| format!("building `{name}`"))?;
         let top = crate::geometry::bounds(&solid).max().z;
         self.put_body(name.to_string(), solid, &roof.material)?;
         self.note_built(name, name);
@@ -234,6 +302,30 @@ impl Model {
             return None;
         }
         Some(roof.edges_named(&rest))
+    }
+
+    pub(crate) fn op_roof_join(&mut self, line: &Line) -> Result<String> {
+        let [own, host] = line.positional.as_slice() else {
+            bail!("write `roof_join r2 r1`: r2 runs on until it meets r1");
+        };
+        if own == host {
+            bail!("a roof cannot join itself");
+        }
+        if self.roof(host).is_none() {
+            bail!("no roof `{host}`");
+        }
+        let index = self
+            .arch
+            .roofs
+            .iter()
+            .position(|r| r.name == *own)
+            .ok_or_else(|| anyhow!("no roof `{own}`"))?;
+        self.arch.roofs[index].joins = Some(host.clone());
+        let top = self.build_roof(own)?;
+        Ok(format!(
+            "{own} runs on into {host}, top at {}",
+            crate::parse::label(top)
+        ))
     }
 
     pub(crate) fn op_pitch_edge(&mut self, line: &Line) -> Result<String> {
