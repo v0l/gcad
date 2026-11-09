@@ -7,7 +7,7 @@ license.workspace = true
 repository.workspace = true
 
 [workspace]
-members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-sim", "crates/gcad-remote", "crates/gcad-view", "crates/gcad2glb", "crates/gcad-mesh", "crates/gcad-mesh-viewer"]
+members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-sim", "crates/gcad-remote", "crates/gcad-view", "crates/gcad2glb", "crates/gcad-mesh", "crates/gcad-mesh-viewer", "crates/gcad-cloud"]
 
 [workspace.package]
 version = "0.7.0"
@@ -30,6 +30,7 @@ gcad-view = { path = "crates/gcad-view" }
 gcad-sims-proto = { path = "sims-proto" }
 gcad-version = { path = "crates/gcad-version" }
 gcad-mesh = { path = "crates/gcad-mesh" }
+gcad-cloud = { path = "crates/gcad-cloud" }
 anyhow = "1.0.104"
 bitcode = { version = "0.6", features = ["serde"] }
 epaint_default_fonts = "0.35"
