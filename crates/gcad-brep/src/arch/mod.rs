@@ -151,12 +151,21 @@ pub struct Flight {
 }
 
 #[derive(Clone, Debug)]
+pub struct Piece {
+    pub kind: &'static str,
+    pub ring: Vec<gcad_mesh::arch::P2>,
+    pub top: f64,
+    pub depth: f64,
+}
+
+#[derive(Clone, Debug)]
 pub struct Stair {
     pub name: String,
     pub base: f64,
     pub width: f64,
     pub steps: gcad_mesh::arch::Steps,
     pub flights: Vec<Flight>,
+    pub pieces: Vec<Piece>,
 }
 
 #[derive(Clone, Debug)]

@@ -1,5 +1,5 @@
-use super::{Flight, Stair};
-use super::slab::inside;
+use super::{Flight, Piece, Stair};
+use super::slab::{inside, prism};
 use super::wall::loft;
 use crate::Model;
 use crate::parse::{Line, eval, eval_point};
@@ -7,11 +7,14 @@ use anyhow::{Context, Result, anyhow, bail};
 use gcad_mesh::arch::P2;
 use gcad_mesh::arch::layout::{add, left, scale};
 use gcad_mesh::arch::stair::{
-    StairRule, check, flight_profile, parse_rule, steps, stringer_profile,
+    StairRule, Steps, check, flight_profile, hull, parse_rule, split_treads, steps,
+    stringer_profile,
 };
 use monstertruck::modeling::*;
 
 const WAIST: f64 = 150.0;
+const COLUMN: f64 = 100.0;
+const SPIRAL_TREAD: f64 = 50.0;
 const STRINGER: (f64, f64, f64) = (40.0, 50.0, 300.0);
 const OPEN_STRINGER: (f64, f64) = (60.0, 250.0);
 
@@ -21,6 +24,7 @@ struct Options {
     at: P2,
     dir: f64,
     shape: String,
+    landing: Option<f64>,
     width: f64,
     rule: StairRule,
     rise: Option<f64>,
@@ -50,6 +54,102 @@ impl Flight {
     }
 }
 
+fn layout(o: &Options, steps: &Steps) -> Result<(Vec<Flight>, Vec<Piece>)> {
+    let (r, t, w) = (steps.rise, steps.tread, o.width);
+    let dir = (o.dir.to_radians().cos(), o.dir.to_radians().sin());
+    let total = steps.treads();
+    let first = |treads: usize| Flight {
+        start: o.at,
+        dir,
+        z0: o.from,
+        treads,
+    };
+    let deck = |ring: Vec<P2>, level: usize, kind: &'static str| Piece {
+        kind,
+        ring,
+        top: o.from + level as f64 * r,
+        depth: WAIST + r / 2.0,
+    };
+    let split = |turns, inside| split_treads(total, turns, inside).map_err(|e| anyhow!(e));
+    Ok(match o.shape.as_str() {
+        "straight" => (vec![first(total)], Vec::new()),
+        "L" | "winder" => {
+            let winders = if o.shape == "L" { 1 } else { 3 };
+            let n = split(1, winders)?;
+            let f1 = first(n[0]);
+            let g = n[0] as f64 * t;
+            let corner = [(g, 0.0), (g + w, 0.0), (g + w, w), (g, w)].map(|(s, u)| f1.plan(s, u));
+            let pieces = if winders == 1 {
+                vec![deck(corner.to_vec(), n[0] + 1, "landing")]
+            } else {
+                let pivot = corner[3];
+                let edge = |a: f64| {
+                    if a <= w {
+                        f1.plan(g + a, 0.0)
+                    } else {
+                        f1.plan(g + w, a - w)
+                    }
+                };
+                (0..3)
+                    .map(|k| {
+                        let (a, b) = (2.0 * w * k as f64 / 3.0, 2.0 * w * (k + 1) as f64 / 3.0);
+                        let mut ring = vec![pivot, if k == 0 { corner[0] } else { edge(a) }];
+                        if a < w && b > w {
+                            ring.push(corner[1]);
+                        }
+                        ring.push(edge(b));
+                        deck(ring, n[0] + 1 + k, "winder")
+                    })
+                    .collect()
+            };
+            let f2 = Flight {
+                start: corner[2],
+                dir: left(dir),
+                z0: o.from + (n[0] + winders) as f64 * r,
+                treads: n[1],
+            };
+            (vec![f1, f2], pieces)
+        }
+        "U" => {
+            let n = split(1, 1)?;
+            let f1 = first(n[0]);
+            let g = n[0] as f64 * t;
+            let d = o.landing.unwrap_or(w);
+            let ring = [(g, 0.0), (g + d, 0.0), (g + d, 2.0 * w), (g, 2.0 * w)]
+                .map(|(s, u)| f1.plan(s, u));
+            let f2 = Flight {
+                start: f1.plan(g, 2.0 * w),
+                dir: scale(dir, -1.0),
+                z0: o.from + (n[0] + 1) as f64 * r,
+                treads: n[1],
+            };
+            (vec![f1, f2], vec![deck(ring.to_vec(), n[0] + 1, "landing")])
+        }
+        _ => {
+            let (r0, r1) = (COLUMN / 2.0, COLUMN / 2.0 + w);
+            let sweep = t / ((r0 + r1) / 2.0);
+            let treads = (0..total)
+                .map(|k| {
+                    let a0 = o.dir.to_radians() + sweep * k as f64;
+                    let at = |a: f64, rad: f64| add(o.at, (rad * a.cos(), rad * a.sin()));
+                    let mut ring: Vec<P2> = (0..=6)
+                        .map(|j| at(a0 + sweep * j as f64 / 6.0, r1))
+                        .collect();
+                    ring.push(at(a0 + sweep, r0));
+                    ring.push(at(a0, r0));
+                    Piece {
+                        kind: "tread",
+                        ring,
+                        top: o.from + (k + 1) as f64 * r,
+                        depth: SPIRAL_TREAD,
+                    }
+                })
+                .collect();
+            (Vec::new(), treads)
+        }
+    })
+}
+
 impl Model {
     fn stair_options(&self, line: &Line) -> Result<Options> {
         let mut o = Options {
@@ -58,6 +158,7 @@ impl Model {
             at: (0.0, 0.0),
             dir: 0.0,
             shape: "straight".into(),
+            landing: None,
             width: 900.0,
             rule: StairRule::default(),
             rise: None,
@@ -78,6 +179,7 @@ impl Model {
                 "at" => at = Some(eval_point(text, &self.scope)?),
                 "dir" => o.dir = value()?,
                 "shape" => o.shape = text.clone(),
+                "landing" => o.landing = Some(value()?),
                 "width" => o.width = value()?,
                 "rise" if auto => o.rise = None,
                 "rise" => o.rise = Some(value()?),
@@ -101,7 +203,7 @@ impl Model {
                 "headroom" => o.headroom = value()?,
                 "material" => o.material = text.clone(),
                 other => bail!(
-                    "`stair` takes from=, to=, at=, dir=, shape=, width=, rise=, tread=, rule=, max_rise=, min_tread=, risers=, stringer=, nosing=, headroom= and material=, not `{other}=`"
+                    "`stair` takes from=, to=, at=, dir=, shape=, landing=, width=, rise=, tread=, rule=, max_rise=, min_tread=, risers=, stringer=, nosing=, headroom= and material=, not `{other}=`"
                 ),
             }
         }
@@ -115,14 +217,17 @@ impl Model {
         if o.nosing < 0.0 {
             bail!("nosing= cannot be negative");
         }
-        if o.shape != "straight" {
-            bail!("stair shapes other than straight are not built yet, not `{}`", o.shape);
+        if o.landing.is_some_and(|l| l <= 0.0) {
+            bail!("a landing must be above zero deep");
+        }
+        if !["straight", "L", "U", "winder", "spiral"].contains(&o.shape.as_str()) {
+            bail!("a stair is shape=straight, L, U, winder or spiral, not `{}`", o.shape);
         }
         Ok(o)
     }
 
-    fn headroom_clash(&self, stair: &Stair, headroom: f64) -> Option<String> {
-        let footprint: Vec<P2> = stair
+    fn footprint(stair: &Stair) -> Vec<P2> {
+        let mut points: Vec<P2> = stair
             .flights
             .iter()
             .flat_map(|f| {
@@ -131,6 +236,12 @@ impl Model {
                     .map(|(s, u)| f.plan(s, u))
             })
             .collect();
+        points.extend(stair.pieces.iter().flat_map(|p| p.ring.iter().copied()));
+        hull(points)
+    }
+
+    fn headroom_clash(&self, stair: &Stair, headroom: f64) -> Option<String> {
+        let footprint = Self::footprint(stair);
         for slab in &self.arch.slabs {
             let over = slab.holes.iter().any(|h| {
                 h.iter().any(|&p| inside(p, &footprint)) || footprint.iter().any(|&p| inside(p, h))
@@ -163,6 +274,80 @@ impl Model {
         None
     }
 
+    pub(crate) fn op_stair_cut(&mut self, line: &Line) -> Result<String> {
+        let [stair, host] = line.positional.as_slice() else {
+            bail!("write `stair_cut st1 s1 headroom=2000`");
+        };
+        let mut headroom = 2000.0;
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "headroom" => {
+                    headroom = eval(text, &self.scope).with_context(|| format!("`headroom={text}`"))?
+                }
+                other => bail!("`stair_cut` takes headroom=, not `{other}=`"),
+            }
+        }
+        let stair = self
+            .arch
+            .stairs
+            .iter()
+            .find(|s| s.name == *stair)
+            .cloned()
+            .ok_or_else(|| anyhow!("no stair `{stair}`"))?;
+        let index = self
+            .arch
+            .slabs
+            .iter()
+            .position(|s| s.name == *host)
+            .ok_or_else(|| anyhow!("no slab `{host}`"))?;
+        let slab = self.arch.slabs[index].clone();
+        let under = slab.bands().first().map_or(slab.top, |b| b.0);
+        let mut points: Vec<P2> = Vec::new();
+        for f in &stair.flights {
+            if let Some(from) = stair.steps.low_headroom_from(under - f.z0, headroom) {
+                let going = f.treads as f64 * stair.steps.tread;
+                points.extend(
+                    [(from, 0.0), (going, 0.0), (going, stair.width), (from, stair.width)]
+                        .map(|(s, u)| f.plan(s, u)),
+                );
+            }
+        }
+        for piece in &stair.pieces {
+            if piece.top + headroom > under {
+                points.extend(piece.ring.iter().copied());
+            }
+        }
+        if points.is_empty() {
+            return Ok(format!(
+                "stair {} has {} clear under {host} everywhere, no cut needed",
+                stair.name,
+                crate::parse::label(headroom)
+            ));
+        }
+        let mut ring = hull(points);
+        if ring.iter().any(|&p| !inside(p, &slab.outline)) {
+            bail!("the cut for `{}` runs outside the edge of `{host}`", stair.name);
+        }
+        let mut holes = Vec::new();
+        for h in slab.holes {
+            if h.iter().any(|&p| inside(p, &ring)) || ring.iter().any(|&p| inside(p, &h)) {
+                ring = hull(ring.into_iter().chain(h).collect());
+            } else {
+                holes.push(h);
+            }
+        }
+        let area = gcad_mesh::arch::layout::signed_area(&ring).abs();
+        holes.push(ring);
+        self.arch.slabs[index].holes = holes;
+        self.build_slab(host)?;
+        Ok(format!(
+            "stair cut in {host} for {}: {} m² open, {} headroom",
+            stair.name,
+            crate::parse::label(area / 1.0e6),
+            crate::parse::label(headroom)
+        ))
+    }
+
     pub(crate) fn op_stair(&mut self, line: &Line) -> Result<String> {
         let name = line.label.clone().ok_or_else(|| {
             anyhow!("a stair needs a label, like `st1: stair from=L0 to=L1 at=0,0 dir=0`")
@@ -180,18 +365,14 @@ impl Model {
         });
         let steps = steps(height, &o.rule, risers, o.tread).map_err(|e| anyhow!(e))?;
         check(&steps, &o.rule).map_err(|e| anyhow!(e))?;
-        let dir = (o.dir.to_radians().cos(), o.dir.to_radians().sin());
+        let (flights, pieces) = layout(&o, &steps)?;
         let stair = Stair {
             name: name.clone(),
             base: o.from,
             width: o.width,
             steps,
-            flights: vec![Flight {
-                start: o.at,
-                dir,
-                z0: o.from,
-                treads: steps.treads(),
-            }],
+            flights,
+            pieces,
         };
         if let Some(problem) = self.headroom_clash(&stair, o.headroom) {
             bail!("{problem}");
@@ -240,8 +421,40 @@ impl Model {
                 self.note_built(&name, &body);
             }
         }
+        let mut counts: Vec<(&str, usize)> = Vec::new();
+        for piece in &stair.pieces {
+            let k = match counts.iter_mut().find(|(kind, _)| *kind == piece.kind) {
+                Some(slot) => {
+                    slot.1 += 1;
+                    slot.1
+                }
+                None => {
+                    counts.push((piece.kind, 1));
+                    1
+                }
+            };
+            let solid = prism(&piece.ring, &[], piece.top - piece.depth, piece.top)
+                .with_context(|| format!("building `{name}`"))?;
+            let body = format!("{name}.{}.{k}", piece.kind);
+            self.put_body(body.clone(), solid, &o.material)?;
+            self.note_built(&name, &body);
+        }
+        if o.shape == "spiral" {
+            let ring: Vec<P2> = (0..32)
+                .map(|k| {
+                    let a = std::f64::consts::TAU * (k as f64 + 0.5) / 32.0;
+                    add(o.at, (COLUMN / 2.0 * a.cos(), COLUMN / 2.0 * a.sin()))
+                })
+                .collect();
+            let solid = prism(&ring, &[], o.from, o.to)
+                .with_context(|| format!("building `{name}`"))?;
+            let body = format!("{name}.column");
+            self.put_body(body.clone(), solid, "steel")?;
+            self.note_built(&name, &body);
+        }
         let summary = format!(
-            "stair {name}: {} risers of {:.1}, {} treads of {:.1}, going {:.0}, pitch {:.1}°",
+            "stair {name}: {}{} risers of {:.1}, {} treads of {:.1}, going {:.0}, pitch {:.1}°",
+            if o.shape == "straight" { String::new() } else { format!("{}, ", o.shape) },
             steps.risers,
             steps.rise,
             steps.treads(),

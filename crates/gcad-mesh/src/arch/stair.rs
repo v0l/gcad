@@ -105,6 +105,44 @@ pub fn stringer_profile(steps: &Steps, treads: usize, above: f64, depth: f64, to
     clip(ring, |p| top - p.1)
 }
 
+pub fn hull(mut points: Vec<P2>) -> Vec<P2> {
+    points.sort_by(|a, b| a.0.total_cmp(&b.0).then(a.1.total_cmp(&b.1)));
+    points.dedup_by(|a, b| (a.0 - b.0).abs() < 1.0e-9 && (a.1 - b.1).abs() < 1.0e-9);
+    if points.len() < 3 {
+        return points;
+    }
+    let turn = |o: P2, a: P2, b: P2| (a.0 - o.0) * (b.1 - o.1) - (a.1 - o.1) * (b.0 - o.0);
+    let mut lower: Vec<P2> = Vec::new();
+    for &p in &points {
+        while lower.len() >= 2 && turn(lower[lower.len() - 2], lower[lower.len() - 1], p) <= 1.0e-9 {
+            lower.pop();
+        }
+        lower.push(p);
+    }
+    let mut upper: Vec<P2> = Vec::new();
+    for &p in points.iter().rev() {
+        while upper.len() >= 2 && turn(upper[upper.len() - 2], upper[upper.len() - 1], p) <= 1.0e-9 {
+            upper.pop();
+        }
+        upper.push(p);
+    }
+    lower.pop();
+    upper.pop();
+    lower.extend(upper);
+    lower
+}
+
+pub fn split_treads(total: usize, turns: usize, steps_in_turns: usize) -> Result<Vec<usize>, String> {
+    let left = total
+        .checked_sub(turns * steps_in_turns)
+        .filter(|n| *n >= turns + 1)
+        .ok_or_else(|| format!("{total} treads are too few for {turns} turns"))?;
+    let flights = turns + 1;
+    Ok((0..flights)
+        .map(|k| left / flights + usize::from(k < left % flights))
+        .collect())
+}
+
 pub fn parse_rule(text: &str) -> Result<f64, String> {
     let sum = text
         .strip_prefix("2R+T=")
@@ -213,6 +251,26 @@ mod tests {
         let top = ring.iter().map(|p| p.1).fold(0.0, f64::max);
         assert!((top - 2700.0).abs() < 1.0e-9);
         assert!(ring.iter().all(|p| p.0 >= 0.0 && p.0 <= 14.0 * 270.0 + 1.0e-9));
+    }
+
+    #[test]
+    fn the_hull_drops_inner_and_collinear_points() {
+        let h = hull(vec![
+            (0.0, 0.0),
+            (2.0, 0.0),
+            (1.0, 0.0),
+            (2.0, 2.0),
+            (1.0, 1.0),
+            (0.0, 2.0),
+        ]);
+        assert_eq!(h, vec![(0.0, 0.0), (2.0, 0.0), (2.0, 2.0), (0.0, 2.0)]);
+    }
+
+    #[test]
+    fn treads_split_between_flights() {
+        assert_eq!(split_treads(16, 1, 1), Ok(vec![8, 7]));
+        assert_eq!(split_treads(16, 1, 3), Ok(vec![7, 6]));
+        assert!(split_treads(2, 1, 1).is_err());
     }
 
     #[test]

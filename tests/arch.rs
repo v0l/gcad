@@ -941,7 +941,7 @@ fn straight_stair_follows_the_rule() {
 fn stair_export_is_the_same_every_run() {
     export_twice(
         "stair_export_is_the_same_every_run",
-        "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=30 width=1000 stringer=closed nosing=20\nst2: stair from=L0 to=L1 at=3000,0 dir=90 width=900 stringer=mono",
+        "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=30 width=1000 stringer=closed nosing=20\nst2: stair from=L0 to=L1 at=3000,0 dir=90 width=900 stringer=mono\nst3: stair from=L0 to=L1 at=6000,0 dir=0 shape=L width=900\nst4: stair from=L0 to=L1 at=0,4000 dir=0 shape=U width=900 landing=1000\nst5: stair from=L0 to=L1 at=6000,4000 dir=0 shape=winder width=900\nst6: stair from=L0 to=L1 at=10000,4000 dir=0 shape=spiral width=800",
     );
 }
 
@@ -958,7 +958,6 @@ fn stair_flight_volume_is_its_profile() {
 }
 
 #[test]
-#[ignore = "missing: stair shapes"]
 fn stair_shapes() {
     for shape in ["L", "U", "winder", "spiral"] {
         let model = build(&format!(
@@ -998,12 +997,17 @@ fn steep_stair_and_low_headroom_fail() {
 }
 
 #[test]
-#[ignore = "missing: stair cut through the slab above"]
 fn stair_cut_opens_the_slab() {
     let model = build(&with(
         "s1: slab L1 A1 B1 B2 A2 type=concrete:200\nst1: stair from=L0 to=L1 at=1000,1000 dir=0 width=1000 max_rise=180\nstair_cut st1 s1 headroom=2000",
     ));
     assert!(volume_of(&model, "s1") < OUT_X * OUT_Y * 200.0 - 1000.0 * 1000.0 * 200.0);
+    let from = (2500.0 - 2000.0 - 180.0) * 270.0 / 180.0;
+    near(
+        volume_of(&model, "s1"),
+        (OUT_X * OUT_Y - (14.0 * 270.0 - from) * 1000.0) * 200.0,
+        1.0e-6,
+    );
 }
 
 #[test]
