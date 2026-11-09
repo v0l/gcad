@@ -107,9 +107,12 @@ pub struct Scene {
     pub part_colours: HashMap<(String, String), [f64; 3]>,
     pub part_gloss: HashMap<(String, String), f64>,
     pub part_soft: HashMap<(String, String), f64>,
+    pub solid_bodies: Vec<String>,
 }
 
 const IDENTITY: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
+const MESH_COLOUR: [f64; 3] = [150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0];
+const SOLID_COLOUR: [f64; 3] = [0.7, 0.7, 0.7];
 
 fn mesh_combine(args: &Args<'_>) -> Result<Combine> {
     match args.values.get("mode").copied() {
@@ -271,7 +274,11 @@ impl Scene {
         self.coloured_meshes(colours)
             .into_iter()
             .map(|(name, mesh, colour)| {
-                let base = colour.unwrap_or([150.0 / 255.0, 175.0 / 255.0, 205.0 / 255.0]);
+                let fallback = match self.solid_bodies.contains(&name) {
+                    true => SOLID_COLOUR,
+                    false => MESH_COLOUR,
+                };
+                let base = colour.unwrap_or(fallback);
                 let tints = self
                     .part_colours_of(&name, &mesh)
                     .into_iter()

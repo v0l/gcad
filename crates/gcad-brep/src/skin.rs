@@ -122,6 +122,68 @@ pub(crate) fn uniform(count: usize) -> Vec<f64> {
     (0..count).map(|i| i as f64 / (count - 1) as f64).collect()
 }
 
+fn ruled_row(piece: &Piece) -> Result<(KnotVector, Vec<Point3>)> {
+    let samples = if piece.straight() { 1 } else { 16 };
+    let params = uniform(samples + 1);
+    let degree = if piece.straight() { 1 } else { 3 };
+    let u_knots = knots(&params, degree);
+    let row = interpolate(&piece.by_length(samples), &params, &u_knots)?;
+    Ok((u_knots, row))
+}
+
+pub(crate) fn cone(base: &Wire, apex: Point3) -> Result<Solid> {
+    let ring = pieces(base);
+    let count = ring.len();
+    let corners: Vec<Vertex> = ring.iter().map(|p| Vertex::new(p.at(0.0))).collect();
+    let tip = Vertex::new(apex);
+    let spokes: Vec<Edge> = corners.iter().map(|v| builder::line(v, &tip)).collect();
+    let mut bottom = Vec::new();
+    let mut faces = Vec::new();
+    for (j, piece) in ring.iter().enumerate() {
+        let next = (j + 1) % count;
+        let (u_knots, mut row) = ruled_row(piece)?;
+        let last = row.len() - 1;
+        row[0] = corners[j].point();
+        row[last] = corners[next].point();
+        let edge = if piece.straight() {
+            builder::line(&corners[j], &corners[next])
+        } else {
+            let curve = BsplineCurve::new(u_knots.clone(), row.clone());
+            Edge::new(&corners[j], &corners[next], Curve::BsplineCurve(curve))
+        };
+        let surface = if piece.straight() {
+            Surface::Plane(Plane::new(row[0], row[last], apex))
+        } else {
+            let net = vec![vec![apex; row.len()], row.clone()];
+            Surface::BsplineSurface(BsplineSurface::new(
+                (KnotVector::bezier_knot(1), u_knots),
+                net,
+            ))
+        };
+        let wire: Wire = vec![edge.clone(), spokes[next].clone(), spokes[j].inverse()].into();
+        faces.push(Face::new(vec![wire], surface));
+        bottom.push(edge);
+    }
+    let points: Vec<Point3> = ring
+        .iter()
+        .rev()
+        .flat_map(|p| (0..8).map(move |i| p.at(1.0 - i as f64 / 8.0)))
+        .collect();
+    let normal = newell(&points).normalize();
+    let origin = points[0];
+    let x = (points[points.len() / 3] - origin).normalize();
+    let x = (x - normal * x.dot(normal)).normalize();
+    let plane = Plane::new(origin, origin + x, origin + normal.cross(x));
+    let start: Wire = bottom.iter().rev().map(Edge::inverse).collect();
+    faces.push(
+        Face::try_new(vec![start], Surface::Plane(plane))
+            .map_err(|e| anyhow!("cannot cap the cone: {e}"))?,
+    );
+    let solid =
+        Solid::try_new(vec![faces.into()]).map_err(|e| anyhow!("the cone is not closed: {e}"))?;
+    Ok(oriented(solid))
+}
+
 pub(crate) fn skin(sections: &[Wire], smooth: bool) -> Result<Solid> {
     if sections.len() < 2 {
         bail!("a loft needs at least two sections");

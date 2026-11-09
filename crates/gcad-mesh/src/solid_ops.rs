@@ -246,6 +246,9 @@ impl Solids {
             bail!("there is already an extrude called `{label}`");
         }
         let regions = solid::regions(&self.sketch);
+        if scale < 1.0e-9 && regions.iter().any(|r| !r.holes.is_empty()) {
+            bail!("`scale=0` makes a cone from a profile without holes");
+        }
         self.sketch.clear();
         self.last = None;
         self.extrudes.push(Extrude {
@@ -335,5 +338,9 @@ impl Solids {
             solid::torus_into(&mut mesh, torus);
         }
         scene.mesh_body.mesh = Some(Arc::new(mesh));
+        let name = scene.body_name();
+        if !scene.solid_bodies.contains(&name) {
+            scene.solid_bodies.push(name);
+        }
     }
 }

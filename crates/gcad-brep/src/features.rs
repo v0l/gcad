@@ -482,6 +482,7 @@ impl Model {
             }),
         };
         let scale = match (args.optional_number("scale", &self.scope)?, lead) {
+            (Some(scale), _) if scale == 0.0 => 0.0,
             (Some(scale), _) => positive(scale, "scale")?,
             (None, Some(lead)) if lead.cone > 0.0 => {
                 let apex = lead.pitch_radius / lead.cone.to_radians().tan();
@@ -495,6 +496,21 @@ impl Model {
             _ => 1.0,
         };
         let (frame, profiles) = self.take_sketch("extrude")?;
+        if scale == 0.0 {
+            if twist != 0.0 {
+                bail!("`scale=0` closes the extrude to a point; it cannot also twist");
+            }
+            let shapes = loops(&frame, &profiles)?;
+            let apex = frame.origin + frame.normal * distance;
+            let tools = regions(&shapes)
+                .iter()
+                .map(|region| match region.as_slice() {
+                    [only] => super::skin::cone(&shapes[*only].wire, apex),
+                    _ => bail!("`scale=0` makes a cone from a profile without holes"),
+                })
+                .collect::<Result<Vec<_>>>()?;
+            return self.place_swept(&label_of(line), tools, frame.origin, apex, combine);
+        }
         let stations = if twist == 0.0 {
             2
         } else {
@@ -655,6 +671,45 @@ impl Model {
                 revolve.alone = self.solid.as_ref().map(face_ids);
             }
             self.revolves.insert(label, revolve);
+        }
+        self.describe_solid()
+    }
+
+    pub(crate) fn op_torus(&mut self, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["d", "tube"], &["at", "around", "sides"], false)?;
+        let ring = positive(args.number("d", &self.scope)?, "d")?;
+        let tube = positive(args.number("tube", &self.scope)?, "tube")?;
+        if tube >= ring {
+            bail!("tube {tube} must be thinner than the ring diameter {ring}");
+        }
+        for name in ["around", "sides"] {
+            if let Some(n) = args.optional_number(name, &self.scope)?
+                && (n < 3.0 || n.fract() != 0.0)
+            {
+                bail!("{name} is a whole number of at least 3, got {n}");
+            }
+        }
+        let (cx, cy) = args.point("at", &self.scope)?;
+        let plane = self.sketch_frame();
+        let centre = plane.at(cx, cy);
+        let section = Frame {
+            origin: centre,
+            x: plane.x,
+            y: plane.normal,
+            normal: plane.x.cross(plane.normal),
+        };
+        let profile = Profile::Circle {
+            center: (ring / 2.0, 0.0),
+            diameter: tube,
+        };
+        let label = label_of(line);
+        for tool in revolved(&section, &[profile], centre, plane.normal, 360.0)? {
+            let groups = select::faces(&tool)
+                .iter()
+                .map(|face| ("side", face.oriented_surface()))
+                .collect();
+            self.record_for(&label, groups, Combine::Add);
+            self.merge(&label, tool, Combine::Add)?;
         }
         self.describe_solid()
     }

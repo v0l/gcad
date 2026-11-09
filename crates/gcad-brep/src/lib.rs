@@ -18,6 +18,7 @@ mod measure;
 mod member;
 mod meshes;
 mod oring;
+pub mod parity;
 mod path;
 mod pattern;
 mod rib;
@@ -533,6 +534,7 @@ pub const OPERATIONS: &[&str] = &[
     "extrude",
     "cut",
     "revolve",
+    "torus",
     "path",
     "helix",
     "sweep",
@@ -771,6 +773,7 @@ impl Model {
             "extrude" => self.op_extrude(line),
             "cut" => self.op_cut(line),
             "revolve" => self.op_revolve(line),
+            "torus" => self.op_torus(line),
             "path" => self.op_path(line),
             "helix" => self.op_helix(line),
             "sweep" => self.op_sweep(line),
