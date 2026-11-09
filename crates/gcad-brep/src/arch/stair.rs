@@ -46,7 +46,7 @@ impl Flight {
         Point3::new(p.0, p.1, self.z0 + z)
     }
 
-    fn slab(&self, profile: &[P2], u0: f64, u1: f64) -> Result<Solid> {
+    pub(crate) fn slab(&self, profile: &[P2], u0: f64, u1: f64) -> Result<Solid> {
         let ring = |u: f64| -> Vec<Vec<Point3>> {
             vec![profile.iter().map(|&(s, z)| self.point(s, u, z)).collect()]
         };

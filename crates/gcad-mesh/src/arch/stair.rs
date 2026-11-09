@@ -143,6 +143,92 @@ pub fn split_treads(total: usize, turns: usize, steps_in_turns: usize) -> Result
         .collect())
 }
 
+pub fn parse_ratio(text: &str) -> Result<f64, String> {
+    let bad = || format!("a slope is written 1:12, not `{text}`");
+    let (a, b) = text.split_once(':').ok_or_else(bad)?;
+    let (a, b): (f64, f64) = (a.parse().map_err(|_| bad())?, b.parse().map_err(|_| bad())?);
+    if a <= 0.0 || b <= 0.0 {
+        return Err(bad());
+    }
+    Ok(a / b)
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RampPart {
+    pub landing: bool,
+    pub s0: f64,
+    pub s1: f64,
+    pub z0: f64,
+    pub z1: f64,
+}
+
+pub fn ramp_parts(
+    length: f64,
+    rise: f64,
+    max_slope: f64,
+    landing: f64,
+    every: f64,
+) -> Result<Vec<RampPart>, String> {
+    if length <= 0.0 {
+        return Err("a ramp needs two different ends".into());
+    }
+    let mut runs = 1usize;
+    let sloped = loop {
+        let sloped = length - (runs - 1) as f64 * landing;
+        if sloped <= 0.0 {
+            return Err(format!(
+                "{runs} runs with landings of {landing:.0} do not fit in {length:.0}"
+            ));
+        }
+        if every <= 0.0 || sloped <= every * runs as f64 + 1.0e-9 {
+            break sloped;
+        }
+        runs += 1;
+    };
+    let slope = rise.abs() / sloped;
+    if slope > max_slope + 1.0e-12 {
+        return Err(format!(
+            "too steep: {:.0} up over {:.0} of slope is 1:{:.1}, steeper than 1:{:.1}",
+            rise.abs(),
+            sloped,
+            1.0 / slope,
+            1.0 / max_slope
+        ));
+    }
+    let run = sloped / runs as f64;
+    let mut parts = Vec::new();
+    let (mut s, mut z) = (0.0, 0.0);
+    for k in 0..runs {
+        if k > 0 {
+            parts.push(RampPart {
+                landing: true,
+                s0: s,
+                s1: s + landing,
+                z0: z,
+                z1: z,
+            });
+            s += landing;
+        }
+        let z1 = z + rise / runs as f64;
+        parts.push(RampPart {
+            landing: false,
+            s0: s,
+            s1: s + run,
+            z0: z,
+            z1,
+        });
+        (s, z) = (s + run, z1);
+    }
+    Ok(parts)
+}
+
+pub fn rung_count(length: f64, spacing: f64) -> usize {
+    if spacing <= 0.0 {
+        return 0;
+    }
+    ((length / spacing - 1.0e-9).ceil() as usize).saturating_sub(1)
+}
+
 pub fn parse_rule(text: &str) -> Result<f64, String> {
     let sum = text
         .strip_prefix("2R+T=")
@@ -271,6 +357,26 @@ mod tests {
         assert_eq!(split_treads(16, 1, 1), Ok(vec![8, 7]));
         assert_eq!(split_treads(16, 1, 3), Ok(vec![7, 6]));
         assert!(split_treads(2, 1, 1).is_err());
+    }
+
+    #[test]
+    fn a_long_ramp_gets_a_landing() {
+        let parts = ramp_parts(13500.0, 600.0, 1.0 / 20.0, 1500.0, 10000.0).unwrap();
+        assert_eq!(parts.iter().filter(|p| p.landing).count(), 1);
+        assert_eq!(parts.len(), 3);
+        assert!((parts[0].s1 - 6000.0).abs() < 1.0e-9);
+        assert!((parts[2].z1 - 600.0).abs() < 1.0e-9);
+        assert!((parts[2].s1 - 13500.0).abs() < 1.0e-9);
+        let short = ramp_parts(6000.0, 600.0, 1.0 / 20.0, 1500.0, 10000.0).unwrap_err();
+        assert!(short.contains("1:10"), "{short}");
+        assert!(ramp_parts(12000.0, 600.0, 1.0 / 20.0, 1500.0, 10000.0).is_err());
+        assert_eq!(parse_ratio("1:12"), Ok(1.0 / 12.0));
+    }
+
+    #[test]
+    fn rungs_fill_between_the_ends() {
+        assert_eq!(rung_count(3000.0, 300.0), 9);
+        assert_eq!(rung_count(3100.0, 300.0), 10);
     }
 
     #[test]

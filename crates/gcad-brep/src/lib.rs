@@ -644,6 +644,8 @@ pub const OPERATIONS: &[&str] = &[
     "stair",
     "roof",
     "stair_cut",
+    "ramp",
+    "ladder",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -917,6 +919,8 @@ impl Model {
             "stair" => self.op_stair(line),
             "roof" => self.op_roof(line),
             "stair_cut" => self.op_stair_cut(line),
+            "ramp" => self.op_ramp(line),
+            "ladder" => self.op_ladder(line),
             "project" => self.scene.op_project(&self.scope, line),
             "layer" => self.scene.op_layer(&self.scope, line),
             "finish" => self.scene.op_finish(&self.scope, line),

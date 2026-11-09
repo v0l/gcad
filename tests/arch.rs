@@ -1011,7 +1011,6 @@ fn stair_cut_opens_the_slab() {
 }
 
 #[test]
-#[ignore = "missing: ramps"]
 fn ramp_slope_and_landings() {
     let text = summary(
         "rp1: ramp from=0,0,0 to=13500,0,600 slope=1:20 width=1200 landing=1500 every=10000",
@@ -1021,10 +1020,19 @@ fn ramp_slope_and_landings() {
 }
 
 #[test]
-#[ignore = "missing: ladders"]
 fn ladder_rungs() {
     let model = build("la: ladder 0,0,0 0,0,3000 width=400 rungs=@300");
     assert_eq!(count_of(&model, "la.rung"), 9);
+}
+
+#[test]
+fn ramp_volume_and_export_are_steady() {
+    let model = build("rp1: ramp from=0,0,0 to=13500,0,600 slope=1:20 width=1200 landing=1500 every=10000");
+    near(volume_of(&model, "rp1"), 13500.0 * 1200.0 * 200.0, 1.0e-6);
+    export_twice(
+        "ramp_volume_and_export_are_steady",
+        "rp1: ramp from=0,0,0 to=13500,4000,600 slope=1:20 width=1200 landing=1500 every=10000\nla: ladder 0,0,0 300,0,3000 width=400 rungs=@300",
+    );
 }
 
 #[test]
