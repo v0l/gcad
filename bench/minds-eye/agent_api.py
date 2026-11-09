@@ -23,7 +23,7 @@ def chat(cfg, body, retries=3):
     err = None
     for _ in range(retries):
         try:
-            return json.load(urllib.request.urlopen(req, timeout=600))
+            return json.load(urllib.request.urlopen(req, timeout=240))
         except Exception as e:
             err = e
             time.sleep(3)
