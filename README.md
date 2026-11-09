@@ -164,9 +164,10 @@ cross-origin isolation headers in `web/_headers` (`web/serve.py` sends them too)
 
 ## Agent skill
 
-[skills/gcad/SKILL.md](skills/gcad/SKILL.md) teaches an agent the write, check, render loop,
-the selectors, assemblies and the traps. It ships in every release archive; link the
-`skills/gcad` directory into your agent's skills folder.
+[skills/gcad/SKILL.md](skills/gcad/SKILL.md) is a short router: the write, check, render loop,
+the shared format rules and the traps, then one file in `skills/gcad/references/` per task type
+(parts, assemblies, simulation, drawings, meshes and so on). It ships in every release archive;
+link the `skills/gcad` directory into your agent's skills folder.
 
 ## Building
 

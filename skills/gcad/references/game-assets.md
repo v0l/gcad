@@ -3,6 +3,21 @@
 Use for `.gasset` authoring, live game-asset preview, and GLB or FBX/PNG exports.
 Reviewed 2026-11-02; FBX remains experimental. This extends the CAD workflow.
 
+Contents: pick the path, resolve the build, model and preview, export, sprites.
+
+## Pick the path first
+
+A character, creature or prop sculpted from blobs, or a CAD prop with one colour per body, stays
+a `.gcad` file: export it with `gcad export f.gcad f.glb --height 1 [--centre]` (or `--scale
+0.01` for centimetres to metres), check poses with `gcad render f.gcad sheet.png --turns 8
+--clip run --times 0,0.2,0.4`, and turn BVH mocap into `clip`/`key` lines with
+`tools/bvh-retarget`. That works in every build; see [meshes](meshes.md).
+
+For `.gasset` files (textured CAD assets, UV painting, atlases, collision, LODs, sprite sheets,
+FBX), which need a build with `--features game-assets` and are experimental, follow the rest of
+this file. If [local runtime configuration](local-runtime.md) exists in this installed skill,
+use it to resolve the configured build before relying on PATH.
+
 ## Resolve the build
 
 If this installed skill includes `local-runtime.md`, read it for configured local
