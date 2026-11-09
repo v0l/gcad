@@ -631,6 +631,8 @@ pub const OPERATIONS: &[&str] = &[
     "garage_door",
     "slab",
     "slab_opening",
+    "foundation",
+    "ground_slab",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -892,6 +894,8 @@ impl Model {
             "opening" | "door" | "window" | "garage_door" => self.op_opening(line),
             "slab" => self.op_slab(line),
             "slab_opening" => self.op_slab_opening(line),
+            "foundation" => self.op_foundation(line),
+            "ground_slab" => self.op_ground_slab(line),
             "project" => self.scene.op_project(&self.scope, line),
             "layer" => self.scene.op_layer(&self.scope, line),
             "finish" => self.scene.op_finish(&self.scope, line),

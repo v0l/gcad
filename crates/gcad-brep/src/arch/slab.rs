@@ -86,7 +86,161 @@ impl Slab {
     }
 }
 
+pub(crate) fn prism(outer: &[P2], holes: &[Vec<P2>], z0: f64, z1: f64) -> Result<Solid> {
+    let ring = |z: f64| -> Vec<Vec<Point3>> {
+        let lift = |ring: &[P2]| -> Vec<Point3> {
+            ring.iter().map(|&p| Point3::new(p.0, p.1, z)).collect()
+        };
+        let mut rings = vec![lift(&ccw(outer.to_vec()))];
+        for hole in holes {
+            let mut h = ccw(hole.clone());
+            h.reverse();
+            rings.push(lift(&h));
+        }
+        rings
+    };
+    loft(&ring(z0), &ring(z1))
+}
+
+fn flat(ring: Vec<(P2, f64)>) -> Vec<P2> {
+    ring.into_iter().map(|(p, _)| p).collect()
+}
+
 impl Model {
+    fn closed_wall(&self, name: &str, op: &str) -> Result<super::Wall> {
+        let wall = self
+            .arch
+            .wall(name)
+            .ok_or_else(|| anyhow!("`{op}` follows a wall, and there is no wall `{name}`"))?;
+        Ok(wall.clone())
+    }
+
+    pub(crate) fn inner_ring(&self, wall: &super::Wall) -> Result<Vec<P2>> {
+        if !wall.line.closed {
+            bail!(
+                "`{}` is not a closed loop of walls, so it has no inside",
+                wall.name
+            );
+        }
+        let (lo, hi) = wall.outer_span();
+        let a = flat(wall.line.offset(lo, None, None));
+        let b = flat(wall.line.offset(hi, None, None));
+        Ok(if signed_area(&a).abs() < signed_area(&b).abs() {
+            a
+        } else {
+            b
+        })
+    }
+
+    pub(crate) fn op_foundation(&mut self, line: &Line) -> Result<String> {
+        let name = line.label.clone().ok_or_else(|| {
+            anyhow!("a foundation needs a label, like `fs: foundation strip outer w=600 d=900`")
+        })?;
+        self.check_free_name(&name)?;
+        let mut w = None;
+        let mut l = None;
+        let mut d = None;
+        let mut top = None;
+        let mut material = "concrete".to_string();
+        for (key, text) in &line.named {
+            let value = || eval(text, &self.scope).with_context(|| format!("`{key}={text}`"));
+            match key.as_str() {
+                "w" => w = Some(value()?),
+                "l" => l = Some(value()?),
+                "d" => d = Some(value()?),
+                "top" => top = Some(value()?),
+                "material" => material = text.clone(),
+                other => bail!("`foundation` takes w=, l=, d=, top= and material=, not `{other}=`"),
+            }
+        }
+        let d = d.ok_or_else(|| anyhow!("a foundation needs `d=`, its depth"))?;
+        let w = w.ok_or_else(|| anyhow!("a foundation needs `w=`, its width"))?;
+        if d <= 0.0 || w <= 0.0 || l.is_some_and(|l| l <= 0.0) {
+            bail!("a foundation's w=, l= and d= must be above zero");
+        }
+        let (solid, top, what) = match line.positional.as_slice() {
+            [kind, host] if kind == "strip" => {
+                if l.is_some() {
+                    bail!("a strip foundation runs the length of its wall; it takes no `l=`");
+                }
+                let wall = self.closed_wall(host, "foundation strip")?;
+                let (lo, hi) = wall.outer_span();
+                let mid = (lo + hi) / 2.0;
+                let (outer, hole) = wall
+                    .line
+                    .band(mid - w / 2.0, mid + w / 2.0, None, None, &[]);
+                let holes: Vec<Vec<P2>> = hole.map(flat).into_iter().collect();
+                let top = top.unwrap_or(wall.base);
+                (
+                    prism(&flat(outer), &holes, top - d, top)?,
+                    top,
+                    format!("under {host}"),
+                )
+            }
+            [kind, at] if kind == "pad" => {
+                let c = self.plan_point(at)?;
+                let l = l.unwrap_or(w);
+                let ring = vec![
+                    (c.0 - w / 2.0, c.1 - l / 2.0),
+                    (c.0 + w / 2.0, c.1 - l / 2.0),
+                    (c.0 + w / 2.0, c.1 + l / 2.0),
+                    (c.0 - w / 2.0, c.1 + l / 2.0),
+                ];
+                let top = top.unwrap_or(0.0);
+                (prism(&ring, &[], top - d, top)?, top, format!("at {at}"))
+            }
+            _ => bail!("write `foundation strip WALL w= d=` or `foundation pad x,y w= l= d=`"),
+        };
+        self.ensure_library()?;
+        self.put_body(name.clone(), solid, &material)?;
+        self.note_built(&name, &name);
+        Ok(format!(
+            "foundation {name} {what}, {} deep, top at {}",
+            crate::parse::label(d),
+            crate::parse::label(top)
+        ))
+    }
+
+    pub(crate) fn op_ground_slab(&mut self, line: &Line) -> Result<String> {
+        let name = line.label.clone().ok_or_else(|| {
+            anyhow!("a ground slab needs a label, like `g: ground_slab outer type=concrete:150`")
+        })?;
+        self.check_free_name(&name)?;
+        let [host] = line.positional.as_slice() else {
+            bail!("write `g: ground_slab outer type=concrete:150+pir:100`");
+        };
+        let wall = self.closed_wall(host, "ground_slab")?;
+        let outline = self.inner_ring(&wall)?;
+        let mut layers = None;
+        let mut top = wall.base;
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "type" => layers = Some(slab_layers(self, text)?),
+                "top" => top = eval(text, &self.scope).with_context(|| format!("`top={text}`"))?,
+                other => bail!("`ground_slab` takes type= and top=, not `{other}=`"),
+            }
+        }
+        let layers = layers.ok_or_else(|| {
+            anyhow!("a ground slab needs `type=`, layers bottom to top like `concrete:150+pir:100`")
+        })?;
+        let area = signed_area(&outline).abs();
+        self.arch.slabs.push(Slab {
+            name: name.clone(),
+            outline,
+            holes: Vec::new(),
+            layers,
+            top,
+            slope: 0.0,
+            fall: None,
+        });
+        self.build_slab(&name)?;
+        Ok(format!(
+            "ground slab {name} inside {host}: {} m², top at {}",
+            crate::parse::label(area / 1.0e6),
+            crate::parse::label(top)
+        ))
+    }
+
     pub(crate) fn plan_ring(&self, words: &[String]) -> Result<Vec<P2>> {
         let mut ring: Vec<P2> = Vec::new();
         for word in words {

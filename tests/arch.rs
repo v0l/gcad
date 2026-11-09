@@ -705,7 +705,6 @@ fn floor_finish_in_a_room() {
 }
 
 #[test]
-#[ignore = "missing: foundations"]
 fn strip_and_pad_foundations() {
     let model = build(&with(
         "fs: foundation strip outer w=600 d=900\nfp: foundation pad 4000,3000 w=1000 l=1000 d=500",
@@ -718,11 +717,20 @@ fn strip_and_pad_foundations() {
 }
 
 #[test]
-#[ignore = "missing: ground slabs"]
 fn ground_slab_inside_the_walls() {
     let model = build(&with("g: ground_slab outer type=concrete:150+pir:100"));
     let inside = (OUT_X - 2.0 * T) * (OUT_Y - 2.0 * T);
     near(volume_of(&model, "g"), inside * 250.0, 1.0e-5);
+}
+
+#[test]
+fn foundation_export_is_the_same_every_run() {
+    export_twice(
+        "foundation_export_is_the_same_every_run",
+        &with(
+            "fs: foundation strip outer w=600 d=900\nfp: foundation pad 4000,3000 w=1000 l=1000 d=500\ng: ground_slab outer type=concrete:150+pir:100",
+        ),
+    );
 }
 
 #[test]

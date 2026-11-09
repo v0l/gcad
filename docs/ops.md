@@ -535,8 +535,8 @@ Architecture stage B (gcad #349).
 | sloped slabs | supported | `slope=0.02 falls_to=x,y` | `arch::sloped_slab_falls_to_a_point` |
 | ceilings | missing | `c1: ceiling room=hall h=2400 type=gypsum:13` | `arch::ceiling_in_a_room` |
 | floor finishes | missing | `f1: floor_finish room=hall type=oak:20` | `arch::floor_finish_in_a_room` |
-| foundations | missing | `foundation strip outer w=600 d=900`, `foundation pad x,y w= l= d=` | `arch::strip_and_pad_foundations` |
-| ground slabs | missing | `ground_slab outer type=concrete:150+pir:100` | `arch::ground_slab_inside_the_walls` |
+| foundations | supported | `foundation strip outer w=600 d=900`, `foundation pad x,y w= l= d=` | `arch::strip_and_pad_foundations`, `arch::foundation_export_is_the_same_every_run` |
+| ground slabs | supported | `ground_slab outer type=concrete:150+pir:100` | `arch::ground_slab_inside_the_walls` |
 | gable roofs | missing | `r1: roof outer type=gable pitch=45 overhang=450 thickness=200 ridge=x base=L1` | `arch::gable_roof_ridge_and_area` |
 | roof types | missing | `type=hip\|half_hip\|shed\|flat\|mansard\|gambrel\|barrel` | `arch::roof_types` |
 | per-edge pitch | missing | `pitch_edge r1.eave.1 60` | `arch::per_edge_pitch` |
