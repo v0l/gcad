@@ -30,11 +30,13 @@ every task shares.
 | Fasteners, o-rings, threads, fits, `gcad calc` | [standard-parts](references/standard-parts.md) |
 | `.gsim`: torque, stress, heat, modal, flow, frame, conduction, acoustics, the sims server | [simulation](references/simulation.md) |
 | `.gdwg` drawing sheets, views, sections, dimensions, labels | [drawings](references/drawings.md) |
-| Characters, creatures, blobs, sculpting, rigging, clips | [meshes](references/meshes.md) |
+| Characters, creatures, props, vehicles, buildings and other game assets, blobs, sculpting, rigging, clips | [meshes](references/meshes.md) |
 | Game assets, `.gasset`, GLB and FBX for engines, runtime selection | [game-assets](references/game-assets.md) |
 | Export and import: STEP, STL, 3MF, OBJ, GLB, SVG, DXF, PDF, BOM | [output](references/output.md) |
 | Walls, openings, slabs, roofs, stairs, rooms | [architecture](references/architecture.md) |
 | Scans, PLY, E57, LAS, registration, reconstruction | [point-clouds](references/point-clouds.md) |
+
+Props, vehicles, weapons, furniture and buildings made for a game or a picture are not machined parts: read [meshes](references/meshes.md) and block them out with `blob` and `limb` lines that `blend`, not with `rect` and `extrude` alone. Use [parts](references/parts.md) only for pieces that will be cut, printed or fitted to other parts.
 
 Anything made of more than one part is an assembly, even two parts: plan it as a `.gasm` from
 the start. Sketch and solid operations are errors in a `.gasm`, joints are errors in a `.gcad`.

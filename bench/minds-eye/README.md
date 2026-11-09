@@ -80,3 +80,14 @@ Why the baseline makes solids: on every non-creature task, the agent in both ski
 Recommended default: new skill, render feedback on (it is cheap now, 369k tokens) and plan first, at medium. Run plan against the other 12 task types before making it the default, and add the changes below. Do not use low.
 
 Judge agreement: `results/ratings.json` lists 20 runs to rate; fill in a 1-10 rating for each and run `./run agreement results/ratings.json`.
+
+## Props and vehicles routing (#459)
+
+SKILL.md now sends props, vehicles, buildings and game assets to `meshes.md` and tells the agent to block them out with `blob` and `limb`. `render-new`, medium, 1 seed.
+
+| set | tasks | judge | rubric | hard | mesh_ops_used |
+| --- | --- | --- | --- | --- | --- |
+| tuning | chest, sword, tractor, rocket | 6.0 | 0.67 | 7.6 | 0.75 (was 0) |
+| heldout | anvil, teapot, biplane, bulldozer, barn | 6.0 | 0.89 | 6.8 | 0.6 |
+
+Judge scores are flat against the 5.4 baseline; the change moves mesh op use, not yet the score. One seed, so below 0.5 is noise.
