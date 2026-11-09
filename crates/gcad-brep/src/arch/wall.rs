@@ -158,7 +158,7 @@ pub(crate) fn outline(profile: &Profile) -> Result<Vec<P2>> {
     Ok(ccw(points))
 }
 
-fn piece_of(name: &str, used: &[String]) -> String {
+pub(crate) fn piece_of(name: &str, used: &[String]) -> String {
     let mut candidate = name.to_string();
     let mut k = 2;
     while used.contains(&candidate) {
@@ -273,7 +273,7 @@ impl Wall {
     }
 }
 
-fn layer_list(model: &mut Model, words: &[&str]) -> Result<Vec<Layer>> {
+pub(crate) fn layer_list(model: &mut Model, words: &[&str]) -> Result<Vec<Layer>> {
     if words.is_empty() {
         bail!("a wall type needs layers outside to inside, like `brick:102 air:50 block:100`");
     }

@@ -620,7 +620,6 @@ fn door_from_a_part_file() {
 }
 
 #[test]
-#[ignore = "missing: slabs"]
 fn slab_with_an_opening() {
     let model = build(&with(
         "s1: slab L1 A1 B1 B2 A2 type=concrete:200\nslab_opening s1 1000,1000 3000,1000 3000,2000 1000,2000",
@@ -635,7 +634,6 @@ fn slab_with_an_opening() {
 }
 
 #[test]
-#[ignore = "missing: layered slabs"]
 fn layered_slab_is_its_layers() {
     let model = build(&datums(
         "s1: slab L1 0,0 4000,0 4000,3000 0,3000 type=concrete:200+screed:50+tile:10",
@@ -656,7 +654,6 @@ fn layered_slab_is_its_layers() {
 }
 
 #[test]
-#[ignore = "missing: sloped slabs"]
 fn sloped_slab_falls_to_a_point() {
     let model = build(&datums(
         "s1: slab L0 0,0 4000,0 4000,3000 0,3000 type=concrete:100 slope=0.02 falls_to=4000,1500",
@@ -664,6 +661,26 @@ fn sloped_slab_falls_to_a_point() {
     near(volume_of(&model, "s1"), 12.0e6 * 100.0, 1.0e-4);
     let (lo, hi) = body_bounds(&model, "s1.concrete");
     near(hi[2] - lo[2], 100.0 + 4000.0 * 0.02, 1.0e-4);
+}
+
+fn export_twice(test: &str, source: &str) {
+    let dir = house_files(test, &[("model.gcad", source)]);
+    let bytes = |name: &str| {
+        let (ok, text) = gcad(&dir, &["export", "model.gcad", name]);
+        assert!(ok, "{text}");
+        std::fs::read(dir.join(name)).expect("stl")
+    };
+    assert_eq!(bytes("a.stl"), bytes("b.stl"));
+}
+
+#[test]
+fn slab_export_is_the_same_every_run() {
+    export_twice(
+        "slab_export_is_the_same_every_run",
+        &with(
+            "s1: slab L1 A1 B1 B2 A2 type=concrete:200+screed:50\nslab_opening s1 1000,1000 3000,1000 3000,2000 1000,2000\ns2: slab L0 0,0 4000,0 4000,3000 0,3000 type=concrete:100 slope=0.02 falls_to=4000,1500",
+        ),
+    );
 }
 
 #[test]

@@ -272,6 +272,8 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `door` | `on= at= w= h= swing=left\|right\|double\|slide\|fold in\|out frame=70x45 leaf=44 threshold= mark= part=file.gcad` | an opening with `name.frame` and `name.leaf` (`name.leaf.2`...) bodies; `part=` builds it from a file with `w`, `h` and the line's other values set |
 | `window` | `on= at= w= h= sill=900 panes=CxR frame=60 mullion=40 glazing=single\|double\|triple head= mark=` | an opening with `name.frame`, `name.glass.N` and `name.mullion` bodies; glass is its own see-through body |
 | `garage_door` | `on= at= w= h= panels=4` | an opening with `name.panel.N` bodies |
+| `slab` | `level points` `type=mat:t+mat:t` `slope= falls_to=x,y` | one body per layer, `slab.material`, stacked bottom to top with the top of the last layer on the level; `slope` tilts the top and bottom planes, rising away from the low point `falls_to`, with the sides vertical |
+| `slab_opening` | `slab points` | a hole through every layer of the slab, inside its edge |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.

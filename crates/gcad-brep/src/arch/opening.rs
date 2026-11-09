@@ -103,7 +103,7 @@ impl Model {
         }
     }
 
-    fn put_body(&mut self, name: String, solid: Solid, material: &str) -> Result<()> {
+    pub(crate) fn put_body(&mut self, name: String, solid: Solid, material: &str) -> Result<()> {
         match self.bodies.iter_mut().find(|(n, _)| *n == name) {
             Some(slot) => slot.1 = solid,
             None => self.bodies.push((name.clone(), solid)),
@@ -318,7 +318,7 @@ impl Model {
         Ok(())
     }
 
-    fn note_built(&mut self, owner: &str, body: &str) {
+    pub(crate) fn note_built(&mut self, owner: &str, body: &str) {
         match self.arch.built.iter_mut().find(|b| b.owner == owner) {
             Some(built) => {
                 if !built.bodies.iter().any(|b| b == body) {

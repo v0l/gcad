@@ -530,9 +530,9 @@ Architecture stage B (gcad #349).
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| slabs and slab openings | missing | `s1: slab L1 A1 B1 B2 A2 type=concrete:200`, `slab_opening s1 x,y ...` | `arch::slab_with_an_opening` |
-| layered slabs | missing | `type=concrete:200+screed:50+tile:10`, top of the last layer on the level | `arch::layered_slab_is_its_layers` |
-| sloped slabs | missing | `slope=0.02 falls_to=x,y` | `arch::sloped_slab_falls_to_a_point` |
+| slabs and slab openings | supported | `s1: slab L1 A1 B1 B2 A2 type=concrete:200`, `slab_opening s1 x,y ...` | `arch::slab_with_an_opening`, `arch::slab_export_is_the_same_every_run` |
+| layered slabs | supported | `type=concrete:200+screed:50+tile:10`, top of the last layer on the level | `arch::layered_slab_is_its_layers` |
+| sloped slabs | supported | `slope=0.02 falls_to=x,y` | `arch::sloped_slab_falls_to_a_point` |
 | ceilings | missing | `c1: ceiling room=hall h=2400 type=gypsum:13` | `arch::ceiling_in_a_room` |
 | floor finishes | missing | `f1: floor_finish room=hall type=oak:20` | `arch::floor_finish_in_a_room` |
 | foundations | missing | `foundation strip outer w=600 d=900`, `foundation pad x,y w= l= d=` | `arch::strip_and_pad_foundations` |

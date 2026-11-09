@@ -1,5 +1,6 @@
 mod datum;
 mod opening;
+mod slab;
 mod wall;
 
 use crate::geometry::Profile;
@@ -107,6 +108,17 @@ pub struct Sweep {
 }
 
 #[derive(Clone, Debug)]
+pub struct Slab {
+    pub name: String,
+    pub outline: Vec<gcad_mesh::arch::P2>,
+    pub holes: Vec<Vec<gcad_mesh::arch::P2>>,
+    pub layers: Vec<Layer>,
+    pub top: f64,
+    pub slope: f64,
+    pub fall: Option<(gcad_mesh::arch::P2, gcad_mesh::arch::P2)>,
+}
+
+#[derive(Clone, Debug)]
 pub struct Built {
     pub owner: String,
     pub key: String,
@@ -125,6 +137,7 @@ pub struct Arch {
     pub joins: Vec<(String, String, Join)>,
     pub openings: Vec<Opening>,
     pub sweeps: Vec<Sweep>,
+    pub slabs: Vec<Slab>,
     pub built: Vec<Built>,
 }
 
