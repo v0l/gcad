@@ -144,12 +144,23 @@ pub fn eval(expression: &str, scope: &Scope) -> Result<f64> {
 pub fn eval_point(text: &str, scope: &Scope) -> Result<(f64, f64)> {
     let parts = split_top_level(text, ',');
     match parts.as_slice() {
-        [x, y] => Ok((eval(x, scope)?, eval(y, scope)?)),
+        [x, y] => match named_point_plus(x, scope) {
+            Some((base, dx)) => Ok((base.0 + eval(dx, scope)?, base.1 + eval(y, scope)?)),
+            None => Ok((eval(x, scope)?, eval(y, scope)?)),
+        },
         [name] if scope.contains_key(&format!("{name}.x")) => {
             Ok((scope[&format!("{name}.x")], scope[&format!("{name}.y")]))
         }
         _ => bail!("`{text}` is not a point, write it as x,y"),
     }
+}
+
+fn named_point_plus<'a>(text: &'a str, scope: &Scope) -> Option<((f64, f64), &'a str)> {
+    let at = text.find(['+', '-']).filter(|&at| at > 0)?;
+    let name = &text[..at];
+    let x = scope.get(&format!("{name}.x"))?;
+    let y = scope.get(&format!("{name}.y"))?;
+    Some(((*x, *y), &text[at..]))
 }
 
 pub fn split_top_level(text: &str, separator: char) -> Vec<&str> {
