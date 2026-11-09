@@ -816,6 +816,35 @@ fn trimmed_wall_export_is_the_same_every_run() {
 }
 
 #[test]
+fn two_doors_in_a_wall_built_up_to_a_gable() {
+    let house = [
+        "units mm",
+        "level L0 0",
+        "level L1 2800",
+        "level L2 5600",
+        "wall_type ext brick:102 air:50 pir:100 block:100 plaster:13",
+        "outer: wall 0,0 10000,0 10000,8000 0,8000 closed type=ext base=L0 top=L1 justify=outside",
+        "D01: door on=outer at=7500 w=900 h=2100",
+        "D02: door on=outer at=21000 w=900 h=2100",
+    ]
+    .join("\n");
+    let model = build(&format!(
+        "{house}\nroof1: roof outer type=gable pitch=40 thickness=250 ridge=x base=L2 walls=outer"
+    ));
+    let without = build(&house);
+    let (x, half) = (10000.0, 4000.0);
+    let slope = 40f64.to_radians().tan();
+    let lift = 2800.0;
+    let prism = |d: f64| {
+        let h = half - d;
+        (x - 2.0 * d) * (lift * 2.0 * h + slope * (half * half - d * d))
+    };
+    let above = prism(0.0) - prism(102.0) + prism(152.0) - prism(365.0);
+    let gained = volume_of(&model, "outer") - volume_of(&without, "outer");
+    near(gained, above, 1.0e-4);
+}
+
+#[test]
 fn walls_trim_to_the_roof_underside() {
     let model = build(&with(
         "r1: roof outer type=gable pitch=45 overhang=0 thickness=200 ridge=x base=L1 walls=outer",

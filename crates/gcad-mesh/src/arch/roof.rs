@@ -312,6 +312,33 @@ pub fn roof_shell(footprint: &[P2], planes: &[Plane], thickness: f64) -> Result<
     Ok(shell)
 }
 
+pub fn above_shells(pieces: &[Vec<P2>], top: f64, planes: &[Plane]) -> Result<Vec<Shell>, String> {
+    let floor = Plane::level(top);
+    let mut lines = switch_lines(&[planes]);
+    lines.extend(
+        planes
+            .iter()
+            .filter(|p| length(p.g) > 1.0e-12)
+            .map(|p| Plane {
+                c: p.c - top,
+                g: p.g,
+            }),
+    );
+    let surfaces = |c: P2| {
+        let roof = lowest(planes, c);
+        (roof.at(c) > top + 1.0e-9).then_some((floor, roof))
+    };
+    let mut out = Vec::new();
+    for piece in pieces {
+        match between_shell(piece, &lines, &surfaces, None) {
+            Ok(shell) => out.push(shell),
+            Err(e) if e.starts_with("nothing is left") => {}
+            Err(e) => return Err(e),
+        }
+    }
+    Ok(out)
+}
+
 pub fn column_shell(
     pieces: &[Vec<P2>],
     z0: f64,
@@ -1261,6 +1288,24 @@ mod tests {
             "{} {expected}",
             shell.volume()
         );
+    }
+
+    #[test]
+    fn the_wall_above_its_top_fills_the_gable() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("gable", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let ends = vec![
+            vec![(0.0, 0.0), (300.0, 0.0), (300.0, 6000.0), (0.0, 6000.0)],
+            vec![(300.0, 0.0), (7700.0, 0.0), (7700.0, 300.0), (300.0, 300.0)],
+        ];
+        let above = above_shells(&ends, 2700.0, &planes).unwrap();
+        assert_eq!(above.len(), 2);
+        assert!(above.iter().all(Shell::is_closed));
+        let eave = 7400.0 * 300.0 * 300.0 / 2.0;
+        let total: f64 = above.iter().map(Shell::volume).sum();
+        assert!((total - (300.0 * 3000.0 * 3000.0 + eave)).abs() < 1.0e-3);
+        let high = above_shells(&ends, 9000.0, &planes).unwrap();
+        assert!(high.is_empty());
     }
 
     #[test]

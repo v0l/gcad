@@ -216,6 +216,24 @@ impl Wall {
         out
     }
 
+    pub(crate) fn infill_solids(
+        &self,
+        tier: &Tier,
+        band: (f64, f64),
+        cuts: (Option<Cut>, Option<Cut>),
+    ) -> Result<Vec<Solid>> {
+        let topped = tier.to >= self.top - self.base - 1.0e-9;
+        if !topped || self.under.is_empty() {
+            return Ok(Vec::new());
+        }
+        let pieces = self.line.band_pieces(band.0, band.1, cuts.0, cuts.1);
+        gcad_mesh::arch::roof::above_shells(&pieces, self.top, &self.under)
+            .map_err(|e| anyhow!(e))?
+            .iter()
+            .map(super::roof::shell_solid)
+            .collect()
+    }
+
     fn layer_solid(
         &self,
         tier: &Tier,
@@ -250,12 +268,6 @@ impl Wall {
         };
         let (z0, z1) = (self.base + tier.from, self.base + tier.to);
         let topped = tier.to >= self.top - self.base - 1.0e-9;
-        if topped && !self.under.is_empty() {
-            let pieces = self.line.band_pieces(band.0, band.1, cuts.0, cuts.1);
-            let shell = gcad_mesh::arch::roof::column_shell(&pieces, z0, self.top, &self.under)
-                .map_err(|e| anyhow!(e))?;
-            return super::roof::shell_solid(&shell);
-        }
         let bottom = ring(band.0, band.1, &|_| z0, z0 * 0.0 + (z0 - self.base) * lean);
         let top_z = |s: f64| if topped { self.top_at(s) } else { z1 };
         let top = ring(band.0, band.1, &top_z, (z1 - self.base) * lean);
@@ -635,6 +647,21 @@ impl Model {
                             },
                         )?;
                         *solid = crate::fuse::fuse_coplanar(&crate::exact::exact_edges(&cut));
+                    }
+                }
+            }
+            if from == 0 && !wall.under.is_empty() {
+                for ((_, t, l), solid) in names.iter().zip(solids.iter_mut()) {
+                    let tier = &wall.tiers[*t];
+                    let bands = gcad_mesh::arch::bands(&tier.layers, wall.justify, wall.offset);
+                    for piece in wall.infill_solids(tier, bands[*l], cuts)? {
+                        let joined = crate::weld::weld_union(solid, &piece)
+                            .map(Ok)
+                            .unwrap_or_else(|| monstertruck::solid::or_normalized(solid, &piece))
+                            .map_err(|e| {
+                                anyhow!("building `{}` up to the roof failed: {e}", wall.name)
+                            })?;
+                        *solid = crate::fuse::fuse_coplanar(&crate::exact::exact_edges(&joined));
                     }
                 }
             }

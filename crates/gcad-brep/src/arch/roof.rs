@@ -93,7 +93,7 @@ impl Roof {
             &self.holes,
         )
         .map_err(|e| anyhow!(e))?;
-        shell_solid(&shell)
+        Ok(crate::fuse::fuse_coplanar(&shell_solid(&shell)?))
     }
 }
 
