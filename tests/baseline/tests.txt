@@ -81,5 +81,5 @@ unittests gcad_render: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered
 unittests gcad_sim: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_sims_proto: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-unittests gcad_view: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_view: ok. 38 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_web: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

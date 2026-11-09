@@ -4873,66 +4873,50 @@ mod tests {
         harness.step();
     }
 
-    #[cfg(not(target_arch = "wasm32"))]
     #[test]
-    fn a_point_cloud_draws_in_every_colour_mode() {
-        let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
-        let dir = root.join(format!("target/cloud-view-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
-        let file = dir.join("scan.gcad");
-        let big = std::env::var("GCAD_BIG_CLOUD").ok();
-        let ply = big
-            .clone()
-            .map(std::path::PathBuf::from)
-            .unwrap_or_else(|| root.join("tests/fixtures/clouds/survey.las"));
-        std::fs::write(&file, format!("scan: cloud {}\n", ply.display())).unwrap();
-        let file = crate::host::canonicalize(&file).unwrap();
-        let opened = file.clone();
-        let mut harness = egui_kittest::Harness::builder()
-            .with_size(egui::vec2(1100., 760.))
-            .with_accessibility_check(false)
-            .build_eframe(|cc| {
-                super::App::new(cc, Some(opened.clone()), String::new(), None, vec![])
-            });
-        let deadline = std::time::Instant::now() + std::time::Duration::from_secs(600);
-        while !harness
-            .state()
-            .shown
-            .as_ref()
-            .is_some_and(|s| !s.scene.clouds.is_empty())
-        {
-            assert!(std::time::Instant::now() < deadline, "timed out");
-            std::thread::sleep(std::time::Duration::from_millis(25));
-            harness.step();
+    fn a_survey_cloud_is_drawn_around_its_centre_in_every_colour_mode() {
+        let path = concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/../../tests/fixtures/clouds/survey.las"
+        );
+        let lines = crate::parse::parse_program(&format!("scan: cloud {path}")).expect("parses");
+        let snapshots = crate::model::run_snapshots(&lines);
+        let key = super::SceneKey {
+            generation: 0,
+            line: 0,
+            query: String::new(),
+            full: true,
+        };
+        let shown = super::build_shown(&snapshots[0], key, &[]).expect("a scene");
+        assert_eq!(shown.scene.clouds.len(), 1);
+        for by in gcad_cloud::ColourBy::ALL {
+            let style = super::scene::CloudStyle { by, size: 4.0 };
+            let drawn = super::scene::styled_clouds(&shown.scene.mesh, &shown.scene.clouds, style);
+            let points: Vec<_> = drawn
+                .lines
+                .iter()
+                .filter(|l| !l.segments.is_empty())
+                .collect();
+            assert_eq!(points.iter().map(|l| l.segments.len()).sum::<usize>(), 726);
+            assert!(points.iter().all(|l| l.width == 4.0));
+            for l in &points {
+                for [p, _] in &l.segments {
+                    assert!(p.iter().all(|v| v.abs() <= 17.4), "{p:?}");
+                }
+            }
         }
-        let mut seen = Vec::new();
-        for (name, by, size) in [
-            ("rgb", gcad_cloud::ColourBy::Rgb, 2.5),
-            ("height", gcad_cloud::ColourBy::Height, 2.5),
-            ("class", gcad_cloud::ColourBy::Class, 2.5),
-            ("intensity", gcad_cloud::ColourBy::Intensity, 2.5),
-            ("big", gcad_cloud::ColourBy::Rgb, 9.0),
-        ] {
-            harness.state_mut().cloud_style = super::scene::CloudStyle { by, size };
-            for _ in 0..3 {
-                harness.step();
-            }
-            let image = harness.render().expect("renders");
-            image.save(dir.join(format!("cloud-{name}.png"))).unwrap();
-            let started = std::time::Instant::now();
-            for _ in 0..5 {
-                harness.step();
-                harness.render().expect("renders");
-            }
-            eprintln!("{name}: {:?} per frame", started.elapsed() / 5);
-            let mut colours = std::collections::HashSet::new();
-            for p in image.pixels() {
-                colours.insert(p.0);
-            }
-            seen.push((name, colours.len()));
-        }
-        eprintln!("cloud pictures in {} {seen:?}", dir.display());
-        assert!(seen.iter().all(|(_, n)| *n > 20));
+        let by_class = super::scene::styled_clouds(
+            &shown.scene.mesh,
+            &shown.scene.clouds,
+            super::scene::CloudStyle {
+                by: gcad_cloud::ColourBy::Class,
+                size: 2.5,
+            },
+        );
+        assert_eq!(
+            by_class.lines.iter().filter(|l| !l.segments.is_empty()).count(),
+            3
+        );
     }
 
     #[cfg(not(target_arch = "wasm32"))]
