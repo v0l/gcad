@@ -779,6 +779,20 @@ impl Default for CloudStyle {
     }
 }
 
+impl CloudStyle {
+    pub fn saved() -> CloudStyle {
+        let base = CloudStyle::default();
+        CloudStyle {
+            by: crate::host::setting("cloud_colour")
+                .and_then(|name| gcad_cloud::ColourBy::parse(&name))
+                .unwrap_or(base.by),
+            size: crate::host::setting("cloud_size")
+                .and_then(|size| size.parse::<f32>().ok())
+                .map_or(base.size, |size| size.clamp(1.0, 12.0)),
+        }
+    }
+}
+
 fn with_clouds(model: &Model, mut scene: Scene) -> Scene {
     let clouds = model.named_clouds();
     if clouds.is_empty() {
@@ -786,7 +800,8 @@ fn with_clouds(model: &Model, mut scene: Scene) -> Scene {
     }
     let base = Arc::try_unwrap(std::mem::take(&mut scene.mesh)).unwrap_or_default();
     let mut bounds: Option<(crate::mesh::P3, crate::mesh::P3)> = None;
-    let had_surfaces = !base.surfaces.is_empty() || !base.lines.is_empty();
+    let had_surfaces =
+        !base.surfaces.is_empty() || base.lines.iter().any(|l| !l.segments.is_empty());
     if had_surfaces {
         let r = base.radius as f64;
         let c = base.centre.map(|v| v as f64);
@@ -818,12 +833,34 @@ fn with_clouds(model: &Model, mut scene: Scene) -> Scene {
         });
     }
     let (lo, hi) = bounds.unwrap_or_default();
+    let centre = if had_surfaces {
+        std::array::from_fn(|k| ((lo[k] + hi[k]) / 2.0) as f32)
+    } else {
+        [0.0; 3]
+    };
     scene.mesh = Arc::new(viewer3d::Scene {
-        centre: std::array::from_fn(|k| ((lo[k] + hi[k]) / 2.0) as f32),
+        centre,
         radius: (crate::mesh::length(crate::mesh::sub(hi, lo)) / 2.0).max(1.0e-3) as f32,
         ..base
     });
     scene
+}
+
+fn cloud_origin(clouds: &[(usize, Arc<gcad_cloud::Cloud>)]) -> [f64; 3] {
+    let mut bounds: Option<(crate::mesh::P3, crate::mesh::P3)> = None;
+    for (_, cloud) in clouds {
+        if let Some((lo, hi)) = cloud.bounds() {
+            bounds = Some(match bounds {
+                None => (lo, hi),
+                Some((a, b)) => (
+                    std::array::from_fn(|k| a[k].min(lo[k])),
+                    std::array::from_fn(|k| b[k].max(hi[k])),
+                ),
+            });
+        }
+    }
+    let (lo, hi) = bounds.unwrap_or_default();
+    std::array::from_fn(|k| (lo[k] + hi[k]) / 2.0)
 }
 
 fn colour_key(c: [u8; 3]) -> u16 {
@@ -834,12 +871,18 @@ fn key_colour(key: u16) -> V3 {
     [(key >> 8) & 15, (key >> 4) & 15, key & 15].map(|v| (v * 16 + 8) as f32 / 255.0)
 }
 
-pub fn cloud_lines(cloud: &gcad_cloud::Cloud, group: usize, style: CloudStyle) -> Vec<Lines> {
+pub fn cloud_lines(
+    cloud: &gcad_cloud::Cloud,
+    group: usize,
+    style: CloudStyle,
+    origin: [f64; 3],
+) -> Vec<Lines> {
     let indices = gcad_cloud::sample::display_indices(cloud.len(), CLOUD_DRAW_CAP);
     let colours = gcad_cloud::colour::colours(cloud, style.by, &indices);
     let mut buckets: std::collections::BTreeMap<u16, Vec<[V3; 2]>> = Default::default();
     for (&i, colour) in indices.iter().zip(&colours) {
-        let p = cloud.positions[i].map(|v| v as f32);
+        let q = cloud.positions[i];
+        let p: V3 = std::array::from_fn(|k| (q[k] - origin[k]) as f32);
         buckets.entry(colour_key(*colour)).or_default().push([p, p]);
     }
     buckets
@@ -859,9 +902,11 @@ pub fn styled_clouds(
     clouds: &[(usize, Arc<gcad_cloud::Cloud>)],
     style: CloudStyle,
 ) -> Arc<viewer3d::Scene<Ink>> {
+    let alone = base.surfaces.is_empty() && base.lines.iter().all(|l| l.segments.is_empty());
+    let origin = if alone { cloud_origin(clouds) } else { [0.0; 3] };
     let mut lines = base.lines.clone();
     for (group, cloud) in clouds {
-        lines.extend(cloud_lines(cloud, *group, style));
+        lines.extend(cloud_lines(cloud, *group, style, origin));
     }
     Arc::new(viewer3d::Scene {
         surfaces: base.surfaces.clone(),
