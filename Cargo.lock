@@ -2041,7 +2041,7 @@ dependencies = [
 
 [[package]]
 name = "gcad"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2070,7 +2070,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-brep"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bitcode",
@@ -2094,7 +2094,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-calc"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "serde",
@@ -2103,7 +2103,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-drafting"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "gcad-brep",
@@ -2117,7 +2117,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-geom"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "epaint_default_fonts 0.35.0",
@@ -2130,7 +2130,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-host"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "rayon",
  "sha2 0.10.9",
@@ -2142,7 +2142,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-mesh"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "gcad-parse",
@@ -2153,7 +2153,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-mesh-viewer"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "gcad-mesh",
  "macroquad",
@@ -2161,14 +2161,14 @@ dependencies = [
 
 [[package]]
 name = "gcad-parse"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
 ]
 
 [[package]]
 name = "gcad-plot"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bitcode",
@@ -2182,7 +2182,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-remote"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "flate2",
@@ -2199,7 +2199,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-render"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "gcad-brep",
@@ -2213,7 +2213,7 @@ dependencies = [
 
 [[package]]
 name = "gcad-sim"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "bitcode",
@@ -2255,11 +2255,11 @@ dependencies = [
 
 [[package]]
 name = "gcad-version"
-version = "0.6.1"
+version = "0.7.0"
 
 [[package]]
 name = "gcad-view"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "anyhow",
  "eframe",
@@ -2310,7 +2310,7 @@ dependencies = [
 
 [[package]]
 name = "gcad2glb"
-version = "0.6.1"
+version = "0.7.0"
 dependencies = [
  "gcad-brep",
  "gcad-mesh",

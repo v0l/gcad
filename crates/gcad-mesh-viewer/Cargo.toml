@@ -1,6 +1,6 @@
 [package]
 name = "gcad-mesh-viewer"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 description = "Minimal macroquad viewer that builds a gcad model at startup and plays a clip"
 license = "GPL-3.0-or-later"

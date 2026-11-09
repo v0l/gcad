@@ -6,6 +6,8 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-11-09
+
 ### Added
 - gcad-mesh `extrude d open=1` leaves the end caps off: a single-sided wall (glass tubes).
 - gcad-mesh `torus d tube at= around= sides=` makes a ring in the current plane (rims, tyres, handles) as its own part.
@@ -14,6 +16,16 @@ All notable changes to gcad are listed here. The format follows
 - `gcad2glb` is a library a game links to build `.gcad` and `.gasm` files at runtime: `gcad2glb::Assets::from_source` and `from_path` give bodies, parts, skins, clips, morph targets with per-clip weights, LODs and baked normal maps for mesh and solid files alike, plus `bounds`, `fit`, `to_glb` (the same bytes as `gcad export`) and a stable `cache_key`. The mesh-only build (`default-features = false`) adds about 1 MB to a game and builds for wasm32; `brep` adds solids and assemblies. The `gcad2glb` command is now a thin wrapper over it and also writes `.gasm` assemblies, one mesh per placed part. See `docs/gcad2glb.md`.
 - `gcad2glb` writes files that mix solid and mesh bodies, through the new `gcad-brep` crate, byte for byte the same GLB as `gcad export` (`examples/mesh/bracket_mascot.gcad`). `cargo build -p gcad2glb --no-default-features` keeps the mesh-only tool.
 - `cargo build -p gcad --no-default-features` builds the CLI without the viewer (no egui or wgpu).
+- `gcad2glb` keeps a content-addressed asset cache: `Sources::key` covers the text, its includes, the files it names, the options and the gcad version. `AssetCache` stores `<key>.glb` with a sidecar and prunes by size and age, `gcad2glb --cache DIR` copies a hit instead of building, `gcad2glb key` prints the key, `gcad2glb bake SRC OUT` builds a whole asset folder with an `index.json`, and `bake --check` lists stale entries. See `docs/gcad2glb.md`.
+- The `gcad-mesh` crate builds mesh and rig models from gcad text with no CAD kernel, egui or wgpu, for games to run at startup. It builds for wasm32, iOS and Android, has a C ABI (`crates/gcad-mesh/include/gcad_mesh.h`), and `crates/gcad-mesh-viewer` is a macroquad example. See `docs/gcad-mesh.md`.
+- Sculpting with brushes: `brush` (draw, clay, inflate, smooth, pinch, crease, slash, flatten, trim, polish, move, snake hook, nudge, stamp) with falloff profiles, `dab`, `stroke`, `mask`, `level`, `layer`, `remesh dynamesh` and `finish decimate= max_error= focus=` to decimate once at the end.
+- `block ... round=` makes a rounded box for mesh blockouts.
+- `corrective NAME bone= axis= from= to=` records a sculpt that blends in as a bone turns, written to the GLB as a morph target with weights in every clip. `refine joints` adds rings at the joints before `skin auto`.
+- `bake normals size=N` writes a tangent-space normal map of the full-detail sculpt into the GLB, and `lod` writes lower-detail meshes beside it.
+- `gcad export --tris N` or `--max-error E` (and `gcad2glb --tris N`) decimate unskinned bodies on export. Solid part files and solid bodies export to GLB too.
+- `gcad inspect --zoom x,y,z,r --wire --path x,y,z` frames a close-up, draws triangle edges and previews where a stroke lands.
+- The viewer draws mesh vertex colours, gloss and textures, has an animation card with a skeleton overlay and one timeline for mesh and asset clips, and drops to a lower detail mesh while editing dense meshes.
+- `gcad calc oring`, `gcad calc thread`, `gcad calc fit` and `gcad calc material` work out o-ring glands, thread sizes, tap drills, clearance holes, torques, ISO 286 fits and material data, each with its sources. The `oring_groove` op cuts the groove `gcad calc oring` works out.
 
 ### Fixed
 - `gcad2glb` wrote flat-solid files (`rect`, `circle`, `extrude` only, like the kids-free-games props) through gcad-mesh's flat extruder, so its GLB differed from `gcad export`; it now runs them through gcad-brep and the bytes match.

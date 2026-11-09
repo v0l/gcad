@@ -1,6 +1,6 @@
 [package]
 name = "gcad-mesh"
-version = "0.6.1"
+version = "0.7.0"
 edition = "2024"
 description = "Build rigged meshes from gcad text: blockout, sculpt, bones, skin, clips, GLB"
 license = "GPL-3.0-or-later"
