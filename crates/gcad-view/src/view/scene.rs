@@ -135,6 +135,7 @@ pub struct Scene {
     pub edges: Vec<SnapEdge>,
     pub faces: Vec<FaceInfo>,
     pub rigged: Vec<Rigged>,
+    pub clouds: Vec<(usize, Arc<gcad_cloud::Cloud>)>,
 }
 
 #[derive(Clone, Debug)]
@@ -649,11 +650,12 @@ pub fn build_lod(
     marked_colour: V3,
     budget: Option<usize>,
 ) -> Scene {
-    let mut scene = build_solids(model, highlights, marked, marked_colour);
+    let scene = build_solids(model, highlights, marked, marked_colour);
     let meshes = model.mesh_shading();
     if meshes.is_empty() {
-        return scene;
+        return with_clouds(model, scene);
     }
+    let mut scene = scene;
     let tinted = model.mesh_tints();
     let current = model.current_body();
     let selection = model.scene.mesh_body.selection.as_ref();
@@ -757,7 +759,118 @@ pub fn build_lod(
         radius: (crate::mesh::length(crate::mesh::sub(hi, lo)) / 2.0).max(1.0e-3) as f32,
         ..Default::default()
     });
+    with_clouds(model, scene)
+}
+
+pub const CLOUD_DRAW_CAP: usize = 400_000;
+
+#[derive(Clone, Copy, PartialEq)]
+pub struct CloudStyle {
+    pub by: gcad_cloud::ColourBy,
+    pub size: f32,
+}
+
+impl Default for CloudStyle {
+    fn default() -> Self {
+        CloudStyle {
+            by: gcad_cloud::ColourBy::Rgb,
+            size: 2.5,
+        }
+    }
+}
+
+fn with_clouds(model: &Model, mut scene: Scene) -> Scene {
+    let clouds = model.named_clouds();
+    if clouds.is_empty() {
+        return scene;
+    }
+    let base = Arc::try_unwrap(std::mem::take(&mut scene.mesh)).unwrap_or_default();
+    let mut bounds: Option<(crate::mesh::P3, crate::mesh::P3)> = None;
+    let had_surfaces = !base.surfaces.is_empty() || !base.lines.is_empty();
+    if had_surfaces {
+        let r = base.radius as f64;
+        let c = base.centre.map(|v| v as f64);
+        bounds = Some((c.map(|v| v - r), c.map(|v| v + r)));
+    }
+    for (name, cloud) in clouds {
+        let Some((lo, hi)) = cloud.bounds() else {
+            continue;
+        };
+        bounds = Some(match bounds {
+            None => (lo, hi),
+            Some((a, b)) => (
+                std::array::from_fn(|k| a[k].min(lo[k])),
+                std::array::from_fn(|k| b[k].max(hi[k])),
+            ),
+        });
+        scene.clouds.push((scene.parts.len(), cloud));
+        scene.parts.push(Part {
+            name: name.clone(),
+            colour: BODY,
+            opacity: model.opacities.get(&name).map_or(1.0, |o| *o as f32),
+            volume: 0.0,
+            current: false,
+            source: None,
+            material: None,
+            size: std::array::from_fn(|k| hi[k] - lo[k]),
+            hidden: false,
+            role: Role::Body,
+        });
+    }
+    let (lo, hi) = bounds.unwrap_or_default();
+    scene.mesh = Arc::new(viewer3d::Scene {
+        centre: std::array::from_fn(|k| ((lo[k] + hi[k]) / 2.0) as f32),
+        radius: (crate::mesh::length(crate::mesh::sub(hi, lo)) / 2.0).max(1.0e-3) as f32,
+        ..base
+    });
     scene
+}
+
+fn colour_key(c: [u8; 3]) -> u16 {
+    ((c[0] >> 4) as u16) << 8 | ((c[1] >> 4) as u16) << 4 | (c[2] >> 4) as u16
+}
+
+fn key_colour(key: u16) -> V3 {
+    [(key >> 8) & 15, (key >> 4) & 15, key & 15].map(|v| (v * 16 + 8) as f32 / 255.0)
+}
+
+pub fn cloud_lines(cloud: &gcad_cloud::Cloud, group: usize, style: CloudStyle) -> Vec<Lines> {
+    let indices = gcad_cloud::sample::display_indices(cloud.len(), CLOUD_DRAW_CAP);
+    let colours = gcad_cloud::colour::colours(cloud, style.by, &indices);
+    let mut buckets: std::collections::BTreeMap<u16, Vec<[V3; 2]>> = Default::default();
+    for (&i, colour) in indices.iter().zip(&colours) {
+        let p = cloud.positions[i].map(|v| v as f32);
+        buckets.entry(colour_key(*colour)).or_default().push([p, p]);
+    }
+    buckets
+        .into_iter()
+        .map(|(key, segments)| Lines {
+            segments,
+            colour: key_colour(key),
+            material: Ink::Edge,
+            group,
+            width: style.size,
+        })
+        .collect()
+}
+
+pub fn styled_clouds(
+    base: &viewer3d::Scene<Ink>,
+    clouds: &[(usize, Arc<gcad_cloud::Cloud>)],
+    style: CloudStyle,
+) -> Arc<viewer3d::Scene<Ink>> {
+    let mut lines = base.lines.clone();
+    for (group, cloud) in clouds {
+        lines.extend(cloud_lines(cloud, *group, style));
+    }
+    Arc::new(viewer3d::Scene {
+        surfaces: base.surfaces.clone(),
+        lines,
+        images: base.images.clone(),
+        centre: base.centre,
+        radius: base.radius,
+        ..Default::default()
+    })
 }
 
 fn build_solids(
@@ -913,6 +1026,7 @@ fn build_solids(
         edges: snap_edges,
         faces: info,
         rigged: Vec::new(),
+        clouds: Vec::new(),
     }
 }
 
@@ -1105,6 +1219,7 @@ pub fn build_field(view: &crate::sim::statics::FieldView) -> Scene {
         edges: Vec::new(),
         faces: Vec::new(),
         rigged: Vec::new(),
+        clouds: Vec::new(),
     }
 }
 

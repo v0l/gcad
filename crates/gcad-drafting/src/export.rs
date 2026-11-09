@@ -302,7 +302,29 @@ fn export_meshes(model: &crate::model::Model, path: &str) -> Result<()> {
     Ok(())
 }
 
+fn export_clouds(model: &crate::model::Model, path: &str) -> Result<()> {
+    let clouds = model.named_clouds();
+    let mut all = gcad_cloud::Cloud::default();
+    for (_, cloud) in &clouds {
+        all.merge(cloud);
+    }
+    gcad_cloud::write(&all, std::path::Path::new(path))
+}
+
+fn is_cloud_export(path: &str) -> bool {
+    let lower = path.to_ascii_lowercase();
+    [".ply", ".xyz", ".e57", ".las", ".laz"]
+        .iter()
+        .any(|e| lower.ends_with(e))
+}
+
 pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &str) -> Result<()> {
+    if !model.clouds.is_empty() && model.solids().is_empty() && model.meshes().is_empty() {
+        if !is_cloud_export(path) {
+            bail!("a point cloud exports as .ply, .xyz, .e57, .las or .laz");
+        }
+        return export_clouds(model, path);
+    }
     if !model.assembly && path.to_ascii_lowercase().ends_with(".glb") {
         return std::fs::write(path, glb_of(model)?).map_err(Into::into);
     }

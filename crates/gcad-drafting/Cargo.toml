@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 gcad-brep.workspace = true
+gcad-cloud.workspace = true
 gcad-geom.workspace = true
 gcad-host.workspace = true
 gcad-mesh.workspace = true

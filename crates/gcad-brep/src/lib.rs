@@ -4,6 +4,7 @@ mod assembly;
 mod blends;
 mod bodies;
 mod clearance;
+mod clouds;
 mod constrain;
 mod enclosure;
 mod exact;
@@ -143,6 +144,7 @@ pub struct Model {
     pub sim: Option<Box<dyn Study>>,
     pub scene: gcad_mesh::interp::Scene,
     pub arch: arch::Arch,
+    pub clouds: Vec<(String, std::sync::Arc<gcad_cloud::Cloud>)>,
 }
 
 #[derive(Clone)]
@@ -570,6 +572,7 @@ pub const OPERATIONS: &[&str] = &[
     "place",
     "measure",
     "import",
+    "cloud",
     "if",
     "include",
     "point",
@@ -683,6 +686,7 @@ const MESH_SAFE: &[&str] = &[
     "axis",
     "point",
     "import",
+    "cloud",
 ];
 
 impl Model {
@@ -879,6 +883,7 @@ impl Model {
                 )
             }
             "import" => self.op_import(line),
+            "cloud" => self.op_cloud(line),
             "blob" => self.op_blob(line),
             "limb" => self.op_limb(line),
             "block" => self.op_block(line),

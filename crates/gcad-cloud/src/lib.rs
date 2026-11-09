@@ -1,4 +1,5 @@
 pub mod cloud;
+pub mod colour;
 pub mod e57;
 pub mod kdtree;
 pub mod las;
@@ -6,6 +7,7 @@ pub mod ply;
 pub mod sample;
 pub mod xyz;
 
+pub use colour::ColourBy;
 pub use cloud::{Cloud, Layout, P3, Point, memory};
 pub use e57::Pose;
 pub use kdtree::KdTree;

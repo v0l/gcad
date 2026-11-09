@@ -71,6 +71,7 @@ gcad-geom.workspace = true
 gcad-host.workspace = true
 gcad-plot.workspace = true
 gcad-brep.workspace = true
+gcad-cloud.workspace = true
 gcad-render.workspace = true
 gcad-drafting.workspace = true
 gcad-sim.workspace = true

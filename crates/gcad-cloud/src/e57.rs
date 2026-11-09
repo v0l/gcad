@@ -61,7 +61,7 @@ fn read_from<T: Read + Seek>(source: T, options: &Options) -> Result<Imported> {
                 continue;
             };
             let mut out = Point::at([x, y, z]);
-            out.scan = *index as u16;
+            out.scan = *index as u16 + 1;
             out.colour = point
                 .color
                 .map(|c| [c.red, c.green, c.blue].map(|v| (v * 255.0).round().clamp(0.0, 255.0) as u8))

@@ -9,6 +9,7 @@ publish = false
 
 [dependencies]
 gcad-calc.workspace = true
+gcad-cloud.workspace = true
 gcad-drafting.workspace = true
 gcad-geom.workspace = true
 gcad-host.workspace = true

@@ -1,2 +1,2 @@
-scan: rect 20 20
+scan: rect 20 20 at=10,10
 extrude 20

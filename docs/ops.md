@@ -673,3 +673,87 @@ Architecture stage G (gcad #354): the same lines build flat meshes with no kerne
 | mesh walls and openings | missing | `wall`, `door`, `window` through `gcad_mesh::build` | `arch::mesh_wall_matches_the_kernel` |
 | mesh house within budget | missing | walls, slab, roof, stair under 4000 triangles and 5 ms | `arch::mesh_house_within_budget` |
 | door nodes | missing | `d1.leaf` a named body pivoting at its hinge | `arch::mesh_door_is_a_hinged_node` |
+
+## Point clouds
+
+Point clouds, gcad #444 to #449. A cloud is a named body like a mesh: `scan: cloud file.ply` makes `scan`, and `scan.points`, `scan.scans`, `scan.min.x`, `scan.max.z`, `scan.size.y` and `scan.centre.x` are values usable in any expression. `gcad check` prints the count, bounds, scan count and memory. The crate is `gcad-cloud`; the tests are in `tests/clouds.rs` on fixtures made by `tools/clouds-fixtures.sh`.
+
+### Import, export and viewing (#444)
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| PLY, ascii and binary | supported | `scan: cloud file.ply`; x, y, z, nx, ny, nz, red, green, blue, intensity, classification read when present | `clouds::ascii_and_binary_ply_hold_the_same_cloud`, `clouds::cube_fixture_is_the_surface_of_the_cube_solid` |
+| XYZ, PTS and CSV | supported | `scan: cloud file.xyz\|.pts\|.csv`, with or without a header line | `clouds::xyz_fixture_reads_with_its_header` |
+| E57, every scan with its pose | supported | `scan: cloud file.e57`; `scan=N` picks one scan | `clouds::e57_with_two_poses_gives_the_world_bounds`, `clouds::e57_scan_picks_one_scan_with_its_pose` |
+| LAS and LAZ | supported | `scan: cloud file.las\|.laz`; scale and offset applied, classification kept | `clouds::las_scale_and_offset_give_the_survey_coordinates`, `clouds::las_keeps_its_classification`, `clouds::laz_reads_the_same_points_as_las` |
+| uniform sample on import | supported | `max_points=N`, streamed, the same points every run | `clouds::max_points_takes_the_requested_count`, `clouds::max_points_sample_is_repeatable`, `clouds::max_points_above_the_file_keeps_every_point` |
+| import as a cloud | supported | `scan: import file.ply cloud`, or by extension | `clouds::import_with_the_cloud_keyword_reads_a_cloud` |
+| queryable count and bounds | supported | `scan.points`, `scan.scans`, `scan.min.x`, `scan.max.x`, `scan.size.x`, `scan.centre.x` | `clouds::points_and_bounds_are_queryable_in_expressions` |
+| check report | supported | `gcad check` prints points, bounds, scans, memory and whether it was sampled | `clouds::check_reports_the_count_the_bounds_and_the_memory` |
+| clouds beside solids | supported | one name per body, a repeat is an error | `clouds::clouds_are_named_bodies_that_can_sit_beside_solids` |
+| import errors | supported | missing file, bad `max_points`, `scan=` on a format without scans, unknown extension | `clouds::import_errors_say_what_is_wrong` |
+| PLY export | supported | `gcad export file.gcad out.ply` (binary, every column kept) | `clouds::ply_write_then_read_is_identical` |
+| XYZ, LAS, LAZ and E57 export | supported | `out.xyz`, `out.las`, `out.laz`, `out.e57`; anything else is refused | `clouds::xyz_export_round_trips`, `clouds::a_cloud_exports_as_ply_xyz_las_and_e57_and_nothing_else`, `clouds::las_export_keeps_survey_coordinates` |
+| viewer colour modes | supported | rgb, intensity, height, normal or class, point size slider, `gcad-view` | `clouds::viewer_colour_modes_follow_the_data` |
+| viewer draw cap | supported | at most 400000 points drawn, evenly spread, so 10 million points stay interactive | `clouds::ten_million_points_are_drawn_within_the_cap` |
+| neighbour queries | supported | `gcad_cloud::KdTree` nearest k and radius | `clouds::kd_tree_answers_neighbour_queries_on_an_imported_cloud` |
+
+### Clean and sample (#445)
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| crop | missing | `crop scan box=x0,y0,z0,x1,y1,z1 \| sphere=c,r \| plane=p keep=above\|below \| polygon=x,y ...` | `clouds::crop_keeps_the_points_in_a_box` |
+| voxel downsample | missing | `downsample scan voxel=5`, centroid per voxel | `clouds::voxel_downsample_gives_one_point_per_occupied_voxel` |
+| every and count downsample | missing | `downsample scan every=10`, `downsample scan count=N` with a fixed seed | `clouds::downsample_every_and_count_are_seeded` |
+| statistical outlier removal | missing | `denoise scan stat k=16 sigma=2` | `clouds::statistical_denoise_removes_the_outliers_and_few_good_points` |
+| radius outlier removal | missing | `denoise scan radius=10 min=5` | `clouds::radius_denoise_removes_isolated_points` |
+| normals | missing | `normals scan k=20 [toward=x,y,z]`, oriented consistently | `clouds::normals_on_the_cube_faces_are_within_2_degrees_and_consistent` |
+| transforms | missing | `move`, `rotate`, `scale`, `transform scan <4x4>` on a cloud | `clouds::cloud_transforms_match_the_solid_transforms` |
+| merge | missing | `merge a b into all`, each point keeps its scan id | `clouds::merge_keeps_every_scan_id` |
+| colour and info | missing | `colour scan by=height\|intensity\|normal\|class`, `info scan` | `clouds::colour_by_and_info` |
+| large clouds | missing | 10 million points through voxel and stat in a recorded time | `clouds::ten_million_points_through_voxel_and_stat` |
+
+### Registration (#446)
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| point pairs | missing | `align b to=a pairs=bx,by,bz>ax,ay,az ...`, Kabsch, reports the RMS | `clouds::point_pairs_with_three_exact_pairs_give_zero_rms` |
+| ICP | missing | `align b to=a icp point\|plane max_dist=20 iters=50` | `clouds::icp_recovers_a_known_transform_for_point_and_plane` |
+| coarse alignment | missing | `align b to=a coarse voxel=10` (FPFH with RANSAC, then ICP) | `clouds::coarse_alignment_recovers_a_90_degree_500_offset` |
+| multi-scan | missing | `align scans s1 s2 s3 ...` | `clouds::overlapping_partial_scans_merge_into_a_clean_cloud` |
+| scan to CAD | missing | `align scan to=<solid or mesh body>` | `clouds::scan_to_cad_icp_gives_an_rms_within_the_noise` |
+
+### Segmentation and fitting (#447)
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| plane peeling | missing | `fit scan plane tol=0.5 into=f all max=20` | `clouds::fit_all_finds_six_planes_on_a_scanned_box` |
+| cylinder | missing | `fit scan cylinder tol=0.5 into=c`, `c.radius`, `c.axis` | `clouds::fit_cylinder_finds_radius_and_axis` |
+| sphere and cone | missing | `fit scan sphere\|cone tol=0.5 into=s` | `clouds::fit_sphere_and_cone` |
+| clustering | missing | `cluster scan dist=5 min=100 into=parts` | `clouds::three_separated_blobs_cluster_into_three` |
+| region growing | missing | `grow scan angle=5 curvature=0.05 into=regions` | `clouds::region_growing_splits_a_box_into_its_faces` |
+| slices to sketches | missing | `slice scan plane=z thickness=1 into=s`, then `extrude s 20` | `clouds::slice_of_a_scanned_extrusion_rebuilds_its_volume` |
+| ground filter | missing | `classify scan ground` | `clouds::ground_filter_matches_the_stored_classification` |
+| fits feed solids | missing | `plane f.plane`, `hole d=f.radius*2` at `f.axis` | `clouds::a_fitted_plane_makes_a_workplane_and_a_cylinder_a_hole` |
+
+### Reconstruction (#448)
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| Poisson | missing | `mesh scan poisson depth=9 trim=0.1 into=m` | `clouds::poisson_of_a_sphere_cloud_is_watertight_with_the_right_volume` |
+| ball pivoting | missing | `mesh scan pivot r=2,4,8 into=m` | `clouds::ball_pivoting_covers_the_sphere_area` |
+| hole fill and decimate | missing | `fill m max_edges=100`, `decimate m to=50000` | `clouds::filling_a_known_hole_closes_it_and_decimation_hits_the_target` |
+| clean and Taubin | missing | `clean m`, `smooth m taubin iters=10` | `clouds::clean_and_taubin_smoothing_keep_the_mesh_manifold` |
+| scanner meshes | missing | PLY faces with colours, `points m every=1`, `sample m count=N` | `clouds::a_scanner_ply_mesh_with_colours_imports_and_samples_back_to_a_cloud` |
+
+### Inspection (#449)
+
+| operation | status | syntax | tests |
+|---|---|---|---|
+| deviation | missing | `deviation scan to=<body> max=0.5 into=d`: `d.mean`, `d.std`, `d.min`, `d.max`, `d.within` | `clouds::deviation_of_an_offset_cloud_has_the_right_mean_and_sign` |
+| deviation flags a moved face | missing | only the moved face's points fall outside the tolerance | `clouds::deviation_flags_only_the_moved_face` |
+| measure | missing | `measure scan a b`, point to plane, fitted feature to fitted feature | `clouds::spacing_of_two_fitted_cylinders_matches_the_cad` |
+| check lines | missing | `check d.max < 0.3` | `clouds::check_lines_use_the_deviation_values` |
+| scan sections | missing | `section scan plane=... into=s` beside the CAD section in a `.gdwg` | `clouds::scan_section_is_drawn_beside_the_cad_section` |
+| inspection report | missing | `gcad inspect scan.gcad --report out.pdf\|.csv` | `clouds::inspection_report_csv_is_stable` |
+| deviation colour map | missing | `colour scan by=deviation`, drawn with a legend | `clouds::deviation_colour_map_renders` |

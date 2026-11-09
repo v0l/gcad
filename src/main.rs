@@ -709,7 +709,10 @@ fn finished(run: &Run) -> Result<()> {
         spec.target()?;
         return Ok(());
     }
-    if run.model.solids().is_empty() && run.model.meshes().is_empty() {
+    if run.model.solids().is_empty()
+        && run.model.meshes().is_empty()
+        && run.model.clouds.is_empty()
+    {
         bail!("the file builds no solid");
     }
     Ok(())

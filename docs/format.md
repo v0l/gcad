@@ -606,6 +606,46 @@ Positions, sizes and the selection are in the same millimetres as everything els
 game asset is best modelled at a known scale, 1 unit to 1 cm for instance, and scaled on
 import.
 
+## Point clouds
+
+A cloud is a body like a mesh, read from a scan file, never written as points. The line
+makes a named body and queryable values:
+
+```
+scan: cloud site.laz max_points=2000000
+scan: cloud rooms.e57 scan=1
+part: import cast.ply cloud
+let width=scan.size.x
+```
+
+`cloud file` and `import file cloud` are the same line, and a file with one of the extensions
+below is read as a cloud without the keyword. Options: `max_points=N` takes a uniform sample
+while reading (the same points every run, the file is streamed, not held whole), and `scan=N`
+picks one scan of an `.e57` file (from 0).
+
+| file | read | notes |
+|---|---|---|
+| `.ply` | ascii, binary little and big endian | `x y z`, `nx ny nz`, `red green blue`, `intensity`, `classification`, `scan_id`; faces and other elements are skipped |
+| `.xyz`, `.csv`, `.pts` | text, space, comma or semicolon separated | a header line with `x y z` names the columns; without one, 3 values are `x y z`, 6 are `x y z r g b`, `.pts` is `x y z intensity [r g b]` after a count line |
+| `.e57` | every scan, each scan's pose applied | `scan=N` picks one; colour and intensity kept; the scan number (from 1) is kept per point |
+| `.las`, `.laz` | scale and offset applied, so coordinates are the survey values | classification, intensity, colour and point source id kept |
+
+Positions are stored as `f64`: survey coordinates such as `500000.123, 4000000.456` need more
+than the 7 digits an `f32` holds, and an offset would make every op carry it. Normals and
+intensity are `f32`, colour is 8 bits per channel, classes are the LAS class codes. A cloud
+holds one scan id per point.
+
+After the line, `scan.points`, `scan.scans`, `scan.min.x`, `scan.max.x`, `scan.size.x` and
+`scan.centre.x` (and the same for `y` and `z`) are values in every later expression.
+`gcad check` prints the point count, the bounds, the scan count and the memory the cloud
+takes, and says when it was sampled.
+
+`gcad export scan.gcad out.ply` writes a binary PLY with every column the cloud has; `.xyz`,
+`.las`, `.laz` and `.e57` are written too. The viewer draws a cloud as points coloured by rgb,
+intensity, height, normal or class, with an adjustable point size. It draws at most 400 000
+points, spread evenly through the cloud, so a 10 million point scan stays interactive.
+The fixtures in `tests/fixtures/clouds` are made by `tools/clouds-fixtures.sh`.
+
 ## Assemblies
 
 A design with more than one part is a `.gasm` file, an assembly: it brings the parts

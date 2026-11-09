@@ -76,7 +76,7 @@ fn main() -> anyhow::Result<()> {
 
     let sparse = cube_surface(20.0, 4.0, 0.0, &mut rng);
     let mut second = sparse.clone();
-    second.scans.iter_mut().for_each(|s| *s = 1);
+    second.scans.iter_mut().for_each(|s| *s = 2);
     e57::write(
         &dir.join("two_scans.e57"),
         &[

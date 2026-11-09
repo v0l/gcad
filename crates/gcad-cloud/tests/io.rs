@@ -172,7 +172,7 @@ fn e57_with_two_poses_has_the_world_bounds() {
     for (a, b) in lo.iter().chain(&hi).zip([0.0, 0.0, 0.0, 100.0, 70.0, 20.0]) {
         assert!((a - b).abs() < 1.0e-9, "{lo:?} {hi:?}");
     }
-    assert_eq!(both.cloud.scan_ids(), vec![0, 1]);
+    assert_eq!(both.cloud.scan_ids(), vec![1, 2]);
 }
 
 #[test]

@@ -299,6 +299,8 @@ pub struct App {
     playback: super::anim::Playback,
     weights: super::weights::Weights,
     weighted: Option<(u64, super::weights::Show, usize, Arc<viewer3d::Scene<Ink>>)>,
+    cloud_style: scene::CloudStyle,
+    cloud_scene: Option<(u64, scene::CloudStyle, Arc<viewer3d::Scene<Ink>>)>,
     posed: Option<(u64, super::anim::Playback, Arc<viewer3d::Scene<Ink>>)>,
     reels: Vec<Option<(usize, egui::TextureHandle)>>,
     opacity: f32,
@@ -989,6 +991,8 @@ impl App {
             playback: super::anim::Playback::default(),
             weights: super::weights::Weights::default(),
             weighted: None,
+            cloud_style: scene::CloudStyle::default(),
+            cloud_scene: None,
             posed: None,
             reels: Vec::new(),
             opacity: 0.25,
@@ -2643,11 +2647,55 @@ impl App {
                     self.parts_card(ui);
                     self.animation_card(ui);
                     self.weights_card(ui);
+                    self.cloud_card(ui);
                 }
                 if !self.shown.as_ref().is_some_and(|s| s.assembly) {
                     self.select_card(ui);
                 }
             });
+    }
+
+    fn cloud_card(&mut self, ui: &mut Ui) {
+        let Some(shown) = self.shown.as_ref() else {
+            return;
+        };
+        let clouds = shown.scene.clouds.clone();
+        if clouds.is_empty() {
+            return;
+        }
+        let points: usize = clouds.iter().map(|(_, c)| c.len()).sum();
+        let drawn: usize = clouds
+            .iter()
+            .map(|(_, c)| c.len().min(scene::CLOUD_DRAW_CAP))
+            .sum();
+        let mut style = self.cloud_style;
+        card(
+            ui,
+            None,
+            |ui| {
+                Line::new().legend("point cloud").show(ui);
+            },
+            |ui| {
+                Line::new()
+                    .legend("points")
+                    .measured(points.to_string())
+                    .legend("drawn")
+                    .measured(drawn.to_string())
+                    .size(11.0)
+                    .show(ui);
+                ui.horizontal_wrapped(|ui| {
+                    for by in gcad_cloud::ColourBy::ALL {
+                        let usable = clouds.iter().any(|(_, c)| by.available(c));
+                        if usable && toggle(ui, by.name(), style.by == by).clicked() {
+                            style.by = by;
+                        }
+                    }
+                });
+                ui.spacing_mut().slider_width = 110.0;
+                ui.add(egui::Slider::new(&mut style.size, 1.0..=12.0).text("point size"));
+            },
+        );
+        self.cloud_style = style;
     }
 
     fn weights_card(&mut self, ui: &mut Ui) {
@@ -2875,6 +2923,19 @@ impl App {
 
     fn shown_scene(&mut self) -> Option<Arc<viewer3d::Scene<Ink>>> {
         let shown = self.shown.as_ref()?;
+        if !shown.scene.clouds.is_empty() {
+            let key = shown.scene.mesh.id;
+            let style = self.cloud_style;
+            if let Some((k, s, scene)) = &self.cloud_scene
+                && *k == key
+                && *s == style
+            {
+                return Some(scene.clone());
+            }
+            let scene = scene::styled_clouds(&shown.scene.mesh, &shown.scene.clouds, style);
+            self.cloud_scene = Some((key, style, scene.clone()));
+            return Some(scene);
+        }
         if self.weights.active() && !shown.scene.rigged.is_empty() {
             let key = shown.scene.mesh.id;
             let (show, bone) = (self.weights.show, self.weights.bone);
@@ -2923,6 +2984,14 @@ impl App {
             .map(|(.., scene)| scene.clone());
         let scene = match &self.posed {
             _ if weighted.is_some() => weighted.unwrap_or_default(),
+            _ if !shown.scene.clouds.is_empty() => match &self.cloud_scene {
+                Some((key, style, scene))
+                    if *key == shown.scene.mesh.id && *style == self.cloud_style =>
+                {
+                    scene.clone()
+                }
+                _ => shown.scene.mesh.clone(),
+            },
             Some((key, playback, scene))
                 if *key == shown.scene.mesh.id
                     && *playback == self.playback
@@ -4367,6 +4436,7 @@ fn mesh_shown(model: &crate::model::Model, key: SceneKey, line: &SourceLine) -> 
         .meshes()
         .iter()
         .filter_map(|(_, mesh)| mesh.bounds())
+        .chain(model.named_clouds().iter().filter_map(|(_, c)| c.bounds()))
         .reduce(|(a, b), (lo, hi)| {
             (
                 std::array::from_fn(|k| a[k].min(lo[k])),
@@ -4435,7 +4505,7 @@ fn build_shown(snapshot: &Snapshot, key: SceneKey, vars: &[(String, f64)]) -> Op
         Some(target) => target,
         None => &snapshot.model,
     };
-    if model.solids().is_empty() && model.meshes().is_empty() {
+    if model.solids().is_empty() && model.meshes().is_empty() && model.clouds.is_empty() {
         return None;
     }
     if model.solids().is_empty() {

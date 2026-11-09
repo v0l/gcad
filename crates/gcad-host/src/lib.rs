@@ -12,6 +12,10 @@ pub use std::time::Instant;
 #[cfg(target_arch = "wasm32")]
 pub use web_time::Instant;
 
+pub trait ReadSeek: io::Read + io::Seek + Send + Sync {}
+
+impl<T: io::Read + io::Seek + Send + Sync> ReadSeek for T {}
+
 pub trait Snapshot: Send + Sync {
     fn covers(&self, path: &Path) -> bool;
     fn read(&self, path: &Path) -> io::Result<Vec<u8>>;
@@ -170,6 +174,16 @@ mod files {
         bytes
     }
 
+    pub fn open(path: &Path) -> io::Result<Box<dyn super::ReadSeek>> {
+        if let Some(snapshot) = super::covering(path) {
+            return Ok(Box::new(io::Cursor::new(snapshot.read(path)?)));
+        }
+        let was = stamp(path);
+        let file = std::fs::File::open(path);
+        note(path, was, file.is_ok(), None);
+        Ok(Box::new(io::BufReader::with_capacity(1 << 16, file?)))
+    }
+
     pub fn is_file(path: &Path) -> bool {
         if let Some(snapshot) = super::covering(path) {
             return snapshot.is_file(path);
@@ -295,6 +309,10 @@ mod files {
         bytes
             .map(|b| b.to_vec())
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "no such file"))
+    }
+
+    pub fn open(path: &Path) -> io::Result<Box<dyn super::ReadSeek>> {
+        Ok(Box::new(io::Cursor::new(read(path)?)))
     }
 
     pub fn is_file(path: &Path) -> bool {

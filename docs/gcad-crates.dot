@@ -6,9 +6,11 @@ digraph gcad {
 	];
 	gcad -> "gcad-view";
 	"gcad-brep" -> "gcad-calc";
+	"gcad-brep" -> "gcad-cloud";
 	"gcad-brep" -> "gcad-geom";
 	"gcad-brep" -> "gcad-host";
 	"gcad-brep" -> "gcad-mesh";
+	"gcad-cloud" -> "gcad-parse";
 	"gcad-drafting" -> "gcad-brep";
 	"gcad-mesh" -> "gcad-parse";
 	"gcad-plot" -> "gcad-host";

@@ -20,8 +20,9 @@ The picture is `docs/gcad-crates.dot` (made from `cargo metadata`, transitive ed
 | `gcad-version` | `BUILD`, the version string with the last code commit | nothing |
 | `gcad-plot` | simulation results (`Outcome`, `Series`, `Field`, `Movie`, `Expect`) and the charts | parse, host |
 | `gcad-mesh` | meshes, sculpting, rigs, clips, the GLB writer, the C ABI. No kernel | parse |
-| `gcad-brep` | the solid language: sketches, features, bodies, assemblies, mates, materials, standard parts, the part cache, `glb_of` for files with solids | parse, calc, host, geom, mesh, version |
-| `gcad-drafting` | STEP, STL, OBJ, 3MF, SVG and DXF export, drawings, `.gdwg` sheets, nesting, BOM | brep, geom, host, mesh, parse |
+| `gcad-cloud` | point clouds: `Cloud`, the kd-tree, sampling, PLY, XYZ, E57 and LAS/LAZ import and export, colour modes for the viewer. No kernel | parse |
+| `gcad-brep` | the solid language: sketches, features, bodies, assemblies, mates, materials, standard parts, the part cache, `glb_of` for files with solids | parse, calc, cloud, host, geom, mesh, version |
+| `gcad-drafting` | STEP, STL, OBJ, 3MF, SVG and DXF export, drawings, `.gdwg` sheets, nesting, BOM | brep, cloud, geom, host, mesh, parse |
 | `gcad-render` | the software renderer (`gcad render`) and `gcad inspect` | brep, geom, mesh, plot |
 | `gcad-sim` | the `.gsim` language, every solver, flow, packed jobs; `gcad_sim::model` and `gcad_sim::drafting` wrap brep and drafting so a `.gsim` opens anywhere | brep, drafting, render, plot, geom, host, parse, version, the sims crates |
 | `gcad-remote` | the paid remote simulation client and worker (not on wasm) | brep, sim |
@@ -45,7 +46,7 @@ What was planned and not made, and why:
 
 ## Where new code goes
 
-- A new operation of the solid language: gcad-brep. Mesh-body operations: gcad-mesh.
+- A new operation of the solid language: gcad-brep. Mesh-body operations: gcad-mesh. Point cloud data, readers and algorithms: gcad-cloud (the `cloud` line itself is dispatched from gcad-brep, which owns the model).
 - A new simulation kind or `.gsim` line: gcad-sim (`language.rs` for the line, its own module for the solver).
 - A new export format or drawing feature: gcad-drafting.
 - Anything with egui, wgpu or the window: gcad-view.
@@ -53,7 +54,7 @@ What was planned and not made, and why:
 - Helpers that two crates need go down to the lowest crate both already depend on (that is why
   `label` and `matches` live in gcad-parse).
 
-Rules that keep the graph honest: gcad-mesh never takes the kernel; gcad-brep never takes sims,
+Rules that keep the graph honest: gcad-mesh and gcad-cloud never take the kernel; gcad-brep never takes sims,
 egui or wgpu (`.gsim` support is a hook, `model::set_study`, that gcad-sim installs);
 `cargo build -p gcad --no-default-features` has no egui or wgpu. Check with
 `cargo tree -p <crate> -e normal | grep -E "egui|wgpu|sims-"`.

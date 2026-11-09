@@ -685,6 +685,7 @@ impl Model {
         if self.body == name
             || self.bodies.iter().any(|(n, _)| *n == name)
             || self.scene.mesh_bodies.iter().any(|(n, _)| *n == name)
+            || self.clouds.iter().any(|(n, _)| *n == name)
         {
             bail!("there is already a body called `{name}`");
         }
@@ -709,16 +710,26 @@ impl Model {
     }
 
     pub(crate) fn op_import(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["file", "as"], &["solid"], false)?;
+        let args = Args::new(
+            line,
+            &["file", "as"],
+            &["solid", "max_points", "scan"],
+            false,
+        )?;
         let file = std::path::PathBuf::from(args.text("file")?);
         let path = match &self.dir {
             Some(dir) if file.is_relative() => dir.join(&file),
             _ => file,
         };
+        if args.values.get("as").copied() == Some("cloud") || super::clouds::is_cloud_file(&path) {
+            return self.import_cloud(line, &args, &path);
+        }
         match args.values.get("as").copied() {
             Some("mesh") => return self.import_mesh(line, &path),
             Some(other) => {
-                bail!("`import file` reads a solid; `import file mesh` reads a mesh, not `{other}`")
+                bail!(
+                    "`import file` reads a solid; `import file mesh` reads a mesh and `import file cloud` a point cloud, not `{other}`"
+                )
             }
             None => {}
         }
