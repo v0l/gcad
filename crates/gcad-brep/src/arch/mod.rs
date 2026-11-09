@@ -1,0 +1,141 @@
+mod datum;
+mod opening;
+mod wall;
+
+use crate::geometry::Profile;
+use gcad_mesh::arch::{Chain, Join, Justify, Layer};
+
+#[derive(Clone, Debug, Default)]
+pub struct Building {
+    pub name: String,
+    pub north: f64,
+    pub datum: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct Level {
+    pub name: String,
+    pub z: f64,
+    pub title: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Grid {
+    pub name: String,
+    pub along_x: bool,
+    pub offset: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct Tier {
+    pub layers: Vec<Layer>,
+    pub from: f64,
+    pub to: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct Wall {
+    pub name: String,
+    pub line: Chain,
+    pub tiers: Vec<Tier>,
+    pub justify: Justify,
+    pub offset: f64,
+    pub base: f64,
+    pub top: f64,
+    pub top_offset: (f64, f64),
+    pub batter: f64,
+    pub pilasters: Vec<(f64, f64, f64)>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Head {
+    Flat,
+    Round,
+    Arch,
+    Segment,
+}
+
+#[derive(Clone, Debug)]
+pub enum Fill {
+    Hole,
+    Cut(Vec<Profile>),
+    Door {
+        swing: String,
+        inward: bool,
+        frame: (f64, f64),
+        leaf: f64,
+        threshold: f64,
+    },
+    Window {
+        panes: (usize, usize),
+        frame: f64,
+        depth: f64,
+        mullion: f64,
+        glass: f64,
+    },
+    Garage {
+        panels: usize,
+    },
+    Part {
+        file: std::path::PathBuf,
+        vars: Vec<(String, f64)>,
+    },
+}
+
+#[derive(Clone, Debug)]
+pub struct Opening {
+    pub name: String,
+    pub host: String,
+    pub at: f64,
+    pub w: f64,
+    pub h: f64,
+    pub sill: f64,
+    pub head: Head,
+    pub mark: Option<String>,
+    pub fill: Fill,
+}
+
+#[derive(Clone, Debug)]
+pub struct Sweep {
+    pub name: String,
+    pub host: String,
+    pub face: String,
+    pub width: f64,
+    pub height: f64,
+    pub at: f64,
+    pub material: String,
+}
+
+#[derive(Clone, Debug)]
+pub struct Built {
+    pub owner: String,
+    pub key: String,
+    pub holes: Vec<String>,
+    pub bodies: Vec<String>,
+}
+
+#[derive(Clone, Debug, Default)]
+pub struct Arch {
+    pub units: Option<String>,
+    pub building: Option<Building>,
+    pub levels: Vec<Level>,
+    pub grids: Vec<Grid>,
+    pub types: Vec<(String, Vec<Layer>)>,
+    pub walls: Vec<Wall>,
+    pub joins: Vec<(String, String, Join)>,
+    pub openings: Vec<Opening>,
+    pub sweeps: Vec<Sweep>,
+    pub built: Vec<Built>,
+}
+
+impl Arch {
+    pub fn owns(&self, body: &str) -> bool {
+        self.built
+            .iter()
+            .any(|b| b.bodies.iter().any(|name| name == body))
+    }
+
+    pub fn wall(&self, name: &str) -> Option<&Wall> {
+        self.walls.iter().find(|w| w.name == name)
+    }
+}

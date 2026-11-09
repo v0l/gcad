@@ -770,7 +770,7 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         .model
         .body_names()
         .into_iter()
-        .filter(|name| !run.model.members.contains(name))
+        .filter(|name| !run.model.members.contains(name) && !run.model.arch.owns(name))
         .collect();
     if !run.model.assembly && bodies.len() > 1 {
         println!(

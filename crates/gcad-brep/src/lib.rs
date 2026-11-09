@@ -1,3 +1,4 @@
+pub mod arch;
 pub mod args;
 mod assembly;
 mod blends;
@@ -141,6 +142,7 @@ pub struct Model {
     pub open: Option<String>,
     pub sim: Option<Box<dyn Study>>,
     pub scene: gcad_mesh::interp::Scene,
+    pub arch: arch::Arch,
 }
 
 #[derive(Clone)]
@@ -614,6 +616,19 @@ pub const OPERATIONS: &[&str] = &[
     "finish",
     "bake",
     "lod",
+    "units",
+    "building",
+    "grid",
+    "gridfile",
+    "wall_type",
+    "wall",
+    "wall_join",
+    "wall_sweep",
+    "wall_cut",
+    "opening",
+    "door",
+    "window",
+    "garage_door",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -861,7 +876,18 @@ impl Model {
             "join" => self.scene.op_join(&self.scope, line),
             "dyntopo" => self.scene.op_dyntopo(&self.scope, line),
             "subdivide" => self.scene.op_subdivide(&self.scope, line),
+            "level" if line.positional.len() >= 2 && !self.has_mesh() => self.op_level_datum(line),
             "level" => self.scene.op_level(&self.scope, line),
+            "units" => self.op_units(line),
+            "building" => self.op_building(line),
+            "grid" => self.op_grid(line),
+            "gridfile" => self.op_gridfile(line),
+            "wall_type" => self.op_wall_type(line),
+            "wall" => self.op_wall(line),
+            "wall_join" => self.op_wall_join(line),
+            "wall_sweep" => self.op_wall_sweep(line),
+            "wall_cut" => self.op_wall_cut(line),
+            "opening" | "door" | "window" | "garage_door" => self.op_opening(line),
             "project" => self.scene.op_project(&self.scope, line),
             "layer" => self.scene.op_layer(&self.scope, line),
             "finish" => self.scene.op_finish(&self.scope, line),

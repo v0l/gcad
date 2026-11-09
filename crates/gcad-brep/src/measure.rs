@@ -235,6 +235,9 @@ impl Model {
     }
 
     fn distance(&self, a: &str, b: &str) -> Result<String> {
+        if let (Some(first), Some(second)) = (self.wall_faces(a), self.wall_faces(b)) {
+            return Self::face_distance(first?, second?);
+        }
         let solid = self.active("measure")?;
         let tolerance = self.tolerance();
         let faces = select::faces(solid);
@@ -246,6 +249,10 @@ impl Model {
             Ok(indices.into_iter().map(|i| faces[i].clone()).collect())
         };
         let (first, second) = (pick(a)?, pick(b)?);
+        Self::face_distance(first, second)
+    }
+
+    fn face_distance(first: Vec<Face>, second: Vec<Face>) -> Result<String> {
         let planes = |set: &[Face]| -> Option<Vec<Plane>> {
             set.iter()
                 .map(|f| match f.oriented_surface() {

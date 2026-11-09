@@ -108,6 +108,15 @@ impl Model {
     }
 
     fn faces_span(&self, selector: &str) -> Result<Span> {
+        if let Some(faces) = self.wall_faces(selector) {
+            let points = faces?.into_iter().flat_map(|face| {
+                face.edge_iter()
+                    .flat_map(|edge| geometry::curve_samples(&edge.curve()))
+                    .collect::<Vec<_>>()
+            });
+            return Span::around(points)
+                .ok_or_else(|| anyhow::anyhow!("`{selector}` matched no faces"));
+        }
         let Ok(solid) = self.active("measure") else {
             bail!(
                 "no body called `{selector}`; bodies are {:?}",

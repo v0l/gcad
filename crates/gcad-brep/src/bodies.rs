@@ -23,7 +23,7 @@ fn reflection(frame: &Frame) -> Matrix4 {
     about(frame.origin, Matrix4::from(linear))
 }
 
-fn moved(solid: &Solid, transform: Matrix4) -> Solid {
+pub(crate) fn moved(solid: &Solid, transform: Matrix4) -> Solid {
     super::solids::placed(solid, transform)
 }
 
