@@ -452,6 +452,64 @@ fn compare_names_bodies_that_only_one_side_builds() {
     assert!(err.contains("\"b\""), "{err}");
 }
 
+fn area_of(model: &gcad_mesh::Model) -> f64 {
+    model
+        .bodies
+        .iter()
+        .flat_map(|body| {
+            body.indices.chunks(3).map(|t| {
+                let [a, b, c] =
+                    [t[0], t[1], t[2]].map(|i| body.positions[i as usize].map(f64::from));
+                let (u, v) = (
+                    [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+                    [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+                );
+                let n = [
+                    u[1] * v[2] - u[2] * v[1],
+                    u[2] * v[0] - u[0] * v[2],
+                    u[0] * v[1] - u[1] * v[0],
+                ];
+                (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0
+            })
+        })
+        .sum()
+}
+
+#[test]
+fn open_extrudes_are_the_kernel_prism_wall_without_caps() {
+    for (n, plane) in [(8, "XY"), (6, "XZ"), (5, "YZ")] {
+        let open = format!("plane {plane} offset=1\nngon 4 {n} at=1,0\nt: extrude 3 open=1\n");
+        let closed = open.replace(" open=1", "");
+        let mesh = mesh_of(&open);
+        let kernel = kernel_of(&closed);
+        let wall = n as f64 * 4.0 * (PI / n as f64).sin() * 3.0;
+        assert!(
+            close(area_of(&mesh), wall, 1.0e-6),
+            "{open}: {}",
+            area_of(&mesh)
+        );
+        let caps = 2.0 * polygon_area(2.0, n);
+        assert!(close(area_of(&kernel) - caps, wall, 1.0e-6), "{closed}");
+        assert_bbox(
+            &parity::measured(&kernel)[0],
+            &parity::measured(&mesh)[0],
+            1.0e-6,
+            &open,
+        );
+        let kp = points(&kernel);
+        assert!(
+            points(&mesh).iter().all(|p| near_any(*p, &kp, 1.0e-6)),
+            "{open}"
+        );
+    }
+    let lines = gcad::parse::parse_program("ngon 4 8\nt: extrude 3 open=1\n").expect("parses");
+    let run = gcad::model::run(&lines);
+    assert!(
+        matches!(run.steps.last(), Some((_, Err(e))) if format!("{e:#}").contains("open")),
+        "the kernel has no open extrude"
+    );
+}
+
 fn check_mesh(source: &str, name: &str, extra: &[&str]) -> std::process::Output {
     let dir = std::env::temp_dir().join("gcad-tests");
     std::fs::create_dir_all(&dir).expect("dir");
@@ -473,14 +531,22 @@ fn check_mesh_reports_each_body_and_passes_within_the_bound() {
         &[],
     );
     let text = String::from_utf8_lossy(&out.stdout);
-    assert!(out.status.success(), "{text}{}", String::from_utf8_lossy(&out.stderr));
+    assert!(
+        out.status.success(),
+        "{text}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
     assert!(text.lines().any(|l| l.starts_with("main ")), "{text}");
     assert!(text.lines().any(|l| l.starts_with("b ")), "{text}");
 }
 
 #[test]
 fn check_mesh_fails_above_the_bound() {
-    let out = check_mesh("circle 10\np: extrude 1\n", "check-mesh-tight.gcad", &["--bound", "0.001"]);
+    let out = check_mesh(
+        "circle 10\np: extrude 1\n",
+        "check-mesh-tight.gcad",
+        &["--bound", "0.001"],
+    );
     assert!(!out.status.success());
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("main"), "{err}");
@@ -488,7 +554,11 @@ fn check_mesh_fails_above_the_bound() {
 
 #[test]
 fn check_mesh_skips_files_gcad_mesh_does_not_build() {
-    let out = check_mesh("rect 10 10\np: extrude 3\nchamfer 1 p.end\n", "check-mesh-kernel.gcad", &[]);
+    let out = check_mesh(
+        "rect 10 10\np: extrude 3\nchamfer 1 p.end\n",
+        "check-mesh-kernel.gcad",
+        &[],
+    );
     let text = String::from_utf8_lossy(&out.stdout);
     assert!(out.status.success(), "{text}");
     assert!(text.contains("gcad-mesh does not build it"), "{text}");
