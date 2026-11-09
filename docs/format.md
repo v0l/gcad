@@ -300,6 +300,7 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `roof extrude` | `LENGTH thickness=200 material=clay-tile` | the last `poly` is the line along the top of the roof (on the sketch plane, `plane XZ` for a section); the roof hangs `thickness` under it, square to each slope with plumb ends, and runs `LENGTH` along the plane's normal |
 | `dormer` | `on= at=x,y w= type=gable front= pitch= material=` | a gable dormer standing on the roof plane under `at`: its front rises `front` above the roof top there (default 1200, less if the ridge would pass the main roof's), `w` wide inside plus the roof thickness, its roof running back until it meets the main roof |
 | `skylight` | `on= at=x,y w= h=` | an opening through the roof plane under `at`, `w` across and `h` up the slope, with a glass body flush with the roof top |
+| `chimney` | `x,y w= d=w up_to=roof over=900 base=0 material=brick` | a stack from `base` to `over` above the highest point of the roof's top over it, cut through the roof; without `up_to` it stops at `base + over` |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.

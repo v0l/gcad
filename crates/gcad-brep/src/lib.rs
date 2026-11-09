@@ -656,6 +656,7 @@ pub const OPERATIONS: &[&str] = &[
     "balcony",
     "dormer",
     "skylight",
+    "chimney",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -941,6 +942,7 @@ impl Model {
             "balcony" => self.op_balcony(line),
             "dormer" => self.op_dormer(line),
             "skylight" => self.op_skylight(line),
+            "chimney" => self.op_chimney(line),
             "project" => self.scene.op_project(&self.scope, line),
             "layer" => self.scene.op_layer(&self.scope, line),
             "finish" => self.scene.op_finish(&self.scope, line),

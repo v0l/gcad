@@ -546,7 +546,7 @@ Architecture stage B (gcad #349).
 | roof by extrusion | supported | a profile, then `roof extrude 3000 thickness=200` | `arch::roof_extruded_from_a_profile`, `arch::extruded_roof_volume_is_its_section_times_length` |
 | dormers | supported | `dormer on=r1 at=x,y w=1200 type=gable` | `arch::dormer_on_a_roof`, `arch::dormer_volume_is_the_part_above_the_roof`, `arch::dormer_and_skylight_export_is_the_same_every_run` |
 | skylights | supported | `skylight on=r1 at=x,y w=780 h=980` | `arch::skylight_on_a_roof`, `arch::dormer_and_skylight_export_is_the_same_every_run` |
-| chimneys | missing | `chimney x,y w=600 d=600 up_to=r1 over=900` | `arch::chimney_through_the_roof` |
+| chimneys | supported | `chimney x,y w=600 d=600 up_to=r1 over=900` | `arch::chimney_through_the_roof`, `arch::chimney_export_is_the_same_every_run` |
 | gutters and downpipes | missing | `gutter along=r1.eave.1 w=100 slope=0.005`, `downpipe from=gu.end d=68 to=L0` | `arch::gutter_and_downpipe` |
 | parapets | missing | `parapet outer h=600 coping=50` | `arch::parapet_on_a_flat_roof` |
 

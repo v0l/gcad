@@ -3,8 +3,8 @@ use crate::Model;
 use crate::parse::{Line, eval, eval_point};
 use anyhow::{Context, Result, anyhow, bail};
 use gcad_mesh::arch::P2;
-use gcad_mesh::arch::layout::{add, left, scale, unit};
-use gcad_mesh::arch::roof::{Plane, dormer_shell, lowest};
+use gcad_mesh::arch::layout::{add, left, scale, sub, unit};
+use gcad_mesh::arch::roof::{Plane, dormer_shell, envelope, lowest};
 
 fn plan_rect(at: P2, along: P2, w: f64, h: f64) -> Vec<P2> {
     let across = left(along);
@@ -13,6 +13,26 @@ fn plan_rect(at: P2, along: P2, w: f64, h: f64) -> Vec<P2> {
         .iter()
         .map(|&(a, b)| add(at, add(scale(across, a), scale(along, b))))
         .collect()
+}
+
+fn highest_over(ring: &[P2], planes: &[Plane]) -> f64 {
+    let n = ring.len();
+    let mut points = ring.to_vec();
+    for i in 0..n {
+        let (a, b) = (ring[i], ring[(i + 1) % n]);
+        for p in planes {
+            for q in planes {
+                let (fa, fb) = (p.at(a) - q.at(a), p.at(b) - q.at(b));
+                if fa * fb < 0.0 {
+                    points.push(add(a, scale(sub(b, a), fa / (fa - fb))));
+                }
+            }
+        }
+    }
+    points
+        .iter()
+        .map(|&p| envelope(planes, p))
+        .fold(f64::MIN, f64::max)
 }
 
 impl Model {
@@ -124,6 +144,79 @@ impl Model {
             "skylight {name} in {on}: {} x {} on the slope, glazed flush with the roof",
             crate::parse::label(w),
             crate::parse::label(h)
+        ))
+    }
+
+    pub(crate) fn op_chimney(&mut self, line: &Line) -> Result<String> {
+        let name = line.label.clone().ok_or_else(|| {
+            anyhow!("a chimney needs a label, like `ch: chimney 6000,3000 w=600 d=600 up_to=r1 over=900`")
+        })?;
+        self.check_free_name(&name)?;
+        let [at] = line.positional.as_slice() else {
+            bail!("write `ch: chimney x,y w=600 d=600 up_to=r1 over=900`");
+        };
+        let at = self.plan_point(at)?;
+        let mut up_to = None;
+        let mut material = "brick".to_string();
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "w" | "d" | "over" | "base" => {}
+                "up_to" => up_to = Some(text.clone()),
+                "material" => material = text.clone(),
+                other => bail!(
+                    "`chimney` takes w=, d=, up_to=, over=, base= and material=, not `{other}=`"
+                ),
+            }
+        }
+        let w = self
+            .number(line, "w")?
+            .ok_or_else(|| anyhow!("a chimney needs `w=`"))?;
+        let d = self.number(line, "d")?.unwrap_or(w);
+        let over = self.number(line, "over")?.unwrap_or(900.0);
+        let base = self.number(line, "base")?.unwrap_or(0.0);
+        if !(w > 0.0 && d > 0.0) || over < 0.0 {
+            bail!("a chimney's w= and d= must be above zero and over= not below zero");
+        }
+        let stack = plan_rect(at, (0.0, 1.0), w, d);
+        let (top, note) = match &up_to {
+            Some(on) => {
+                let roof = self
+                    .roof(on)
+                    .cloned()
+                    .ok_or_else(|| anyhow!("`up_to={on}`: there is no roof `{on}`"))?;
+                let tops: Vec<Plane> = roof
+                    .planes()?
+                    .iter()
+                    .map(|p| p.lifted(roof.thickness))
+                    .collect();
+                let highest = highest_over(&stack, &tops);
+                let index = self
+                    .arch
+                    .roofs
+                    .iter()
+                    .position(|r| r.name == *on)
+                    .expect("a roof");
+                self.arch.roofs[index].holes.push(stack.clone());
+                if let Err(e) = self.build_roof(on) {
+                    self.arch.roofs[index].holes.pop();
+                    return Err(e.context(format!("cutting `{name}` through `{on}`")));
+                }
+                (highest + over, format!(" through {on}"))
+            }
+            None => (base + over, String::new()),
+        };
+        if top <= base {
+            bail!("the chimney's top {} is not above its base {}", top, base);
+        }
+        let solid = super::slab::prism(&stack, &[], base, top)?;
+        self.ensure_library()?;
+        self.put_body(name.clone(), solid, &material)?;
+        self.note_built(&name, &name);
+        Ok(format!(
+            "chimney {name}{note}, {} x {}, top at {}",
+            crate::parse::label(w),
+            crate::parse::label(d),
+            crate::parse::label(top)
         ))
     }
 

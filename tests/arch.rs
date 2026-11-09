@@ -889,7 +889,6 @@ fn dormer_volume_is_the_part_above_the_roof() {
 }
 
 #[test]
-#[ignore = "missing: chimneys"]
 fn chimney_through_the_roof() {
     let model = build(&with(
         "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\nch: chimney 6000,3000 w=600 d=600 up_to=r1 over=900",
@@ -899,6 +898,33 @@ fn chimney_through_the_roof() {
         hi[2],
         2700.0 + OUT_Y / 2.0 + 200.0 * 2f64.sqrt() + 900.0,
         1.0e-3,
+    );
+    let bare = build(&with(
+        "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1",
+    ));
+    let column = 600.0 * 600.0 * 200.0 * 2f64.sqrt();
+    near(
+        volume_of(&bare, "r1") - volume_of(&model, "r1"),
+        column,
+        1.0e-3,
+    );
+    near(
+        volume_of(&model, "ch"),
+        600.0 * 600.0 * (2700.0 + OUT_Y / 2.0 + 200.0 * 2f64.sqrt() + 900.0),
+        1.0e-4,
+    );
+    let a = model.named_body("r1").expect("r1");
+    let b = model.named_body("ch").expect("ch");
+    assert!(gcad::geometry::overlap_volume(&a, &b, 64) < 1.0e-3);
+}
+
+#[test]
+fn chimney_export_is_the_same_every_run() {
+    export_twice(
+        "chimney_export_is_the_same_every_run",
+        &with(
+            "r1: roof outer type=hip pitch=40 overhang=300 thickness=200 base=L1\nch: chimney 6500,2000 w=600 d=500 up_to=r1 over=900",
+        ),
     );
 }
 
