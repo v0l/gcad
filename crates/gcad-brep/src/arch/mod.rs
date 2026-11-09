@@ -2,6 +2,7 @@ mod datum;
 mod opening;
 mod room;
 mod slab;
+mod structure;
 mod wall;
 
 use crate::geometry::Profile;

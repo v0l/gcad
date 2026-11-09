@@ -1035,7 +1035,6 @@ fn glass_balustrade_and_handrail() {
 }
 
 #[test]
-#[ignore = "missing: columns"]
 fn columns_at_grid_crossings() {
     let model = build(&datums(
         "c1: column A1 rect 300x300 base=L0 top=L1 material=concrete-c30-37\nc2: column B2 round 300 base=L0 top=L1",
@@ -1052,10 +1051,19 @@ fn columns_at_grid_crossings() {
 }
 
 #[test]
-#[ignore = "missing: column grids"]
 fn column_at_every_grid_crossing() {
     let model = build(&datums("cg: column_grid rect 200x200 base=L0 top=L1"));
     assert_eq!(count_of(&model, "cg"), 4);
+}
+
+#[test]
+fn column_export_is_the_same_every_run() {
+    export_twice(
+        "column_export_is_the_same_every_run",
+        &datums(
+            "c1: column A1 rect 300x300 top=L1\nc2: column B2 round 300 top=L1\nc3: column A2 tube 100x100x5 top=L1 material=steel\ncg: column_grid rect 200x200 base=L1 top=L1+2400",
+        ),
+    );
 }
 
 #[test]

@@ -279,6 +279,8 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `room` | `name at=x,y level=` | finds the rectangle of wall faces around the point on that level; a room that is not a rectangle of wall faces fails for now |
 | `ceiling` | `room= h= type=mat:t+mat:t` | layers filling the room, the bottom `h` above the room's level |
 | `floor_finish` | `room= type=mat:t+mat:t` | layers filling the room, the bottom on the room's level |
+| `column` | `point rect WxD\|round D\|member section` `base= top= material=concrete` | an upright centred on the point from `base` to `top` |
+| `column_grid` | `rect WxD\|round D\|member section` `base= top= material=` | a column at every grid crossing, named `grid.A1` |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.

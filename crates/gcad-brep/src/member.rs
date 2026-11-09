@@ -220,6 +220,42 @@ fn member_solid(
     Ok(super::solids::oriented(solid))
 }
 
+pub(crate) fn straight_member(
+    kind: &str,
+    size: &str,
+    from: Point3,
+    to: Point3,
+    up: Vector3,
+    hang: bool,
+) -> Result<Solid> {
+    let (kind, size) = match kind {
+        "rect" => ("bar", size),
+        "round" => ("rod", size),
+        other => (other, size),
+    };
+    let mut section = section(kind, size)?;
+    if hang {
+        let top = section.reach.iter().map(|p| p.1).fold(f64::MIN, f64::max);
+        section = shifted(section, (0.0, -top));
+    }
+    let d = to - from;
+    if d.magnitude() < 1.0e-9 {
+        bail!("a member needs two different points");
+    }
+    let along = d.normalize();
+    let lift = up - along * up.dot(along);
+    if lift.magnitude() < 1.0e-6 {
+        bail!("a member cannot run along its own up direction");
+    }
+    let y = lift.normalize();
+    let x = y.cross(along);
+    let cut = |point: Point3| Cut {
+        point,
+        normal: along,
+    };
+    member_solid(&section, &cut(from), &cut(to), along, x, y)
+}
+
 impl Model {
     fn member_row(&mut self, line: &Line) -> Result<String> {
         let [kind, size, rest @ ..] = line.positional.as_slice() else {

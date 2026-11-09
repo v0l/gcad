@@ -573,8 +573,8 @@ Architecture stage B (gcad #349). Profiles are the `member` sections.
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| columns | missing | `c1: column A1 rect 300x300\|round 300\|<member section> base=L0 top=L1 material=` | `arch::columns_at_grid_crossings` |
-| column grids | missing | `column_grid rect 200x200 base=L0 top=L1` | `arch::column_at_every_grid_crossing` |
+| columns | supported | `c1: column A1 rect 300x300\|round 300\|<member section> base=L0 top=L1 material=` | `arch::columns_at_grid_crossings`, `arch::column_export_is_the_same_every_run` |
+| column grids | supported | `column_grid rect 200x200 base=L0 top=L1` | `arch::column_at_every_grid_crossing` |
 | beams | missing | `b1: beam A1 B1 bar 200x400 z=L1 material=c24` (top of beam on `z`) | `arch::beam_between_grid_points` |
 | joists | missing | `joist <outline> bar 47x200 spacing=400 dir=y z=L1` | `arch::joists_across_a_floor` |
 | trusses | missing | `truss x,y,z x,y,z type=king\|queen\|fink pitch=30 member=bar 47x150 spacing=600 count=10` | `arch::truss_member_counts` |
