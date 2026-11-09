@@ -28,3 +28,5 @@ W03: window on=outer at=16000 w=1200 h=1200 sill=900 panes=2x1 mark=W03
 W04: window on=outer at=24500 w=1500 h=1200 sill=900 panes=2x1 mark=W04
 W05: window on=outer at=33000 w=600 h=900 sill=1200 mark=W05
 W06: window on=outer at=29000 w=1500 h=1200 sill=900 panes=3x1 mark=W06
+floor1: slab L1+250 A1 C1 C3 A3 type=concrete:200+screed:50
+slab_opening floor1 5200,4300 6300,4300 6300,7700 5200,7700
