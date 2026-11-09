@@ -33,3 +33,5 @@ slab_opening floor1 5200,4300 6300,4300 6300,7700 5200,7700
 st1: stair from=L0 to=L1+250 at=6250,4433 dir=90 width=1000 rule=2R+T=640 max_rise=210 stringer=closed nosing=20
 rl1: railing along=st1.edge height=900 post=50@1500 baluster=12@120
 bal: balcony on=outer at=21000 level=L1+250 w=3000 d=1200 slab=concrete:200 railing=1100
+roof1: roof outer type=gable pitch=40 overhang=400 thickness=250 ridge=x base=L2 walls=outer
+chimney1: chimney 8000,5200 w=700 d=600 up_to=roof1 over=900 material=brick
