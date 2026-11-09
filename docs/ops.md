@@ -94,6 +94,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | sweep with twist | supported | `sweep twist=90` | `features::sweep_twist` |
 | sweep with scale | supported | `sweep scale=0.5` | `features::sweep_scale` |
 | twisted or tapered extrude | supported | `extrude 10 twist=90`, `extrude 10 scale=0.5` | `features::extrude_twisted`, `features::extrude_scaled`, `features::twisted_extrude_with_a_hole` |
+| open extrude, a wall without caps | supported | `glass: extrude 3.66 open=1` | `mesh_brep_parity::open_extrudes_are_the_same_wall_in_both`, `mesh_brep_parity::both_refuse_the_same_open_extrudes` |
 | extrude to a cone | supported | `extrude 10 scale=0` | `mesh_brep_parity::scale_zero_makes_the_same_cone_in_both` |
 | torus | supported | `rim: torus 40 8 at=0,0` | `mesh_brep_parity::tori_match_the_kernel_within_their_segments` |
 | helical gear | supported | `gear 20 2 helix=20` then `extrude 10` | `features::helical_gear` |
@@ -322,7 +323,7 @@ the kernel build.
 | profile array | supported | `array count=4 step=180,0` | `solid_props::buildings_match_kernel`, `solid_silhouette::building_silhouettes_match_kernel` |
 | profile inside a profile is a hole | supported | `rect 40 40` then `circle 10` | `solid_props::profile_inside_another_is_a_hole`, `solid_props::arch_matches_kernel` |
 | mesh ellipse, ngon | supported | `ellipse 4 2`, `ngon 2 6 angle=30` | `shapes::an_ellipse_extrudes_to_its_area`, `shapes::an_ngon_extrudes_into_a_prism_of_that_many_sides`, `mesh_brep_parity::ngon_corners_match_the_kernel`, `mesh_brep_parity::ngon_first_corner_sits_at_its_angle_on_both_sides`, `mesh_brep_parity::ellipses_match_the_kernel_within_their_segments`, `mesh_brep_parity::curved_profiles_use_fixed_segments_not_the_kernel_tolerance` |
-| mesh open extrude | supported | `t: extrude 1 open=1` | `shapes::an_open_extrude_is_a_single_wall_without_caps`, `mesh_brep_parity::open_extrudes_are_the_kernel_prism_wall_without_caps` |
+| mesh open extrude | supported | `t: extrude 1 open=1` | `shapes::an_open_extrude_is_a_single_wall_without_caps`, `mesh_brep_parity::open_extrudes_are_the_same_wall_in_both`, `mesh_brep_parity::open_curved_extrudes_match_the_kernel_area_within_their_segments`, `mesh_brep_parity::both_refuse_the_same_open_extrudes`, `mesh_brep_parity::the_ballsort_tube_builds_the_same_through_both` |
 | mesh torus | supported | `rim: torus 4 1 around=32 sides=12` | `shapes::a_torus_has_the_volume_of_a_ring_and_its_own_part`, `shapes::a_torus_lies_in_its_plane_at_its_offset`, `shapes::a_torus_tube_must_be_thinner_than_its_ring`, `mesh_brep_parity::tori_match_the_kernel_within_their_segments` |
 | mesh extrude to a frustum or cone | supported | `extrude 3 scale=0.5`, `extrude 3 scale=0` | `shapes::extrude_scale_makes_a_frustum_and_zero_makes_a_cone`, `mesh_brep_parity::scaled_extrudes_match_the_kernel`, `mesh_brep_parity::scale_zero_makes_the_same_cone_in_both`, `mesh_brep_parity::a_cone_needs_a_profile_without_holes` |
 | low-poly shell | supported | `eye: blob 0,0,0 r=1,1,0.5 mode=shell segments=12` | `shapes::a_shell_blob_with_segments_is_a_low_poly_ellipsoid`, `shapes::segments_need_a_shell`, `shapes::low_poly_shells_keep_their_part_names_and_colours`, `mesh_brep_parity::shell_blobs_come_out_the_same_through_both` |
@@ -331,7 +332,7 @@ the kernel build.
 | mesh extrude rim fillet | supported | `fillet 2 foot.end&foot.side` | `solid_silhouette::fillet_rim_stays_close_to_the_kernel_arc`, `solid_silhouette::coin_face_normals_match_kernel`, `solid_silhouette::barrier_face_normals_match_kernel`, `solid_silhouette::arch_silhouette_matches_kernel` |
 | solid props build fast and small | supported | `gcad_mesh::build` on a prop file | `solid_silhouette::props_stay_within_five_times_the_kernel_glb_triangles`, `solid_silhouette::building_all_props_is_fast` |
 | mesh bodies match kernel names and colours | supported | `body b` then `color #00ff00` | `mesh_brep_parity::body_names_and_colours_match_the_kernel`, `mesh_brep_parity::compare_names_bodies_that_only_one_side_builds` |
-| compare a file built both ways | supported | `gcad check-mesh part.gcad --bound 0.03` | `mesh_brep_parity::check_mesh_reports_each_body_and_passes_within_the_bound`, `mesh_brep_parity::check_mesh_fails_above_the_bound`, `mesh_brep_parity::check_mesh_skips_files_gcad_mesh_does_not_build` |
+| compare a file built both ways | supported | `gcad check-mesh part.gcad --bound 0.03` | `mesh_brep_parity::check_mesh_reports_each_body_and_passes_within_the_bound`, `mesh_brep_parity::check_mesh_fails_above_the_bound`, `mesh_brep_parity::check_mesh_skips_files_gcad_mesh_does_not_build`, `mesh_brep_parity::check_mesh_compares_the_area_of_an_open_body` |
 
 ## Assemblies
 

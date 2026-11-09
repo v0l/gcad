@@ -7,6 +7,7 @@ use crate::geometry::{self, Frame, Profile, Segment};
 use crate::parse::Line;
 use crate::select;
 use anyhow::{Result, anyhow, bail};
+use monstertruck::meshing::prelude::*;
 use monstertruck::modeling::*;
 
 pub(crate) enum Depth {
@@ -311,7 +312,9 @@ impl Model {
         let args = Args::new(
             line,
             &["d", "how"],
-            &["draft", "mode", "upto", "offset", "thin", "twist", "scale"],
+            &[
+                "draft", "mode", "upto", "offset", "thin", "twist", "scale", "open",
+            ],
             false,
         )?;
         let combine = match args.values.get("mode").copied() {
@@ -320,7 +323,7 @@ impl Model {
             Some("cut") => Combine::Remove,
             Some(other) => bail!("mode must be add, cut or intersect, got `{other}`"),
         };
-        if args.has("twist") || args.has("scale") || self.gear.is_some() {
+        if args.has("twist") || args.has("scale") || args.has("open") || self.gear.is_some() {
             return self.extrude_shaped(line, &args, combine);
         }
         let both = match args.values.get("how").copied() {
@@ -475,6 +478,20 @@ impl Model {
         if distance == 0.0 {
             bail!("extrude distance is zero");
         }
+        let open = match args.optional_number("open", &self.scope)? {
+            None => false,
+            Some(v) if v == 0.0 => false,
+            Some(v) if v == 1.0 => true,
+            Some(v) => bail!("give `open=1` for a wall without caps, got open={v}"),
+        };
+        if open {
+            if combine != Combine::Add {
+                bail!("an `open=1` wall has no inside, so it cannot cut or intersect");
+            }
+            if self.solid.is_some() || self.open.is_some() || self.scene.has_mesh() {
+                bail!("an `open=1` wall goes in its own body; start one with `body name`");
+            }
+        }
         let twist = match args.optional_number("twist", &self.scope)? {
             Some(twist) => twist,
             None => lead.map_or(0.0, |lead| {
@@ -509,7 +526,17 @@ impl Model {
                     _ => bail!("`scale=0` makes a cone from a profile without holes"),
                 })
                 .collect::<Result<Vec<_>>>()?;
+            if open {
+                return self.open_wall(&label_of(line), &tools, frame.normal * distance);
+            }
             return self.place_swept(&label_of(line), tools, frame.origin, apex, combine);
+        }
+        if open
+            && regions(&loops(&frame, &profiles)?)
+                .iter()
+                .any(|r| r.len() > 1)
+        {
+            bail!("an `open=1` wall is one loop: give a profile without holes");
         }
         let stations = if twist == 0.0 {
             2
@@ -532,7 +559,52 @@ impl Model {
             .collect();
         let tools = super::path::skin_frames(&frames, &profiles)?;
         let end = frame.origin + frame.normal * distance;
+        if open {
+            return self.open_wall(&label_of(line), &tools, frame.normal * distance);
+        }
         self.place_swept(&label_of(line), tools, frame.origin, end, combine)
+    }
+
+    fn open_wall(&mut self, label: &str, tools: &[Solid], direction: Vector3) -> Result<String> {
+        let tolerance = tools
+            .iter()
+            .map(|tool| geometry::bounds(tool).diameter() * super::glb::GLB_TOLERANCE)
+            .fold(1.0e-4, f64::max);
+        let mut mesh = crate::mesh::Mesh::default();
+        for tool in tools {
+            let along = direction.normalize();
+            let sides: Vec<Face> = select::faces(tool)
+                .into_iter()
+                .filter(|face| match face.oriented_surface() {
+                    Surface::Plane(plane) => plane.normal().dot(along).abs() < 0.999,
+                    _ => true,
+                })
+                .collect();
+            let shell: Shell = sides.into();
+            let wall =
+                super::glb::faceted(&shell.robust_triangulation(tolerance).to_polygon(), label);
+            mesh.merge(&wall);
+        }
+        let area: f64 = mesh
+            .triangles
+            .iter()
+            .map(|t| {
+                let [a, b, c] = t.map(|i| mesh.positions[i as usize]);
+                crate::mesh::length(crate::mesh::cross(
+                    crate::mesh::sub(b, a),
+                    crate::mesh::sub(c, a),
+                )) / 2.0
+            })
+            .sum();
+        self.scene.mesh_body.mesh = Some(std::sync::Arc::new(mesh));
+        self.open = Some(label.to_string());
+        let body = self.body_name();
+        if !self.scene.solid_bodies.contains(&body) {
+            self.scene.solid_bodies.push(body.clone());
+        }
+        Ok(format!(
+            "body `{body}` is an open wall `{label}`, area {area:.3}, no caps"
+        ))
     }
 
     pub(crate) fn remove(&mut self, label: &str, removal: Removal<'_>) -> Result<String> {

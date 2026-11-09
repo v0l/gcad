@@ -6,8 +6,10 @@ pub struct Measured {
     pub parts: Vec<(String, [f32; 3])>,
     pub lo: [f64; 3],
     pub hi: [f64; 3],
+    pub open: bool,
     pub volume: f64,
     pub glb_volume: f64,
+    pub area: f64,
 }
 
 impl Measured {
@@ -22,6 +24,7 @@ impl Measured {
 #[derive(Clone, Debug)]
 pub struct Difference {
     pub body: String,
+    pub open: bool,
     pub size: f64,
     pub bbox: f64,
     pub kernel_volume: f64,
@@ -31,6 +34,10 @@ pub struct Difference {
 }
 
 impl Difference {
+    pub fn what(&self) -> &'static str {
+        if self.open { "open, area" } else { "volume" }
+    }
+
     pub fn volume(&self) -> f64 {
         (self.mesh_volume - self.kernel_volume).abs()
             / self.kernel_volume.abs().max(f64::MIN_POSITIVE)
@@ -45,16 +52,51 @@ impl Difference {
     }
 }
 
-pub fn volume_of(body: &gcad_mesh::Body) -> f64 {
+fn corners(body: &gcad_mesh::Body) -> impl Iterator<Item = [[f64; 3]; 3]> + '_ {
     body.indices
         .chunks(3)
-        .map(|t| {
-            let [a, b, c] = [t[0], t[1], t[2]].map(|i| body.positions[i as usize].map(f64::from));
+        .map(|t| [t[0], t[1], t[2]].map(|i| body.positions[i as usize].map(f64::from)))
+}
+
+pub fn volume_of(body: &gcad_mesh::Body) -> f64 {
+    corners(body)
+        .map(|[a, b, c]| {
             a[0] * (b[1] * c[2] - b[2] * c[1]) - a[1] * (b[0] * c[2] - b[2] * c[0])
                 + a[2] * (b[0] * c[1] - b[1] * c[0])
         })
         .sum::<f64>()
         / 6.0
+}
+
+pub fn area_of(body: &gcad_mesh::Body) -> f64 {
+    corners(body)
+        .map(|[a, b, c]| {
+            let (u, v) = (
+                [b[0] - a[0], b[1] - a[1], b[2] - a[2]],
+                [c[0] - a[0], c[1] - a[1], c[2] - a[2]],
+            );
+            let n = [
+                u[1] * v[2] - u[2] * v[1],
+                u[2] * v[0] - u[0] * v[2],
+                u[0] * v[1] - u[1] * v[0],
+            ];
+            (n[0] * n[0] + n[1] * n[1] + n[2] * n[2]).sqrt() / 2.0
+        })
+        .sum()
+}
+
+pub fn is_open(body: &gcad_mesh::Body) -> bool {
+    let key = |p: [f64; 3]| p.map(|c| (c * 1.0e6).round() as i64);
+    let mut edges: std::collections::HashMap<([i64; 3], [i64; 3]), i64> = Default::default();
+    for [a, b, c] in corners(body) {
+        for (p, q) in [(a, b), (b, c), (c, a)] {
+            let (p, q) = (key(p), key(q));
+            if p != q {
+                *edges.entry((p.min(q), p.max(q))).or_default() += if p < q { 1 } else { -1 };
+            }
+        }
+    }
+    edges.values().any(|&n| n != 0)
 }
 
 pub fn measured(model: &gcad_mesh::Model) -> Vec<Measured> {
@@ -70,6 +112,9 @@ pub fn measured(model: &gcad_mesh::Model) -> Vec<Measured> {
                     hi[k] = hi[k].max(p[k] as f64);
                 }
             }
+            let open = is_open(body);
+            let area = area_of(body);
+            let volume = if open { area } else { volume_of(body) };
             Measured {
                 name: body.name.clone(),
                 parts: body
@@ -79,8 +124,10 @@ pub fn measured(model: &gcad_mesh::Model) -> Vec<Measured> {
                     .collect(),
                 lo,
                 hi,
-                volume: volume_of(body),
-                glb_volume: volume_of(body),
+                open,
+                volume,
+                glb_volume: volume,
+                area,
             }
         })
         .collect()
@@ -147,11 +194,24 @@ pub fn compare(
             names(mesh)
         ));
     }
-    Ok(mesh
+    let pairs: Vec<(&Measured, &Measured)> = mesh
         .iter()
         .filter_map(|m| kernel.iter().find(|k| k.name == m.name).map(|k| (k, m)))
+        .collect();
+    if let Some((k, m)) = pairs.iter().find(|(k, m)| k.open != m.open) {
+        let side = |open: bool| if open { "open" } else { "closed" };
+        return Err(format!(
+            "body `{}` is {} in the kernel and {} in gcad-mesh",
+            k.name,
+            side(k.open),
+            side(m.open)
+        ));
+    }
+    Ok(pairs
+        .into_iter()
         .map(|(k, m)| Difference {
             body: k.name.clone(),
+            open: m.open,
             size: k.size(),
             bbox: (0..3)
                 .map(|i| (k.lo[i] - m.lo[i]).abs().max((k.hi[i] - m.hi[i]).abs()))

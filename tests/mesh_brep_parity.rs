@@ -475,39 +475,149 @@ fn area_of(model: &gcad_mesh::Model) -> f64 {
         .sum()
 }
 
-#[test]
-fn open_extrudes_are_the_kernel_prism_wall_without_caps() {
-    for (n, plane) in [(8, "XY"), (6, "XZ"), (5, "YZ")] {
-        let open = format!("plane {plane} offset=1\nngon 4 {n} at=1,0\nt: extrude 3 open=1\n");
-        let closed = open.replace(" open=1", "");
-        let mesh = mesh_of(&open);
-        let kernel = kernel_of(&closed);
-        let wall = n as f64 * 4.0 * (PI / n as f64).sin() * 3.0;
-        assert!(
-            close(area_of(&mesh), wall, 1.0e-6),
-            "{open}: {}",
-            area_of(&mesh)
-        );
-        let caps = 2.0 * polygon_area(2.0, n);
-        assert!(close(area_of(&kernel) - caps, wall, 1.0e-6), "{closed}");
-        assert_bbox(
-            &parity::measured(&kernel)[0],
-            &parity::measured(&mesh)[0],
-            1.0e-6,
-            &open,
-        );
-        let kp = points(&kernel);
-        assert!(
-            points(&mesh).iter().all(|p| near_any(*p, &kp, 1.0e-6)),
-            "{open}"
-        );
+fn open_edges(model: &gcad_mesh::Model) -> usize {
+    let mut edges: std::collections::HashMap<([i64; 3], [i64; 3]), usize> = Default::default();
+    let key = |p: [f32; 3]| p.map(|c| (c as f64 * 1.0e5).round() as i64);
+    for body in &model.bodies {
+        for t in body.indices.chunks(3) {
+            for k in 0..3 {
+                let (a, b) = (
+                    key(body.positions[t[k] as usize]),
+                    key(body.positions[t[(k + 1) % 3] as usize]),
+                );
+                if a != b {
+                    *edges.entry((a.min(b), a.max(b))).or_default() += 1;
+                }
+            }
+        }
     }
-    let lines = gcad::parse::parse_program("ngon 4 8\nt: extrude 3 open=1\n").expect("parses");
-    let run = gcad::model::run(&lines);
-    assert!(
-        matches!(run.steps.last(), Some((_, Err(e))) if format!("{e:#}").contains("open")),
-        "the kernel has no open extrude"
-    );
+    edges.values().filter(|&&n| n == 1).count()
+}
+
+#[test]
+fn open_extrudes_are_the_same_wall_in_both() {
+    for (n, plane, depth) in [
+        (8, "XY", 3.0_f64),
+        (6, "XZ", 3.0),
+        (5, "YZ", -3.0),
+        (28, "XY", 3.66),
+    ] {
+        let open =
+            format!("plane {plane} offset=1\nngon 4 {n} at=1,0\nt: extrude {depth} open=1\n");
+        let both = built(&open);
+        let wall = n as f64 * 4.0 * (PI / n as f64).sin() * depth.abs();
+        for (side, model) in [("mesh", &both.mesh), ("kernel", &both.kernel)] {
+            assert!(
+                close(area_of(model), wall, 1.0e-6),
+                "{open}: {side} area {}",
+                area_of(model)
+            );
+            assert_eq!(open_edges(model), 2 * n, "{open}: {side} rims");
+        }
+        let (k, m) = both.one();
+        assert_bbox(&k, &m, 1.0e-6, &open);
+        let (kp, mp) = (points(&both.kernel), points(&both.mesh));
+        assert_eq!(kp.len(), 2 * n, "{open}: kernel corners");
+        assert!(mp.iter().all(|p| near_any(*p, &kp, 1.0e-6)), "{open}");
+    }
+}
+
+#[test]
+fn open_curved_extrudes_match_the_kernel_area_within_their_segments() {
+    for source in [
+        "circle 4\nt: extrude 3 open=1\n",
+        "ellipse 4 2\nt: extrude 3 open=1 scale=0.5\n",
+    ] {
+        let both = built(source);
+        let (k, m) = both.one();
+        assert_bbox(&k, &m, 1.0e-5, source);
+        let (ka, ma) = (area_of(&both.kernel), area_of(&both.mesh));
+        assert!(close(ma, ka, 0.01), "{source}: kernel {ka} mesh {ma}");
+        assert_eq!(open_edges(&both.mesh), 2 * 24, "{source}");
+    }
+    let exact = TAU * 2.0 * 3.0;
+    assert!(close(
+        area_of(&kernel_of("circle 4\nt: extrude 3 open=1\n")),
+        exact,
+        0.01
+    ));
+}
+
+fn kernel_error(source: &str) -> String {
+    let lines = gcad::parse::parse_program(source).expect("parses");
+    match gcad::model::run(&lines).steps.last() {
+        Some((_, Err(error))) => format!("{error:#}"),
+        _ => panic!("the kernel builds `{source}`"),
+    }
+}
+
+#[test]
+fn both_refuse_the_same_open_extrudes() {
+    for (source, says) in [
+        (
+            "circle 10\ncircle 4\nt: extrude 3 open=1\n",
+            "without holes",
+        ),
+        (
+            "rect 10 10\np: extrude 3\nngon 4 6\nt: extrude 2 open=1\n",
+            "its own body",
+        ),
+        (
+            "ngon 4 6\nt: extrude 2 open=1\nrect 10 10\np: extrude 3\n",
+            "its own body",
+        ),
+        (
+            "ngon 4 6\nt: extrude 2 open=1\nfillet 0.5 t.end&t.side\n",
+            "open",
+        ),
+        ("ngon 4 6\nt: extrude 2 open=2\n", "open=1"),
+    ] {
+        let mesh = gcad_mesh::build(source)
+            .err()
+            .expect("gcad-mesh refuses")
+            .message;
+        assert!(mesh.contains(says), "{source}: gcad-mesh says {mesh}");
+        let kernel = kernel_error(source);
+        assert!(kernel.contains(says), "{source}: kernel says {kernel}");
+    }
+    let cut = "rect 10 10\np: extrude 3\nngon 4 6\nt: extrude 2 open=1 mode=cut\n";
+    assert!(kernel_error(cut).contains("open"), "{}", kernel_error(cut));
+    assert!(gcad_mesh::build(cut).is_err());
+}
+
+const BALLSORT_TUBE: &str = "body glass\nplane XY\nngon 1.03 28\nglass: extrude 3.66 open=1\ncolor #d1f2ff\nbody foot\nplane XY\nngon 1.2 28\nfoot: extrude 0.14\ncolor #8c73d9\nbody rim\nplane XY offset=3.66\nrim: torus 1.08 0.09 around=40 sides=10\ncolor #ebf7ff\nbody glint\nplane XY offset=0.457\nrect 0.07 0.02 at=-0.3,-0.43\nglint: extrude 2.855\ncolor #ffffff\n";
+
+#[test]
+fn the_ballsort_tube_builds_the_same_through_both() {
+    let both = built(BALLSORT_TUBE);
+    let (k, m) = both.measured();
+    let differences = parity::compare(&k, &m).expect("same bodies");
+    for d in &differences {
+        let bound = if d.body == "rim" {
+            1.0 - inscribed(40) * inscribed(10) + KERNEL_TORUS
+        } else {
+            0.03
+        };
+        assert!(d.within(bound), "{d:?}");
+    }
+    let glass = |model: &gcad_mesh::Model| {
+        let body = model
+            .bodies
+            .iter()
+            .find(|b| b.name == "glass")
+            .expect("glass");
+        gcad_mesh::Model {
+            bodies: vec![body.clone()],
+        }
+    };
+    assert!(close(
+        area_of(&glass(&both.kernel)),
+        area_of(&glass(&both.mesh)),
+        1.0e-6
+    ));
+    let exported = gcad2glb::Assets::from_source(BALLSORT_TUBE, &gcad2glb::Options::default())
+        .expect("gcad2glb builds it");
+    assert_eq!(exported.bodies.len(), 4);
 }
 
 fn check_mesh(source: &str, name: &str, extra: &[&str]) -> std::process::Output {
@@ -550,6 +660,22 @@ fn check_mesh_fails_above_the_bound() {
     assert!(!out.status.success());
     let err = String::from_utf8_lossy(&out.stderr);
     assert!(err.contains("main"), "{err}");
+}
+
+#[test]
+fn check_mesh_compares_the_area_of_an_open_body() {
+    let out = check_mesh(BALLSORT_TUBE, "check-mesh-tube.gcad", &["--bound", "0.1"]);
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(
+        out.status.success(),
+        "{text}{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let glass = text
+        .lines()
+        .find(|l| l.starts_with("glass "))
+        .expect("glass row");
+    assert!(glass.contains("open, area"), "{glass}");
 }
 
 #[test]

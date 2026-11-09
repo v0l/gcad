@@ -8,7 +8,7 @@ All notable changes to gcad are listed here. The format follows
 
 ### Added
 - `gcad check-mesh file.gcad [--bound 0.03]` builds a file with the kernel and with gcad-mesh and reports each body's volume, bounding box and colour difference, failing above the bound.
-- The kernel runs `torus d tube at=` and `extrude d scale=0` (a cone), so files using them build the same through `gcad export` and the mesh-only path.
+- The kernel runs `extrude d open=1` (a wall without caps, as its own body), `torus d tube at=` and `extrude d scale=0` (a cone), so files using them build the same through `gcad export` and the mesh-only path.
 
 ### Fixed
 - gcad-mesh flat solid bodies without a `color` are the kernel's grey (0.7) instead of the sculpt blue, so the two GLBs match.

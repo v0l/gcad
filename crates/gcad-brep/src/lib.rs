@@ -138,6 +138,7 @@ pub struct Model {
     pub hole_notes: Vec<HoleNote>,
     pub sheet: Option<sheet::Sheet>,
     pub members: Vec<String>,
+    pub open: Option<String>,
     pub sim: Option<Box<dyn Study>>,
     pub scene: gcad_mesh::interp::Scene,
 }
@@ -874,6 +875,9 @@ impl Model {
     }
 
     pub(crate) fn active(&self, op: &str) -> Result<&Solid> {
+        if let Some(wall) = &self.open {
+            bail!("`{op}` needs a solid; `{wall}` is an `open=1` wall with no edges to work on");
+        }
         self.solid
             .as_ref()
             .ok_or_else(|| anyhow!("`{op}` needs a solid"))
@@ -885,6 +889,12 @@ impl Model {
         tools: Vec<Solid>,
         combine: Combine,
     ) -> Result<()> {
+        if let Some(wall) = &self.open {
+            bail!(
+                "body `{}` holds the open wall `{wall}`; an `open=1` wall goes in its own body",
+                self.body_name()
+            );
+        }
         let apart = |a: &BoundingBox<Point3>, b: &BoundingBox<Point3>| {
             (0..3).any(|k| a.max()[k] < b.min()[k] || b.max()[k] < a.min()[k])
         };
@@ -919,6 +929,12 @@ impl Model {
     }
 
     pub(crate) fn merge(&mut self, label: &str, tool: Solid, combine: Combine) -> Result<()> {
+        if let Some(wall) = &self.open {
+            bail!(
+                "body `{}` holds the open wall `{wall}`; an `open=1` wall goes in its own body",
+                self.body_name()
+            );
+        }
         let result = match (self.solid.as_ref(), combine) {
             (None, Combine::Add) => tool.clone(),
             (None, _) => bail!("there is no solid to cut or intersect"),

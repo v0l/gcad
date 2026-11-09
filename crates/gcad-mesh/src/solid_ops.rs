@@ -140,6 +140,9 @@ impl Solids {
         let sides = whole("sides", 8)?;
         let centre = args.point("at", scope)?;
         self.require_solid_body(scene)?;
+        if self.extrudes.iter().any(|e| e.open) {
+            bail!("an `open=1` wall goes in its own body; start one with `body name`");
+        }
         let label = label_of(line);
         if self.tori.iter().any(|t| t.label == label)
             || self.extrudes.iter().any(|e| e.label == label)
@@ -249,6 +252,19 @@ impl Solids {
         if scale < 1.0e-9 && regions.iter().any(|r| !r.holes.is_empty()) {
             bail!("`scale=0` makes a cone from a profile without holes");
         }
+        let open = match args.optional_number("open", scope)? {
+            None => false,
+            Some(v) if v == 0.0 => false,
+            Some(v) if v == 1.0 => true,
+            Some(v) => bail!("give `open=1` for a wall without caps, got open={v}"),
+        };
+        if open && regions.iter().any(|r| !r.holes.is_empty()) {
+            bail!("an `open=1` wall is one loop: give a profile without holes");
+        }
+        let shapes = self.extrudes.len() + self.tori.len();
+        if (open && shapes > 0) || self.extrudes.iter().any(|e| e.open) {
+            bail!("an `open=1` wall goes in its own body; start one with `body name`");
+        }
         self.sketch.clear();
         self.last = None;
         self.extrudes.push(Extrude {
@@ -260,7 +276,7 @@ impl Solids {
             end_round: 0.0,
             copies: Vec::new(),
             scale,
-            open: args.optional_number("open", scope)?.unwrap_or(0.0) != 0.0,
+            open,
         });
         self.publish(scene);
         Ok(())
@@ -288,6 +304,9 @@ impl Solids {
             .iter_mut()
             .find(|e| e.label == label)
             .ok_or_else(|| anyhow!("no extrude called `{label}` in this body"))?;
+        if extrude.open {
+            bail!("`{label}` is an `open=1` wall with no rim edges to fillet");
+        }
         if !groups.contains(&"side") {
             bail!("gcad-mesh fillets only the rim of an extrude: `{label}.end&{label}.side`");
         }

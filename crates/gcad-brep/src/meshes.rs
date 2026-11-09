@@ -13,6 +13,12 @@ impl Model {
     }
 
     pub(crate) fn mesh_op(&self, op: &str) -> Result<()> {
+        if let Some(wall) = &self.open {
+            bail!(
+                "`{op}` works on solids and body `{}` holds the open wall `{wall}`; an `open=1` wall goes in its own body",
+                self.body_name()
+            );
+        }
         if self.has_mesh() {
             bail!(
                 "`{op}` works on solids and body `{}` is a mesh; start a solid with `body name`",
@@ -23,6 +29,12 @@ impl Model {
     }
 
     pub(super) fn start_mesh(&self, op: &str) -> Result<()> {
+        if let Some(wall) = &self.open {
+            bail!(
+                "`{op}` makes a mesh and body `{}` holds the open wall `{wall}`; start one with `body name`",
+                self.body_name()
+            );
+        }
         if self.solid.is_some() {
             bail!(
                 "`{op}` makes a mesh and body `{}` is a solid; start a mesh with `body name`",

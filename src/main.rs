@@ -915,20 +915,21 @@ fn check_mesh(file: &str, vars: &[(String, f64)], bound: f64) -> Result<()> {
     let differences = parity::compare(&parity::kernel(&run.model), &parity::measured(&mesh))
         .map_err(|e| anyhow::anyhow!(e))?;
     println!(
-        "{:<16} {:>14} {:>14} {:>14} {:>9} {:>9} {:>7}",
-        "body", "kernel vol", "kernel glb vol", "mesh vol", "vol %", "bbox %", "colour"
+        "{:<16} {:>14} {:>14} {:>14} {:>9} {:>9} {:>7}  {}",
+        "body", "kernel", "kernel glb", "mesh", "diff %", "bbox %", "colour", "compared"
     );
     let mut over = Vec::new();
     for d in &differences {
         println!(
-            "{:<16} {:>14.4} {:>14.4} {:>14.4} {:>9.4} {:>9.4} {:>7.3}",
+            "{:<16} {:>14.4} {:>14.4} {:>14.4} {:>9.4} {:>9.4} {:>7.3}  {}",
             d.body,
             d.kernel_volume,
             d.kernel_glb_volume,
             d.mesh_volume,
             d.volume() * 100.0,
             d.bbox_share() * 100.0,
-            d.colour
+            d.colour,
+            d.what()
         );
         if !d.within(bound) {
             over.push(d.body.clone());

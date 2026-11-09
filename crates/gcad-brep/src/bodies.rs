@@ -667,6 +667,7 @@ impl Model {
             bail!("there is already a body called `{name}`");
         }
         self.finish_mesh_body()?;
+        self.open = None;
         if let Some(solid) = self.solid.take() {
             let previous = if self.body.is_empty() {
                 "main".to_string()

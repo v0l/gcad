@@ -63,10 +63,16 @@ pub fn mesh_model(model: &Model, y_up: bool) -> gcad_mesh::Model {
     gcad_mesh::Model { bodies }
 }
 
-const GLB_TOLERANCE: f64 = 3e-3;
+pub(crate) const GLB_TOLERANCE: f64 = 3e-3;
 
 fn faceted_mesh(solid: &Solid, name: &str, tolerance: f64) -> crate::mesh::Mesh {
-    let polygons = geometry::mesh(solid, tolerance);
+    faceted(&geometry::mesh(solid, tolerance), name)
+}
+
+pub(crate) fn faceted(
+    polygons: &monstertruck::meshing::prelude::PolygonMesh,
+    name: &str,
+) -> crate::mesh::Mesh {
     let positions = polygons.positions();
     let corners: Vec<[f64; 3]> = polygons
         .faces()
