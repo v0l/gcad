@@ -202,7 +202,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | subtract | supported | `cut` | `bodies::subtract`, `bodies::thru_cut_across_thin_sheet_rows` |
 | intersect | supported | `extrude 10 mode=intersect` | `bodies::intersect` |
 | mirror | supported | `mirror YZ` | `bodies::mirror` |
-| linear pattern | supported | `repeat h count=4 step=10,0` | `bodies::linear_pattern` |
+| linear pattern | supported | `repeat h count=4 step=10,0` | `bodies::linear_pattern`, `features::repeat_of_many_small_boxes_stays_within_memory` |
 | circular pattern | supported | `repeat h count=6 angle=360` | `bodies::circular_pattern` |
 | move | supported | `move 10,0,0` | `bodies::translate` |
 | rotate | supported | `rotate 90 axis=z` | `bodies::rotate`, `assembly::a_transform_in_a_later_body_keeps_earlier_bodies_groups` |

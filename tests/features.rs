@@ -1152,3 +1152,11 @@ fn cut_where_the_tool_wall_meets_a_corner_fillet_start() {
         5.0e-4,
     );
 }
+
+#[test]
+fn repeat_of_many_small_boxes_stays_within_memory() {
+    let model = build(
+        "rect 0.28 1.5 at=-44,0\nsleeper: extrude 0.07\nrepeat sleeper count=110 step=0.8,0",
+    );
+    assert_volume(&model, 110.0 * 0.28 * 1.5 * 0.07, 1.0e-6);
+}

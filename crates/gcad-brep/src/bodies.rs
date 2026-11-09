@@ -174,11 +174,23 @@ impl Model {
     }
 
     fn copy_groups(&mut self, label: Option<&str>, transform: Matrix4, as_label: &str) {
+        let known = self.groups.0.len();
+        self.copy_groups_among(known, label, transform, as_label);
+    }
+
+    fn copy_groups_among(
+        &mut self,
+        known: usize,
+        label: Option<&str>,
+        transform: Matrix4,
+        as_label: &str,
+    ) {
         let body = self.body_name();
         let copies: Vec<GroupEntry> = self
             .groups
             .0
             .iter()
+            .take(known)
             .filter(|entry| entry.body == body)
             .filter(|entry| label.is_none_or(|l| entry.label == l))
             .map(|entry| GroupEntry {
@@ -319,12 +331,22 @@ impl Model {
             ),
         };
         let label = label_of(line);
+        let known = self.groups.0.len();
+        let additive = tools.iter().all(|(combine, _)| *combine == Combine::Add);
+        let mut copies = Vec::new();
         for k in 1..count {
             let transform = place(k);
-            self.copy_groups(Some(of), transform, of);
+            self.copy_groups_among(known, Some(of), transform, of);
+            if additive {
+                copies.extend(tools.iter().map(|(_, tool)| moved(tool, transform)));
+                continue;
+            }
             for (combine, tool) in &tools {
                 self.merge(&label, moved(tool, transform), *combine)?;
             }
+        }
+        if additive {
+            self.merge_all(&label, copies, Combine::Add)?;
         }
         self.describe_solid()
     }
