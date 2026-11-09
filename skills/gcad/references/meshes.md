@@ -106,7 +106,8 @@ Stop when a close-up of the face, a side view and a three-quarter view all look 
 Ship the text and build at load: `gcad_mesh::build(include_str!("hero.gcad"))` (crate
 `crates/gcad-mesh`, no CAD kernel) gives vertex buffers, joints, weights, clips and
 `bone_matrices(clip, t)`; `to_glb()` or `gcad2glb in.gcad out.glb` writes GLB; `include/gcad_mesh.h`
-is the C ABI. Only mesh and rig lines run there. See `docs/gcad-mesh.md`; `gcad2glb` also writes
+is the C ABI. Only mesh and rig lines run there. `gcad check-mesh part.gcad` builds a flat-solid
+prop both ways and fails if a body's volume or size differs by more than 3%. See `docs/gcad-mesh.md`; `gcad2glb` also writes
 files mixing solid and mesh bodies. Crate layout is in `docs/gcad-crates.md`.
 
 ## Examples

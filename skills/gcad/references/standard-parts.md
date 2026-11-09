@@ -24,7 +24,7 @@ gcad calc fit H7/g6 25                               # ISO 286 limits for a hole
 gcad calc material petg                              # properties and thread engagement
 ```
 
-## Not yet
+## Not calculators
 
-Gears, bearings housings, belts and springs have no calculator yet. Gears are drawn with `gear`
-(see [parts](parts.md)).
+Gears are drawn with `gear` (see [parts](parts.md)), not calculated. `gcad calc --help` lists every
+calculator that exists.
