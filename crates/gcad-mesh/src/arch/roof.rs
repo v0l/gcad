@@ -580,6 +580,93 @@ pub fn lowest(planes: &[Plane], p: P2) -> Plane {
         .expect("a plane")
 }
 
+pub fn holed_shell(
+    footprint: &[P2],
+    planes: &[Plane],
+    thickness: f64,
+    holes: &[Vec<P2>],
+) -> Result<Shell, String> {
+    if holes.is_empty() {
+        return roof_shell(footprint, planes, thickness);
+    }
+    let ring = ccw_ring(footprint.to_vec());
+    let tops: Vec<Plane> = planes.iter().map(|p| p.lifted(thickness)).collect();
+    let mut lines = switch_lines(&[planes]);
+    lines.extend(switch_lines(&[&tops]));
+    let holes: Vec<Vec<P2>> = holes.iter().map(|h| ccw_ring(h.clone())).collect();
+    for hole in &holes {
+        if !is_convex(hole) || hole.iter().any(|&p| !inside(p, &ring)) {
+            return Err("an opening in a roof must be convex and inside the roof's edge".into());
+        }
+        lines.extend(edge_lines(hole));
+    }
+    let surfaces = |c: P2| {
+        if holes.iter().any(|h| inside(c, h)) {
+            return None;
+        }
+        Some((lowest(planes, c), lowest(&tops, c)))
+    };
+    between_shell(&ring, &lines, &surfaces, None)
+}
+
+pub fn dormer_shell(
+    host: (&[P2], &[Plane]),
+    thickness: f64,
+    at: P2,
+    width: f64,
+    front: f64,
+    pitch: f64,
+) -> Result<Shell, String> {
+    let (host_eaves, host_planes) = host;
+    let host_ring = ccw_ring(host_eaves.to_vec());
+    if !inside(at, &host_ring) {
+        return Err("a dormer must stand on the roof, inside its edge".into());
+    }
+    let host_top: Vec<Plane> = host_planes.iter().map(|p| p.lifted(thickness)).collect();
+    let plane = lowest(host_planes, at);
+    if length(plane.g) < 1.0e-9 {
+        return Err("a dormer stands on a sloped roof plane".into());
+    }
+    let up = unit(plane.g);
+    let side = left(up);
+    let reach = host_ring
+        .iter()
+        .map(|&p| dot(sub(p, at), up))
+        .fold(0.0, f64::max);
+    let half = width / 2.0;
+    let corners = [
+        add(at, scale(side, -half)),
+        add(at, scale(side, half)),
+        add(add(at, scale(side, half)), scale(up, reach)),
+        add(add(at, scale(side, -half)), scale(up, reach)),
+    ];
+    let eave = lowest(&host_top, at).at(at) + front;
+    let own = vec![
+        Plane::rising_from(corners[0], corners[3], eave, pitch),
+        Plane::rising_from(corners[2], corners[1], eave, pitch),
+    ];
+    let own_top: Vec<Plane> = own.iter().map(|p| p.lifted(thickness)).collect();
+    let mut lines = switch_lines(&[&own_top, &host_top]);
+    lines.extend(switch_lines(&[&own_top]));
+    lines.extend(switch_lines(&[&host_top]));
+    lines.extend(edge_lines(&host_ring));
+    let region: Vec<P2> = corners.to_vec();
+    let surfaces = |c: P2| {
+        if !inside(c, &host_ring) || lowest(host_planes, c) != plane {
+            return None;
+        }
+        Some((lowest(&host_top, c), lowest(&own_top, c)))
+    };
+    let probe = add(at, scale(up, 1.0));
+    let seed = [
+        add(probe, (-0.5, -0.5)),
+        add(probe, (0.5, -0.5)),
+        add(probe, (0.5, 0.5)),
+        add(probe, (-0.5, 0.5)),
+    ];
+    between_shell(&region, &lines, &surfaces, Some(&seed))
+}
+
 pub fn joined_shell(
     own: (&[P2], &[Plane], P2),
     host: (&[P2], &[Plane]),
@@ -657,7 +744,9 @@ fn touches(a: &[P2], b: &[P2]) -> bool {
 fn connected_to(kept: Vec<(Vec<P2>, Plane, Plane)>, seed: &[P2]) -> Vec<(Vec<P2>, Plane, Plane)> {
     let mut reached: Vec<bool> = kept
         .iter()
-        .map(|(piece, _, _)| inside(centre_of(piece), seed))
+        .map(|(piece, _, _)| {
+            inside(centre_of(piece), seed) || seed.iter().any(|&p| inside(p, piece))
+        })
         .collect();
     loop {
         let mut grew = false;
@@ -1113,6 +1202,64 @@ mod tests {
             (signed_area(&section) - band).abs() < 1.0e-6,
             "{}",
             signed_area(&section)
+        );
+    }
+
+    #[test]
+    fn a_hole_takes_its_column_out_of_the_roof() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("gable", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let whole = roof_shell(&ring, &planes, 200.0).unwrap().volume();
+        let hole = vec![
+            (3600.0, 1000.0),
+            (4400.0, 1000.0),
+            (4400.0, 1700.0),
+            (3600.0, 1700.0),
+        ];
+        let holed = holed_shell(&ring, &planes, 200.0, &[hole]).unwrap();
+        assert!(holed.is_closed());
+        let column = 800.0 * 700.0 * 200.0 * 2f64.sqrt();
+        assert!((whole - holed.volume() - column).abs() < 1.0e-3);
+    }
+
+    #[test]
+    fn a_dormer_runs_back_into_the_roof() {
+        let ring = rect(8000.0, 6000.0);
+        let planes = roof_planes("gable", &ring, 2700.0, &[45.0; 4], (1.0, 0.0)).unwrap();
+        let shell = dormer_shell(
+            (&ring, &planes),
+            200.0,
+            (4000.0, 1500.0),
+            1400.0,
+            1000.0,
+            45.0,
+        )
+        .unwrap();
+        assert!(shell.is_closed());
+        let xs: Vec<f64> = shell.points.iter().map(|p| p[0]).collect();
+        let span = xs.iter().cloned().fold(f64::MIN, f64::max)
+            - xs.iter().cloned().fold(f64::MAX, f64::min);
+        assert!((span - 1400.0).abs() < 1.0e-6, "{span} {:?}", shell.points);
+        let host_top: Vec<Plane> = planes.iter().map(|p| p.lifted(200.0)).collect();
+        let lift = 200.0 * 2f64.sqrt();
+        let eave = 2700.0 + 1500.0 + lift + 1000.0;
+        let mut expected = 0.0;
+        let steps = 400;
+        let (dx, dy) = (1400.0 / steps as f64, 1500.0 / steps as f64);
+        for i in 0..steps {
+            for j in 0..steps {
+                let p = (
+                    3300.0 + (i as f64 + 0.5) * dx,
+                    1500.0 + (j as f64 + 0.5) * dy,
+                );
+                let roof = eave + (p.0 - 3300.0).min(4700.0 - p.0) + lift;
+                expected += (roof - envelope(&host_top, p)).max(0.0) * dx * dy;
+            }
+        }
+        assert!(
+            (shell.volume() - expected).abs() < 2.0e-3 * expected,
+            "{} {expected}",
+            shell.volume()
         );
     }
 

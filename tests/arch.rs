@@ -827,7 +827,6 @@ fn walls_trim_to_the_roof_underside() {
 }
 
 #[test]
-#[ignore = "missing: dormers"]
 fn dormer_on_a_roof() {
     let model = build(&with(
         "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\ndm1: dormer on=r1 at=4000,1500 w=1200 type=gable",
@@ -837,7 +836,6 @@ fn dormer_on_a_roof() {
 }
 
 #[test]
-#[ignore = "missing: skylights"]
 fn skylight_on_a_roof() {
     let model = build(&with(
         "r1: roof outer type=gable pitch=45 overhang=0 thickness=200 ridge=x base=L1\nsk1: skylight on=r1 at=4000,1500 w=780 h=980",
@@ -853,6 +851,41 @@ fn skylight_on_a_roof() {
         780.0 * 980.0 * 200.0,
         1.0e-2,
     );
+}
+
+#[test]
+fn dormer_and_skylight_export_is_the_same_every_run() {
+    export_twice(
+        "dormer_and_skylight_export_is_the_same_every_run",
+        &with(
+            "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\ndm1: dormer on=r1 at=2500,1500 w=1200 type=gable\nsk1: skylight on=r1 at=6000,4500 w=780 h=980",
+        ),
+    );
+}
+
+#[test]
+fn dormer_volume_is_the_part_above_the_roof() {
+    let model = build(&with(
+        "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\ndm1: dormer on=r1 at=4000,1500 w=1200 front=400 pitch=45 type=gable",
+    ));
+    let lift = 200.0 * 2f64.sqrt();
+    let eave = 2700.0 + 1500.0 + lift + 400.0;
+    let mut expected = 0.0;
+    let steps = 400;
+    let (dx, dy) = (1400.0 / steps as f64, 1500.0 / steps as f64);
+    for i in 0..steps {
+        for j in 0..steps {
+            let (x, y) = (
+                3300.0 + (i as f64 + 0.5) * dx,
+                1500.0 + (j as f64 + 0.5) * dy,
+            );
+            let dormer = eave + (x - 3300.0).min(4700.0 - x) + lift;
+            let roof = 2700.0 + y + lift;
+            expected += (dormer - roof).max(0.0) * dx * dy;
+        }
+    }
+    near(volume_of(&model, "dm1"), expected, 5.0e-3);
+    assert!(failure(&with("r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\ndm1: dormer on=r1 at=4000,1500 w=1200 front=3000 type=gable")).contains("above the main roof"));
 }
 
 #[test]
@@ -1076,7 +1109,8 @@ fn ladder_rungs() {
 
 #[test]
 fn ramp_volume_and_export_are_steady() {
-    let model = build("rp1: ramp from=0,0,0 to=13500,0,600 slope=1:20 width=1200 landing=1500 every=10000");
+    let model =
+        build("rp1: ramp from=0,0,0 to=13500,0,600 slope=1:20 width=1200 landing=1500 every=10000");
     near(volume_of(&model, "rp1"), 13500.0 * 1200.0 * 200.0, 1.0e-6);
     export_twice(
         "ramp_volume_and_export_are_steady",

@@ -298,6 +298,8 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `pitch_edge` | `r1.eave.N degrees` | sets the pitch of the roof plane rising from that outline edge (an eave or verge) and rebuilds the roof |
 | `roof_join` | `r2 r1` | carries `r2`'s planes on along its ridge until they meet the top of `r1`, so the two roofs touch along their valleys without overlapping |
 | `roof extrude` | `LENGTH thickness=200 material=clay-tile` | the last `poly` is the line along the top of the roof (on the sketch plane, `plane XZ` for a section); the roof hangs `thickness` under it, square to each slope with plumb ends, and runs `LENGTH` along the plane's normal |
+| `dormer` | `on= at=x,y w= type=gable front= pitch= material=` | a gable dormer standing on the roof plane under `at`: its front rises `front` above the roof top there (default 1200, less if the ridge would pass the main roof's), `w` wide inside plus the roof thickness, its roof running back until it meets the main roof |
+| `skylight` | `on= at=x,y w= h=` | an opening through the roof plane under `at`, `w` across and `h` up the slope, with a glass body flush with the roof top |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.

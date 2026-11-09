@@ -1,6 +1,7 @@
 mod access;
 mod datum;
 mod facade;
+mod dormer;
 mod opening;
 mod railing;
 mod roof;
@@ -139,6 +140,7 @@ pub struct Roof {
     pub thickness: f64,
     pub material: String,
     pub joins: Option<String>,
+    pub holes: Vec<Vec<gcad_mesh::arch::P2>>,
 }
 
 #[derive(Clone, Debug)]

@@ -7,7 +7,7 @@ use gcad_mesh::arch::P2;
 use gcad_mesh::arch::layout::signed_area;
 use gcad_mesh::arch::roof::{
     Plane, ROOF_KINDS, RoofEdge, ccw_ring, extruded_profile, joined_shell, longest_edge,
-    offset_ring, roof_edges, roof_planes, roof_shell,
+    offset_ring, roof_edges, roof_planes,
 };
 use monstertruck::modeling::*;
 
@@ -86,8 +86,13 @@ impl Roof {
     }
 
     fn solid(&self) -> Result<Solid> {
-        let shell =
-            roof_shell(&self.eaves(), &self.planes()?, self.thickness).map_err(|e| anyhow!(e))?;
+        let shell = gcad_mesh::arch::roof::holed_shell(
+            &self.eaves(),
+            &self.planes()?,
+            self.thickness,
+            &self.holes,
+        )
+        .map_err(|e| anyhow!(e))?;
         shell_solid(&shell)
     }
 }
@@ -194,6 +199,7 @@ impl Model {
             thickness: 200.0,
             material: "clay-tile".into(),
             joins: None,
+            holes: Vec::new(),
         };
         let mut ridge = None;
         let mut trims: Vec<String> = Vec::new();
