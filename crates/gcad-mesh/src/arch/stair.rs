@@ -268,6 +268,18 @@ pub fn infill_stations(posts: &[f64], spacing: f64) -> Vec<f64> {
         .collect()
 }
 
+pub fn even_split(length: f64, max: f64) -> usize {
+    if max <= 0.0 {
+        return 1;
+    }
+    ((length / max - 1.0e-9).ceil() as usize).max(1)
+}
+
+pub fn blade_stations(lo: f64, hi: f64, spacing: f64) -> Vec<f64> {
+    let n = ((hi - lo) / spacing + 1.0e-9).floor() as usize;
+    (0..=n).map(|k| lo + spacing * k as f64).collect()
+}
+
 pub fn parse_rule(text: &str) -> Result<f64, String> {
     let sum = text
         .strip_prefix("2R+T=")
@@ -431,6 +443,15 @@ mod tests {
         assert_eq!(path_length(&path), 15.0);
         assert_eq!(point_along(&path, 10.0), [3.0, 4.0, 5.0]);
         assert_eq!(point_along(&path, 2.5), [1.5, 2.0, 0.0]);
+    }
+
+    #[test]
+    fn grids_split_evenly() {
+        assert_eq!(even_split(6000.0, 1500.0), 4);
+        assert_eq!(even_split(2700.0, 900.0), 3);
+        assert_eq!(even_split(2800.0, 900.0), 4);
+        assert_eq!(blade_stations(900.0, 2100.0, 100.0).len(), 13);
+        assert_eq!(blade_stations(0.0, 4000.0, 500.0).len(), 9);
     }
 
     #[test]

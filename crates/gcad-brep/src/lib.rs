@@ -650,6 +650,10 @@ pub const OPERATIONS: &[&str] = &[
     "roof_join",
     "railing",
     "handrail",
+    "curtainwall",
+    "louvre",
+    "shading_fin",
+    "balcony",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -929,6 +933,10 @@ impl Model {
             "roof_join" => self.op_roof_join(line),
             "railing" => self.op_railing(line),
             "handrail" => self.op_handrail(line),
+            "curtainwall" => self.op_curtainwall(line),
+            "louvre" => self.op_louvre(line),
+            "shading_fin" => self.op_shading_fin(line),
+            "balcony" => self.op_balcony(line),
             "project" => self.scene.op_project(&self.scope, line),
             "layer" => self.scene.op_layer(&self.scope, line),
             "finish" => self.scene.op_finish(&self.scope, line),

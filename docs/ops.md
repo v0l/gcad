@@ -580,9 +580,9 @@ Architecture stage B (gcad #349). Profiles are the `member` sections.
 | trusses | supported | `truss x,y,z x,y,z type=king\|queen\|fink pitch=30 member=bar 47x150 spacing=600 count=10` | `arch::truss_member_counts` |
 | braces | missing | `brace A1 B1 rod 20 from=L0 to=L1 type=x` | `arch::brace_between_columns` |
 | footings | missing | `footing c1 1200x1200x500` | `arch::footing_under_a_column` |
-| curtain walls | missing | `curtainwall x,y x,y height=L1 grid=1500x900 mullion=50x100 glass=double door=cell:2,1` | `arch::curtain_wall_grid` |
-| louvres and shading fins | missing | `louvre x,y x,y z=900..2100 blade=150x20@100 angle=45`, `shading_fin x,y x,y depth=400 t=20@500` | `arch::louvres_and_fins` |
-| balconies | missing | `balcony on=outer at=4000 level=L1 w=3000 d=1200 slab=concrete:200 railing=1100` | `arch::balcony_slab_and_railing` |
+| curtain walls | supported | `curtainwall x,y x,y height=L1 grid=1500x900 mullion=50x100 glass=double door=cell:2,1` | `arch::curtain_wall_grid` |
+| louvres and shading fins | supported | `louvre x,y x,y z=900..2100 blade=150x20@100 angle=45`, `shading_fin x,y x,y depth=400 t=20@500` | `arch::louvres_and_fins` |
+| balconies | supported | `balcony on=outer at=4000 level=L1 w=3000 d=1200 slab=concrete:200 railing=1100` | `arch::balcony_slab_and_railing`, `arch::facade_export_is_the_same_every_run` |
 
 ## Rooms and schedules
 

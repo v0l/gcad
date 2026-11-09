@@ -1216,7 +1216,6 @@ fn footing_under_a_column() {
 }
 
 #[test]
-#[ignore = "missing: curtain walls"]
 fn curtain_wall_grid() {
     let model = build(&datums(
         "cw1: curtainwall 0,0 6000,0 height=L1 grid=1500x900 mullion=50x100 glass=double door=cell:2,1",
@@ -1226,7 +1225,6 @@ fn curtain_wall_grid() {
 }
 
 #[test]
-#[ignore = "missing: louvres and shading fins"]
 fn louvres_and_fins() {
     let model = build(&datums(
         "lv: louvre 0,0 2000,0 z=900..2100 blade=150x20@100 angle=45\nsf: shading_fin 0,0 4000,0 depth=400 t=20@500 height=L1",
@@ -1236,7 +1234,16 @@ fn louvres_and_fins() {
 }
 
 #[test]
-#[ignore = "missing: balconies"]
+fn facade_export_is_the_same_every_run() {
+    export_twice(
+        "facade_export_is_the_same_every_run",
+        &with(
+            "cw1: curtainwall 0,-2000 6000,-2000 height=L1 grid=1500x900 mullion=50x100 glass=double door=cell:2,1\nlv: louvre 0,-3000 2000,-3000 z=900..2100 blade=150x20@100 angle=45\nsf: shading_fin 0,-4000 4000,-4000 depth=400 t=20@500 height=L1\nbal: balcony on=outer at=4000 level=L1 w=3000 d=1200 slab=concrete:200 railing=1100",
+        ),
+    );
+}
+
+#[test]
 fn balcony_slab_and_railing() {
     let model = build(&with(
         "bal: balcony on=outer at=4000 level=L1 w=3000 d=1200 slab=concrete:200 railing=1100",
