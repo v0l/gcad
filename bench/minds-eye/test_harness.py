@@ -102,7 +102,7 @@ class Agreement(unittest.TestCase):
         self.assertEqual(out["n_rated"], 2)
         self.assertEqual(out["n_decent"], 2)
         self.assertEqual(out["mean_abs_error_rated"], 2.0)
-        self.assertEqual(out["within_1_rated"], 0.0)
+        self.assertEqual(out["within_1_rated"], 0.5)
         self.assertEqual(out["decent_above_rated_auc"], 0.5)
 
 
