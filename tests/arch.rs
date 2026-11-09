@@ -1067,7 +1067,6 @@ fn column_export_is_the_same_every_run() {
 }
 
 #[test]
-#[ignore = "missing: beams"]
 fn beam_between_grid_points() {
     let model = build(&datums("b1: beam A1 B1 bar 200x400 z=L1 material=c24"));
     near(volume_of(&model, "b1"), 4000.0 * 200.0 * 400.0, 1.0e-6);
@@ -1076,7 +1075,6 @@ fn beam_between_grid_points() {
 }
 
 #[test]
-#[ignore = "missing: joists"]
 fn joists_across_a_floor() {
     let model = build(&datums(
         "j: joist 0,0 4000,0 4000,3000 0,3000 bar 47x200 spacing=400 dir=y z=L1 material=c24",
@@ -1085,7 +1083,6 @@ fn joists_across_a_floor() {
 }
 
 #[test]
-#[ignore = "missing: trusses"]
 fn truss_member_counts() {
     for (kind, members) in [("king", 4), ("queen", 6), ("fink", 7)] {
         let model = build(&format!(
@@ -1097,6 +1094,16 @@ fn truss_member_counts() {
         "t: truss 0,0,2700 8000,0,2700 type=fink pitch=30 member=bar 47x150 spacing=600 count=10",
     );
     assert_eq!(count_of(&row, "t"), 70);
+}
+
+#[test]
+fn framing_export_is_the_same_every_run() {
+    export_twice(
+        "framing_export_is_the_same_every_run",
+        &datums(
+            "b1: beam A1 B1 bar 200x400 z=L1\nj: joist 0,0 4000,0 4000,3000 0,3000 bar 47x200 spacing=400 dir=x z=L1-400\nt: truss 0,0,2700 4000,0,2700 type=fink pitch=30 member=bar 47x150 spacing=600 count=3",
+        ),
+    );
 }
 
 #[test]

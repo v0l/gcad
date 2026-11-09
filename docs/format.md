@@ -281,6 +281,9 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `floor_finish` | `room= type=mat:t+mat:t` | layers filling the room, the bottom on the room's level |
 | `column` | `point rect WxD\|round D\|member section` `base= top= material=concrete` | an upright centred on the point from `base` to `top` |
 | `column_grid` | `rect WxD\|round D\|member section` `base= top= material=` | a column at every grid crossing, named `grid.A1` |
+| `beam` | `a b section` `z= material=c24` | a member from `a` to `b` with its top on `z` |
+| `joist` | `points section` `spacing= dir=x\|y z= material=c24` | members running along `dir` across the outline, `spacing` apart centre to centre, the first and last against the outline's edges, tops on `z`, named `name.1`... |
+| `truss` | `a b size` `type=king\|queen\|fink pitch=30 member=bar spacing=600 count=1 material=c24` | trusses bearing on `a` and `b`, repeated `count` times `spacing` apart to the left of `a` to `b`; members `name.N.chord.1`, `.rafter`, `.post`, `.strut`, `.web` |
 
 Wall faces are selectors for `measure`: `w1.outside`, `w1.inside`, `w1.top`, `w1.bottom`,
 `w1.ends`, and per layer `w1.brick.outside`.

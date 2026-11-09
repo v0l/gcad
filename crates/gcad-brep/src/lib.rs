@@ -638,6 +638,9 @@ pub const OPERATIONS: &[&str] = &[
     "floor_finish",
     "column",
     "column_grid",
+    "beam",
+    "joist",
+    "truss",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -905,6 +908,9 @@ impl Model {
             "ceiling" | "floor_finish" => self.op_room_cover(line),
             "column" => self.op_column(line),
             "column_grid" => self.op_column_grid(line),
+            "beam" => self.op_beam(line),
+            "joist" => self.op_joist(line),
+            "truss" => self.op_truss(line),
             "project" => self.scene.op_project(&self.scope, line),
             "layer" => self.scene.op_layer(&self.scope, line),
             "finish" => self.scene.op_finish(&self.scope, line),
