@@ -906,7 +906,7 @@ fn roof_edges_are_selectors() {
 #[ignore = "missing: roof joins"]
 fn roof_join_meets_two_roofs() {
     let model = build(&with(
-        "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\nr2: roof 3000,6000 5000,6000 5000,8000 3000,8000 type=gable pitch=45 thickness=200 ridge=y base=L1\nroof_join r2 r1",
+        "r1: roof outer type=gable pitch=45 thickness=200 ridge=x base=L1\nr2: roof 3000,6000 5000,6000 5000,8000 3000,8000 closed type=gable pitch=45 thickness=200 ridge=y base=L1\nroof_join r2 r1",
     ));
     let a = model.named_body("r1").expect("r1");
     let b = model.named_body("r2").expect("r2");
