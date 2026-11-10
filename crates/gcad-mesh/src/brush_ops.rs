@@ -526,6 +526,45 @@ impl Scene {
         Ok(format!("{count} vertices in group `{name}`"))
     }
 
+    pub fn op_plate(&mut self, scope: &Scope, line: &Line) -> Result<String> {
+        let args = Args::new(line, &["name"], &["from", "t", "offset", "rim"], false)?;
+        let name = args.text("name")?.to_string();
+        let t = positive(args.number("t", scope)?, "t")?;
+        let offset = args.optional_number("offset", scope)?.unwrap_or(0.0);
+        let rim = args.optional_number("rim", scope)?.unwrap_or(0.0);
+        if rim < 0.0 {
+            bail!("rim must be 0 or more, got {rim}");
+        }
+        if self.mesh_body.rig.skin.is_some() {
+            bail!("`plate` adds vertices the skin does not cover; run it before `skin auto`");
+        }
+        let mut regions = Vec::new();
+        for word in crate::parse::split_top_level(args.text("from")?, ',') {
+            regions.extend(self.region_of(word.trim())?);
+        }
+        let mesh = self.sculpted("plate")?;
+        if mesh.parts.iter().any(|p| *p == name) {
+            bail!("the mesh already has a part `{name}`");
+        }
+        let weighting = mesh::Weighting {
+            masked: false,
+            ..Default::default()
+        };
+        let selection = Selection::weighted(mesh, regions, 0.0, None, weighting)?;
+        let selected: Vec<bool> = selection.weights.iter().map(|&w| w >= 1.0).collect();
+        let plate = mesh.plate(&selected, &name, t, offset, rim);
+        if plate.patch_triangles == 0 {
+            bail!("`from` selects no whole triangles to thicken");
+        }
+        mesh.merge(&plate.mesh);
+        Ok(format!(
+            "plate `{name}` of {} triangles, {} rim edges, volume {:.3}",
+            plate.mesh.triangles.len(),
+            plate.rim_edges,
+            plate.mesh.volume()
+        ))
+    }
+
     pub fn op_join(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         let args = Args::new(line, &["a", "b"], &["blend", "falloff"], false)?;
         let blend = positive(args.number("blend", scope)?, "blend")?;

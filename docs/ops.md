@@ -297,6 +297,7 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | polygroups | supported | `group cap sphere=x,y,z r=2` then `select cap` | `brush::group_makes_a_polygroup_to_select` |
 | selection falloff shape and strength | supported | `select sphere=... falloff=2 profile=linear strength=0.5` | `brush::select_profile_and_strength_shape_the_falloff` |
 | soften the seam between parts | supported | `join arm body blend=1.5` | `brush::join_softens_the_seam_between_parts` |
+| thicken a patch into a plate | supported | `plate shell from=cap t=0.4 offset=0.2 rim=0.15` | `brush::plate_thickens_a_patch_into_its_own_closed_part` |
 | dynamic topology under brushes | supported | `dyntopo on detail=0.05` | `brush::dyntopo_refines_under_the_brush` |
 | subdivide and project to a stored level | supported | `level base`, `subdivide 2`, `project base` | `brush::subdivide_quadruples_the_triangles`, `brush::project_returns_a_selection_to_a_stored_level` |
 | sculpt layers | supported | `layer wrinkles`, then `layer wrinkles amount=0.5` | `brush::layer_amount_dials_its_strokes` |

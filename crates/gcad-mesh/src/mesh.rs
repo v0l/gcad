@@ -5,6 +5,7 @@ pub mod channels;
 pub mod decimate;
 pub mod grid;
 pub mod masking;
+pub mod plate;
 pub mod quadric;
 pub mod rig;
 pub mod sculpt;

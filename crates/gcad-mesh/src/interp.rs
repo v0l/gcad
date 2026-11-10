@@ -37,6 +37,7 @@ pub const MESH_OPERATIONS: &[&str] = &[
     "show",
     "group",
     "join",
+    "plate",
     "dyntopo",
     "subdivide",
     "level",
@@ -660,7 +661,7 @@ impl Scene {
         Ok(Arc::make_mut(mesh))
     }
 
-    fn region_of(&self, word: &str) -> Result<Vec<Region>> {
+    pub(crate) fn region_of(&self, word: &str) -> Result<Vec<Region>> {
         if word == "all" {
             return Ok(vec![Region::All]);
         }
