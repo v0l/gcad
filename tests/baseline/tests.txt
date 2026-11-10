@@ -23,7 +23,7 @@ tests/assets.rs assets: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filter
 tests/blender.rs blender: ok. 0 passed; 0 failed; 1 ignored; 0 measured; 0 filtered out
 tests/blends.rs blends: ok. 25 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/bodies.rs bodies: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/brush.rs brush: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/brush.rs brush: ok. 50 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/c_abi.rs c_abi: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/cache.rs cache: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc.rs calc: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -70,7 +70,7 @@ unittests gcad_cloud: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered 
 unittests gcad_drafting: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_geom: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_host: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-unittests gcad_mesh: ok. 78 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+unittests gcad_mesh: ok. 79 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad_mesh_viewer: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 unittests gcad: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
