@@ -245,7 +245,7 @@ after it. Each test checks a volume or bounding box worked out by hand.
 | refine a region | supported | `refine 0.1` | `mesh::refine_hits_the_edge_length_and_stays_closed`, `mesh::refine_only_inside_the_selection`, `mesh::refine_follows_the_curve` |
 | refine rings at joints | supported | `refine joints edge=0.3 reach=1.8` | `rig::refine_joints_splits_triangles_near_the_joint_only`, `rig::refine_joints_needs_a_parented_bone` |
 | crease a groove | supported | `crease x,y,z x,y,z depth=0.3 width=0.4` | `mesh::crease_cuts_a_groove_of_the_given_depth`, `mesh::crease_drawn_just_off_the_surface_still_cuts` |
-| pinch toward a point | supported | `pinch 0.5 toward=x,y,z` | `mesh::pinch_draws_vertices_together_along_the_surface`, `mesh::pinch_with_mirror_pulls_each_side_to_its_own_point` |
+| pinch toward a point | supported | `pinch 0.5 toward=x,y,z` | `mesh::pinch_draws_vertices_together_along_the_surface`, `mesh::pinch_with_mirror_pulls_each_side_to_its_own_point`, `mesh::part_pinch_does_not_tear_the_blend_seam` |
 | flatten onto a plane | supported | `flatten at=0,0,0 normal=z`, `flatten cut ...` | `mesh::flatten_onto_a_plane`, `mesh::flatten_cut_trues_a_sole_without_crushing_the_paw` |
 | surface noise | supported | `noise 0.2 size=1 seed=3` | `mesh::noise_is_repeatable_and_bounded` |
 | relax triangles | supported | `relax 10` | `mesh::relax_evens_triangles_without_shrinking` |
