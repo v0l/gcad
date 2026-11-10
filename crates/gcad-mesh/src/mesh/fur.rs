@@ -188,7 +188,7 @@ impl Cards {
         let colours = (0..mesh.positions.len())
             .map(|i| match i % 3 {
                 2 => tint.map(|c| (c * 1.15).min(1.0)),
-                _ => tint.map(|c| c * 0.6),
+                _ => tint.map(|c| c * 0.82),
             })
             .collect();
         (mesh, colours)

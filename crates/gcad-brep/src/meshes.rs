@@ -68,7 +68,7 @@ impl Model {
         self.scene.mesh_shading(&self.colours)
     }
 
-    pub fn fur_shading(&self) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>)> {
+    pub fn fur_shading(&self) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>, Vec<gcad_mesh::interp::Shine>)> {
         self.scene.fur_shading(&self.colours)
     }
 
