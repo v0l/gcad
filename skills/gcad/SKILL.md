@@ -65,6 +65,11 @@ configured with it (`command = "gcad"`, `args = ["lsp"]`, extensions gcad, gasm,
 gdwg) gets the failing line as a diagnostic after every edit, plus document symbols and hover
 on an op name.
 
+`gcad lsp` serves the same check as a language server on stdio, so an editor or agent harness
+configured with it (`command = "gcad"`, `args = ["lsp"]`, extensions gcad, gasm, gasset, gsim,
+gdwg) gets the failing line as a diagnostic after every edit, plus document symbols and hover
+on an op name.
+
 ## The loop
 
 For an assembly, run the loop on each part file alone, then on the `.gasm`.
