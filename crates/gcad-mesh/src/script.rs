@@ -57,6 +57,8 @@ pub struct Part {
     pub name: String,
     pub colour: [f32; 3],
     pub gloss: f32,
+    pub metal: f32,
+    pub rough: f32,
     pub first_index: usize,
     pub index_count: usize,
 }
@@ -123,7 +125,7 @@ pub struct RawBody {
     pub mesh: Arc<Mesh>,
     pub rig: Option<Rig>,
     pub tints: Vec<[f64; 3]>,
-    pub gloss: Vec<f64>,
+    pub gloss: Vec<crate::interp::Shine>,
     pub colours: Vec<[f32; 3]>,
     pub detail: Option<crate::interp::Detail>,
 }
@@ -146,7 +148,7 @@ pub struct Body {
     mesh: Arc<Mesh>,
     rig: Option<Rig>,
     tints: Vec<[f64; 3]>,
-    gloss: Vec<f64>,
+    gloss: Vec<crate::interp::Shine>,
     detail: Option<crate::interp::Detail>,
 }
 
@@ -611,7 +613,7 @@ fn collect(run: &Run, y_up: bool) -> Model {
                 .find(|(n, ..)| *n == name)
                 .map(|(_, _, t)| t.clone())
                 .unwrap_or_default();
-            let gloss = scene.part_gloss_of(&name, &mesh);
+            let gloss = scene.part_shine_of(&name, &mesh);
             let vertex_colours = shading
                 .iter()
                 .find(|(n, ..)| *n == name)
@@ -639,7 +641,7 @@ fn parts_of(
     triangles: &[[u32; 3]],
     labels: &[u16],
     tints: &[[f64; 3]],
-    gloss: &[f64],
+    gloss: &[crate::interp::Shine],
 ) -> (Vec<u32>, Vec<Part>) {
     let mut indices = Vec::new();
     let mut parts = Vec::new();
@@ -654,10 +656,13 @@ fn parts_of(
         if indices.len() == first {
             continue;
         }
+        let shine = gloss.get(part).copied().unwrap_or_default();
         parts.push(Part {
             name: part_name.clone(),
             colour: f3(tints.get(part).copied().unwrap_or([0.7; 3])),
-            gloss: gloss.get(part).copied().unwrap_or(0.0) as f32,
+            gloss: shine.gloss as f32,
+            metal: shine.metal as f32,
+            rough: shine.rough as f32,
             first_index: first,
             index_count: indices.len() - first,
         });

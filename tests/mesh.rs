@@ -672,3 +672,45 @@ fn soft_colour_fades_across_the_border() {
         at(1.0)
     );
 }
+
+const SPHERE: &str = "ball: blob 0,0,0 r=4\nremesh 0.4\n";
+
+fn glb_json_of(source: &str) -> serde_json::Value {
+    let glb = gcad::export::glb_of(&build(source)).expect("exports");
+    let len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    serde_json::from_slice(&glb[20..20 + len]).expect("json chunk")
+}
+
+#[test]
+fn metal_part_glb_material_carries_the_factors() {
+    let json = glb_json_of(&format!("{SPHERE}color #c0c0c0 part=ball metal=1 rough=0.3"));
+    let pbr = &json["materials"][0]["pbrMetallicRoughness"];
+    assert_eq!(pbr["metallicFactor"].as_f64(), Some(1.0));
+    assert!((pbr["roughnessFactor"].as_f64().unwrap() - 0.3).abs() < 1e-6, "{pbr}");
+    let plain = glb_json_of(&format!("{SPHERE}color #c0c0c0 part=ball gloss=0.5"));
+    let pbr = &plain["materials"][0]["pbrMetallicRoughness"];
+    assert_eq!(pbr["metallicFactor"].as_f64(), Some(0.0));
+    assert!((pbr["roughnessFactor"].as_f64().unwrap() - 0.6).abs() < 1e-6, "{pbr}");
+}
+
+#[test]
+fn metal_values_are_checked() {
+    let error = failure(&format!("{SPHERE}color red part=ball metal=2"));
+    assert!(error.contains("metal goes from 0 to 1"), "{error}");
+    let error = failure(&format!("{SPHERE}color red metal=1"));
+    assert!(error.contains("go with `part=`"), "{error}");
+}
+
+#[test]
+fn a_metal_sphere_renders_differently_from_a_glossy_one() {
+    let draw = |line: &str, name: &str| {
+        let model = build(&format!("{SPHERE}{line}"));
+        let path = scratch(name);
+        gcad::render::render_with_meshes(&[], &model.mesh_shading(), &path).expect("renders");
+        image::open(&path).expect("png").to_rgb8()
+    };
+    let metal = draw("color #c0c0c0 part=ball metal=1 rough=0.3", "metal-ball.png");
+    let glossy = draw("color #c0c0c0 part=ball gloss=0.8", "gloss-ball.png");
+    let differing = metal.pixels().zip(glossy.pixels()).filter(|(a, b)| a != b).count();
+    assert!(differing > 20_000, "only {differing} pixels differ");
+}

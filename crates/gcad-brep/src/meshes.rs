@@ -60,7 +60,11 @@ impl Model {
         self.scene.part_gloss_of(body, mesh)
     }
 
-    pub fn mesh_shading(&self) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>)> {
+    pub fn part_shine_of(&self, body: &str, mesh: &Mesh) -> Vec<gcad_mesh::interp::Shine> {
+        self.scene.part_shine_of(body, mesh)
+    }
+
+    pub fn mesh_shading(&self) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>, Vec<gcad_mesh::interp::Shine>)> {
         self.scene.mesh_shading(&self.colours)
     }
 
@@ -90,8 +94,9 @@ impl Model {
         colour: [f64; 3],
         gloss: Option<f64>,
         soft: Option<f64>,
+        metal: Option<(f64, f64)>,
     ) -> Result<String> {
-        self.scene.colour_mesh_part(part, colour, gloss, soft)
+        self.scene.colour_mesh_part(part, colour, gloss, soft, metal)
     }
 
     pub(crate) fn op_mesh_pose(&mut self, line: &Line) -> Result<String> {

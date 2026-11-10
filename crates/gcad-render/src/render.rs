@@ -1,5 +1,6 @@
 use crate::geometry;
 use anyhow::Result;
+use gcad_mesh::interp::Shine;
 use image::{Rgb, RgbImage};
 use monstertruck::modeling::*;
 use rayon::prelude::*;
@@ -43,6 +44,7 @@ fn views() -> [View; 4] {
 
 struct Light {
     toward_eye: Vector3,
+    up: Vector3,
     key: Vector3,
     half: Vector3,
     floor: f64,
@@ -53,20 +55,37 @@ impl Light {
         let key = (view.toward_eye * 0.6 + view.up * 0.5 - view.right * 0.35).normalize();
         Light {
             toward_eye: view.toward_eye,
+            up: view.up,
             key,
             half: (key + view.toward_eye).normalize(),
             floor,
         }
     }
 
-    fn shade(&self, normal: Vector3, tint: [f64; 3], shine: f64) -> [f64; 3] {
+    fn shade(&self, normal: Vector3, tint: [f64; 3], shine: Shine) -> [f64; 3] {
         let facing = normal.dot(self.toward_eye).max(0.0);
         let key = normal.dot(self.key).max(0.0);
         let diffuse = self.floor + (1.0 - self.floor) * (0.5 * facing + 0.5 * key);
-        let spread = 30.0 + 170.0 * shine;
-        let strength = 0.2 + 0.8 * shine;
+        let spread = 30.0 + 170.0 * shine.gloss;
+        let strength = 0.2 + 0.8 * shine.gloss;
         let gloss = strength * (1.0 - self.floor) * normal.dot(self.half).max(0.0).powf(spread);
-        tint.map(|c| (255.0 * (c * diffuse + gloss)).min(255.0))
+        let plain = tint.map(|c| 255.0 * (c * diffuse + gloss));
+        let plain = if shine.metal > 0.0 {
+            let metal = shine.metal.clamp(0.0, 1.0);
+            let reflected = normal * (2.0 * normal.dot(self.toward_eye)) - self.toward_eye;
+            let sky = 0.5 + 0.5 * reflected.dot(self.up);
+            let horizon = (-(sky - 0.5).powi(2) * 40.0).exp();
+            let env = 0.12 + 0.88 * sky * sky + 0.5 * horizon;
+            let blur = shine.rough.clamp(0.0, 1.0);
+            let env = env * (1.0 - blur) + 0.45 * blur;
+            let sun = reflected.dot(self.key).max(0.0).powf(8.0 + 400.0 * (1.0 - blur).powi(2));
+            let bright = |c: f64| 255.0 * (c * env * 1.3 + sun * (1.0 - 0.6 * c));
+            let dull = tint.map(bright);
+            [0, 1, 2].map(|k| plain[k] * (1.0 - metal) + dull[k] * metal)
+        } else {
+            plain
+        };
+        plain.map(|c| c.clamp(0.0, 255.0))
     }
 }
 
@@ -96,7 +115,7 @@ impl Canvas {
         p: [(f64, f64, f64); 3],
         tints: [[f64; 3]; 3],
         normals: [Vector3; 3],
-        shine: f64,
+        shine: Shine,
         light: &Light,
     ) {
         let low = |f: fn(&(f64, f64, f64)) -> f64| {
@@ -285,7 +304,7 @@ type ColouredMesh = (
     String,
     std::sync::Arc<crate::mesh::Mesh>,
     Vec<[f64; 3]>,
-    Vec<f64>,
+    Vec<Shine>,
 );
 
 pub fn render_with_meshes(
@@ -381,7 +400,7 @@ struct Gathered {
     positions: Vec<Point3>,
     triangles: Vec<([usize; 3], [[f64; 3]; 3])>,
     normals: Vec<[Vector3; 3]>,
-    shine: Vec<f64>,
+    shine: Vec<Shine>,
     edges: Vec<Vec<Point3>>,
     bounds: Vec<Point3>,
     outline: bool,
@@ -413,7 +432,7 @@ impl Gathered {
                 triangles.push((corners, [tint; 3]));
             }
         }
-        let mut shine: Vec<f64> = vec![0.0; triangles.len()];
+        let mut shine: Vec<Shine> = vec![Shine::default(); triangles.len()];
         for (_, mesh, tints, glosses) in meshes {
             let base = positions.len();
             let at = |p: crate::mesh::P3| Point3::new(p[0], p[1], p[2]);
@@ -428,7 +447,7 @@ impl Gathered {
                     Vector3::new(n[0], n[1], n[2])
                 }));
                 triangles.push((corners, t.map(tint_of)));
-                shine.push(glosses.get(t[0] as usize).copied().unwrap_or(0.0));
+                shine.push(glosses.get(t[0] as usize).copied().unwrap_or_default());
             }
         }
         let edges: Vec<Vec<Point3>> = solids
@@ -587,7 +606,7 @@ struct Scene<'a> {
     lines: &'a [Line],
     floor: f64,
     edges_on_surface: bool,
-    shine: &'a [f64],
+    shine: &'a [Shine],
     outline: bool,
 }
 
@@ -648,7 +667,7 @@ fn draw_view_framed(scene: &Scene, view: &View, center: Vector3, parts: f64) -> 
             corners.map(|i| to_pixel(projected[i])),
             *tints,
             normals.map(|n| n * toward),
-            scene.shine.get(k).copied().unwrap_or(0.0),
+            scene.shine.get(k).copied().unwrap_or_default(),
             &light,
         );
     }

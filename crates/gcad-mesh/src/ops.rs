@@ -20,6 +20,22 @@ pub fn opacity_of(args: &Args, scope: &Scope) -> Result<f64> {
     Ok(opacity)
 }
 
+pub fn metal_of(args: &Args, scope: &Scope) -> Result<Option<(f64, f64)>> {
+    let metal = args.optional_number("metal", scope)?;
+    let rough = args.optional_number("rough", scope)?;
+    if metal.is_none() && rough.is_none() {
+        return Ok(None);
+    }
+    let metal = metal.unwrap_or(0.0);
+    let rough = rough.unwrap_or(if metal > 0.0 { 0.4 } else { 1.0 });
+    for (name, v) in [("metal", metal), ("rough", rough)] {
+        if !(0.0..=1.0).contains(&v) {
+            bail!("{name} goes from 0 to 1, got {v}");
+        }
+    }
+    Ok(Some((metal, rough)))
+}
+
 impl Scene {
     pub fn op_move(&mut self, scope: &Scope, line: &Line) -> Result<String> {
         let args = Args::new(line, &["by", "copy"], &[], false)?;
@@ -101,7 +117,7 @@ impl Scene {
         let args = Args::new(
             line,
             &["colour"],
-            &["opacity", "part", "gloss", "soft"],
+            &["opacity", "part", "gloss", "soft", "metal", "rough"],
             false,
         )?;
         let colour = colour_of(args.text("colour")?, scope)?;
@@ -118,11 +134,12 @@ impl Scene {
         {
             bail!("soft must be 0 or more, got {s}");
         }
+        let metal = metal_of(&args, scope)?;
         if let Some(part) = args.values.get("part") {
-            return self.colour_mesh_part(part, colour, gloss, soft);
+            return self.colour_mesh_part(part, colour, gloss, soft, metal);
         }
-        if gloss.is_some() || soft.is_some() {
-            bail!("`gloss=` and `soft=` go with `part=` on a mesh body");
+        if gloss.is_some() || soft.is_some() || metal.is_some() {
+            bail!("`gloss=`, `soft=`, `metal=` and `rough=` go with `part=` on a mesh body");
         }
         let name = self.body_name();
         colours.insert(name.clone(), colour);

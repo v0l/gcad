@@ -12,7 +12,7 @@ pub struct Body<'a> {
     pub mesh: &'a Mesh,
     pub rig: Option<&'a Rig>,
     pub colours: Vec<[f64; 3]>,
-    pub gloss: Vec<f64>,
+    pub gloss: Vec<crate::interp::Shine>,
     pub detail: Option<Detail>,
 }
 
@@ -365,13 +365,13 @@ fn emit_level(
             None,
         );
         let colour = body.colours.get(part).copied().unwrap_or([0.7, 0.7, 0.7]);
-        let gloss = body.gloss.get(part).copied().unwrap_or(0.0);
+        let shine = body.gloss.get(part).copied().unwrap_or_default();
         let mut material = json!({
             "name": format!("{name}.{part_name}"),
             "pbrMetallicRoughness": {
                 "baseColorFactor": [linear(colour[0]), linear(colour[1]), linear(colour[2]), 1.0],
-                "metallicFactor": 0.0,
-                "roughnessFactor": 1.0 - gloss * 0.8,
+                "metallicFactor": shine.metal,
+                "roughnessFactor": shine.rough,
             },
         });
         if let Some(t) = normal_texture {

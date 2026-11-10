@@ -28,7 +28,7 @@ pub fn mesh_model(model: &Model, y_up: bool) -> gcad_mesh::Model {
                     mesh: Arc::new(mesh),
                     rig: None,
                     tints: vec![colour.unwrap_or([0.7, 0.7, 0.7])],
-                    gloss: vec![0.0],
+                    gloss: vec![Default::default()],
                     colours: Vec::new(),
                     detail: None,
                 },
@@ -50,7 +50,7 @@ pub fn mesh_model(model: &Model, y_up: bool) -> gcad_mesh::Model {
         gcad_mesh::Body::new(
             gcad_mesh::RawBody {
                 rig: model.rig_of(&name).cloned(),
-                gloss: model.part_gloss_of(&name, &mesh),
+                gloss: model.part_shine_of(&name, &mesh),
                 detail: model.scene.detail_of(&name),
                 name,
                 mesh,

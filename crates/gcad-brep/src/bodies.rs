@@ -486,7 +486,7 @@ impl Model {
         let args = Args::new(
             line,
             &["colour"],
-            &["opacity", "part", "gloss", "soft"],
+            &["opacity", "part", "gloss", "soft", "metal", "rough"],
             false,
         )?;
         let colour = self.colour_of(args.text("colour")?)?;
@@ -503,11 +503,12 @@ impl Model {
         {
             bail!("soft must be 0 or more, got {s}");
         }
+        let metal = gcad_mesh::ops::metal_of(&args, &self.scope)?;
         if let Some(part) = args.values.get("part") {
-            return self.colour_mesh_part(part, colour, gloss, soft);
+            return self.colour_mesh_part(part, colour, gloss, soft, metal);
         }
-        if gloss.is_some() || soft.is_some() {
-            bail!("`gloss=` and `soft=` go with `part=` on a mesh body");
+        if gloss.is_some() || soft.is_some() || metal.is_some() {
+            bail!("`gloss=`, `soft=`, `metal=` and `rough=` go with `part=` on a mesh body");
         }
         let name = self.body_name();
         self.colours.insert(name.clone(), colour);

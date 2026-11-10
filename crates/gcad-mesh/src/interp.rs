@@ -47,7 +47,24 @@ pub const MESH_OPERATIONS: &[&str] = &[
     "lod",
 ];
 
-pub type Shaded = (String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>);
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Shine {
+    pub gloss: f64,
+    pub metal: f64,
+    pub rough: f64,
+}
+
+impl Default for Shine {
+    fn default() -> Shine {
+        Shine {
+            gloss: 0.0,
+            metal: 0.0,
+            rough: 1.0,
+        }
+    }
+}
+
+pub type Shaded = (String, Arc<Mesh>, Vec<[f64; 3]>, Vec<Shine>);
 
 type Named = (String, Vec<Region>, f64, Option<usize>);
 
@@ -106,6 +123,7 @@ pub struct Scene {
     pub details: Vec<(String, Detail)>,
     pub part_colours: HashMap<(String, String), [f64; 3]>,
     pub part_gloss: HashMap<(String, String), f64>,
+    pub part_metal: HashMap<(String, String), (f64, f64)>,
     pub part_soft: HashMap<(String, String), f64>,
     pub solid_bodies: Vec<String>,
 }
@@ -192,6 +210,7 @@ impl Scene {
         colour: [f64; 3],
         gloss: Option<f64>,
         soft: Option<f64>,
+        metal: Option<(f64, f64)>,
     ) -> Result<String> {
         let mesh = self
             .current_mesh()?
@@ -207,6 +226,10 @@ impl Scene {
         if let Some(g) = gloss {
             self.part_gloss
                 .insert((self.body_name(), part.to_string()), g);
+        }
+        if let Some(m) = metal {
+            self.part_metal
+                .insert((self.body_name(), part.to_string()), m);
         }
         if let Some(w) = soft {
             self.part_soft
@@ -241,11 +264,31 @@ impl Scene {
             .collect()
     }
 
+    pub fn part_shine_of(&self, body: &str, mesh: &Mesh) -> Vec<Shine> {
+        let gloss = self.part_gloss_of(body, mesh);
+        mesh.parts
+            .iter()
+            .zip(gloss)
+            .map(|(p, gloss)| {
+                let (metal, rough) = self
+                    .part_metal
+                    .get(&(body.to_string(), p.clone()))
+                    .copied()
+                    .unwrap_or((0.0, 1.0 - gloss * 0.8));
+                Shine {
+                    gloss,
+                    metal,
+                    rough,
+                }
+            })
+            .collect()
+    }
+
     pub fn mesh_shading(&self, colours: &HashMap<String, [f64; 3]>) -> Vec<Shaded> {
         self.mesh_tints(colours)
             .into_iter()
             .map(|(name, mesh, tints)| {
-                let gloss = self.part_gloss_of(&name, &mesh);
+                let gloss = self.part_shine_of(&name, &mesh);
                 let soft: Vec<f64> = mesh
                     .parts
                     .iter()
@@ -260,7 +303,7 @@ impl Scene {
                 let shine = mesh
                     .labels
                     .iter()
-                    .map(|&l| gloss.get(l as usize).copied().unwrap_or(0.0))
+                    .map(|&l| gloss.get(l as usize).copied().unwrap_or_default())
                     .collect();
                 (name, mesh, colours, shine)
             })
