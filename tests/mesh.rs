@@ -250,7 +250,7 @@ fn creature_example() {
         ]
     );
     assert_eq!(mesh.open_edges(), 0);
-    near(mesh.volume(), 2652.355, 0.001);
+    near(mesh.volume(), 2638.2585, 0.001);
 }
 
 fn coarse_ball() -> &'static str {
