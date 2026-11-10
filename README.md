@@ -41,7 +41,14 @@ gcad measure examples/assemblies/case.gasm box
 gcad examples/assemblies/enclosure.gasm
 gcad examples/robot/arm.gasm
 gcad docs
+gcad lsp
 ```
+
+`gcad lsp` is a language server on stdio for `.gcad`, `.gasm`, `.gasset`, `.gsim` and `.gdwg`
+files. After each edit it runs what `gcad check` runs on the buffer and publishes one
+diagnostic on the failing line (errors, and the separate-bodies note as a warning). It also
+answers document symbols (bodies, parts, `let` names) and hover on an op name with its row from
+`gcad docs`. Includes and part files resolve relative to the file.
 
 Anything with more than one part is an assembly (`.gasm`): it brings the parts in
 from part files, places them, joins them with turning and sliding joints and checks

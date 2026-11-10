@@ -2054,6 +2054,7 @@ version = "0.7.0"
 dependencies = [
  "anyhow",
  "clap",
+ "crossbeam-channel",
  "egui_bench",
  "gcad-brep",
  "gcad-calc",
@@ -2071,6 +2072,7 @@ dependencies = [
  "gcad-view",
  "gcad2glb",
  "image 0.25.10",
+ "lsp-server",
  "monstertruck",
  "robust",
  "serde_json",
@@ -4095,6 +4097,19 @@ dependencies = [
  "stringprep",
  "thiserror 2.0.21",
  "weezl 0.2.1",
+]
+
+[[package]]
+name = "lsp-server"
+version = "0.7.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7d6ada348dbc2703cbe7637b2dda05cff84d3da2819c24abcb305dd613e0ba2e"
+dependencies = [
+ "crossbeam-channel",
+ "log",
+ "serde",
+ "serde_derive",
+ "serde_json",
 ]
 
 [[package]]

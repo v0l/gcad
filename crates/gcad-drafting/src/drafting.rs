@@ -126,7 +126,11 @@ const MEMBER_KINDS: [&str; 6] = ["bar ", "tube ", "pipe ", "rod ", "angle ", "ch
 pub fn run(path: &Path, vars: &[(String, f64)]) -> Result<Drawing> {
     let source = crate::host::read_to_string(path)
         .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
-    let lines = crate::parse::parse_program(&source)?;
+    run_source(path, &source, vars)
+}
+
+pub fn run_source(path: &Path, source: &str, vars: &[(String, f64)]) -> Result<Drawing> {
+    let lines = crate::parse::parse_program(source)?;
     let mut state = State {
         dir: path.parent().map(Path::to_path_buf).unwrap_or_default(),
         scope: vars.iter().cloned().collect(),

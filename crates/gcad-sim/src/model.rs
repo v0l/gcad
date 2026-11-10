@@ -8,6 +8,11 @@ pub fn run_path(path: &Path, vars: &[(String, f64)], until: Option<usize>) -> Re
     gcad_brep::run_path(path, vars, until)
 }
 
+pub fn run_source(path: &Path, source: &str, vars: &[(String, f64)]) -> Result<Run> {
+    crate::install();
+    gcad_brep::run_source(path, source, vars)
+}
+
 pub fn snapshots_path(
     path: &Path,
     vars: &[(String, f64)],
