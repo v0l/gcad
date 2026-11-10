@@ -195,3 +195,16 @@ fn lsp_slow_build_does_not_stall_shutdown() {
     );
     client.notify("exit", Value::Null);
 }
+
+#[test]
+fn lsp_checks_gasset_files() {
+    let dir = format!("{}/target", env!("CARGO_MANIFEST_DIR"));
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(format!("{dir}/lsp-bad.gasset"), "nonsense 1 2\n").unwrap();
+    let mut client = Client::start();
+    let file = uri("target/lsp-bad.gasset");
+    client.open(&file, "nonsense 1 2\n");
+    let found = client.diagnostics(&file);
+    assert_eq!(found.len(), 1, "{found:?}");
+    assert_eq!(found[0]["severity"], 1);
+}

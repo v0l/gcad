@@ -86,7 +86,7 @@ lsp-server = "0.7"
 crossbeam-channel = "0.5"
 
 [features]
-default = ["view"]
+default = ["view", "game-assets"]
 view = ["dep:gcad-view"]
 gpu-tests = ["gcad-view?/gpu-tests"]
 game-assets = ["view", "gcad-view/game-assets", "gcad-sim/game-assets"]
