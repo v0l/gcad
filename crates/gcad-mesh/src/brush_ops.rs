@@ -527,22 +527,24 @@ impl Scene {
     }
 
     pub fn op_plate(&mut self, scope: &Scope, line: &Line) -> Result<String> {
-        let args = Args::new(line, &["name"], &["from", "t", "offset", "rim"], false)?;
+        let args = Args::new(line, &["name"], &["from", "t", "offset", "rim", "smooth"], false)?;
         let name = args.text("name")?.to_string();
         let t = positive(args.number("t", scope)?, "t")?;
+        let smooth = args.optional_number("smooth", scope)?.unwrap_or(4.0);
+        if smooth < 0.0 {
+            bail!("smooth must be 0 or more, got {smooth}");
+        }
         let offset = args.optional_number("offset", scope)?.unwrap_or(0.0);
         let rim = args.optional_number("rim", scope)?.unwrap_or(0.0);
         if rim < 0.0 {
             bail!("rim must be 0 or more, got {rim}");
-        }
-        if self.mesh_body.rig.skin.is_some() {
-            bail!("`plate` adds vertices the skin does not cover; run it before `skin auto`");
         }
         let mut regions = Vec::new();
         for word in crate::parse::split_top_level(args.text("from")?, ',') {
             regions.extend(self.region_of(word.trim())?);
         }
         let mesh = self.sculpted("plate")?;
+        let vertices = mesh.positions.len();
         if mesh.parts.iter().any(|p| *p == name) {
             bail!("the mesh already has a part `{name}`");
         }
@@ -552,11 +554,22 @@ impl Scene {
         };
         let selection = Selection::weighted(mesh, regions, 0.0, None, weighting)?;
         let selected: Vec<bool> = selection.weights.iter().map(|&w| w >= 1.0).collect();
-        let plate = mesh.plate(&selected, &name, t, offset, rim);
+        let plate = mesh.plate(&selected, &name, t, offset, rim, smooth as usize);
         if plate.patch_triangles == 0 {
             bail!("`from` selects no whole triangles to thicken");
         }
         mesh.merge(&plate.mesh);
+        let rig = &mut self.mesh_body.rig;
+        if let Some(skin) = rig.skin.as_mut().filter(|s| s.len() == vertices) {
+            let extra: Vec<_> = plate.origin.iter().map(|&i| skin[i as usize].clone()).collect();
+            skin.extend(extra);
+        }
+        for corrective in &mut rig.correctives {
+            if corrective.delta.len() == vertices {
+                let extra: Vec<_> = plate.origin.iter().map(|&i| corrective.delta[i as usize]).collect();
+                corrective.delta.extend(extra);
+            }
+        }
         Ok(format!(
             "plate `{name}` of {} triangles, {} rim edges, volume {:.3}",
             plate.mesh.triangles.len(),

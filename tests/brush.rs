@@ -438,6 +438,16 @@ fn plate_thickens_a_patch_into_its_own_closed_part() {
 }
 
 #[test]
+fn plate_after_skin_keeps_the_skin_covering_every_vertex() {
+    let model = build(
+        "ball: blob 0,0,0 r=10\nremesh 0.4\nbone b head=0,0,-10 tail=0,0,10\nskin auto\ngroup cap sphere=0,0,10 r=4\nplate shell from=cap t=0.4 offset=0.2 rim=0.15",
+    );
+    let mesh = mesh_of(&model);
+    assert!(mesh.parts.iter().any(|p| p == "shell"));
+    assert_eq!(mesh.open_edges(), 0);
+}
+
+#[test]
 fn dyntopo_refines_under_the_brush() {
     let coarse = "ball: blob 0,0,0 r=10\nremesh 1";
     let before = mesh_of(&build(coarse));

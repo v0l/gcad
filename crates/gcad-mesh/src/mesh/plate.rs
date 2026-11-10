@@ -7,6 +7,40 @@ pub struct Plate {
     pub mesh: Mesh,
     pub rim_edges: usize,
     pub patch_triangles: usize,
+    pub origin: Vec<u32>,
+}
+
+fn smoothed_border(
+    positions: &[P3],
+    border: &[(u32, u32, P3)],
+    passes: usize,
+) -> HashMap<u32, P3> {
+    let mut neighbours: HashMap<u32, Vec<u32>> = HashMap::new();
+    for &(u, v, _) in border {
+        neighbours.entry(u).or_default().push(v);
+        neighbours.entry(v).or_default().push(u);
+    }
+    let mut current: HashMap<u32, P3> = neighbours
+        .keys()
+        .map(|&i| (i, positions[i as usize]))
+        .collect();
+    for _ in 0..passes {
+        for factor in [0.5, -0.53] {
+            let next: HashMap<u32, P3> = current
+                .iter()
+                .map(|(&i, &p)| {
+                    let ring = &neighbours[&i];
+                    let mean = scale(
+                        ring.iter().fold([0.0; 3], |acc, j| add(acc, current[j])),
+                        1.0 / ring.len() as f64,
+                    );
+                    (i, add(p, scale(sub(mean, p), factor)))
+                })
+                .collect();
+            current = next;
+        }
+    }
+    current
 }
 
 fn profile(t: f64, rim: f64) -> Vec<(f64, f64)> {
@@ -23,7 +57,7 @@ fn profile(t: f64, rim: f64) -> Vec<(f64, f64)> {
 }
 
 impl Mesh {
-    pub fn plate(&self, selected: &[bool], name: &str, t: f64, offset: f64, rim: f64) -> Plate {
+    pub fn plate(&self, selected: &[bool], name: &str, t: f64, offset: f64, rim: f64, smooth: usize) -> Plate {
         let patch: Vec<[u32; 3]> = self
             .triangles
             .iter()
@@ -46,16 +80,21 @@ impl Mesh {
             .flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3])))
             .collect();
         let mut border: Vec<(u32, u32, P3)> = Vec::new();
+        let mut edges: Vec<(u32, u32, P3)> = Vec::new();
         for tri in &patch {
             let [a, b, c] = self.corners(*tri);
             let face = normalized(cross(sub(b, a), sub(c, a)));
             for k in 0..3 {
                 let (u, v) = (tri[k], tri[(k + 1) % 3]);
                 if !directed.contains(&(v, u)) {
-                    let e = sub(self.positions[v as usize], self.positions[u as usize]);
-                    border.push((u, v, normalized(cross(e, face))));
+                    edges.push((u, v, face));
                 }
             }
+        }
+        let rim_points = smoothed_border(&self.positions, &edges, smooth);
+        for &(u, v, face) in &edges {
+            let e = sub(rim_points[&v], rim_points[&u]);
+            border.push((u, v, normalized(cross(e, face))));
         }
         let mut outward: HashMap<u32, P3> = HashMap::new();
         for &(u, v, d) in &border {
@@ -74,7 +113,10 @@ impl Mesh {
 
         let steps = profile(t, rim);
         let place = |i: u32, (d, h): (f64, f64), edge: bool| {
-            let p = self.positions[i as usize];
+            let p = rim_points
+                .get(&i)
+                .copied()
+                .unwrap_or(self.positions[i as usize]);
             let n = normals[i as usize];
             let lifted = add(p, scale(n, offset + h));
             match outward.get(&i) {
@@ -122,10 +164,19 @@ impl Mesh {
             ..Default::default()
         };
         mesh.mask.clear();
+        let mut origin: Vec<u32> = source.clone();
+        origin.extend(source.iter().copied());
+        let mut ring_ids: Vec<(u32, u32)> = rings
+            .iter()
+            .flat_map(|(&i, ids)| ids[1..ids.len() - 1].iter().map(move |&id| (id, i)))
+            .collect();
+        ring_ids.sort_unstable();
+        origin.extend(ring_ids.into_iter().map(|(_, i)| i));
         let _ = length;
         Plate {
             rim_edges: border.len(),
             patch_triangles: patch.len(),
+            origin,
             mesh,
         }
     }
@@ -139,10 +190,39 @@ mod tests {
     const UNIT: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
 
     #[test]
+    fn smoothing_the_border_loop_shortens_a_stepped_rim() {
+        let ball = ellipsoid_mesh([0.0; 3], [10.0; 3], &UNIT, 24, "ball");
+        let selected: Vec<bool> = ball.positions.iter().map(|p| p[2] > 3.0 + p[0] * 0.2).collect();
+        let loop_length = |passes: usize| {
+            let patch: Vec<[u32; 3]> = ball
+                .triangles
+                .iter()
+                .copied()
+                .filter(|t| t.iter().all(|&i| selected[i as usize]))
+                .collect();
+            let directed: HashSet<(u32, u32)> = patch
+                .iter()
+                .flat_map(|t| (0..3).map(move |k| (t[k], t[(k + 1) % 3])))
+                .collect();
+            let edges: Vec<(u32, u32, P3)> = directed
+                .iter()
+                .filter(|(u, v)| !directed.contains(&(*v, *u)))
+                .map(|&(u, v)| (u, v, [0.0; 3]))
+                .collect();
+            let points = smoothed_border(&ball.positions, &edges, passes);
+            edges
+                .iter()
+                .map(|&(u, v, _)| length(sub(points[&v], points[&u])))
+                .sum::<f64>()
+        };
+        assert!(loop_length(6) < loop_length(0) * 0.99);
+    }
+
+    #[test]
     fn plate_of_a_cap_has_the_shell_sector_volume_and_a_closed_rim() {
         let ball = ellipsoid_mesh([0.0; 3], [10.0; 3], &UNIT, 96, "ball");
         let selected: Vec<bool> = ball.positions.iter().map(|p| p[2] > 6.0).collect();
-        let plate = ball.plate(&selected, "cap", 0.4, 0.2, 0.15);
+        let plate = ball.plate(&selected, "cap", 0.4, 0.2, 0.15, 4);
         assert_eq!(plate.mesh.open_edges(), 0);
         let patch = Mesh {
             positions: ball.positions.clone(),
