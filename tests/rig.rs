@@ -634,13 +634,20 @@ fn refine_joints_splits_triangles_near_the_joint_only() {
     let refined = build(&format!("{ARM}refine joints edge=0.3 reach=3.5\n"));
     let (a, b) = (rest_of(&plain), rest_of(&refined));
     assert!(b.triangles.len() > a.triangles.len());
-    let far = |m: &Mesh| m.positions.iter().filter(|p| (p[2] - 20.0).abs() > 7.0).count();
+    let far = |m: &Mesh| {
+        m.positions
+            .iter()
+            .filter(|p| (p[2] - 20.0).abs() > 7.0)
+            .count()
+    };
     assert_eq!(far(&a), far(&b));
 }
 
 #[test]
 fn refine_joints_needs_a_parented_bone() {
-    let message = failure("arm: limb 0,0,0 0,0,20 r=3\nremesh 0.4\nbone a head=0,0,0 tail=0,0,20\nrefine joints edge=0.3");
+    let message = failure(
+        "arm: limb 0,0,0 0,0,20 r=3\nremesh 0.4\nbone a head=0,0,0 tail=0,0,20\nrefine joints edge=0.3",
+    );
     assert!(message.contains("bone"), "{message}");
 }
 
@@ -649,7 +656,9 @@ const PUSH: &str = "corrective bulge bone=b_low axis=x from=30 to=90\nselect sph
 
 #[test]
 fn corrective_ramps_with_the_bone_angle_and_reaches_the_glb() {
-    let model = build(&format!("{BENT}{PUSH}clip bend fps=10\nkey t=0 bone=b_low rotate=0 axis=x\nkey t=1 bone=b_low rotate=120 axis=x"));
+    let model = build(&format!(
+        "{BENT}{PUSH}clip bend fps=10\nkey t=0 bone=b_low rotate=0 axis=x\nkey t=1 bone=b_low rotate=120 axis=x"
+    ));
     let rig = rig_of(&model);
     assert_eq!(rig.correctives.len(), 1);
     let at = |deg: f64| {
@@ -668,14 +677,24 @@ fn corrective_ramps_with_the_bone_angle_and_reaches_the_glb() {
 
 #[test]
 fn corrective_errors_name_the_problem() {
-    let unskinned = failure(&format!("{ARM}corrective c bone=b_low axis=x from=30 to=90"));
+    let unskinned = failure(&format!(
+        "{ARM}corrective c bone=b_low axis=x from=30 to=90"
+    ));
     assert!(unskinned.contains("skin"), "{unskinned}");
-    let bone = failure(&format!("{BENT}corrective c bone=nope axis=x from=30 to=90"));
+    let bone = failure(&format!(
+        "{BENT}corrective c bone=nope axis=x from=30 to=90"
+    ));
     assert!(bone.contains("b_low"), "{bone}");
-    let range = failure(&format!("{BENT}corrective c bone=b_low axis=x from=30 to=30"));
+    let range = failure(&format!(
+        "{BENT}corrective c bone=b_low axis=x from=30 to=30"
+    ));
     assert!(range.contains("differ"), "{range}");
-    let empty = failure(&format!("{BENT}corrective c bone=b_low axis=x from=30 to=90\nbone tip parent=b_low tail=0,0,25"));
+    let empty = failure(&format!(
+        "{BENT}corrective c bone=b_low axis=x from=30 to=90\nbone tip parent=b_low tail=0,0,25"
+    ));
     assert!(empty.contains("sculpts nothing"), "{empty}");
-    let twice = failure(&format!("{BENT}{PUSH}bone tip parent=b_low tail=0,0,25\n{PUSH}bone t2 parent=tip tail=0,0,30"));
+    let twice = failure(&format!(
+        "{BENT}{PUSH}bone tip parent=b_low tail=0,0,25\n{PUSH}bone t2 parent=tip tail=0,0,30"
+    ));
     assert!(twice.contains("already"), "{twice}");
 }

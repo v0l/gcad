@@ -3,6 +3,8 @@ use clap::{Parser, Subcommand};
 use gcad::model::{Run, run_path};
 use gcad::{export, render, select};
 
+mod lsp;
+
 #[derive(Parser)]
 #[command(
     about = "Parametric CAD written like G-code: one operation per line",
@@ -553,6 +555,8 @@ enum Command {
     },
     /// Print the format reference: every operation, selector and assembly line
     Docs,
+    /// Serve the Language Server Protocol on stdio: diagnostics as `check` reports them, document symbols and op hover
+    Lsp,
     /// Open the file in a window that rebuilds whenever it is saved
     View {
         file: Option<String>,
@@ -2087,6 +2091,7 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
+        Command::Lsp => lsp::serve(),
         Command::Docs => {
             print!("{}", include_str!("../docs/format.md"));
             Ok(())

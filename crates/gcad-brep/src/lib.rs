@@ -1183,6 +1183,11 @@ pub fn run_path(
     Ok(run_model(start_for(path, vars, 0), &lines, Some(path)))
 }
 
+pub fn run_source(path: &std::path::Path, source: &str, vars: &[(String, f64)]) -> Result<Run> {
+    let lines = crate::parse::parse_program(source)?;
+    Ok(run_model(start_for(path, vars, 0), &lines, Some(path)))
+}
+
 pub fn snapshots_path(
     path: &std::path::Path,
     vars: &[(String, f64)],

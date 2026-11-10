@@ -38,6 +38,7 @@ tests/input_recording.rs input_recording: ok. 2 passed; 0 failed; 0 ignored; 0 m
 tests/inspect.rs inspect: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/inspect_view.rs inspect_view: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/job_format.rs job_format: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/lsp.rs lsp: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/manifest.rs manifest: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/mesh.rs mesh: ok. 43 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/ops_doc.rs ops_doc: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
