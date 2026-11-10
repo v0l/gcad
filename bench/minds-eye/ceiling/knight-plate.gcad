@@ -53,8 +53,8 @@ plate lame_l from=lame_zone_l t=0.35 offset=0.15 rim=0.12
 plate lame_r from=lame_zone_r t=0.35 offset=0.15 rim=0.12
 plate lame2_l from=lame2_zone_l t=0.35 offset=0.15 rim=0.12
 plate lame2_r from=lame2_zone_r t=0.35 offset=0.15 rim=0.12
-plate tasset_l from=tasset_zone_l t=0.4 offset=0.15 rim=0.15
-plate tasset_r from=tasset_zone_r t=0.4 offset=0.15 rim=0.15
+plate tasset_l from=tasset_zone_l t=0.4 offset=1.4 rim=0.15
+plate tasset_r from=tasset_zone_r t=0.4 offset=1.4 rim=0.15
 color #9aa3ad
 color #c4ccd4 part=cuirass gloss=0.8
 color #c4ccd4 part=keel gloss=0.8
@@ -127,7 +127,7 @@ poly -4.5,48 -1.5,48 -1.5,40 -3,36 -4.5,40
 sign: extrude 0.3
 color #d4a838
 body tabard
-plane XZ offset=6.4
+plane XZ offset=4.8
 poly -3.6,42 3.6,42 3.2,29 0,28 -3.2,29
 cloth: extrude 0.4
 color #8a1c1c
