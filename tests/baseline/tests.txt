@@ -43,7 +43,7 @@ tests/io.rs io: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/job_format.rs job_format: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/manifest.rs manifest: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/mesh_brep_parity.rs mesh_brep_parity: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/mesh.rs mesh: ok. 46 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/mesh.rs mesh: ok. 47 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/ops_doc.rs ops_doc: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/output.rs output: ok. 28 passed; 0 failed; 2 ignored; 0 measured; 0 filtered out
 tests/parse.rs parse: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
