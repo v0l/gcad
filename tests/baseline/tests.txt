@@ -41,7 +41,7 @@ tests/inspect.rs inspect: ok. 20 passed; 0 failed; 0 ignored; 0 measured; 0 filt
 tests/inspect_view.rs inspect_view: ok. 9 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/io.rs io: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/job_format.rs job_format: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/lsp.rs lsp: ok. 4 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/lsp.rs lsp: ok. 5 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/manifest.rs manifest: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/mesh_brep_parity.rs mesh_brep_parity: ok. 23 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/mesh.rs mesh: ok. 52 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
