@@ -745,3 +745,106 @@ fn part_pinch_does_not_tear_the_blend_seam() {
     let worst = worst_aspect(&mesh_of(&model), [6.0, 0.0, 3.0], 6.0);
     assert!(worst < 30.0, "worst aspect {worst}");
 }
+
+fn fur_primitive(source: &str) -> (usize, serde_json::Value) {
+    let model = build(source);
+    let glb = gcad::export::glb_of(&model).expect("exports");
+    let n = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    let doc: serde_json::Value = serde_json::from_slice(&glb[20..20 + n]).expect("json");
+    let primitives = doc["meshes"][0]["primitives"]
+        .as_array()
+        .expect("primitives");
+    let fur = primitives
+        .iter()
+        .find(|p| doc["materials"][p["material"].as_u64().unwrap() as usize]["alphaMode"] == "MASK")
+        .expect("an alpha tested primitive");
+    let accessor = fur["indices"].as_u64().unwrap() as usize;
+    let indices = doc["accessors"][accessor]["count"].as_u64().unwrap() as usize;
+    let material = doc["materials"][fur["material"].as_u64().unwrap() as usize].clone();
+    (indices / 3, material)
+}
+
+#[test]
+fn fur_on_a_sphere_gives_the_requested_cards_within_the_budget() {
+    let base = "ball: blob 0,0,0 r=5\nremesh 0.5\n";
+    let (triangles, material) = fur_primitive(&format!(
+        "{base}fur length=1.2 cards=400 clump=0.4 colour=#b5651d"
+    ));
+    assert!(
+        (triangles as f64 / 2.0 - 400.0).abs() <= 400.0 * 0.05,
+        "{triangles} triangles for 400 cards"
+    );
+    assert!(triangles <= 800);
+    assert_eq!(material["alphaMode"], "MASK");
+    assert_eq!(material["doubleSided"], true);
+    let (capped, _) = fur_primitive(&format!("{base}fur length=1.2 cards=400 triangles=300"));
+    assert!(capped <= 300, "{capped} over the budget of 300");
+}
+
+#[test]
+fn fur_density_counts_cards_per_unit_of_surface() {
+    let base = "ball: blob 0,0,0 r=5\nremesh 0.5\n";
+    let mesh_area = mesh_of(&build(base)).area();
+    let (triangles, _) = fur_primitive(&format!("{base}fur length=1 density=2"));
+    let expected = 2.0 * mesh_area;
+    assert!(
+        (triangles as f64 / 2.0 - expected).abs() <= expected * 0.05,
+        "{} cards for {expected}",
+        triangles / 2
+    );
+}
+
+#[test]
+fn fur_on_a_part_grows_only_there() {
+    let source = "head: blob 0,0,0 r=3\ntail: blob 6,0,0 r=2 blend=0.5\nremesh 0.4\nfur part=tail length=1 cards=100";
+    let model = build(source);
+    let fur = model.fur_shading();
+    let (_, blades, _, _) = fur.first().expect("fur");
+    assert_eq!(blades.triangles.len(), 100);
+    let (lo, _) = blades.bounds().unwrap();
+    assert!(lo[0] > 2.0, "fur strays to x={}", lo[0]);
+}
+
+#[test]
+fn fur_asks_for_a_count_and_a_known_part() {
+    let base = "ball: blob 0,0,0 r=5\nremesh 0.5\n";
+    assert!(failure(&format!("{base}fur length=1")).contains("density="));
+    assert!(failure(&format!("{base}fur length=1 cards=10 part=tail")).contains("no part"));
+    assert!(failure(&format!("{base}fur length=1 cards=10 clump=2")).contains("clump"));
+}
+
+#[test]
+fn render_draws_the_fur() {
+    let dir = std::env::temp_dir().join("gcad-fur-render");
+    std::fs::create_dir_all(&dir).unwrap();
+    let draw = |source: &str, name: &str| {
+        let model = build(source);
+        let mut meshes = model.mesh_shading();
+        meshes.extend(model.fur_shading());
+        let path = dir.join(name).to_string_lossy().into_owned();
+        gcad::render::render_with_meshes(&[], &meshes, &path).expect("renders");
+        image::open(&path).expect("a png").to_rgb8()
+    };
+    let bare = draw("ball: blob 0,0,0 r=5\nremesh 0.5", "bare.png");
+    let furry = draw(
+        "ball: blob 0,0,0 r=5\nremesh 0.5\nfur length=2 cards=600 width=0.6 colour=#b5651d",
+        "furry.png",
+    );
+    let background = *bare.get_pixel(2, 2);
+    let covered = |image: &image::RgbImage| image.pixels().filter(|p| **p != background).count();
+    assert!(
+        covered(&furry) > 10_000,
+        "only {} pixels drawn",
+        covered(&furry)
+    );
+    let lit = furry
+        .pixels()
+        .filter(|p| p[0] as i32 > p[2] as i32 + 20 && **p != background)
+        .count();
+    assert!(lit > 5_000, "only {lit} fur coloured pixels");
+    let plain = bare
+        .pixels()
+        .filter(|p| p[0] as i32 > p[2] as i32 + 20 && **p != background)
+        .count();
+    assert!(lit > plain, "{lit} fur coloured vs {plain} without");
+}

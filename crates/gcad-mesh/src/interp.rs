@@ -46,6 +46,7 @@ pub const MESH_OPERATIONS: &[&str] = &[
     "finish",
     "bake",
     "lod",
+    "fur",
 ];
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -74,6 +75,7 @@ pub struct Detail {
     pub full: Option<Arc<Mesh>>,
     pub bake: Option<usize>,
     pub lods: Vec<LodSize>,
+    pub fur: Vec<crate::mesh::fur::FurSpec>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -84,7 +86,7 @@ pub enum LodSize {
 
 impl Detail {
     pub fn is_empty(&self) -> bool {
-        self.bake.is_none() && self.lods.is_empty()
+        self.bake.is_none() && self.lods.is_empty() && self.fur.is_empty()
     }
 }
 

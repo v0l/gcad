@@ -3,6 +3,7 @@ pub mod bake;
 pub mod brush;
 pub mod channels;
 pub mod decimate;
+pub mod fur;
 pub mod grid;
 pub mod masking;
 pub mod plate;

@@ -2,6 +2,7 @@ pub mod arch;
 pub mod args;
 pub mod brush_ops;
 pub mod ffi;
+pub mod fur_ops;
 pub mod glb;
 pub mod gltf;
 pub mod interp;

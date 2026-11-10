@@ -2347,7 +2347,8 @@ fn main() -> Result<()> {
             finished(&run)?;
             let parts = run.model.exploded_parts(if explode { 1.0 } else { 0.0 });
             let parts: Vec<_> = parts.iter().map(|(s, c)| (s, *c)).collect();
-            let meshes = run.model.mesh_shading();
+            let mut meshes = run.model.mesh_shading();
+            meshes.extend(run.model.fur_shading());
             if let Some(turns) = turns {
                 let times = if times.is_empty() { vec![0.0] } else { times };
                 let rows = render::posed_rows(&run.model, clip.as_deref(), &times)?;

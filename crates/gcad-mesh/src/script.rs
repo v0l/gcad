@@ -425,6 +425,7 @@ const SUBSET: &[&str] = &[
     "finish",
     "bake",
     "lod",
+    "fur",
 ];
 
 impl Run {
@@ -528,6 +529,7 @@ impl Run {
             "finish" => scene.op_finish(scope, line),
             "bake" => scene.op_bake(scope, line),
             "lod" => scene.op_lod(scope, line),
+            "fur" => scene.op_fur(scope, line),
             "move" => scene.op_move(scope, line),
             "rotate" => scene.op_rotate(scope, line, |_| None),
             "scale" => scene.op_scale(scope, line),

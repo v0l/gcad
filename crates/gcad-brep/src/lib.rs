@@ -664,6 +664,7 @@ pub const OPERATIONS: &[&str] = &[
     "gutter",
     "downpipe",
     "parapet",
+    "fur",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -961,6 +962,7 @@ impl Model {
             "finish" => self.scene.op_finish(&self.scope, line),
             "bake" => self.scene.op_bake(&self.scope, line),
             "lod" => self.scene.op_lod(&self.scope, line),
+            "fur" => self.scene.op_fur(&self.scope, line),
             other => bail!(
                 "unknown operation `{other}`; operations are {}",
                 OPERATIONS.join(", ")

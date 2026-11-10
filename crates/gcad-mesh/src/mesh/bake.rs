@@ -169,7 +169,7 @@ impl Baked {
     }
 }
 
-fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
+pub(crate) fn chunk(out: &mut Vec<u8>, kind: &[u8; 4], data: &[u8]) {
     out.extend((data.len() as u32).to_be_bytes());
     let start = out.len();
     out.extend(kind);

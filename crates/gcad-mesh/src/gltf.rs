@@ -392,6 +392,104 @@ fn emit_level(
     json!({"name": name, "primitives": primitives})
 }
 
+fn emit_fur(
+    b: &mut Buffer,
+    materials: &mut Vec<Value>,
+    images: &mut Vec<Value>,
+    textures: &mut Vec<Value>,
+    body: &Body<'_>,
+    rig: Option<&Rig>,
+    mesh_json: &mut Value,
+) {
+    let Some(detail) = body.detail.as_ref().filter(|d| !d.fur.is_empty()) else {
+        return;
+    };
+    if rig.is_some_and(|r| !r.correctives.is_empty()) {
+        return;
+    }
+    let skin = rig.and_then(|r| r.skin.as_ref());
+    let mut texture = None;
+    for (k, spec) in detail.fur.iter().enumerate() {
+        let Ok(cards) = spec.grow(body.mesh) else {
+            continue;
+        };
+        if cards.is_empty() {
+            continue;
+        }
+        let tint = spec.tint(body.mesh, &body.colours);
+        let quads = cards.quads();
+        let positions = flat(quads.positions.iter().map(|p| y_up(*p)));
+        let mut normals = Vec::new();
+        let mut uvs = Vec::new();
+        for c in 0..cards.len() {
+            for _ in 0..4 {
+                normals.push(cards.surface[c]);
+            }
+            uvs.extend([0.0f32, 1.0, 1.0, 1.0, 1.0, 0.0, 0.0, 0.0]);
+        }
+        let mut attributes = json!({
+            "POSITION": b.floats(&positions, 3, "VEC3", Some(ARRAY_BUFFER), true),
+            "NORMAL": b.floats(&flat(normals.iter().map(|p| y_up(*p))), 3, "VEC3", Some(ARRAY_BUFFER), false),
+            "TEXCOORD_0": b.floats(&uvs, 2, "VEC2", Some(ARRAY_BUFFER), false),
+        });
+        if let Some(skin) = skin.filter(|s| s.len() == body.mesh.positions.len()) {
+            let per_vertex: Weights = cards
+                .anchor
+                .iter()
+                .flat_map(|&a| std::iter::repeat_n(skin[a as usize].clone(), 4))
+                .collect();
+            let (joints, weights) = weights_of(&per_vertex, per_vertex.len());
+            let jbytes: Vec<u8> = joints.iter().flat_map(|v| v.to_le_bytes()).collect();
+            attributes["JOINTS_0"] = json!(b.accessor(
+                &jbytes,
+                Some(ARRAY_BUFFER),
+                UNSIGNED_SHORT,
+                joints.len() / 4,
+                "VEC4",
+                None
+            ));
+            attributes["WEIGHTS_0"] =
+                json!(b.floats(&weights, 4, "VEC4", Some(ARRAY_BUFFER), false));
+        }
+        let indices: Vec<u32> = quads.triangles.iter().flatten().copied().collect();
+        let bytes: Vec<u8> = indices.iter().flat_map(|v| v.to_le_bytes()).collect();
+        let accessor = b.accessor(
+            &bytes,
+            Some(ELEMENT_ARRAY_BUFFER),
+            UNSIGNED_INT,
+            indices.len(),
+            "SCALAR",
+            None,
+        );
+        let texture = *texture.get_or_insert_with(|| {
+            let view = b.view(&crate::mesh::fur::strand_png(), None);
+            images.push(json!({"name": format!("{}.strand", body.name), "bufferView": view, "mimeType": "image/png"}));
+            textures.push(json!({"sampler": 0, "source": images.len() - 1}));
+            textures.len() - 1
+        });
+        materials.push(json!({
+            "name": format!("{}.fur{}", body.name, k),
+            "alphaMode": "MASK",
+            "alphaCutoff": 0.5,
+            "doubleSided": true,
+            "pbrMetallicRoughness": {
+                "baseColorFactor": [linear(tint[0]), linear(tint[1]), linear(tint[2]), 1.0],
+                "baseColorTexture": {"index": texture},
+                "metallicFactor": 0.0,
+                "roughnessFactor": 1.0,
+            },
+        }));
+        if let Some(list) = mesh_json["primitives"].as_array_mut() {
+            list.push(json!({
+                "attributes": attributes,
+                "indices": accessor,
+                "material": materials.len() - 1,
+                "mode": 4,
+            }));
+        }
+    }
+}
+
 pub(crate) fn corrective_times(clip: &crate::mesh::rig::Clip) -> Vec<f64> {
     let duration = clip.duration();
     let frames = (duration * clip.fps).ceil() as usize;
@@ -435,6 +533,17 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
             );
             meshes.push(json);
             mesh_indices.push(meshes.len() - 1);
+            if k == 0 {
+                emit_fur(
+                    &mut b,
+                    &mut materials,
+                    &mut images,
+                    &mut textures,
+                    body,
+                    rig,
+                    &mut meshes[mesh_indices[0]],
+                );
+            }
         }
         let mesh_index = mesh_indices[0];
         let mut node = json!({"name": body.name, "mesh": mesh_index});

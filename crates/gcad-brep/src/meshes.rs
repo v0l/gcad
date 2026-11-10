@@ -68,6 +68,10 @@ impl Model {
         self.scene.mesh_shading(&self.colours)
     }
 
+    pub fn fur_shading(&self) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>, Vec<f64>)> {
+        self.scene.fur_shading(&self.colours)
+    }
+
     pub fn mesh_tints(&self) -> Vec<(String, Arc<Mesh>, Vec<[f64; 3]>)> {
         self.scene.mesh_tints(&self.colours)
     }
