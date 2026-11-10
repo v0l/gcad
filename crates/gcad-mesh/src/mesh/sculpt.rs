@@ -1,5 +1,10 @@
-use super::{Mesh, P3, Selection, add, dot, length, normalized, on_far_side, reflect, scale, sub};
+use super::{
+    Mesh, P3, Region, Selection, add, dot, length, normalized, on_far_side, reflect, scale, sub,
+};
 use std::collections::HashMap;
+
+const SEAM_HOPS: usize = 4;
+const SEAM_PASSES: usize = 6;
 
 fn edge(a: u32, b: u32) -> (u32, u32) {
     (a.min(b), a.max(b))
@@ -139,6 +144,86 @@ impl Mesh {
     }
 
     pub fn pinch(&mut self, selection: &Selection, toward: P3, strength: f64) -> usize {
+        let before = self.positions.clone();
+        let moved = self.pinch_vertices(selection, toward, strength);
+        if selection.regions.iter().any(|r| matches!(r, Region::Part(_))) {
+            self.relax_seam(&before, SEAM_HOPS, SEAM_PASSES);
+        }
+        moved
+    }
+
+    pub fn relax_seam(&mut self, before: &[P3], hops: usize, passes: usize) {
+        let around = self.neighbours();
+        let n = self.positions.len();
+        let mut hop = vec![usize::MAX; n];
+        let mut frontier: Vec<usize> = (0..n)
+            .filter(|&i| {
+                around[i]
+                    .iter()
+                    .any(|&j| self.labels.get(j as usize) != self.labels.get(i))
+            })
+            .collect();
+        for &i in &frontier {
+            hop[i] = 0;
+        }
+        for h in 1..=hops {
+            let mut next = Vec::new();
+            for &i in &frontier {
+                for &j in &around[i] {
+                    if hop[j as usize] == usize::MAX {
+                        hop[j as usize] = h;
+                        next.push(j as usize);
+                    }
+                }
+            }
+            frontier = next;
+        }
+        let travelled: Vec<f64> = (0..n)
+            .map(|i| length(sub(self.positions[i], before[i])))
+            .collect();
+        let mean_edge = {
+            let (mut sum, mut count) = (0.0, 0.0);
+            for t in &self.triangles {
+                for k in 0..3 {
+                    sum += length(sub(
+                        before[t[k] as usize],
+                        before[t[(k + 1) % 3] as usize],
+                    ));
+                    count += 1.0;
+                }
+            }
+            sum / f64::max(count, 1.0)
+        };
+        let weight: Vec<f64> = (0..n)
+            .map(|i| {
+                if hop[i] == usize::MAX {
+                    return 0.0;
+                }
+                let reach = around[i]
+                    .iter()
+                    .map(|&j| travelled[j as usize])
+                    .fold(travelled[i], f64::max);
+                (reach / (0.05 * mean_edge)).min(1.0)
+            })
+            .collect();
+        for _ in 0..passes {
+            let normals = self.vertex_normals();
+            let current = self.positions.clone();
+            for i in 0..n {
+                if weight[i] <= 0.0 || around[i].is_empty() {
+                    continue;
+                }
+                let sum = around[i]
+                    .iter()
+                    .fold([0.0; 3], |s, &j| add(s, current[j as usize]));
+                let step = sub(scale(sum, 1.0 / around[i].len() as f64), current[i]);
+                let along = sub(step, scale(normals[i], dot(step, normals[i])));
+                self.positions[i] = add(current[i], scale(along, 0.5 * weight[i]));
+            }
+        }
+    }
+
+    fn pinch_vertices(&mut self, selection: &Selection, toward: P3, strength: f64) -> usize {
         let normals = self.vertex_normals();
         let mut moved = 0;
         for (i, p) in self.positions.iter_mut().enumerate() {
