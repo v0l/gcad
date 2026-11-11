@@ -135,12 +135,12 @@ By data type (objects, an object can have several):
 
 | Type | Objects | Commercial OK |
 |---|---:|---:|
-| Mesh (GLB) | 137372 | 98186 |
+| Mesh (GLB) | 137372 | 118186 |
 | Build history | 132139 | 100516 |
 | Photo | 3268 | 2533 (ABO, GSO) |
 | Concept image | 6 | 6 |
 
-Of the 157372 manifest lines, 118186 are commercial OK and 39186 are not. DeepCAD (20000) has build history but no GLB, so 137372 objects have a mesh (98186 commercial OK).
+Of the 157372 manifest lines, 118186 are commercial OK and 39186 are not. DeepCAD (20000) has build history but no GLB, so 137372 objects have a mesh (118186 commercial OK).
 
 By category:
 
