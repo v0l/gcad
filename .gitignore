@@ -3,4 +3,6 @@
 *.result.bin
 .wrangler
 *.frames.bin
+__pycache__/
+*.pyc
 *.view
