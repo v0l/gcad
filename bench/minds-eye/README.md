@@ -110,3 +110,23 @@ The 2 anchor is one of the 7 rated runs (plan fox-s0), so that row scores 2 by c
 ## Mesh ceiling (#461)
 
 `ceiling/fox.gcad` and `ceiling/knight.gcad` are the best gcad-mesh results from a hand-tuned high-model session (renders in `docs/minds-eye-ceiling-*.png`). The fox is clearly better than any agent fox: correct sitting pose, wedge head, soft-edged markings. The knight is a toy-like blockout. The limit is the agent and skill for the fox, and the tool for the knight and for finish (metal, plates, fur): see gcad issues #463 to #466.
+
+## Qwen3.5-4B-3D-Coder (#536)
+
+Same 8 tuning tasks, 2 seeds, judge `v2:code-x-high`, new skill, render on, plan off. coder4b is `ccore/Qwen3.5-4B-3D-Coder` Q8_0 with its BF16 mmproj, served by llama.cpp `llama-server` on port 8011 (`--jinja`, 65536 context, flash attention, temperature 0.7, top_p 0.92, top_k 30, thinking off). `--jinja` tool calling works with this template. The comparison is `local-render`, the local qwen3.8-27b on vLLM port 8001. Report: `results/report.html`.
+
+| config | runs | built | judge v2 | rubric | hard | mesh_ops_used | tokens/run | seconds | pairwise |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| coder4b-render | 16 | 0 | none | none | 0.0 | 0.06 | 199k | 329 | 0-0 vs local |
+| local-render (qwen3.8-27b) | 16 | 5 | 3.0 | 0.37 | 2.7 | 0.31 | 669k | 695 | reference |
+
+Pairwise `./run pairwise coder4b local` has nothing to compare: no coder4b run produced a model that builds, so there are no renders to judge (0-0-0).
+
+Findings:
+
+- Check rate is 0 of 16 for coder4b. 7 runs wrote a `model.gcad`, none passed `gcad check`. The 27b passes 5 of 16 (fox and knight, both seeds, and one cottage); judge scores 2 to 4 there, and its chest, sword, rocket, bracket and tractor runs all fail the check or hit the time or turn budget.
+- The 4B model does drive the tool loop: it calls `write_file` and `gcad check`, reads the errors and retries. The smoke run (chest, 47 tool calls, 24 minutes, 914k tokens) never got past the syntax. It invents Three.js style operations (`box`, `position.set`, `add`, `group`, `set`, `place`, `move`) and gives `block`, `axis` and `rect` the wrong argument counts, then spends its turns guessing the grammar instead of reading the skill reference.
+- Tool-use failures: 5 runs died on an HTTP 500 from llama-server (`Failed to parse tool call arguments as JSON`, long `write_file` bodies with a broken string), 3 died on the harness 240 s request timeout, 2 ended with a plain answer and no tool call, 5 ran out of turns or time.
+- With thinking on, a single request ran past the 240 s harness timeout on the first smoke attempt, so thinking is off for the whole run.
+- Typical failure: three.js habits (`box w h d`, property assignment, parenting) in a format where every line is an operation. The finetune is trained on Three.js scenes and does not transfer to gcad from the skill text alone.
+- The 27b is also weak on this reduced set today (5 of 16 build, judge 3.0 against 5.4 for the earlier `new-render` run under judge v1). Its failures are chamfer edge selectors, `combine` without `from`, `cut` with no boundary shell and the time budget, and the shared GPU made its runs slow (695 s per run).

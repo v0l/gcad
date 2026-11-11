@@ -1,0 +1,1 @@
+{"name":"local-render","agent":"api","provider":"local","model":"qwen3.8-27b","tier":"medium","render":true,"plan":false}
