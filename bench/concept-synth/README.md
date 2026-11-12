@@ -31,3 +31,17 @@ Needs Blender (`~/gcad-datasets/tools`), numpy, scipy, Pillow, and ssh access to
 - C: real concepts only (the held-out object removed).
 
 The model is a linear regressor from a 24x24 silhouette and shading feature vector to the object's bounding box proportions and part count. It is a cheap proxy for the question, not the gcad inverse-modelling model, which does not exist yet. The same script and manifest fields drive the real fine-tune once there is one. With 6 real pairs the differences are not significant; more real concept sheets (Spring, Sintel via Blender Studio subscription) are needed.
+
+## Results (2026-11-12)
+
+Run on 43 objects (6 per source, commercial_ok, high or medium fit). FLUX img2img on spark took about 50 s per image. 38 kept and 5 dropped at IoU 0.75: three Objaverse renders that are near empty, the Blender Studio default cube rig (blank render), and one Zero-to-CAD part at 0.473. The drops are in `~/gcad-datasets/out/synthetic/dropped.jsonl`. The merged manifest is `out/manifest.synthetic.jsonl` (38 synthetic, 6 real; the full 137k manifest is untouched).
+
+Ablation (`ablation.json`, mean absolute error of the log bounding box ratios and part count, 2000 steps, batch 16, 5 seeds, leave-one-object-out over the 12 real Blender Studio concept images):
+
+| arm | train images | MAE |
+| --- | --- | --- |
+| A clean renders | 38 | 0.977 |
+| B renders plus synthetic concepts | 76 | 0.994 |
+| C real concepts only | 8 to 11 | 0.671 |
+
+On this proxy real concepts win and synthetic concepts add nothing over clean renders, because the features are silhouette based and FLUX img2img keeps the silhouette by design. It says nothing yet about the full inverse-modelling model, and 6 real objects cannot separate arms with small gaps.

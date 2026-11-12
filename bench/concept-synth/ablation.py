@@ -48,9 +48,11 @@ def _flat(path):
     return f.name
 
 
-def train(x, y, steps, batch, seed, lr=0.05, l2=1e-3):
+def train(x, y, steps, batch, seed, lr=None, l2=1e-3):
     rng = np.random.default_rng(seed)
     w = np.zeros((x.shape[1], y.shape[1]))
+    if lr is None:
+        lr = 0.5 * len(x) / np.linalg.norm(x, 2) ** 2
     for _ in range(steps):
         idx = rng.integers(0, len(x), batch)
         xb, yb = x[idx], y[idx]

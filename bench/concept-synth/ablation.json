@@ -1,0 +1,110 @@
+{
+ "summary_mae": {
+  "A": 0.9766968183290737,
+  "B": 0.9937713749985999,
+  "C": 0.6710432784067156
+ },
+ "per_object": {
+  "A": [
+   {
+    "held_out": "blender-studio:bbb-bird",
+    "mae": 1.6085251208661417,
+    "train_pairs": 38
+   },
+   {
+    "held_out": "blender-studio:bbb-frankie",
+    "mae": 0.5695053436858157,
+    "train_pairs": 38
+   },
+   {
+    "held_out": "blender-studio:character-gabby",
+    "mae": 1.1053317430558411,
+    "train_pairs": 38
+   },
+   {
+    "held_out": "blender-studio:character-lunte",
+    "mae": 1.2057102544187823,
+    "train_pairs": 38
+   },
+   {
+    "held_out": "blender-studio:character-phileas",
+    "mae": 0.85480436084126,
+    "train_pairs": 38
+   },
+   {
+    "held_out": "blender-studio:character-pip",
+    "mae": 0.5163040871066021,
+    "train_pairs": 38
+   }
+  ],
+  "B": [
+   {
+    "held_out": "blender-studio:bbb-bird",
+    "mae": 1.65916182982136,
+    "train_pairs": 76
+   },
+   {
+    "held_out": "blender-studio:bbb-frankie",
+    "mae": 0.6201420526410335,
+    "train_pairs": 76
+   },
+   {
+    "held_out": "blender-studio:character-gabby",
+    "mae": 1.1455507699119054,
+    "train_pairs": 76
+   },
+   {
+    "held_out": "blender-studio:character-lunte",
+    "mae": 1.212970446888335,
+    "train_pairs": 76
+   },
+   {
+    "held_out": "blender-studio:character-phileas",
+    "mae": 0.8639013089211417,
+    "train_pairs": 76
+   },
+   {
+    "held_out": "blender-studio:character-pip",
+    "mae": 0.46090184180782384,
+    "train_pairs": 76
+   }
+  ],
+  "C": [
+   {
+    "held_out": "blender-studio:bbb-bird",
+    "mae": 1.0883192761518032,
+    "train_pairs": 11
+   },
+   {
+    "held_out": "blender-studio:bbb-frankie",
+    "mae": 1.0887793642469779,
+    "train_pairs": 11
+   },
+   {
+    "held_out": "blender-studio:character-gabby",
+    "mae": 0.3698492482524264,
+    "train_pairs": 8
+   },
+   {
+    "held_out": "blender-studio:character-lunte",
+    "mae": 0.6964079778938499,
+    "train_pairs": 9
+   },
+   {
+    "held_out": "blender-studio:character-phileas",
+    "mae": 0.4937299139094121,
+    "train_pairs": 10
+   },
+   {
+    "held_out": "blender-studio:character-pip",
+    "mae": 0.2891738899858248,
+    "train_pairs": 11
+   }
+  ]
+ },
+ "synthetic_objects": 38,
+ "real_pairs": 12,
+ "steps": 2000,
+ "batch": 16,
+ "seeds": 5
+}
