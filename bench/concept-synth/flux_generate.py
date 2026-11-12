@@ -11,7 +11,7 @@ import uuid
 from PIL import Image
 
 DATA = os.path.expanduser("~/gcad-datasets")
-GENERATOR = "flux1-dev img2img (ComfyUI, spark)"
+GENERATORS = {"img2img": "flux1-dev img2img (ComfyUI, spark)", "controlnet": "flux1-dev + FLUX.1-dev-ControlNet-Union-Pro-2.0 canny (ComfyUI, spark)"}
 BG = (236, 236, 232)
 STYLE = ("professional concept art of {subject}, single object centred on a plain light grey background, "
          "three-quarter view, vivid painterly digital illustration, rich colours and varied materials, "
@@ -48,6 +48,20 @@ def workflow(image_name, prompt, seed, denoise, steps):
         "9": {"class_type": "VAEDecode", "inputs": {"samples": ["8", 0], "vae": ["3", 0]}},
         "10": {"class_type": "SaveImage", "inputs": {"images": ["9", 0], "filename_prefix": "synth"}},
     }
+
+
+def controlnet_workflow(image_name, prompt, seed, steps, strength):
+    g = workflow(image_name, prompt, seed, 1.0, steps)
+    g["11"] = {"class_type": "ControlNetLoader", "inputs": {"control_net_name": "flux-union-pro2.safetensors"}}
+    g["12"] = {"class_type": "SetUnionControlNetType", "inputs": {"control_net": ["11", 0], "type": "canny/lineart/anime_lineart/mlsd"}}
+    g["13"] = {"class_type": "Canny", "inputs": {"image": ["6", 0], "low_threshold": 0.15, "high_threshold": 0.4}}
+    g["14"] = {"class_type": "ControlNetApplyAdvanced", "inputs": {"positive": ["5", 0], "negative": ["5", 0], "control_net": ["12", 0],
+                                                                    "image": ["13", 0], "strength": strength, "start_percent": 0.0,
+                                                                    "end_percent": 0.8, "vae": ["3", 0]}}
+    g["6b"] = {"class_type": "EmptySD3LatentImage", "inputs": {"width": 1024, "height": 1024, "batch_size": 1}}
+    g["8"]["inputs"].update({"positive": ["14", 0], "negative": ["14", 1], "latent_image": ["6b", 0]})
+    del g["7"]
+    return g
 
 
 class Comfy:
@@ -94,6 +108,8 @@ def main():
     ap.add_argument("selection")
     ap.add_argument("--render", default=os.path.join(DATA, "out/synthetic/render"))
     ap.add_argument("--out", default=os.path.join(DATA, "out/synthetic/concept"))
+    ap.add_argument("--mode", choices=list(GENERATORS), default="img2img")
+    ap.add_argument("--strength", type=float, default=0.7)
     ap.add_argument("--denoise", type=float, default=0.78)
     ap.add_argument("--steps", type=int, default=22)
     ap.add_argument("--host", default="spark")
@@ -116,9 +132,11 @@ def main():
                 os.remove(flat)
                 prompt = prompt_for(m)
                 seed = int(hashlib.sha1(m["id"].encode()).hexdigest()[:8], 16) % (2 ** 31)
-                data = comfy.run(workflow(remote, prompt, seed, args.denoise, args.steps))
+                graph = (controlnet_workflow(remote, prompt, seed, args.steps, args.strength) if args.mode == "controlnet"
+                         else workflow(remote, prompt, seed, args.denoise, args.steps))
+                data = comfy.run(graph)
                 open(dst, "wb").write(data)
-                meta.write(json.dumps({"id": m["id"], "concept": dst, "render": src, "prompt": prompt, "generator": GENERATOR,
+                meta.write(json.dumps({"id": m["id"], "concept": dst, "render": src, "prompt": prompt, "generator": GENERATORS[args.mode],
                                        "denoise": args.denoise, "steps": args.steps, "seed": seed}) + "\n")
                 meta.flush()
                 print("done", m["id"], flush=True)

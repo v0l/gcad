@@ -21,6 +21,41 @@ def target(record):
 
 
 def features(path):
+    if FEATURES == "dino":
+        return embed(path)
+    return outline_features(path)
+
+
+FEATURES = "outline"
+_CACHE = {}
+_MODEL = {}
+MODEL_NAME = "facebook/dinov2-small"
+
+
+def embed(path):
+    key = (os.path.abspath(path), os.path.getmtime(path))
+    if key in _CACHE:
+        return _CACHE[key]
+    import torch
+    from transformers import AutoImageProcessor, AutoModel
+    if not _MODEL:
+        _MODEL["p"] = AutoImageProcessor.from_pretrained(MODEL_NAME)
+        _MODEL["m"] = AutoModel.from_pretrained(MODEL_NAME).eval()
+    im = Image.open(path).convert("RGBA")
+    bg = Image.new("RGBA", im.size, BG + (255,))
+    bg.alpha_composite(im)
+    inputs = _MODEL["p"](images=bg.convert("RGB"), return_tensors="pt")
+    with torch.no_grad():
+        out = _MODEL["m"](**inputs)
+    h = out.last_hidden_state[0]
+    v = torch.cat([h[0], h[1:].mean(0)]).numpy().astype(np.float64)
+    v = v / (np.linalg.norm(v) + 1e-9)
+    f = np.concatenate([v, [1.0]])
+    _CACHE[key] = f
+    return f
+
+
+def outline_features(path):
     rgba = Image.open(path).convert("RGBA")
     if np.asarray(rgba)[:, :, 3].min() < 255:
         bg = Image.new("RGBA", rgba.size, BG + (255,))
@@ -133,12 +168,15 @@ def main():
     ap.add_argument("--steps", type=int, default=2000)
     ap.add_argument("--batch", type=int, default=16)
     ap.add_argument("--seeds", type=int, default=5)
+    ap.add_argument("--features", choices=["outline", "dino"], default="outline")
     ap.add_argument("--out", default="ablation.json")
     args = ap.parse_args()
+    global FEATURES
+    FEATURES = args.features
     synth = load_synth(args.kept, args.manifest)
     real = load_real(args.manifest)
     res = run(synth, real, args.steps, args.batch, args.seeds)
-    out = {"summary_mae": summary(res), "per_object": res, "synthetic_objects": len(synth),
+    out = {"features": args.features, "summary_mae": summary(res), "per_object": res, "synthetic_objects": len(synth),
            "real_pairs": len(real), "steps": args.steps, "batch": args.batch, "seeds": args.seeds}
     json.dump(out, open(args.out, "w"), indent=1)
     print(json.dumps(out["summary_mae"]), "synthetic", len(synth), "real pairs", len(real))
