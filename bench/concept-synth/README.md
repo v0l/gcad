@@ -59,3 +59,15 @@ Ablation: leave-one-object-out over the 12 real Blender Studio concept images, 2
 | frozen DINOv2-small embeddings, CPU (`--features dino`) | 0.760 | 0.734 | 0.617 |
 
 The outline features see only the silhouette, which img2img preserves by design, so B cannot beat A there. With DINOv2 features B improves on A by 0.026 (3%), the direction the idea predicts, but real concepts alone still win by a wider margin, and 6 real objects cannot separate gaps this small. DINO runs need `HF_HUB_OFFLINE=1` once the model is cached and a venv with torch and transformers. A proxy regressor is not the inverse-modelling model: rerun `ablation.py` with that model once it exists.
+
+## Results (500 objects)
+
+Selection of 498 objects, img2img generator. 83 kept and 10 dropped at IoU 0.75 (drops in `dropped_img2img.jsonl`). Arm B here uses 83 synthetic objects.
+
+DINOv2-small features, leave-one-object-out over 12 real concept images, 2000 steps, batch 16, 5 seeds. A is clean renders only, B is renders plus synthetic concepts, C is real concepts only.
+
+| arm | MAE |
+| --- | --- |
+| A | 0.728 |
+| B | 0.760 |
+| C | 0.617 |
