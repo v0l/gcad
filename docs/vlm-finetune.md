@@ -24,6 +24,7 @@ Input is four 256 px views (iso, front, top, right) and one fixed prompt; the ta
 | base Qwen3-VL-4B | 0% | 0% | 0.00 | | |
 | SFT, 1400 steps (about 100 minutes on the RTX PRO 6000) | 87% | 19% | 0.51 | 0.81% | 11.4% |
 | SFT then GRPO, 120 steps | 89% | 7% | 0.46 | 1.55% | 22.6% |
+| GRPO v2, 8 prompts, KL 0.04, step 60 checkpoint | 88% | 20% | 0.50 | 1.00% | 13.3% |
 | no-dimension SFT adapter, dimensions in the test prompt | 75% | 22% | 0.54 | 0.41% | 2.5% |
 | SFT with part dimensions in the prompt, Qwen3-VL-4B-Instruct, 1400 steps | 84% | 27% | 0.65 | 0.36% | 1.7% |
 
