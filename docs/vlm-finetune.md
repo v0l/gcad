@@ -27,6 +27,26 @@ Input is four 256 px views (iso, front, top, right) and one fixed prompt; the ta
 
 SFT loss went from about 1.1 to 0.2. The failing builds are mostly `combine ... mode=cut` and `hole` placement errors.
 
+## Part dimensions in the prompt (#565)
+
+A person asking for a part gives sizes, not four renders alone. `tools/vlm/part_dims.py` reads a pair's `.gcad` and writes the dimensions as plain English in mm, rounded to two decimals at most:
+
+- the base profile (rect w x h, circle diameter, n-gon across corners, polyline overall size, revolve maximum diameter and length, loft end sections) and its extrude depth;
+- bosses and pockets (size and depth), slots, corner radius;
+- holes: count, diameter, depth or through, counterbore and countersink, and the spacing when the points form a row, a pair or a regular grid;
+- fillets and chamfers with their size and the edges in words (vertical corner edges, top edges, all edges);
+- shell wall thickness.
+
+Ops it cannot phrase (anything else, for example a `revolve` with no profile) are listed in `Spec.unphrased` and left out; the spec never guesses. The base profile, and the loft and revolve sizes, are always kept. Every other clause (hole diameter, depth, pattern, edge size, pocket depth and so on) is dropped with probability `p` (default 0.3) from a `random.Random` seeded by seed and pair id, so a given pair always gets the same spec. Lead phrases and clause wordings are picked from a few templates, and a spec is either one sentence or a bullet list.
+
+```
+The images show one part from four views: iso, front, top and right. Write the .gcad program, one operation per line, that builds it. Dimensions in mm: rectangular base 80 x 40, 30 mm thick; four holes, 6 mm diameter, through, on a 40 x 24 pattern; 1 mm chamfer on the vertical corner edges. Reply with the program only.
+```
+
+`prepare_sft.py --dims` and `eval.py --dims` (with `--dims-p` and `--dims-seed`) use it; without the flag the old prompt is used. Test pairs get their spec the same way with the fixed seed 1, so the same 100 test pairs see the same sizes in every run. A program that gives an empty spec keeps the old prompt. Over 5000 pairs from the kept set no spec was empty and no spec held a number that is not in (or twice, or a difference of, numbers in) its program. Tests: `tools/vlm/test_part_dims.py`.
+
+`finish_dims.sh` (unit `gcad-565-finish`) prepares the data in `out/vlm_dims`, waits for 36 GB free on the GPU, trains under `/tmp/gpu27.lock` with the #562 settings (Qwen3-VL-4B, rank 32, 1400 steps, batch 4 x 4, 256 px), evaluates on the first 100 test pairs, adds the rows below and pushes.
+
 ## GRPO
 
 120 steps, one training image per step, group of 8 samples at temperature 0.9, lr 2e-5, group-normalised advantage, no KL term. It made the model worse on the test split: reward on the training prompts stayed flat (about 0.43, 0.45, 0.35 over three blocks of 40 steps) and test match fell from 19% to 7%. One prompt per step is too noisy and there is no reference-policy anchor. The script is in place; do not use the result adapter.
