@@ -54,6 +54,7 @@ def sequence_logprob(model, batch, completion_ids):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--adapter", required=True)
+    parser.add_argument("--anchor", default="")
     parser.add_argument("--out", required=True)
     parser.add_argument("--base", default=BASE)
     parser.add_argument("--steps", type=int, default=1000)
@@ -71,7 +72,7 @@ def main():
     processor = AutoProcessor.from_pretrained(args.base)
     model = AutoModelForImageTextToText.from_pretrained(args.base, dtype=torch.bfloat16, device_map={"": 0})
     model = PeftModel.from_pretrained(model, args.adapter, adapter_name="policy", is_trainable=True)
-    model.load_adapter(args.adapter, adapter_name="anchor", is_trainable=False)
+    model.load_adapter(args.anchor or args.adapter, adapter_name="anchor", is_trainable=False)
     model.set_adapter("policy")
     model.gradient_checkpointing_enable()
     model.enable_input_require_grads()
