@@ -6,6 +6,7 @@ PY="${VLM_PYTHON:-/tmp/vlm/bin/python}"
 export PYTHONPATH="${QWEN35_PKGS:-/tmp/vlm35pkgs}"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 NEED_MB="${NEED_MB:-24000}"
+LOCK="${LOCK:-/tmp/gpu27.lock}"
 LOG="${LOG:-$OUT/sft_qwen35.log}"
 
 exec >>"$LOG" 2>&1
@@ -23,4 +24,4 @@ done
 
 cd "$HERE" || exit 1
 rm -f "$OUT/sft_log_lora_qwen35.jsonl"
-exec "$PY" sft.py --base Qwen/Qwen3.5-4B-Base --out "$OUT/lora_qwen35" --steps 1400 --batch 2 --accum 8
+exec flock "$LOCK" "$PY" sft.py --base Qwen/Qwen3.5-4B-Base --out "$OUT/lora_qwen35" --steps 1400 --batch 2 --accum 8
