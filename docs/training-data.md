@@ -176,3 +176,72 @@ Thingi10K is a mix of mechanical parts, scenery and architecture.
 | ![thingi10k](training-data/thingi10k.png) | |
 
 DeepCAD has no meshes, so it has no sheet.
+
+## gcad pairs
+
+Exact (render, `.gcad`) pairs for inverse modelling, made from the Zero-to-CAD CadQuery programs. DeepCAD,
+Fusion 360 and CAD-Recode are not translated: they are non-commercial and Zero-to-CAD alone gave 25k pairs.
+
+Tools in `tools/datasets/to_gcad/`:
+
+- `translate.py` runs each CadQuery program against a recording `Workplane` and `Sketch` that mirror the calls
+  onto real CadQuery, so Python control flow, variables and loops are free. Anything it cannot express raises
+  `Unsupported(<call>)` and the program is skipped with that reason.
+- `pairs.py` translates, builds with `gcad export`, checks the shape, renders and appends to
+  `out/pairs/results.jsonl` (resumable, 20 workers, niced). `report.py` writes `pairs.jsonl`, `report.json`
+  and the contact sheet. `test_translate.py` has 10 hand-picked programs (one per op family), each built with
+  gcad and checked with the shape distance, plus a rejection test: `python -m unittest test_translate`.
+- `tools/datasets/shape_distance.py a.stl b.glb` prints volume error, bbox error, symmetric chamfer and
+  Hausdorff (20k sampled points each, normalised by the bbox diagonal of the first mesh). It exits 0 when the
+  volume is within 1% and the chamfer under 0.5% of the diagonal. `compare_meshes` and `verdict` are the reusable
+  reward. The source volume is the exact B-rep volume from CadQuery; the mesh volume is the fallback.
+
+Renders are 512 px: `iso`, plus orthographic `top`, `front`, `right` and `left` (the left view is the right view
+of the file turned 180 degrees about z). `gcad render` draws a 2x2 sheet, which `pairs.py` cuts into cells.
+`out/pairs/pairs.jsonl` has one line per pair: id, source, licence, commercial_ok, gcad path, renders,
+source_render, line count, ops, shape distance and split. Splits hash the source object id (90/5/5), so no
+shape crosses splits. Data is 2.2 GB under `out/pairs` and is not committed.
+
+Result over all 100000 programs (3 h at 20 workers):
+
+| stage | count | rate |
+|---|---|---|
+| translated | 59278 | 59.3% |
+| built by gcad and compared | 29620 | 29.6% |
+| kept (volume within 1%, chamfer under 0.5%) | 25325 | 25.3% of all, 42.7% of translated |
+
+Splits: train 22807, val 1290, test 1228. A first 2000-program sample translated at 59% and kept 24%.
+The metric is cheap and stable: a re-check of 150 random kept pairs passed all 150.
+
+Op histogram of kept files (lines using each op): extrude 24292, plane 22576, rect 19082, chamfer 18052,
+hole 12780, pen 8997, line 8995, close 8997, body 8012, combine 8012, fillet 7129, circle 6926, move 3617,
+revolve 2157, arc 1157, axis 1088, rotate 1088, ngon 665, shell 536, loft 341, section 341, poly 334, slot 105.
+
+Line count of kept files: min 2, median 12, p90 29, max 296 (the translator refuses more than 300 lines).
+Histogram by tens of lines: 0-9 7234, 10-19 12813, 20-29 2790, 30-39 953, 40-49 506, 50-59 288, 60-69 167,
+70-79 138, 80-89 64, 90-99 44, 100+ 328.
+
+Top reasons for drops:
+
+| reason | programs |
+|---|---|
+| shell on a selection other than extrude end faces (`unsupported:shell_selection`) | 13209 |
+| sweep | 4131 |
+| edge selectors with boolean logic or BoxSelector | 3971 |
+| volume off by over 1% | 2203 |
+| chamfer distance over 0.5% | 2088 |
+| gcad boolean "invalid output shell" on `combine` | 2049 + 1914 + 1147 |
+| `.add(...)` of a Workplane or wire | 1625 |
+| `.sketch()` sub-API | 1551 |
+| `.filter(lambda ...)` on edges | 1542 |
+| fillet or chamfer on a face selection | 1145 |
+| spline | 1037 |
+| split | 1035 |
+| `gcad export` over 40 s | 1032 |
+
+Contact sheet of 20 random kept pairs (source render beside the gcad iso render):
+
+![gcad pairs](training-data/gcad-pairs.png)
+
+Gaps worth a later issue: shell selectors and sweep alone are 17% of the corpus; the combine failures show
+gcad booleans failing on bodies that touch along faces CadQuery fuses happily.

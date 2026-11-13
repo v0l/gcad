@@ -45,7 +45,7 @@ def crop_cells(sheet_path, names, dest, prefix):
         cell = sheet.crop((cx * CELL, cy * CELL, (cx + 1) * CELL, (cy + 1) * CELL))
         path = dest / f"{prefix}_{name}.png"
         cell.resize((SIZE, SIZE), Image.LANCZOS).save(path)
-        paths[name if name != "right" or prefix == "a" else "left"] = path
+        paths[name] = path
     return paths
 
 

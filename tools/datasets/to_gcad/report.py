@@ -99,7 +99,7 @@ def main():
                 "license": m["license"],
                 "commercial_ok": m["commercial_ok"],
                 "gcad": r["gcad"],
-                "renders": r["renders"],
+                "renders": {**r["renders"], "right": r["renders"]["iso"].replace("_iso.png", "_right.png")},
                 "source_render": m["paths"]["render"],
                 "lines": r["lines"],
                 "ops": r["ops"],
