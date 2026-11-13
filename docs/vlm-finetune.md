@@ -49,6 +49,8 @@ The Spark has 121 GB unified memory, 102 GB used and about 15 GB free next to Fr
 
 Result: 1 pair with a concept image (train 1, val 0, test 0), plus 20 clean examples per split as filler. The #553 concepts cover ABO, Kenney, Poly Haven, GSO and Thingi10k meshes and 5 zero-to-cad objects, but the pairs are all zero-to-cad CAD parts (25,325), and only 1 of those has a concept. Concept training needs concept images for the pairs themselves: render each train pair's GLB with `bench/concept-synth/render_all.py` and run `flux_generate.py` on a selection of a few thousand train pairs. That and the SFT run come after the GRPO v2 eval frees the GPU.
 
+Generation for the pairs runs unattended: `bench/concept-synth/pick_pairs.py` selects 4,433 pairs (2,000 train stratified by op mix, all val and test), `tools/vlm/generate_pair_concepts.sh` (unit `gcad-563-concepts-gen`) renders them on the CPU and runs `flux_generate.py` on `spark` one job at a time under `/tmp/flux-spark.lock`, and `tools/vlm/finish_concepts.sh` (unit `gcad-563-concepts-finish`) then filters, runs `prepare_concept_sft.py`, replaces the Result line above with the counts, and pushes. Data is in `~/gcad-datasets/out/synthetic_pairs`. The concept SFT training is not started.
+
 ## Not done here
 
 - Minds-eye judge v2 on the 8 tuning tasks and the comparison with qwen3.8-27b plus the skill. Those need the judge on yalr (spend) and the shared vLLM on port 8001. The test-split numbers above use the shape distance only.
