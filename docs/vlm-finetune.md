@@ -31,6 +31,12 @@ SFT loss went from about 1.1 to 0.2. The failing builds are mostly `combine ... 
 
 120 steps, one training image per step, group of 8 samples at temperature 0.9, lr 2e-5, group-normalised advantage, no KL term. It made the model worse on the test split: reward on the training prompts stayed flat (about 0.43, 0.45, 0.35 over three blocks of 40 steps) and test match fell from 19% to 7%. One prompt per step is too noisy and there is no reference-policy anchor. The script is in place; do not use the result adapter.
 
+## GRPO v2
+
+`grpo.py` now takes `--prompts` (default 8 training images per step, `--group` samples each), `--beta` (default 0.04) and `--steps` (default 1000). The KL term is the k3 estimator against a frozen copy of the SFT adapter loaded as a second PEFT adapter, so the anchor costs no extra base weights. The loss is normalised by the number of samples with non-zero advantage across all prompts. Output goes to `--out` with its log at `<out>_log.jsonl`. Tests: `tools/vlm/test_grpo.py`.
+
+Measured cost on the shared RTX PRO 6000 (GPU shared with vLLM): about 3 minutes per step at 8 prompts x 8 samples, so 1000 steps is about 50 hours. A 100 step run (`lr 1e-5`, `beta 0.04`) was started to `~/gcad-datasets/out/vlm/lora_grpo2`; evaluate its checkpoint with `eval.py --adapter` before using it. The 1000 step run and the test-split result are not done.
+
 ## Not done here
 
 - Minds-eye judge v2 on the 8 tuning tasks and the comparison with qwen3.8-27b plus the skill. Those need the judge on yalr (spend) and the shared vLLM on port 8001. The test-split numbers above use the shape distance only.
