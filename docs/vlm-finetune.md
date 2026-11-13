@@ -76,3 +76,14 @@ Generation for the pairs runs unattended: `bench/concept-synth/pick_pairs.py` se
 - Minds-eye judge v2 on the 8 tuning tasks and the comparison with qwen3.8-27b plus the skill. Those need the judge on yalr (spend) and the shared vLLM on port 8001. The test-split numbers above use the shape distance only.
 - Better GRPO: several prompts per step, a KL penalty to the SFT policy, and a larger run.
 - Concept-image inputs (real plus #553 synthetic). The SFT inputs are clean renders only.
+
+## Minds-eye comparison
+
+8 tuning tasks (chest, sword, rocket, bracket, cottage, fox, knight, tractor), 2 seeds, judge `v2:code-x-high`, render on, plan off. The SFT adapter was merged and served by vLLM on port 8012 (`--gpu-memory-utilization 0.2`, hermes tool parser); the 27b is the local vLLM on port 8001 with the skill. Runs went one at a time per server. Configs: `bench/minds-eye/configs/gcadvlm-render.json`, `local-render.json`.
+
+| config | runs | built | judge v2 | rubric | hard | tokens/run | seconds | pairwise |
+|---|---|---|---|---|---|---|---|---|
+| gcadvlm-render (SFT 4B) | 16 | 6% | 1.0 | 0.00 | 0.34 | 5k | 187 | 0-1 vs local |
+| local-render (qwen3.8-27b + skill) | 15 | 47% | 4.9 | 0.81 | 3.88 | 714k | 683 | reference |
+
+The SFT model is trained on single-image to program pairs of short extrude parts, not on a tool loop with a task prompt. Given a text brief it writes a long run of `plane`/`rect`/`extrude`/`combine` lines and hits the token limit, so almost nothing builds (1 of 16). The adapter is not usable as an agent; the minds-eye benchmark does not test what it was trained for (image in, program out), which the shape-distance table above does. A fair minds-eye entry needs image-conditioned tasks (the concept-image work in #563).
