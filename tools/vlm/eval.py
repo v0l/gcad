@@ -12,7 +12,7 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from pairs_data import DATA, PROMPT, VIEWS, read_pairs
+from pairs_data import DATA, VIEWS, read_pairs, row_prompt
 from reward import score
 
 BASE = "Qwen/Qwen3-VL-4B-Instruct"
@@ -23,9 +23,9 @@ def reference_mesh(row):
     return DATA / "out" / "zero-to-cad" / "glb" / row["id"].split(":")[1][:2] / (row["id"].split(":")[1] + ".glb")
 
 
-def generate(model, processor, row, max_new_tokens, temperature):
+def generate(model, processor, row, max_new_tokens, temperature, prompt_text):
     images = [Image.open(DATA / row["renders"][v]).convert("RGB").resize((IMAGE_SIDE, IMAGE_SIDE)) for v in VIEWS]
-    content = [{"type": "image"} for _ in images] + [{"type": "text", "text": PROMPT}]
+    content = [{"type": "image"} for _ in images] + [{"type": "text", "text": prompt_text}]
     prompt = processor.apply_chat_template([{"role": "user", "content": content}], tokenize=False, add_generation_prompt=True)
     batch = processor(text=[prompt], images=images, return_tensors="pt").to(model.device)
     kwargs = {"max_new_tokens": max_new_tokens, "do_sample": temperature > 0}
@@ -59,6 +59,9 @@ def main():
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-lines", type=int, default=60)
     parser.add_argument("--out", required=True)
+    parser.add_argument("--dims", action="store_true")
+    parser.add_argument("--dims-p", type=float, default=0.3)
+    parser.add_argument("--dims-seed", type=int, default=1)
     args = parser.parse_args()
 
     processor = AutoProcessor.from_pretrained(args.base)
@@ -71,7 +74,8 @@ def main():
     with ThreadPoolExecutor(4) as pool, open(args.out, "w") as f:
         pending = []
         for row in rows:
-            text = generate(model, processor, row, args.max_new_tokens, args.temperature)
+            prompt_text = row_prompt(row, dims=args.dims, p=args.dims_p, seed=args.dims_seed)
+            text = generate(model, processor, row, args.max_new_tokens, args.temperature, prompt_text)
             pending.append((row, text, pool.submit(score, text, reference_mesh(row))))
         for row, text, future in pending:
             r = future.result()
