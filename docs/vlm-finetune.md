@@ -47,6 +47,10 @@ The images show one part from four views: iso, front, top and right. Write the .
 
 `finish_dims.sh` (unit `gcad-565-finish`) prepares the data in `out/vlm_dims`, waits for 36 GB free on the GPU, trains under `/tmp/gpu27.lock` with the #562 settings (Qwen3-VL-4B, rank 32, 1400 steps, batch 4 x 4, 256 px), evaluates on the first 100 test pairs, adds the rows below and pushes.
 
+## Qwen3.5-4B-Base
+
+`Qwen/Qwen3.5-4B-Base` (`Qwen3_5ForConditionalGeneration`, natively multimodal: `vision_config` with a 24 layer tower, no deepstack; hybrid linear and full attention language model) ships no chat template, so `--base` with a name containing `base` selects the plain format in `prompt_format.py`: four `<|vision_start|><|image_pad|><|vision_end|>` blocks, the prompt, a blank line, then the program and `<|endoftext|>` (the stop token at eval). Qwen3-VL keeps the chat template. It needs transformers 5 and `fla-core` (the reference linear attention is far too slow); they are installed in `/tmp/vlm35pkgs` and used through `PYTHONPATH`. Same data, rank 32 (42M trainable), 1400 steps, 256 px views. Run as unit `gcad-564-sft` (`sft.py --base Qwen/Qwen3.5-4B-Base --out .../lora_qwen35`); `finish_qwen35.sh` (unit `gcad-564-finish`) evaluates the adapter and the untuned base on the first 100 test pairs and adds both rows below.
+
 ## GRPO
 
 120 steps, one training image per step, group of 8 samples at temperature 0.9, lr 2e-5, group-normalised advantage, no KL term. It made the model worse on the test split: reward on the training prompts stayed flat (about 0.43, 0.45, 0.35 over three blocks of 40 steps) and test match fell from 19% to 7%. One prompt per step is too noisy and there is no reference-policy anchor. The script is in place; do not use the result adapter.
