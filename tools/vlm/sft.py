@@ -1,6 +1,7 @@
 import argparse
 import json
 import random
+import sys
 import time
 from pathlib import Path
 
@@ -8,6 +9,10 @@ import torch
 from peft import LoraConfig, get_peft_model
 from PIL import Image
 from transformers import AutoModelForImageTextToText, AutoProcessor
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+from prompt_format import end_marker, format_for, prompt_text
 
 BASE = "Qwen/Qwen3-VL-4B-Instruct"
 IMAGE_SIDE = 256
@@ -17,7 +22,7 @@ def load_image(path):
     return Image.open(path).convert("RGB").resize((IMAGE_SIDE, IMAGE_SIDE))
 
 
-def to_batch(processor, examples, device):
+def to_batch(processor, examples, device, fmt="chat"):
     texts, images = [], []
     for ex in examples:
         msgs = []
@@ -31,8 +36,13 @@ def to_batch(processor, examples, device):
                     content.append(c)
             msgs.append({"role": m["role"], "content": content})
         texts.append(msgs)
-    prompts = [processor.apply_chat_template(m[:1], tokenize=False, add_generation_prompt=True) for m in texts]
-    fulls = [p + m[1]["content"][0]["text"] + "<|im_end|>" for p, m in zip(prompts, texts)]
+    prompts = []
+    for m in texts:
+        parts = m[0]["content"]
+        n_images = sum(1 for c in parts if c["type"] == "image")
+        text = " ".join(c["text"] for c in parts if c["type"] == "text")
+        prompts.append(prompt_text(processor, fmt, n_images, text))
+    fulls = [p + m[1]["content"][0]["text"] + end_marker(fmt) for p, m in zip(prompts, texts)]
     batch = processor(text=fulls, images=images, return_tensors="pt", padding=True)
     prompt_batch = processor(text=prompts, images=images, return_tensors="pt", padding=True)
     labels = batch["input_ids"].clone()
@@ -65,6 +75,7 @@ def main():
 
     random.seed(args.seed)
     torch.manual_seed(args.seed)
+    fmt = format_for(args.base)
     processor = AutoProcessor.from_pretrained(args.base)
     processor.tokenizer.padding_side = "right"
     model = AutoModelForImageTextToText.from_pretrained(args.base, torch_dtype=torch.bfloat16, device_map={"": 0})
@@ -88,7 +99,7 @@ def main():
     )
     model.train()
     order = []
-    log = open(Path(args.out).parent / "sft_log.jsonl", "a")
+    log = open(Path(args.out).parent / ("sft_log.jsonl" if args.base == BASE else f"sft_log_{Path(args.out).name}.jsonl"), "a")
     started = time.time()
     for step in range(total):
         loss_sum = 0.0
@@ -96,7 +107,7 @@ def main():
             if len(order) < args.batch:
                 order = random.sample(range(len(examples)), len(examples))
             idx, order = order[: args.batch], order[args.batch :]
-            batch = to_batch(processor, [examples[i] for i in idx], model.device)
+            batch = to_batch(processor, [examples[i] for i in idx], model.device, fmt)
             loss = model(**batch).loss / args.accum
             loss.backward()
             loss_sum += loss.item()
