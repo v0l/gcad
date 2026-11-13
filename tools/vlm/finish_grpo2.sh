@@ -11,7 +11,7 @@ RESULTS="${RESULTS:-$OUT/eval_grpo2.jsonl}"
 DOC="${DOC:-$REPO/docs/vlm-finetune.md}"
 LOG="${LOG:-$OUT/finish_grpo2.log}"
 LOCK="${LOCK:-/tmp/gpu27.lock}"
-LABEL="GRPO v2, 8 prompts, KL 0.04, 100 steps"
+LABEL="${LABEL:-GRPO v2, 8 prompts, KL 0.04, 100 steps}"
 LIMIT=100
 POLL="${POLL:-300}"
 PUSH=1
@@ -47,6 +47,8 @@ done
 
 export PATH="$HOME/.cargo/bin:$PATH"
 cd "$HERE" || exit 1
+ADAPTER=$("$PY" adapter_dir.py "$ADAPTER") || exit 1
+echo "adapter $ADAPTER"
 flock "$LOCK" "$PY" eval.py --adapter "$ADAPTER" --limit "$LIMIT" --out "$RESULTS" | tail -3 || exit 1
 "$PY" add_result_row.py --results "$RESULTS" --doc "$DOC" --label "$LABEL" || exit 1
 
