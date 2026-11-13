@@ -1,0 +1,9 @@
+{
+  "base": "Qwen/Qwen3-VL-4B-Instruct",
+  "data": "/home/kieran/gcad-datasets/out/vlm_concept",
+  "prepare": "python tools/vlm/prepare_concept_sft.py --clean-per-concept 20",
+  "train": "python tools/vlm/sft.py --data /home/kieran/gcad-datasets/out/vlm_concept --out /home/kieran/gcad-datasets/out/vlm/lora_concept --steps 1400 --accum 4",
+  "start_from": "SFT adapter /home/kieran/gcad-datasets/out/vlm/lora",
+  "inputs": "one concept image per example plus clean four-view renders mixed in at 20 clean per concept example",
+  "blocked_on": "GRPO v2 eval (finish_grpo2.sh) so the GPU is free, and concept images for the pairs"
+}

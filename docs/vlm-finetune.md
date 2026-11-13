@@ -37,6 +37,18 @@ SFT loss went from about 1.1 to 0.2. The failing builds are mostly `combine ... 
 
 Measured cost on the shared RTX PRO 6000 (GPU shared with vLLM): about 3 minutes per step at 8 prompts x 8 samples, so 1000 steps is about 50 hours. A 100 step run (`lr 1e-5`, `beta 0.04`) was started to `~/gcad-datasets/out/vlm/lora_grpo2`; evaluate its checkpoint with `eval.py --adapter` before using it. The 1000 step run and the test-split result are not done.
 
+`finish_grpo2.sh` waits for the 100 step run, evaluates it on the first 100 test pairs under `/tmp/gpu27.lock`, adds the row to the results table above and fast-forward pushes (`--test` runs it on the SFT adapter without pushing). It runs as the user unit `gcad-563-grpo2`.
+
+### 1000 steps on the DGX Spark: does not fit
+
+The Spark has 121 GB unified memory, 102 GB used and about 15 GB free next to Frigate, Jellyfin, Home Assistant and the other containers, no torch or peft install, and an aarch64 CPU with no `gcad` or `gcad export` build for the reward. Training needs about 17 GB for the 4B bf16 model plus the frozen anchor activations, and the reward needs `gcad`. The 1000 step run (about 3 to 4 minutes a step on the shared desktop GPU, 50 to 65 hours) is not queued on the desktop GPU either. It needs a free GPU slot; resume from `lora_grpo2` with `--adapter` pointing at it.
+
+## Concept-image inputs
+
+`prepare_concept_sft.py` builds `out/vlm_concept/{train,val,test}.jsonl` from the #553 manifest (`manifest.synthetic.jsonl`, real and synthetic concepts) and `kept_img2img.jsonl`, keeping only objects that also have a verified pair, and mixing in clean four-view examples at 20 per concept example. Config: `tools/vlm/concept_sft.json`.
+
+Result: 1 pair with a concept image (train 1, val 0, test 0), plus 20 clean examples per split as filler. The #553 concepts cover ABO, Kenney, Poly Haven, GSO and Thingi10k meshes and 5 zero-to-cad objects, but the pairs are all zero-to-cad CAD parts (25,325), and only 1 of those has a concept. Concept training needs concept images for the pairs themselves: render each train pair's GLB with `bench/concept-synth/render_all.py` and run `flux_generate.py` on a selection of a few thousand train pairs. That and the SFT run come after the GRPO v2 eval frees the GPU.
+
 ## Not done here
 
 - Minds-eye judge v2 on the 8 tuning tasks and the comparison with qwen3.8-27b plus the skill. Those need the judge on yalr (spend) and the shared vLLM on port 8001. The test-split numbers above use the shape distance only.
