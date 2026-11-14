@@ -47,18 +47,11 @@ export PATH="$HOME/.cargo/bin:$PATH"
 cd "$HERE" || exit 1
 flock "$LOCK" "$PY" eval.py --base "$BASE" --adapter "$ADAPTER" --limit "$LIMIT" --out "$RESULTS" | tail -3 || exit 1
 flock "$LOCK" "$PY" eval.py --base "$BASE" --limit "$LIMIT" --out "$BASE_RESULTS" | tail -3 || exit 1
-"$PY" add_result_row.py --results "$RESULTS" --doc "$DOC" --label "Qwen3.5-4B-Base SFT, 1400 steps" || exit 1
-"$PY" add_result_row.py --results "$BASE_RESULTS" --doc "$DOC" --label "base Qwen3.5-4B-Base" || exit 1
-
 if [ "$PUSH" = 1 ]; then
-  cd "$REPO" || exit 1
-  git add docs/vlm-finetune.md
-  git -c commit.gpgsign=false commit -qm "Qwen3.5 base eval results" || exit 1
-  git fetch -q origin
-  git rebase origin/master || exit 1
-  git push origin HEAD:master || exit 1
-  git log origin/master -1 --oneline
+  "$HERE/publish_rows.sh" "$REPO" docs/vlm-finetune.md "Qwen3.5 base eval results" "$PY" "$RESULTS" "Qwen3.5-4B-Base SFT, 1400 steps" "$BASE_RESULTS" "base Qwen3.5-4B-Base" || exit 1
 else
+  "$PY" add_result_row.py --results "$RESULTS" --doc "$DOC" --label "Qwen3.5-4B-Base SFT, 1400 steps" || exit 1
+  "$PY" add_result_row.py --results "$BASE_RESULTS" --doc "$DOC" --label "base Qwen3.5-4B-Base" || exit 1
   echo "test mode: no commit, no push, doc at $DOC"
 fi
 echo "== $(date -Is) finished"

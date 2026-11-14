@@ -64,20 +64,30 @@ def controlnet_workflow(image_name, prompt, seed, steps, strength):
     return g
 
 
+class PromptLost(Exception):
+    pass
+
+
 class Comfy:
-    def __init__(self, host):
+    def __init__(self, host, base="http://127.0.0.1:18188", timeout=600, poll=1.0, lost_grace=30):
         self.host = host
-        self.base = "http://127.0.0.1:18188"
-        self.tunnel = subprocess.Popen(["ssh", "-N", "-L", "18188:127.0.0.1:8188", host])
-        for _ in range(20):
-            try:
-                urllib.request.urlopen(self.base + "/system_stats", timeout=2)
-                break
-            except Exception:
-                time.sleep(0.5)
+        self.base = base
+        self.timeout = timeout
+        self.poll = poll
+        self.lost_grace = lost_grace
+        self.tunnel = None
+        if host:
+            self.tunnel = subprocess.Popen(["ssh", "-N", "-L", "18188:127.0.0.1:8188", host])
+            for _ in range(20):
+                try:
+                    urllib.request.urlopen(self.base + "/system_stats", timeout=2)
+                    break
+                except Exception:
+                    time.sleep(0.5)
 
     def close(self):
-        self.tunnel.terminate()
+        if self.tunnel:
+            self.tunnel.terminate()
 
     def upload(self, path, name):
         boundary = uuid.uuid4().hex
@@ -89,18 +99,50 @@ class Comfy:
                                      headers={"Content-Type": "multipart/form-data; boundary=" + boundary})
         return json.loads(urllib.request.urlopen(req).read())["name"]
 
-    def run(self, graph):
+    def queued(self, pid):
+        q = json.loads(urllib.request.urlopen(self.base + "/queue", timeout=10).read())
+        items = q.get("queue_running", []) + q.get("queue_pending", [])
+        return any(len(item) > 1 and item[1] == pid for item in items)
+
+    def cancel(self, pid):
+        try:
+            req = urllib.request.Request(self.base + "/queue", data=json.dumps({"delete": [pid]}).encode(), headers={"Content-Type": "application/json"})
+            urllib.request.urlopen(req, timeout=10).read()
+        except Exception:
+            pass
+
+    def submit_and_wait(self, graph):
         req = urllib.request.Request(self.base + "/prompt", data=json.dumps({"prompt": graph, "client_id": str(uuid.uuid4())}).encode(),
                                      headers={"Content-Type": "application/json"})
-        pid = json.loads(urllib.request.urlopen(req).read())["prompt_id"]
+        pid = json.loads(urllib.request.urlopen(req, timeout=30).read())["prompt_id"]
+        start = time.monotonic()
+        missing_since = None
         while True:
-            hist = json.loads(urllib.request.urlopen(f"{self.base}/history/{pid}").read())
+            hist = json.loads(urllib.request.urlopen(f"{self.base}/history/{pid}", timeout=10).read())
             if pid in hist:
-                break
-            time.sleep(1)
-        img = hist[pid]["outputs"]["10"]["images"][0]
-        q = urllib.parse.urlencode({"filename": img["filename"], "subfolder": img["subfolder"], "type": img["type"]})
-        return urllib.request.urlopen(f"{self.base}/view?{q}").read()
+                return hist[pid]
+            if time.monotonic() - start > self.timeout:
+                self.cancel(pid)
+                raise PromptLost(f"timeout after {self.timeout}s")
+            if self.queued(pid):
+                missing_since = None
+            else:
+                missing_since = missing_since or time.monotonic()
+                if time.monotonic() - missing_since > self.lost_grace:
+                    raise PromptLost("prompt left the queue without a result")
+            time.sleep(self.poll)
+
+    def run(self, graph, attempts=2):
+        for attempt in range(1, attempts + 1):
+            try:
+                entry = self.submit_and_wait(graph)
+            except PromptLost as e:
+                print(f"prompt lost ({e}), attempt {attempt} of {attempts}", flush=True)
+                continue
+            img = entry["outputs"]["10"]["images"][0]
+            q = urllib.parse.urlencode({"filename": img["filename"], "subfolder": img["subfolder"], "type": img["type"]})
+            return urllib.request.urlopen(f"{self.base}/view?{q}", timeout=60).read()
+        return None
 
 
 def main():
@@ -135,6 +177,9 @@ def main():
                 graph = (controlnet_workflow(remote, prompt, seed, args.steps, args.strength) if args.mode == "controlnet"
                          else workflow(remote, prompt, seed, args.denoise, args.steps))
                 data = comfy.run(graph)
+                if data is None:
+                    print("skipped", m["id"], flush=True)
+                    continue
                 open(dst, "wb").write(data)
                 meta.write(json.dumps({"id": m["id"], "concept": dst, "render": src, "prompt": prompt, "generator": GENERATORS[args.mode],
                                        "denoise": args.denoise, "steps": args.steps, "seed": seed}) + "\n")

@@ -50,17 +50,10 @@ cd "$HERE" || exit 1
 ADAPTER=$("$PY" adapter_dir.py "$ADAPTER") || exit 1
 echo "adapter $ADAPTER"
 flock "$LOCK" "$PY" eval.py --adapter "$ADAPTER" --limit "$LIMIT" --out "$RESULTS" | tail -3 || exit 1
-"$PY" add_result_row.py --results "$RESULTS" --doc "$DOC" --label "$LABEL" || exit 1
-
 if [ "$PUSH" = 1 ]; then
-  cd "$REPO" || exit 1
-  git add docs/vlm-finetune.md
-  git -c commit.gpgsign=false commit -qm "GRPO v2 eval result" || exit 1
-  git fetch -q origin
-  git rebase origin/master || exit 1
-  git push origin HEAD:master || exit 1
-  git log origin/master -1 --oneline
+  "$HERE/publish_rows.sh" "$REPO" docs/vlm-finetune.md "GRPO v2 eval result" "$PY" "$RESULTS" "$LABEL" || exit 1
 else
+  "$PY" add_result_row.py --results "$RESULTS" --doc "$DOC" --label "$LABEL" || exit 1
   echo "test mode: no commit, no push, doc at $DOC"
 fi
 echo "== $(date -Is) finished"
