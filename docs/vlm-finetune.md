@@ -26,6 +26,8 @@ Input is four 256 px views (iso, front, top, right) and one fixed prompt; the ta
 | SFT then GRPO, 120 steps | 89% | 7% | 0.46 | 1.55% | 22.6% |
 | GRPO v2, 100 steps | 91% | 22% | 0.53 | 0.97% | 13.8% |
 | GRPO v2, 8 prompts, KL 0.04, step 60 checkpoint | 88% | 20% | 0.50 | 1.00% | 13.3% |
+| base Qwen3.5-4B-Base | 1% | 0% | 0.00 | 16.65% | 3206.9% |
+| Qwen3.5-4B-Base SFT, 1400 steps | 90% | 22% | 0.51 | 1.46% | 11.1% |
 | no-dimension SFT adapter, dimensions in the test prompt | 75% | 22% | 0.54 | 0.41% | 2.5% |
 | SFT with part dimensions in the prompt, Qwen3-VL-4B-Instruct, 1400 steps | 84% | 27% | 0.65 | 0.36% | 1.7% |
 
