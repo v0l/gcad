@@ -3,11 +3,11 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(git -C "$HERE" rev-parse --show-toplevel)"
 OUT="${VLM_OUT:-$HOME/gcad-datasets/out/vlm}"
-PY="${VLM_PYTHON:-/tmp/vlm/bin/python}"
+PY="${VLM_PYTHON:-$HOME/gcad-datasets/venv-vlm/bin/python}"
 LOCK="${LOCK:-/tmp/gpu27.lock}"
 DOC="${DOC:-$REPO/docs/vlm-finetune.md}"
 STEPS="${STEPS:-1400}"
-DEFAULT_BASE="Qwen/Qwen3-VL-4B-Instruct"
+DEFAULT_BASE="Qwen/Qwen3.5-4B-Base"
 BASE="$DEFAULT_BASE"
 LIMIT=100
 MIN_FREE_MB="${MIN_FREE_MB:-36000}"
@@ -59,25 +59,21 @@ cd "$HERE" || exit 1
 "$PY" prepare_sft.py --dims --out "$DIMS_OUT" || exit 1
 
 if [ ! -f "$DIMS_OUT/lora/adapter_config.json" ]; then
-  flock "$LOCK" bash -c "$(declare -f wait_for_memory); MIN_FREE_MB=$MIN_FREE_MB; wait_for_memory; exec '$PY' sft.py --base '$BASE' --data '$DIMS_OUT' --out '$DIMS_OUT/lora' --steps $STEPS --accum 4" || exit 1
+  flock "$LOCK" bash -c "$(declare -f wait_for_memory); MIN_FREE_MB=$MIN_FREE_MB; wait_for_memory; PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True exec '$PY' sft.py --base '$BASE' --data '$DIMS_OUT' --out '$DIMS_OUT/lora' --steps $STEPS --batch 2 --accum 8" || exit 1
 fi
 
 flock "$LOCK" "$PY" eval.py --base "$BASE" --adapter "$DIMS_OUT/lora" --dims --limit "$LIMIT" --out "$DIMS_OUT/eval_dims.jsonl" | tail -3 || exit 1
 "$PY" add_result_row.py --results "$DIMS_OUT/eval_dims.jsonl" --doc "$DOC" --label "SFT with part dimensions in the prompt, $NAME, $STEPS steps" || exit 1
+ROWS=("$DIMS_OUT/eval_dims.jsonl" "SFT with part dimensions in the prompt, $NAME, $STEPS steps")
 
 if [ "$BASE" = "$DEFAULT_BASE" ]; then
-  flock "$LOCK" "$PY" eval.py --adapter "$OUT/lora" --dims --limit "$LIMIT" --out "$DIMS_OUT/eval_nodims_adapter_dims_prompt.jsonl" | tail -3
-  "$PY" add_result_row.py --results "$DIMS_OUT/eval_nodims_adapter_dims_prompt.jsonl" --doc "$DOC" --label "no-dimension SFT adapter, dimensions in the test prompt" || exit 1
+  flock "$LOCK" "$PY" eval.py --base "$BASE" --adapter "$OUT/lora_qwen35" --dims --limit "$LIMIT" --out "$DIMS_OUT/eval_nodims_adapter_dims_prompt.jsonl" | tail -3
+  "$PY" add_result_row.py --results "$DIMS_OUT/eval_nodims_adapter_dims_prompt.jsonl" --doc "$DOC" --label "no-dimension $NAME SFT adapter, dimensions in the test prompt" || exit 1
+  ROWS+=("$DIMS_OUT/eval_nodims_adapter_dims_prompt.jsonl" "no-dimension $NAME SFT adapter, dimensions in the test prompt")
 fi
 
 if [ "$PUSH" = 1 ]; then
-  cd "$REPO" || exit 1
-  git add docs/vlm-finetune.md
-  git -c commit.gpgsign=false commit -qm "Dimension prompt SFT results ($NAME)" || exit 1
-  git fetch -q origin
-  git rebase origin/master || exit 1
-  git push origin HEAD:master || exit 1
-  git log origin/master -1 --oneline
+  "$HERE/publish_rows.sh" "$REPO" docs/vlm-finetune.md "Dimension prompt SFT results ($NAME)" "$PY" "${ROWS[@]}" || exit 1
 else
   echo "test mode: no commit, no push, doc at $DOC"
 fi

@@ -8,7 +8,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import add_result_row
 
-DOC = "| a | 1 |\n| SFT then GRPO, 120 steps | 89% | 7% | 0.46 | 1.55% | 22.6% |\n\ntext\n"
+DOC = "| a | 1 |\n| Qwen3.5-4B-Base SFT, 1400 steps | 90% | 22% | 0.51 | 1.46% | 11.1% |\n\ntext\n"
 
 
 def result(built, chamfer, volume, reward):

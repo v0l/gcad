@@ -2,8 +2,7 @@
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${VLM_OUT:-$HOME/gcad-datasets/out/vlm}"
-PY="${VLM_PYTHON:-/tmp/vlm/bin/python}"
-export PYTHONPATH="${QWEN35_PKGS:-/tmp/vlm35pkgs}"
+PY="${VLM_PYTHON:-$HOME/gcad-datasets/venv-vlm/bin/python}"
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True
 NEED_MB="${NEED_MB:-24000}"
 LOCK="${LOCK:-/tmp/gpu27.lock}"

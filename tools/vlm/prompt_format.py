@@ -1,3 +1,4 @@
+BASE = "Qwen/Qwen3.5-4B-Base"
 IMAGE_TOKENS = "<|vision_start|><|image_pad|><|vision_end|>"
 END_OF_TEXT = "<|endoftext|>"
 END_OF_TURN = "<|im_end|>"
@@ -20,3 +21,14 @@ def end_marker(fmt):
 
 def stop_ids(tokenizer, fmt):
     return [tokenizer.convert_tokens_to_ids(end_marker(fmt))]
+
+
+def completion_tokens(ids, stop, pad):
+    out = []
+    for t in ids:
+        if t == stop:
+            out.append(t)
+            break
+        if t != pad:
+            out.append(t)
+    return out

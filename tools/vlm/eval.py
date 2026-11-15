@@ -13,10 +13,9 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from pairs_data import DATA, VIEWS, read_pairs, row_prompt
-from prompt_format import format_for, prompt_text, stop_ids
+from prompt_format import BASE, format_for, prompt_text, stop_ids
 from reward import score
 
-BASE = "Qwen/Qwen3-VL-4B-Instruct"
 IMAGE_SIDE = 256
 
 

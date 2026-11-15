@@ -12,9 +12,8 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from prompt_format import end_marker, format_for, prompt_text
+from prompt_format import BASE, end_marker, format_for, prompt_text
 
-BASE = "Qwen/Qwen3-VL-4B-Instruct"
 IMAGE_SIDE = 256
 
 
@@ -62,7 +61,7 @@ def to_batch(processor, examples, device, fmt="chat"):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--data", default="/home/kieran/gcad-datasets/out/vlm")
-    parser.add_argument("--out", default="/home/kieran/gcad-datasets/out/vlm/lora")
+    parser.add_argument("--out", default="/home/kieran/gcad-datasets/out/vlm/lora_qwen35")
     parser.add_argument("--base", default=BASE)
     parser.add_argument("--steps", type=int, default=2000)
     parser.add_argument("--batch", type=int, default=4)
@@ -99,7 +98,7 @@ def main():
     )
     model.train()
     order = []
-    log = open(Path(args.out).parent / ("sft_log.jsonl" if args.base == BASE else f"sft_log_{Path(args.out).name}.jsonl"), "a")
+    log = open(Path(args.out).parent / f"sft_log_{Path(args.out).name}.jsonl", "a")
     started = time.time()
     for step in range(total):
         loss_sum = 0.0

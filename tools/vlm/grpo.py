@@ -12,8 +12,9 @@ from transformers import AutoModelForImageTextToText, AutoProcessor
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from eval import BASE, IMAGE_SIDE, reference_mesh
+from eval import IMAGE_SIDE, reference_mesh
 from pairs_data import DATA, PROMPT, VIEWS, read_pairs
+from prompt_format import BASE, completion_tokens, format_for, prompt_text, stop_ids
 from reward import score
 
 
@@ -34,10 +35,9 @@ def sequence_loss(adv, logp, ref_logp, beta):
     return policy + anchor
 
 
-def prompt_inputs(processor, row):
+def prompt_inputs(processor, row, fmt):
     images = [Image.open(DATA / row["renders"][v]).convert("RGB").resize((IMAGE_SIDE, IMAGE_SIDE)) for v in VIEWS]
-    content = [{"type": "image"} for _ in images] + [{"type": "text", "text": PROMPT}]
-    prompt = processor.apply_chat_template([{"role": "user", "content": content}], tokenize=False, add_generation_prompt=True)
+    prompt = prompt_text(processor, fmt, len(images), PROMPT)
     return processor(text=[prompt], images=images, return_tensors="pt")
 
 
@@ -69,7 +69,10 @@ def main():
     args = parser.parse_args()
 
     random.seed(args.seed)
+    fmt = format_for(args.base)
     processor = AutoProcessor.from_pretrained(args.base)
+    stop = stop_ids(processor.tokenizer, fmt)[0]
+    pad = processor.tokenizer.pad_token_id
     model = AutoModelForImageTextToText.from_pretrained(args.base, dtype=torch.bfloat16, device_map={"": 0})
     model = PeftModel.from_pretrained(model, args.adapter, adapter_name="policy", is_trainable=True)
     model.load_adapter(args.anchor or args.adapter, adapter_name="anchor", is_trainable=False)
@@ -88,7 +91,7 @@ def main():
         rewards_all = []
         built_all = []
         for row in picked:
-            batch = prompt_inputs(processor, row).to(model.device)
+            batch = prompt_inputs(processor, row, fmt).to(model.device)
             model.eval()
             with torch.no_grad():
                 out = model.generate(
@@ -97,8 +100,10 @@ def main():
                     temperature=args.temperature,
                     max_new_tokens=args.max_new_tokens,
                     num_return_sequences=args.group,
+                    eos_token_id=[stop],
+                    pad_token_id=pad if pad is not None else stop,
                 )
-            completions = out[:, batch["input_ids"].shape[1] :]
+            completions = [completion_tokens(c.tolist(), stop, pad) for c in out[:, batch["input_ids"].shape[1] :]]
             texts = processor.tokenizer.batch_decode(completions, skip_special_tokens=True)
             ref = reference_mesh(row)
             results = list(pool.map(lambda t: score(t, ref), texts))
@@ -111,11 +116,9 @@ def main():
         count = sum(1 for _, comps, advs in samples for a in advs if abs(a) >= 1e-6)
         for batch, completions, advantages in samples:
             for comp, adv in zip(completions, advantages):
-                if abs(adv) < 1e-6:
+                if abs(adv) < 1e-6 or not comp:
                     continue
-                ids = comp[comp != processor.tokenizer.pad_token_id].unsqueeze(0)
-                if ids.shape[1] == 0:
-                    continue
+                ids = torch.tensor([comp], device=model.device)
                 with torch.no_grad():
                     model.set_adapter("anchor")
                     ref_lp = sequence_logprob(model, batch, ids)

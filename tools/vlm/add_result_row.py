@@ -3,7 +3,7 @@ import json
 import statistics
 from pathlib import Path
 
-ANCHOR = "| SFT then GRPO, 120 steps |"
+ANCHOR = "| Qwen3.5-4B-Base SFT, 1400 steps |"
 
 
 def summarise_file(path):

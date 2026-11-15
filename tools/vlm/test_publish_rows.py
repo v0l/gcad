@@ -8,7 +8,7 @@ from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 DOC = "docs/vlm-finetune.md"
-TABLE = "| model | builds |\n|---|---|\n| SFT then GRPO, 120 steps | 89% | 7% | 0.46 | 1.55% | 22.6% |\n| other | 1 |\n"
+TABLE = "| model | builds |\n|---|---|\n| Qwen3.5-4B-Base SFT, 1400 steps | 90% | 22% | 0.51 | 1.46% | 11.1% |\n| other | 1 |\n"
 
 
 def git(cwd, *args):

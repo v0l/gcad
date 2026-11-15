@@ -1,19 +1,25 @@
 # VLM fine-tune on gcad pairs
 
-Image to `.gcad` with a LoRA fine-tune of Qwen3-VL-4B-Instruct on the verified pairs from `docs/training-data.md` ("gcad pairs"). Code is in `tools/vlm/`. Data and adapters stay in `~/gcad-datasets/out/vlm/`, never in git.
+Image to `.gcad` with a LoRA fine-tune of **Qwen3.5-4B-Base** on the verified pairs from `docs/training-data.md` ("gcad pairs"). This is the only model we train. Code is in `tools/vlm/`; `prompt_format.BASE` is the default base for `sft.py`, `eval.py` and `grpo.py`. Data and adapters stay in `~/gcad-datasets/out/vlm/`, never in git. The current adapter is `out/vlm/lora_qwen35`.
+
+The first rounds (#562, #563) used Qwen3-VL-4B-Instruct. Those runs are kept below as history only; nothing new is trained on it.
 
 ## Base model
 
-Qwen3-VL-4B-Instruct. The pair statistics: 25,325 kept pairs (22,180 train, 1,246 val, 1,187 test after the commercial-OK and at most 60 lines filter), median 12 lines, p90 29. Ops are dominated by `extrude`, `plane`, `rect`, `chamfer`, `hole`, `fillet`. Programs are short, so a 4B model with LoRA (rank 32 on all language-model projections, 66M trainable parameters) trains in bf16 on one GPU in about 17 GB. Qwen3.5-4B and its 3D-Coder finetune (#536) were not tried: the Qwen3-VL processor was available with a standard vision path and the 3D-Coder is Three.js-trained.
+The pair statistics: 25,325 kept pairs (22,180 train, 1,246 val, 1,187 test after the commercial-OK and at most 60 lines filter), median 12 lines, p90 29. Ops are dominated by `extrude`, `plane`, `rect`, `chamfer`, `hole`, `fillet`.
+
+`Qwen/Qwen3.5-4B-Base` (`Qwen3_5ForConditionalGeneration`, natively multimodal: `vision_config` with a 24 layer tower, no deepstack; hybrid linear and full attention language model) ships no chat template, so the plain format in `prompt_format.py` is used: four `<|vision_start|><|image_pad|><|vision_end|>` blocks, the prompt, a blank line, then the program and `<|endoftext|>` (the stop token at eval and in GRPO sampling). LoRA rank 32 on all language-model projections (42M trainable), bf16, 256 px views. It needs transformers 5 and `fla-core` (the reference linear attention is far too slow); they are in the venv `~/gcad-datasets/venv-vlm` (built with `--system-site-packages` over the system torch 2.12 cu130, then `pip install "transformers>=5" peft fla-core accelerate trimesh scipy`). Every script in `tools/vlm/` uses that venv by default (`VLM_PYTHON` overrides it).
 
 ## Pipeline
 
 ```
-python tools/vlm/prepare_sft.py                      # pairs.jsonl to train/val/test chat jsonl
-python tools/vlm/sft.py --steps 1400 --accum 4       # LoRA SFT, batch 4 x 4, lr 2e-4, 256 px images
-python tools/vlm/eval.py --adapter DIR --limit 100 --out results.jsonl
-python tools/vlm/grpo.py --adapter DIR --out DIR2    # shape-distance reward
+python tools/vlm/prepare_sft.py                                   # pairs.jsonl to train/val/test jsonl
+tools/vlm/train_qwen35.sh                                         # LoRA SFT, 1400 steps, batch 2 x 8, lr 2e-4
+python tools/vlm/eval.py --adapter out/vlm/lora_qwen35 --limit 100 --out results.jsonl
+python tools/vlm/grpo.py --adapter out/vlm/lora_qwen35 --out DIR  # shape-distance reward, KL to the SFT
 ```
+
+`train_qwen35.sh` waits for 24 GB of free GPU memory, then trains under `/tmp/gpu27.lock` with `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`; micro-batch 2 with 8 accumulation steps fits beside the vLLM on port 8001.
 
 Input is four 256 px views (iso, front, top, right) and one fixed prompt; the target is the program text. `reward.py` builds a prediction with `gcad export` and compares it to the reference mesh with `tools/datasets/shape_distance.py`. Reward is 0 for a program that does not build, otherwise `0.1 + 0.9 * shape * volume`, where `shape` falls linearly to 0 at a chamfer of 5% of the bbox diagonal (after a 0.2% noise floor) and `volume` is `1 - volume_error`. Tests: `tools/vlm/test_*.py`.
 
@@ -21,15 +27,22 @@ Input is four 256 px views (iso, front, top, right) and one fixed prompt; the ta
 
 | model | builds (`gcad export`) | match (volume within 1% and chamfer within 0.5%) | mean reward | median chamfer | median volume error |
 |---|---|---|---|---|---|
-| base Qwen3-VL-4B | 0% | 0% | 0.00 | | |
-| SFT, 1400 steps (about 100 minutes on the RTX PRO 6000) | 87% | 19% | 0.51 | 0.81% | 11.4% |
-| SFT then GRPO, 120 steps | 89% | 7% | 0.46 | 1.55% | 22.6% |
-| GRPO v2, 100 steps | 91% | 22% | 0.53 | 0.97% | 13.8% |
-| GRPO v2, 8 prompts, KL 0.04, step 60 checkpoint | 88% | 20% | 0.50 | 1.00% | 13.3% |
 | base Qwen3.5-4B-Base | 1% | 0% | 0.00 | 16.65% | 3206.9% |
 | Qwen3.5-4B-Base SFT, 1400 steps | 90% | 22% | 0.51 | 1.46% | 11.1% |
+
+Rows added by the finishers land under the SFT row above. The Qwen3-VL-4B-Instruct history:
+
+| Qwen3-VL-4B-Instruct (history, not trained further) | builds | match | mean reward | median chamfer | median volume error |
+|---|---|---|---|---|---|
+| base | 0% | 0% | 0.00 | | |
+| SFT, 1400 steps | 87% | 19% | 0.51 | 0.81% | 11.4% |
+| SFT then GRPO, 120 steps (1 prompt per step, no KL) | 89% | 7% | 0.46 | 1.55% | 22.6% |
+| GRPO v2, 8 prompts, KL 0.04, 100 steps | 91% | 22% | 0.53 | 0.97% | 13.8% |
+| GRPO v2, step 60 checkpoint | 88% | 20% | 0.50 | 1.00% | 13.3% |
 | no-dimension SFT adapter, dimensions in the test prompt | 75% | 22% | 0.54 | 0.41% | 2.5% |
-| SFT with part dimensions in the prompt, Qwen3-VL-4B-Instruct, 1400 steps | 84% | 27% | 0.65 | 0.36% | 1.7% |
+| SFT with part dimensions in the prompt, 1400 steps | 84% | 27% | 0.65 | 0.36% | 1.7% |
+
+The GRPO v2 and part-dimension recipes both helped on Qwen3-VL, so they are the next runs on Qwen3.5-4B-Base: `grpo.py` and `finish_dims.sh` default to it now.
 
 SFT loss went from about 1.1 to 0.2. The failing builds are mostly `combine ... mode=cut` and `hole` placement errors.
 
@@ -51,49 +64,36 @@ The images show one part from four views: iso, front, top and right. Write the .
 
 `prepare_sft.py --dims` and `eval.py --dims` (with `--dims-p` and `--dims-seed`) use it; without the flag the old prompt is used. Test pairs get their spec the same way with the fixed seed 1, so the same 100 test pairs see the same sizes in every run. A program that gives an empty spec keeps the old prompt. Over 5000 pairs from the kept set no spec was empty and no spec held a number that is not in (or twice, or a difference of, numbers in) its program. Tests: `tools/vlm/test_part_dims.py`.
 
-`finish_dims.sh` (unit `gcad-565-finish`) prepares the data in `out/vlm_dims`, waits for 36 GB free on the GPU, trains under `/tmp/gpu27.lock` with the #562 settings (Qwen3-VL-4B, rank 32, 1400 steps, batch 4 x 4, 256 px), evaluates on the first 100 test pairs, adds the rows below and pushes.
+`finish_dims.sh` prepares the data in `out/vlm_dims_<base>`, waits for 36 GB free on the GPU, trains under `/tmp/gpu27.lock` (rank 32, 1400 steps, batch 2 x 8, 256 px), evaluates on the first 100 test pairs, adds the rows above and pushes. Its default base is now Qwen3.5-4B-Base; the row above is from the earlier Qwen3-VL run.
 
-## Qwen3.5-4B-Base
+## GRPO (Qwen3-VL history)
 
-`Qwen/Qwen3.5-4B-Base` (`Qwen3_5ForConditionalGeneration`, natively multimodal: `vision_config` with a 24 layer tower, no deepstack; hybrid linear and full attention language model) ships no chat template, so `--base` with a name containing `base` selects the plain format in `prompt_format.py`: four `<|vision_start|><|image_pad|><|vision_end|>` blocks, the prompt, a blank line, then the program and `<|endoftext|>` (the stop token at eval). Qwen3-VL keeps the chat template. It needs transformers 5 and `fla-core` (the reference linear attention is far too slow); they are installed in `/tmp/vlm35pkgs` and used through `PYTHONPATH`. Same data, rank 32 (42M trainable), 1400 steps, 256 px views. Run as unit `gcad-564-sft` (`sft.py --base Qwen/Qwen3.5-4B-Base --out .../lora_qwen35`); `finish_qwen35.sh` (unit `gcad-564-finish`) evaluates the adapter and the untuned base on the first 100 test pairs and adds both rows below.
-
-## GRPO
-
-120 steps, one training image per step, group of 8 samples at temperature 0.9, lr 2e-5, group-normalised advantage, no KL term. It made the model worse on the test split: reward on the training prompts stayed flat (about 0.43, 0.45, 0.35 over three blocks of 40 steps) and test match fell from 19% to 7%. One prompt per step is too noisy and there is no reference-policy anchor. The script is in place; do not use the result adapter.
+120 steps, one training image per step, group of 8 samples at temperature 0.9, lr 2e-5, group-normalised advantage, no KL term. It made the model worse on the test split: reward on the training prompts stayed flat (about 0.43, 0.45, 0.35 over three blocks of 40 steps) and test match fell from 19% to 7%. One prompt per step is too noisy and there is no reference-policy anchor.
 
 ## GRPO v2
 
-`grpo.py` now takes `--prompts` (default 8 training images per step, `--group` samples each), `--beta` (default 0.04) and `--steps` (default 1000). The KL term is the k3 estimator against a frozen copy of the SFT adapter loaded as a second PEFT adapter, so the anchor costs no extra base weights. The loss is normalised by the number of samples with non-zero advantage across all prompts. Output goes to `--out` with its log at `<out>_log.jsonl`. Tests: `tools/vlm/test_grpo.py`.
+`grpo.py` takes `--prompts` (default 8 training images per step, `--group` samples each), `--beta` (default 0.04), `--anchor` (the KL reference adapter, default the starting adapter) and `--steps` (default 1000). The KL term is the k3 estimator against a frozen copy of the SFT adapter loaded as a second PEFT adapter, so the anchor costs no extra base weights. The loss is normalised by the number of samples with non-zero advantage across all prompts. Output goes to `--out` with its log at `<out>_log.jsonl`. It uses the same prompt format as `sft.py` and `eval.py` (plain for Qwen3.5-4B-Base), stops sampling at `<|endoftext|>`, and cuts each completion at its first stop token before scoring and before the policy and anchor log-probs. Tests: `tools/vlm/test_grpo.py`, `tools/vlm/test_prompt_format.py`.
 
-Measured cost on the shared RTX PRO 6000 (GPU shared with vLLM): about 3 minutes per step at 8 prompts x 8 samples, so 1000 steps is about 50 hours. A 100 step run (`lr 1e-5`, `beta 0.04`) was started to `~/gcad-datasets/out/vlm/lora_grpo2`; evaluate its checkpoint with `eval.py --adapter` before using it. The 1000 step run and the test-split result are not done.
-
-`finish_grpo2.sh` waits for the 100 step run, evaluates it on the first 100 test pairs under `/tmp/gpu27.lock`, adds the row to the results table above and fast-forward pushes (`--test` runs it on the SFT adapter without pushing). It runs as the user unit `gcad-563-grpo2`.
+On Qwen3-VL, 100 steps at 8 prompts x 8 samples, `lr 1e-5`, `beta 0.04` gave 91% build and 22% match (from 87% and 19%), about 3 minutes a step on the shared RTX PRO 6000. That recipe is the next run on Qwen3.5-4B-Base, from `out/vlm/lora_qwen35`. `smoke_grpo_qwen35.sh` runs 2 steps of it under the GPU lock to prove the path before a long run.
 
 ### 1000 steps on the DGX Spark: does not fit
 
-The Spark has 121 GB unified memory, 102 GB used and about 15 GB free next to Frigate, Jellyfin, Home Assistant and the other containers, no torch or peft install, and an aarch64 CPU with no `gcad` or `gcad export` build for the reward. Training needs about 17 GB for the 4B bf16 model plus the frozen anchor activations, and the reward needs `gcad`. The 1000 step run (about 3 to 4 minutes a step on the shared desktop GPU, 50 to 65 hours) is not queued on the desktop GPU either. It needs a free GPU slot; resume from `lora_grpo2` with `--adapter` pointing at it.
+The Spark has 121 GB unified memory, 102 GB used and about 15 GB free next to Frigate, Jellyfin, Home Assistant and the other containers, no torch or peft install, and an aarch64 CPU with no `gcad` build for the reward. A 1000 step run (50 to 65 hours on the shared desktop GPU) needs a free GPU slot.
 
 ## Concept-image inputs
 
 `prepare_concept_sft.py` builds `out/vlm_concept/{train,val,test}.jsonl` from the #553 manifest (`manifest.synthetic.jsonl`, real and synthetic concepts) and `kept_img2img.jsonl`, keeping only objects that also have a verified pair, and mixing in clean four-view examples at 20 per concept example. Config: `tools/vlm/concept_sft.json`.
 
-Result: 1 pair with a concept image (train 1, val 0, test 0), plus 20 clean examples per split as filler. The #553 concepts cover ABO, Kenney, Poly Haven, GSO and Thingi10k meshes and 5 zero-to-cad objects, but the pairs are all zero-to-cad CAD parts (25,325), and only 1 of those has a concept. Concept training needs concept images for the pairs themselves: render each train pair's GLB with `bench/concept-synth/render_all.py` and run `flux_generate.py` on a selection of a few thousand train pairs. That and the SFT run come after the GRPO v2 eval frees the GPU.
+Result: 1 pair with a concept image (train 1, val 0, test 0), plus 20 clean examples per split as filler. The #553 concepts cover ABO, Kenney, Poly Haven, GSO and Thingi10k meshes and 5 zero-to-cad objects, but the pairs are all zero-to-cad CAD parts (25,325), and only 1 of those has a concept. Concept training needs concept images for the pairs themselves: render each train pair's GLB with `bench/concept-synth/render_all.py` and run `flux_generate.py` on a selection of a few thousand train pairs. That and the concept SFT run (on Qwen3.5-4B-Base from `lora_qwen35`, `tools/vlm/concept_sft.json`) come after generation finishes.
 
 Generation for the pairs runs unattended: `bench/concept-synth/pick_pairs.py` selects 4,433 pairs (2,000 train stratified by op mix, all val and test), `tools/vlm/generate_pair_concepts.sh` (unit `gcad-563-concepts-gen`) renders them on the CPU and runs `flux_generate.py` on `spark` one job at a time under `/tmp/flux-spark.lock`, and `tools/vlm/finish_concepts.sh` (unit `gcad-563-concepts-finish`) then filters, runs `prepare_concept_sft.py`, replaces the Result line above with the counts, and pushes. Data is in `~/gcad-datasets/out/synthetic_pairs`. The concept SFT training is not started.
 
-## Not done here
+## Minds-eye (evaluation only)
 
-- Minds-eye judge v2 on the 8 tuning tasks and the comparison with qwen3.8-27b plus the skill. Those need the judge on yalr (spend) and the shared vLLM on port 8001. The test-split numbers above use the shape distance only.
-- Better GRPO: several prompts per step, a KL penalty to the SFT policy, and a larger run.
-- Concept-image inputs (real plus #553 synthetic). The SFT inputs are clean renders only.
-
-## Minds-eye comparison
-
-8 tuning tasks (chest, sword, rocket, bracket, cottage, fox, knight, tractor), 2 seeds, judge `v2:code-x-high`, render on, plan off. The SFT adapter was merged and served by vLLM on port 8012 (`--gpu-memory-utilization 0.2`, hermes tool parser); the 27b is the local vLLM on port 8001 with the skill. Runs went one at a time per server. Configs: `bench/minds-eye/configs/gcadvlm-render.json`, `local-render.json`.
+Minds-eye is a held-out evaluation. Its tasks are never training data, and nothing is generated from them for training: the model has to handle any user prompt. 8 tuning tasks (chest, sword, rocket, bracket, cottage, fox, knight, tractor), 2 seeds, judge `v2:code-x-high`, render on, plan off. The 27b is the local vLLM on port 8001 with the skill. Configs: `bench/minds-eye/configs/local-render.json`, `opus-render.json`.
 
 | config | runs | built | judge v2 | rubric | hard | tokens/run | seconds | pairwise |
 |---|---|---|---|---|---|---|---|---|
-| gcadvlm-render (SFT 4B) | 16 | 6% | 1.0 | 0.00 | 0.34 | 5k | 187 | 0-1 vs local |
 | local-render (qwen3.8-27b + skill) | 15 | 47% | 4.9 | 0.81 | 3.88 | 714k | 683 | reference |
 
-The SFT model is trained on single-image to program pairs of short extrude parts, not on a tool loop with a task prompt. Given a text brief it writes a long run of `plane`/`rect`/`extrude`/`combine` lines and hits the token limit, so almost nothing builds (1 of 16). The adapter is not usable as an agent; the minds-eye benchmark does not test what it was trained for (image in, program out), which the shape-distance table above does. A fair minds-eye entry needs image-conditioned tasks (the concept-image work in #563).
+Qwen3.5-4B-Base has not been run on minds-eye yet. The earlier Qwen3-VL SFT adapter built 1 of 16 runs (judge 1.0): it was trained on four renders in and a program out, never on a text brief or a tool loop, so it wrote `plane`/`rect`/`extrude` lines until the token limit. The opus row below is the bar.

@@ -3,7 +3,7 @@ set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 REPO="$(git -C "$HERE" rev-parse --show-toplevel)"
 OUT="${VLM_OUT:-$HOME/gcad-datasets/out/vlm}"
-PY="${VLM_PYTHON:-/tmp/vlm/bin/python}"
+PY="${VLM_PYTHON:-$HOME/gcad-datasets/venv-vlm/bin/python}"
 ADAPTER="${ADAPTER:-$OUT/lora_grpo2}"
 GRPO_LOG="${GRPO_LOG:-$OUT/lora_grpo2_log.jsonl}"
 TARGET_STEPS="${TARGET_STEPS:-100}"

@@ -2,7 +2,7 @@
 set -u
 HERE="$(cd "$(dirname "$0")" && pwd)"
 OUT="${VLM_OUT:-$HOME/gcad-datasets/out/vlm}"
-PY="${VLM_PYTHON:-/tmp/vlm/bin/python}"
+PY="${VLM_PYTHON:-$HOME/gcad-datasets/venv-vlm/bin/python}"
 LOCK="${LOCK:-/tmp/gpu27.lock}"
 STEPS=40
 RESUME="$OUT/lora_grpo2/policy"
