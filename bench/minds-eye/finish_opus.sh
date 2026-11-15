@@ -25,8 +25,8 @@ while [ "$UNIT" != none ] && systemctl --user is-active --quiet "$UNIT"; do
   sleep "$POLL"
 done
 
-result=$(ls -t "$RESULTS"/*-"$CONFIG".json 2>/dev/null | head -1)
-if [ -z "$result" ]; then
+result="${RESULT:-$(ls -t "$RESULTS"/*-"$CONFIG".json 2>/dev/null | head -1)}"
+if [ -z "$result" ] || [ ! -f "$result" ]; then
   echo "no result for $CONFIG"
   exit 1
 fi
