@@ -26,6 +26,16 @@ class Requests(unittest.TestCase):
         self.assertEqual(request_body(cfg, [], [])["reasoning_effort"], "high")
 
 
+class Transcript(unittest.TestCase):
+    def test_scrub_images_replaces_data_urls_with_saved_paths(self):
+        from agent_api import scrub_images
+        messages = [{"role": "user", "content": [{"type": "image_url", "image_url": {"url": "data:x"}}, {"type": "text", "text": "hi"}]},
+                    {"role": "assistant", "content": "ok"}]
+        out = scrub_images(messages, ["images/0.png"])
+        self.assertEqual(out[0]["content"][0], {"type": "image", "image": "images/0.png"})
+        self.assertEqual(out[1], messages[1])
+
+
 class Tasks(unittest.TestCase):
     def test_sets_have_expected_sizes_and_are_disjoint(self):
         tuning = harness.load_tasks(["tuning"])
