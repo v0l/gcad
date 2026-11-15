@@ -6,51 +6,54 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import overlap
 import trajectories
 
 TRANSCRIPT = [
-    {"role": "system", "content": "skill"},
-    {"role": "user", "content": "Request: a chest"},
+    {"role": "system", "content": "sys"},
+    {"role": "user", "content": "Make a plate"},
     {"role": "assistant", "content": None, "tool_calls": [
         {"id": "c1", "function": {"name": "gcad", "arguments": "{\"args\": [\"check\", \"model.gcad\"]}"}}]},
     {"role": "tool", "tool_call_id": "c1", "content": "ok"},
-    {"role": "user", "content": [{"type": "image", "image": "images/0.png"}, {"type": "text", "text": "Here is the image."}]},
+    {"role": "user", "content": [{"type": "image", "image": "/tmp/runs/a/0.png"}, {"type": "text", "text": "Here is the image."}]},
     {"role": "assistant", "content": "done"},
 ]
+BANNED = {"names": {"fox"}, "prompts": [set(overlap.words("A red fox game character sitting looking forward"))]}
 
 
-def row(builds=True, hard=7.0, judge=6.0, task="chest"):
-    return {"task": task, "seed": 0, "hard": {"builds": builds, "hard_score": hard}, "judge": {"overall": judge}}
+def run(brief="a flat plate with four holes", built=True, reward=0.8, transcript=TRANSCRIPT):
+    return {"id": "r1", "brief": brief, "built": built, "reward": reward, "transcript": transcript}
 
 
 class Trajectories(unittest.TestCase):
-    def test_keeps_only_runs_that_build_and_score_well(self):
-        self.assertTrue(trajectories.keep_row(row()))
-        self.assertFalse(trajectories.keep_row(row(builds=False)))
-        self.assertFalse(trajectories.keep_row(row(hard=3.0)))
-        self.assertFalse(trajectories.keep_row(row(judge=2.0)))
-        self.assertFalse(trajectories.keep_row({"task": "x", "hard": {"builds": True, "hard_score": 9}, "judge": None}))
+    def test_keep_run_needs_build_and_reward(self):
+        self.assertTrue(trajectories.keep_run(run()))
+        self.assertFalse(trajectories.keep_run(run(built=False)))
+        self.assertFalse(trajectories.keep_run(run(reward=0.2)))
 
     def test_example_keeps_tool_calls_results_and_images(self):
-        ex = trajectories.trajectory_example("chest-s0", TRANSCRIPT)
-        self.assertEqual(ex["system"], "skill")
-        roles = [m["role"] for m in ex["messages"]]
-        self.assertEqual(roles, ["user", "assistant", "tool", "user", "assistant"])
+        ex = trajectories.trajectory_example("r1", TRANSCRIPT)
+        self.assertEqual([m["role"] for m in ex["messages"]], ["user", "assistant", "tool", "user", "assistant"])
         self.assertEqual(ex["messages"][1]["tool_calls"][0]["name"], "gcad")
-        self.assertEqual(ex["messages"][2]["tool_call_id"], "c1")
-        self.assertEqual(ex["messages"][3]["content"][0], {"type": "image", "image": "images/0.png"})
-        self.assertEqual(ex["messages"][0]["content"], [{"type": "text", "text": "Request: a chest"}])
+        self.assertEqual(ex["messages"][3]["content"][0], {"type": "image", "image": "/tmp/runs/a/0.png"})
 
-    def test_collect_reads_logs_of_kept_rows(self):
+    def test_collect_drops_low_reward_and_minds_eye_overlap(self):
         with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            results = root / "r.json"
-            results.write_text(json.dumps({"rows": [row(), row(builds=False, task="fox")]}))
-            run = root / "runs" / "chest-s0"
-            run.mkdir(parents=True)
-            (run / "agent.jsonl").write_text(json.dumps({"assistant": "x"}) + "\n" + json.dumps({"transcript": TRANSCRIPT}) + "\n")
-            got = trajectories.collect(results, root / "runs")
-            self.assertEqual([g["id"] for g in got], ["chest-s0"])
+            path = Path(tmp) / "runs.jsonl"
+            rows = [run(), run(reward=0.1), run(brief="a red fox game character")]
+            path.write_text("\n".join(json.dumps(r) for r in rows) + "\n")
+            self.assertEqual(len(trajectories.collect(path, BANNED)), 1)
+
+    def test_collect_refuses_a_minds_eye_run_folder(self):
+        with self.assertRaises(ValueError):
+            trajectories.collect(overlap.MINDS_EYE_DIR / "results" / "runs" / "x.jsonl", BANNED)
+
+    def test_example_with_minds_eye_image_is_dropped(self):
+        image = str(overlap.MINDS_EYE_DIR / "results" / "runs" / "fox-s0" / "images" / "0.png")
+        transcript = [TRANSCRIPT[0], TRANSCRIPT[1], {"role": "user", "content": [{"type": "image_url", "image_url": {}}]}]
+        transcript[2] = {"role": "user", "content": [{"type": "image", "image": image}]}
+        ex = trajectories.trajectory_example("r1", transcript)
+        self.assertFalse(trajectories.clean_example(ex))
 
 
 if __name__ == "__main__":

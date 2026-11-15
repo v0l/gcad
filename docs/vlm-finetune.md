@@ -97,3 +97,24 @@ Minds-eye is a held-out evaluation. Its tasks are never training data, and nothi
 | local-render (qwen3.8-27b + skill) | 15 | 47% | 4.9 | 0.81 | 3.88 | 714k | 683 | reference |
 
 Qwen3.5-4B-Base has not been run on minds-eye yet. The earlier Qwen3-VL SFT adapter built 1 of 16 runs (judge 1.0): it was trained on four renders in and a program out, never on a text brief or a tool loop, so it wrote `plane`/`rect`/`extrude` lines until the token limit. The opus row below is the bar.
+
+## General gcad model (#627)
+
+Training starts from the #564 adapter `out/vlm/lora_qwen35` on `prompt_format.BASE`. No training script reads `bench/minds-eye`, and none of its tasks, briefs, references, rubrics or runs enter training.
+
+- `tools/vlm/briefs.py` captions the verified pairs into short requests with the local 27b (`BRIEF_URL`, `BRIEF_MODEL`, default vLLM on port 8001, thinking off), resumable through `out/vlm_brief/briefs.jsonl`, and writes `out/vlm_brief/{train,val,test}.jsonl` as text-in, program-out examples with five phrasings. Every brief goes through `tools/vlm/overlap.py`, which drops any brief that names a minds-eye task or ceiling model or has a word-set Jaccard of 0.6 or more with a minds-eye prompt, including briefs already in `briefs.jsonl`. Tests: `test_briefs.py`.
+- `agent_api.run_api` writes the full transcript (tool calls, results, viewed images saved under `images/`) as the last line of `agent.jsonl`. This is for evaluation logs only.
+- `tools/vlm/trajectories.py RUNS.jsonl --out traj.jsonl` converts the model's own self-correction runs on general briefs, each `{id, brief, built, reward, transcript}` with reward from `reward.py` against the known target program, into multi-turn examples. It keeps built runs with reward at least 0.5, and refuses input under `bench/minds-eye`, briefs that overlap minds-eye and transcripts with minds-eye images. Another model's runs may be used the same way, on general briefs only, with the user's approval. Tests: `test_trajectories.py`.
+- `tools/vlm/train_agent.py` is the multi-turn LoRA trainer for that format (Qwen chat markup, tool calls as `<tool_call>` JSON in the assistant turn, tool results as `<tool_response>` user turns, viewed images as `<|image_pad|>` where they were viewed). Loss is on assistant turns only, including the end marker (`agent_format.assistant_labels`). It refuses data under `bench/minds-eye`. Tests: `test_agent_format.py`. It has not been run.
+
+Commands that wait for the user's go (GPU window or spend):
+
+```
+VLM_PY=~/gcad-datasets/venv-vlm/bin/python
+$VLM_PY tools/vlm/briefs.py
+flock /tmp/gpu27.lock $VLM_PY tools/vlm/train_agent.py --data traj.jsonl --out ~/gcad-datasets/out/vlm/lora_agent
+cd bench/minds-eye && ./run run configs/<our-model>.json --sets tuning heldout --seeds 2
+$VLM_PY tools/vlm/grpo.py --adapter ~/gcad-datasets/out/vlm/lora_agent --out ~/gcad-datasets/out/vlm/lora_agent_grpo
+```
+
+Open: the self-correction run generator (general brief in, tool loop, `reward.py` against the target) is not written; it needs the merged SFT served on vLLM.

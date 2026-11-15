@@ -9,6 +9,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import overlap
 from pairs_data import DATA, read_pairs
 
 LOCAL_URL = os.environ.get("BRIEF_URL", "http://127.0.0.1:8001/v1")
@@ -35,8 +36,11 @@ def clean_brief(text):
     return " ".join(text.split())
 
 
-def caption(program, ask):
-    return clean_brief(ask(CAPTION_PROMPT.format(program=program.strip())))
+def caption(program, ask, banned=None):
+    brief = clean_brief(ask(CAPTION_PROMPT.format(program=program.strip())))
+    if brief and banned and overlap.overlaps_minds_eye(brief, banned):
+        return None
+    return brief
 
 
 def ask_local(prompt):
@@ -62,13 +66,13 @@ def text_example(row_id, brief, program):
     }
 
 
-def caption_rows(rows, data, ask, workers=4, done=None):
+def caption_rows(rows, data, ask, workers=4, done=None, banned=None):
     done = done or {}
 
     def one(row):
         if row["id"] in done:
             return row["id"], done[row["id"]]
-        return row["id"], caption((data / row["gcad"]).read_text(), ask)
+        return row["id"], caption((data / row["gcad"]).read_text(), ask, banned)
 
     with ThreadPoolExecutor(workers) as pool:
         return dict(pool.map(one, rows))
@@ -91,6 +95,8 @@ def main():
     out.mkdir(parents=True, exist_ok=True)
     briefs_path = out / "briefs.jsonl"
     done = load_done(briefs_path)
+    banned = overlap.load_minds_eye()
+    done = {k: v for k, v in done.items() if not overlap.overlaps_minds_eye(v, banned)}
     splits = {}
     for split in ("train", "val", "test"):
         rows = read_pairs(split=split, max_lines=args.max_lines)
@@ -100,9 +106,9 @@ def main():
             todo = [r for r in rows if r["id"] not in done]
             for start in range(0, len(todo), 64):
                 chunk = todo[start:start + 64]
-                got = caption_rows(chunk, DATA, ask_local, args.workers)
+                got = caption_rows(chunk, DATA, ask_local, args.workers, banned=banned)
                 for rid, brief in got.items():
-                    if brief:
+                    if brief and not overlap.overlaps_minds_eye(brief, banned):
                         done[rid] = brief
                         f.write(json.dumps({"id": rid, "brief": brief}) + "\n")
                 f.flush()

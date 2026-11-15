@@ -7,6 +7,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import briefs
+import overlap
 
 
 class Briefs(unittest.TestCase):
@@ -43,6 +44,18 @@ class Briefs(unittest.TestCase):
             rows = [{"id": "a", "gcad": "a.gcad"}, {"id": "b", "gcad": "b.gcad"}]
             got = briefs.caption_rows(rows, root, lambda p: "```", workers=1, done={"a": "kept"})
             self.assertEqual(got, {"a": "kept", "b": None})
+
+    def test_briefs_matching_minds_eye_tasks_are_dropped(self):
+        banned = overlap.load_minds_eye()
+        self.assertIn("fox", banned["names"])
+        self.assertIsNone(briefs.caption("rect 1 1\n", lambda p: "A red fox game character, sitting.", banned))
+        self.assertIsNone(briefs.caption("rect 1 1\n", lambda p: "A spur gear with 24 teeth.", banned))
+        self.assertEqual(briefs.caption("rect 1 1\n", lambda p: "A flat plate 40 mm wide.", banned), "A flat plate 40 mm wide.")
+
+    def test_overlap_catches_a_reworded_minds_eye_prompt(self):
+        banned = {"names": set(), "prompts": [set(overlap.words("A wooden treasure chest with iron bands, lid slightly open."))]}
+        self.assertTrue(overlap.overlaps_minds_eye("wooden treasure chest, iron bands, lid slightly open", banned))
+        self.assertFalse(overlap.overlaps_minds_eye("a plate with iron bands", banned))
 
     def test_load_done_reads_jsonl(self):
         with tempfile.TemporaryDirectory() as tmp:

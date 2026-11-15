@@ -3,34 +3,22 @@ import json
 import sys
 from pathlib import Path
 
-HARD_MIN = 6.0
-JUDGE_MIN = 5.0
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+
+import overlap
+
+REWARD_MIN = 0.5
 
 
-def keep_row(row, hard_min=HARD_MIN, judge_min=JUDGE_MIN):
-    hard = row.get("hard") or {}
-    if not hard.get("builds"):
-        return False
-    if (hard.get("hard_score") or 0) < hard_min:
-        return False
-    judged = row.get("judge") or {}
-    return float(judged.get("overall") or 0) >= judge_min
-
-
-def read_transcript(agent_log):
-    for line in Path(agent_log).read_text().splitlines():
-        record = json.loads(line)
-        if "transcript" in record:
-            return record["transcript"]
-    return None
+def keep_run(run, reward_min=REWARD_MIN):
+    return bool(run.get("built")) and float(run.get("reward") or 0) >= reward_min
 
 
 def to_turn(message):
-    role = message["role"]
     content = message.get("content")
     if isinstance(content, str):
         content = [{"type": "text", "text": content}]
-    turn = {"role": role, "content": content or []}
+    turn = {"role": message["role"], "content": content or []}
     if message.get("tool_calls"):
         turn["tool_calls"] = [
             {"id": c["id"], "name": c["function"]["name"], "arguments": c["function"]["arguments"]}
@@ -41,36 +29,43 @@ def to_turn(message):
     return turn
 
 
-def trajectory_example(task_id, transcript):
-    turns = [to_turn(m) for m in transcript if m["role"] != "system"]
+def trajectory_example(run_id, transcript):
     system = next((m["content"] for m in transcript if m["role"] == "system"), "")
-    return {"id": task_id, "system": system, "messages": turns}
+    return {"id": run_id, "system": system, "messages": [to_turn(m) for m in transcript if m["role"] != "system"]}
 
 
-def collect(results_json, runs_dir, hard_min=HARD_MIN, judge_min=JUDGE_MIN):
-    result = json.loads(Path(results_json).read_text())
+def images_of(example):
+    return [p["image"] for m in example["messages"] for p in m["content"] if isinstance(p, dict) and p.get("type") == "image"]
+
+
+def clean_example(example):
+    return not any(overlap.inside_minds_eye(p) for p in images_of(example) if p)
+
+
+def collect(runs_path, banned, reward_min=REWARD_MIN):
+    overlap.refuse_minds_eye(runs_path)
     out = []
-    for row in result["rows"]:
-        if not keep_row(row, hard_min, judge_min):
+    for line in Path(runs_path).read_text().splitlines():
+        if not line.strip():
             continue
-        log = Path(runs_dir) / f"{row['task']}-s{row['seed']}" / "agent.jsonl"
-        if not log.exists():
+        run = json.loads(line)
+        if not keep_run(run, reward_min):
             continue
-        transcript = read_transcript(log)
-        if transcript:
-            out.append(trajectory_example(f"{row['task']}-s{row['seed']}", transcript))
+        if overlap.overlaps_minds_eye(run["brief"], banned):
+            continue
+        example = trajectory_example(run["id"], run["transcript"])
+        if clean_example(example):
+            out.append(example)
     return out
 
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("results")
-    parser.add_argument("runs_dir")
+    parser.add_argument("runs", help="jsonl of {id, brief, built, reward, transcript} from general requests")
     parser.add_argument("--out", required=True)
-    parser.add_argument("--hard-min", type=float, default=HARD_MIN)
-    parser.add_argument("--judge-min", type=float, default=JUDGE_MIN)
+    parser.add_argument("--reward-min", type=float, default=REWARD_MIN)
     args = parser.parse_args()
-    rows = collect(args.results, args.runs_dir, args.hard_min, args.judge_min)
+    rows = collect(args.runs, overlap.load_minds_eye(), args.reward_min)
     with open(args.out, "a") as f:
         for r in rows:
             f.write(json.dumps(r) + "\n")
