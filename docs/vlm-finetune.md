@@ -95,5 +95,6 @@ Minds-eye is a held-out evaluation. Its tasks are never training data, and nothi
 | config | runs | built | judge v2 | rubric | hard | tokens/run | seconds | pairwise |
 |---|---|---|---|---|---|---|---|---|
 | local-render (qwen3.8-27b + skill) | 15 | 47% | 4.9 | 0.81 | 3.88 | 714k | 683 | reference |
+| opus-render (claude-opus-5-5, thinking high) | 16 | 100% | 5.6 | 0.88 | 6.68 | 515k | 218 | 5-0 vs local |
 
 Qwen3.5-4B-Base has not been run on minds-eye yet. The earlier Qwen3-VL SFT adapter built 1 of 16 runs (judge 1.0): it was trained on four renders in and a program out, never on a text brief or a tool loop, so it wrote `plane`/`rect`/`extrude` lines until the token limit. The opus row below is the bar.
