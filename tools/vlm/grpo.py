@@ -41,11 +41,22 @@ def prompt_inputs(processor, row, fmt):
     return processor(text=[prompt], images=images, return_tensors="pt")
 
 
+PER_TOKEN = ("attention_mask", "mm_token_type_ids")
+
+
+def full_sequence(batch, completion_ids):
+    n = completion_ids.shape[1]
+    full = {k: v for k, v in batch.items() if k not in ("input_ids",) + PER_TOKEN}
+    full["input_ids"] = torch.cat([batch["input_ids"], completion_ids], dim=1)
+    full["attention_mask"] = torch.ones_like(full["input_ids"])
+    if "mm_token_type_ids" in batch:
+        types = batch["mm_token_type_ids"]
+        full["mm_token_type_ids"] = torch.cat([types, types.new_zeros(types.shape[0], n)], dim=1)
+    return full
+
+
 def sequence_logprob(model, batch, completion_ids):
-    input_ids = torch.cat([batch["input_ids"], completion_ids], dim=1)
-    mask = torch.ones_like(input_ids)
-    extra = {k: v for k, v in batch.items() if k not in ("input_ids", "attention_mask")}
-    logits = model(input_ids=input_ids, attention_mask=mask, **extra).logits
+    logits = model(**full_sequence(batch, completion_ids)).logits
     start = batch["input_ids"].shape[1]
     lp = torch.log_softmax(logits[:, start - 1 : -1].float(), dim=-1)
     return lp.gather(-1, completion_ids.unsqueeze(-1)).squeeze(-1)
