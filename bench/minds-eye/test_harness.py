@@ -5,9 +5,25 @@ import unittest
 
 import harness
 import metrics
-from agent_api import silhouette_overlap
+from agent_api import request_body, silhouette_overlap
 
 REPO = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", ".."))
+
+
+class Requests(unittest.TestCase):
+    def test_reasoning_effort_passed_through(self):
+        body = request_body({"model": "code-x-high", "reasoning_effort": "high", "max_tokens": 32000}, [], [])
+        self.assertEqual((body["reasoning_effort"], body["max_tokens"]), ("high", 32000))
+
+    def test_no_effort_by_default(self):
+        body = request_body({"model": "code-high"}, [], [])
+        self.assertNotIn("reasoning_effort", body)
+        self.assertEqual(body["max_tokens"], 16000)
+
+    def test_opus_config_thinks_high(self):
+        import json
+        cfg = json.load(open(os.path.join(os.path.dirname(__file__), "configs", "opus-render.json")))
+        self.assertEqual(request_body(cfg, [], [])["reasoning_effort"], "high")
 
 
 class Tasks(unittest.TestCase):

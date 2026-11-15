@@ -174,6 +174,13 @@ def dispatch(box, name, args):
         return f"error: {e}"
 
 
+def request_body(cfg, messages, tools):
+    body = {"model": cfg["model"], "messages": messages, "tools": tools, "max_tokens": cfg.get("max_tokens", 16000)}
+    if cfg.get("reasoning_effort"):
+        body["reasoning_effort"] = cfg["reasoning_effort"]
+    return body
+
+
 def run_api(cfg, prompt, system, workdir, budget, log):
     api = provider(cfg.get("provider", "yalr"))
     box = Sandbox(workdir, cfg.get("render", False), cfg.get("reference", False))
@@ -192,7 +199,7 @@ def run_api(cfg, prompt, system, workdir, budget, log):
         if usage["requests"] >= budget["turns"]:
             stop = "turn budget"
             break
-        resp = chat(api, {"model": cfg["model"], "messages": messages, "tools": tools, "max_tokens": 16000})
+        resp = chat(api, request_body(cfg, messages, tools))
         u = resp.get("usage") or {}
         usage["requests"] += 1
         usage["input"] += u.get("prompt_tokens", 0)

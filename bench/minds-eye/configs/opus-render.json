@@ -1,1 +1,1 @@
-{"name":"opus-render","agent":"api","provider":"yalr","model":"code-x-high","tier":"high","render":true,"plan":false}
+{"name":"opus-render","agent":"api","provider":"yalr","model":"code-x-high","tier":"high","reasoning_effort":"high","max_tokens":32000,"render":true,"plan":false}
