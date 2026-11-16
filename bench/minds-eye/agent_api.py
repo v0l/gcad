@@ -89,6 +89,7 @@ class Sandbox:
         self.calls = 0
         self.renders = 0
         self.pending_images = []
+        self.pending_paths = []
 
     def path(self, rel):
         full = os.path.realpath(os.path.join(self.dir, rel))
@@ -126,6 +127,7 @@ class Sandbox:
             return "viewing images is not available in this configuration"
         full = self.path(path)
         self.pending_images.append(image_part(full))
+        self.pending_paths.append(full)
         return f"image {path} is attached in the next message"
 
     def compare(self, render_png, concept_png="reference.png"):
@@ -174,6 +176,36 @@ def dispatch(box, name, args):
         return f"error: {e}"
 
 
+def keep_images(paths, log, start):
+    import shutil
+
+    folder = os.path.join(os.path.dirname(os.path.abspath(log.name)), "images")
+    os.makedirs(folder, exist_ok=True)
+    kept = []
+    for i, p in enumerate(paths):
+        dest = os.path.join(folder, f"{start + i}.png")
+        shutil.copy(p, dest)
+        kept.append(dest)
+    return kept
+
+
+def scrub_images(messages, saved):
+    out, n = [], 0
+    for m in messages:
+        content = m.get("content")
+        if isinstance(content, list):
+            parts = []
+            for c in content:
+                if c.get("type") == "image_url":
+                    parts.append({"type": "image", "image": saved[n] if n < len(saved) else None})
+                    n += 1
+                else:
+                    parts.append(c)
+            m = {**m, "content": parts}
+        out.append(m)
+    return out
+
+
 def request_body(cfg, messages, tools):
     body = {"model": cfg["model"], "messages": messages, "tools": tools, "max_tokens": cfg.get("max_tokens", 16000)}
     if cfg.get("reasoning_effort"):
@@ -189,6 +221,7 @@ def run_api(cfg, prompt, system, workdir, budget, log):
     started = time.time()
     usage = {"input": 0, "output": 0, "cached": 0, "requests": 0}
     stop = "finished"
+    saved = []
     while True:
         if time.time() - started > budget["seconds"]:
             stop = "time budget"
@@ -222,6 +255,10 @@ def run_api(cfg, prompt, system, workdir, budget, log):
             messages.append({"role": "tool", "tool_call_id": c["id"], "content": out})
         if box.pending_images:
             messages.append({"role": "user", "content": box.pending_images + [{"type": "text", "text": "Here is the image."}]})
+            saved.extend(keep_images(box.pending_paths, log, len(saved)))
             box.pending_images = []
+            box.pending_paths = []
+    log.write(json.dumps({"transcript": scrub_images(messages, saved)}) + "\n")
+    log.flush()
     return {"stop": stop, "seconds": round(time.time() - started, 1), "tokens": usage,
             "tool_calls": box.calls, "renders": box.renders}
