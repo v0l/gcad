@@ -29,6 +29,9 @@ Input is four 256 px views (iso, front, top, right) and one fixed prompt; the ta
 |---|---|---|---|---|---|
 | base Qwen3.5-4B-Base | 1% | 0% | 0.00 | 16.65% | 3206.9% |
 | Qwen3.5-4B-Base SFT, 1400 steps | 90% | 22% | 0.51 | 1.46% | 11.1% |
+| #564 SFT adapter, text briefs | 32% | 8% | 0.18 | 1.33% | 7.8% |
+| Brief SFT (from the #564 adapter, 1000 steps), text briefs | 75% | 19% | 0.42 | 1.68% | 7.4% |
+| Brief SFT (from the #564 adapter, 1000 steps), image prompts | 86% | 18% | 0.50 | 0.98% | 7.7% |
 | Qwen3.5-4B-Base SFT then GRPO v2, 8 prompts, KL 0.04, 100 steps | 91% | 21% | 0.51 | 1.38% | 15.8% |
 
 Rows added by the finishers land under the SFT row above. The Qwen3-VL-4B-Instruct history:
