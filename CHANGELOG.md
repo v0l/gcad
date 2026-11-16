@@ -6,6 +6,8 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-11-16
+
 ### Added
 - Point clouds, part 1 of 6 (gcad #444): the `gcad-cloud` crate (`Cloud`, a kd-tree, uniform sampling, PLY, XYZ, PTS, CSV, E57 and LAS/LAZ import, PLY, XYZ, E57 and LAS/LAZ export, builds for wasm32), the `cloud` op (`scan: cloud file.laz max_points=1000000`, `scan=N` for an E57 scan), `scan.points` and bounds as values, `gcad check` and `gcad export` for clouds, and a point cloud viewer with colour by rgb, intensity, height, normal or class. The rest of the point cloud operations are `missing` rows in `docs/ops.md` with their tests written.
 - Buildings, stage A (#348): `units`, `building`, `level` and `grid` datums usable as heights and points (`top=L1-300`, `A1+0,500`), `gridfile`, layered `wall_type`s and `wall`s (straight, polyline, closed, arc, from a profile, justified, offset, sloped, battered, with pilasters, stacked types) with one body per layer, automatic L and T joins and `wall_join`, `wall_sweep`, `wall_cut`, and hosted `opening`, `door`, `window` and `garage_door` that cut every layer, move with their wall and can come from a part file. Wall faces work as selectors. See `examples/architecture/house.gcad`.
@@ -14,7 +16,14 @@ All notable changes to gcad are listed here. The format follows
 - `gcad check-mesh file.gcad [--bound 0.03]` builds a file with the kernel and with gcad-mesh and reports each body's volume, bounding box and colour difference, failing above the bound.
 - The kernel runs `extrude d open=1` (a wall without caps, as its own body), `torus d tube at=` and `extrude d scale=0` (a cone), so files using them build the same through `gcad export` and the mesh-only path.
 
+- Buildings, stage B2: `stair`s (straight and shaped, risers and treads worked out, stringers, `stair_cut`), `ramp`s and `ladder`s, `roof`s (gable, hip, shed, flat, mansard, gambrel, barrel), per-edge pitch and roof edge selectors, joined and extruded roofs, walls built up to the roof underside, `chimney`s, dormers and skylights, gutters, downpipes and parapets, railings, glass balustrades and handrails, curtain walls, louvres, fins and balconies. The example house now has a first floor, a stair, a balcony, a roof and a chimney.
+- `gcad lsp` is a language server for `.gcad` and `.gasm` files, so editors and agents get diagnostics and completions (#510). Game-asset files are included in the default build.
+- Mesh bodies: `plate` thickens a surface patch with a smoothed rim (armour), `fur` grows hair cards on a body (#466), the `metal` material, and part selection falloff that fades across the seam, with a relaxed seam after `pinch`.
+
 ### Fixed
+- Wall prisms build the same bytes every run.
+- `repeat` with many copies no longer blows up memory.
+- Clouds draw around their centre and keep their colour mode in the viewer.
 - gcad-mesh flat solid bodies without a `color` are the kernel's grey (0.7) instead of the sculpt blue, so the two GLBs match.
 - gcad-mesh refuses `extrude scale=0` on a profile with holes, as the kernel does.
 
