@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 import torch
-from peft import LoraConfig, get_peft_model
+from peft import LoraConfig, PeftModel, get_peft_model
 from PIL import Image
 from transformers import AutoModelForImageTextToText, AutoProcessor
 
@@ -42,8 +42,8 @@ def to_batch(processor, examples, device, fmt="chat"):
         text = " ".join(c["text"] for c in parts if c["type"] == "text")
         prompts.append(prompt_text(processor, fmt, n_images, text))
     fulls = [p + m[1]["content"][0]["text"] + end_marker(fmt) for p, m in zip(prompts, texts)]
-    batch = processor(text=fulls, images=images, return_tensors="pt", padding=True)
-    prompt_batch = processor(text=prompts, images=images, return_tensors="pt", padding=True)
+    batch = processor(text=fulls, images=images or None, return_tensors="pt", padding=True)
+    prompt_batch = processor(text=prompts, images=images or None, return_tensors="pt", padding=True)
     labels = batch["input_ids"].clone()
     labels[batch["attention_mask"] == 0] = -100
     side = processor.tokenizer.padding_side
@@ -70,6 +70,7 @@ def main():
     parser.add_argument("--rank", type=int, default=32)
     parser.add_argument("--save-every", type=int, default=500)
     parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--adapter", default="")
     args = parser.parse_args()
 
     random.seed(args.seed)
@@ -87,7 +88,10 @@ def main():
         target_modules=r".*language_model.*\.(q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj)",
         task_type="CAUSAL_LM",
     )
-    model = get_peft_model(model, lora)
+    if args.adapter:
+        model = PeftModel.from_pretrained(model, args.adapter, is_trainable=True)
+    else:
+        model = get_peft_model(model, lora)
     model.print_trainable_parameters()
 
     examples = [json.loads(l) for l in open(Path(args.data) / "train.jsonl")]
