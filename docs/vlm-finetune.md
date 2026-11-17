@@ -50,6 +50,35 @@ The GRPO v2 and part-dimension recipes both helped on Qwen3-VL, so they are the 
 
 SFT loss went from about 1.1 to 0.2. The failing builds are mostly `combine ... mode=cut` and `hole` placement errors.
 
+## Build failures and the check-and-repair loop (#703)
+
+`failures.py NAME=results.jsonl ...` buckets every output that does not build by its `gcad export` error:
+
+| bucket | SFT, test pairs | GRPO v2, test pairs | brief SFT, text briefs | brief SFT, image prompts |
+|---|---|---|---|---|
+| boolean failure (cut, union or combine) | 8 | 7 | 15 | 12 |
+| fillet or chamfer failure | 1 | 2 | 7 | 0 |
+| timeout (40 s) | 0 | 0 | 2 | 0 |
+| bad edge selector | 0 | 0 | 1 | 0 |
+| missing argument (`rect 8`) | 0 | 0 | 0 | 1 |
+| gcad crash | 0 | 0 | 0 | 1 |
+| other (boolean, long message) | 1 | 0 | 0 | 0 |
+| failures | 10 of 100 | 9 of 100 | 25 of 100 | 14 of 100 |
+
+There are no syntax errors, unknown ops or empty outputs, so constrained decoding would fix nothing. Truncation is 4 outputs in 300, all repetition loops (one line repeated to the 700 token limit), not a missing stop. Most boolean failures are geometry: a `hole` or `mode=cut` sketched on a plane that misses the solid (`cut_misses.py`: 1 to 4 per set, where dropping the line builds), counterbores over a raised boss, and `fillet`/`chamfer ... all` on revolved or thin parts. `validate_data.py` rebuilt all 22,807 training targets with today's `gcad`: none fail.
+
+The failures are near misses for the model, not gaps in what it knows. Sampling 8 programs at temperature 0.8 for every failed prompt (`passk.py`) gave at least one that builds for 10 of 10 test pairs, 24 of 25 text briefs and 14 of 14 image prompts.
+
+`repair.py` is the loop: build the greedy program; on failure resample up to K; if none builds, drop the line `gcad` names in its error until it builds; and as a last resort return a stub block. `resample_eval.py` scores the loop from the `passk.py` samples. `tries` counts programs built, the first included:
+
+| model, set | single shot | with the loop | match | mean reward | mean tries | how the failures were fixed |
+|---|---|---|---|---|---|---|
+| SFT, test pairs | 90% | 100% | 23% | 0.56 | 1.31 | 10 resample |
+| brief SFT, text briefs | 75% | 100% | 21% | 0.53 | 1.71 | 24 resample, 1 line drop |
+| brief SFT, image prompts | 86% | 100% | 20% | 0.56 | 1.35 | 14 resample |
+
+Dropping lines alone, without resampling, also reaches 100% (`repair_eval.py`: match 23%, 20% and 19%), but it keeps the broken program's shape. Tests: `tools/vlm/test_repair.py`.
+
 ## Part dimensions in the prompt (#565)
 
 A person asking for a part gives sizes, not four renders alone. `tools/vlm/part_dims.py` reads a pair's `.gcad` and writes the dimensions as plain English in mm, rounded to two decimals at most:
