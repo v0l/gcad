@@ -79,6 +79,12 @@ The failures are near misses for the model, not gaps in what it knows. Sampling 
 
 Dropping lines alone, without resampling, also reaches 100% (`repair_eval.py`: match 23%, 20% and 19%), but it keeps the broken program's shape. Tests: `tools/vlm/test_repair.py`.
 
+`infer.py` runs the loop on one request: `infer.py --brief "..."` or `infer.py --images iso.png front.png top.png right.png`, with `--adapter` (default `out/vlm/lora_brief`) and `--k` (default 8). It writes the program that builds to stdout, or to `--out`, and its stage and tries to stderr. Every `gcad` build in the reward and the loop runs under a 4 GB address-space cap (`GCAD_MEM_MB`): one failing counterbore grew to about 9 GB uncapped, and under the cap it fails in a second with the same error. None of 330 training targets needs more.
+
+### Expert iteration
+
+`expert_iter.sh` (round `ROUND`, from adapter `START`) samples 8 programs at temperature 0.8 for 1100 text briefs and 500 image prompts from the training split (`expert_iter.py sample`, resumable, scored with `reward.py`), then builds the SFT set (`expert_iter.py build`): for each prompt the best stopped, built sample with reward 0.75 or more, two distinct ones when some of its samples failed, and the ground truth where too few samples qualify; plus 2000 ground-truth rows from prompts that were not sampled. It fine-tunes 300 steps at lr 5e-5 from `START`, then evaluates single shot, resampling and the loop on both test sets and buckets the failures. Later rounds skip prompts sampled in earlier rounds. Data comes from `out/vlm_brief/mixed_train.jsonl` and the training split only; `expert_iter.py` refuses data under `bench/minds-eye`. Tests: `tools/vlm/test_expert_iter.py`.
+
 ## Part dimensions in the prompt (#565)
 
 A person asking for a part gives sizes, not four renders alone. `tools/vlm/part_dims.py` reads a pair's `.gcad` and writes the dimensions as plain English in mm, rounded to two decimals at most:
