@@ -5,6 +5,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import infer
 import repair
 
 GOOD = "rect 20 10 at=0,0\nextrude 5\n"
@@ -51,6 +52,32 @@ class Repair(unittest.TestCase):
     def test_stub_when_everything_dropped(self):
         r = repair.repair("bad\n", lambda: "bad\n", 1, build=lambda p: None if p == repair.STUB else "Error: line 1: x")
         self.assertEqual(r["stage"], "stub")
+
+
+class Infer(unittest.TestCase):
+    def test_resamples_drawn_once_in_a_batch(self):
+        calls = []
+
+        def generate(n, temperature):
+            calls.append((n, temperature))
+            return [GOOD] if temperature == 0 else ["bad\n"] * n
+
+        self.assertEqual(infer.solve(generate, 8)["stage"], "single_shot")
+        self.assertEqual(calls, [(1, 0.0)])
+
+    def test_failed_greedy_takes_first_building_sample(self):
+        calls = []
+
+        def generate(n, temperature):
+            calls.append((n, temperature))
+            return ["bad\n"] if temperature == 0 else ["bad\n", GOOD, "bad\n"]
+
+        r = repair.repair(generate(1, 0)[0], infer.batch_resampler(lambda: generate(3, 0.8)), 4, build=fake_build)
+        self.assertEqual((r["stage"], r["tries"]), ("resample", 3))
+        self.assertEqual(calls, [(1, 0), (3, 0.8)])
+
+    def test_resampler_empty_batch_gives_empty_program(self):
+        self.assertEqual(infer.batch_resampler(lambda: [])(), "")
 
 
 @unittest.skipUnless(shutil.which(repair.GCAD), "gcad binary not on PATH")
