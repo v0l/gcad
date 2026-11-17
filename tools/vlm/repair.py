@@ -3,7 +3,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from reward import GCAD, BUILD_TIMEOUT, strip_fences
+from reward import BUILD_TIMEOUT, GCAD, memory_cap, strip_fences
 
 LINE_RE = re.compile(r"line (\d+)")
 STUB = "rect 10 10 at=0,0\nextrude 10\n"
@@ -15,7 +15,7 @@ def build_error(program, gcad=GCAD, timeout=BUILD_TIMEOUT):
         out = Path(tmp) / "p.stl"
         src.write_text(program)
         try:
-            r = subprocess.run([gcad, "export", str(src), str(out)], capture_output=True, text=True, timeout=timeout)
+            r = subprocess.run([gcad, "export", str(src), str(out)], capture_output=True, text=True, timeout=timeout, preexec_fn=memory_cap())
         except subprocess.TimeoutExpired:
             return "timeout"
         if r.returncode == 0 and out.exists():
