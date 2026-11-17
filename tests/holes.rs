@@ -160,3 +160,22 @@ fn hole_fit_limits() {
     );
     assert!(failure(&format!("{BLOCK}hole 6 0,0 fit=Z9")).contains("not known"));
 }
+
+#[test]
+fn cut_above_the_solid_says_so() {
+    let message = failure(
+        "rect 80 80 at=0,0\nextrude 8\nplane 0,0,30 1,0,30 0,1,30\ncircle 4 at=0,0\nextrude -2 mode=cut",
+    );
+    assert!(
+        message.contains("the cut tool does not touch the solid (tool z 28.0000..30.0000, solid z 0.0000..8.0000)"),
+        "{message}"
+    );
+}
+
+#[test]
+fn counterbore_above_the_solid_fails_fast() {
+    let message = failure(
+        "rect 80 80 at=0,0\nextrude 8\nplane 0,0,12 1,0,12 0,1,12\nhole 4 25,25 cbore=7,3",
+    );
+    assert!(message.contains("does not touch the solid"), "{message}");
+}

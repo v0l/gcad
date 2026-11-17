@@ -1041,6 +1041,9 @@ impl Model {
             },
             (Some(existing), Combine::Remove) => {
                 let tool = solids::clear_flush(&tool, existing);
+                if let Some(gap) = miss_message(existing, &tool) {
+                    bail!("the cut tool does not touch the solid ({gap})");
+                }
                 monstertruck::solid::difference_normalized(existing, &tool)
                     .map_err(|error| anyhow!("cut failed: {error}"))?
             }
@@ -1151,6 +1154,19 @@ pub struct Snapshot {
     pub line: Line,
     pub result: std::result::Result<String, String>,
     pub model: Model,
+}
+
+fn miss_message(solid: &Solid, tool: &Solid) -> Option<String> {
+    let (a, b) = (geometry::bounds(solid), geometry::bounds(tool));
+    let axis = (0..3).find(|&k| a.max()[k] < b.min()[k] || b.max()[k] < a.min()[k])?;
+    let name = ["x", "y", "z"][axis];
+    Some(format!(
+        "tool {name} {:.4}..{:.4}, solid {name} {:.4}..{:.4}",
+        b.min()[axis],
+        b.max()[axis],
+        a.min()[axis],
+        a.max()[axis]
+    ))
 }
 
 fn start(dir: Option<PathBuf>) -> Model {

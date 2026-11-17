@@ -126,6 +126,7 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | through hole | supported | `hole 4 x,y ...` | `holes::through`, `holes::several` |
 | blind hole | supported | `hole 4 0,0 depth=5` | `holes::blind` |
 | counterbore | supported | `hole 3.2 0,0 cbore=6,3` | `holes::counterbore` |
+| cut tool that misses the solid is refused with its extents | supported | `extrude -2 mode=cut` above the part, `hole 4 25,25 cbore=7,3` on a raised plane | `holes::cut_above_the_solid_says_so`, `holes::counterbore_above_the_solid_fails_fast` |
 | countersink | supported | `hole 3.2 0,0 csink=6.4,90` | `holes::countersink` |
 | tapped hole | supported | `hole 3.3 0,0 thread=M4` | `holes::threaded` |
 | angled hole | supported | `plane >Z rx=30` then `hole` | `holes::angled` |
