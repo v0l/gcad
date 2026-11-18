@@ -67,7 +67,7 @@ def main():
     from pairs_data import PROMPT, VIEWS
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("--adapter", default=str(Path.home() / "gcad-datasets" / "out" / "vlm" / "lora_brief"))
+    parser.add_argument("--adapter", default=str(Path.home() / "gcad-datasets" / "out" / "vlm_ei" / "r2" / "lora"))
     parser.add_argument("--brief", default="")
     parser.add_argument("--images", nargs="*", default=[], help=" ".join(VIEWS))
     parser.add_argument("--k", type=int, default=8)

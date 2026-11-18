@@ -79,7 +79,7 @@ The failures are near misses for the model, not gaps in what it knows. Sampling 
 
 Dropping lines alone, without resampling, also reaches 100% (`repair_eval.py`: match 23%, 20% and 19%), but it keeps the broken program's shape. Tests: `tools/vlm/test_repair.py`.
 
-`infer.py` runs the loop on one request: `infer.py --brief "..."` or `infer.py --images iso.png front.png top.png right.png`, with `--adapter` (default `out/vlm/lora_brief`) and `--k` (default 8). It writes the program that builds to stdout, or to `--out`, and its stage and tries to stderr. Every `gcad` build in the reward and the loop runs under a 4 GB address-space cap (`GCAD_MEM_MB`): one failing counterbore grew to about 9 GB uncapped, and under the cap it fails in a second with the same error. None of 330 training targets needs more.
+`infer.py` runs the loop on one request: `infer.py --brief "..."` or `infer.py --images iso.png front.png top.png right.png`, with `--adapter` (default `out/vlm_ei/r2/lora`) and `--k` (default 8). It writes the program that builds to stdout, or to `--out`, and its stage and tries to stderr. Every `gcad` build in the reward and the loop runs under a 4 GB address-space cap (`GCAD_MEM_MB`): one failing counterbore grew to about 9 GB uncapped, and under the cap it fails in a second with the same error. None of 330 training targets needs more.
 
 ### Expert iteration
 
@@ -97,6 +97,25 @@ Round 1 from `out/vlm/lora_brief`: on the training prompts 68% of brief samples 
 | r1 then DPO, beta 0.2, alpha 1.0, lr 5e-6, 120 steps | 90% | 18% | 74% | 18% | 100% (1.20) | 100% (1.57) |
 
 DPO does not help: the strong run raised the preference margin to about 12 nats and lost a third of the match rate, the gentle one changed nothing. On 100 briefs the single shot moves by a few points run to run (round 1 fixed 7 of the starting adapter's failures and broke 9 others, with 18 failing in both), so a change under about 5 points is noise.
+
+Round 2 starts from round 1 on 1600 new training prompts: 72% of brief samples and 81% of image samples built (from 68% and 77% in round 1). `eval_wide.sh` scores every adapter on 200 more test prompts per set (offset 100). Pooled with the first 100, single shot over 300 prompts:
+
+| model | images build | images match | images reward | briefs build | briefs match | briefs reward |
+|---|---|---|---|---|---|---|
+| brief SFT (`out/vlm/lora_brief`), start | 82.7% | 17.7% | 0.48 | 78.0% | 20.3% | 0.45 |
+| expert iteration round 1 | 87.7% | 19.0% | 0.50 | 79.3% | 20.3% | 0.47 |
+| expert iteration round 2 (`out/vlm_ei/r2/lora`) | 87.0% | 19.7% | 0.52 | 78.7% | 22.0% | 0.48 |
+
+The loop on the 200 extra prompts (8 resamples, then line drops):
+
+| model, set | single shot | with the loop | match | mean reward | mean tries | fixed by |
+|---|---|---|---|---|---|---|
+| round 1, images | 86% | 100% | 20% | 0.56 | 1.46 | 24 resample, 4 line drop |
+| round 1, briefs | 82.5% | 100% | 22.5% | 0.58 | 1.43 | 33 resample, 2 line drop |
+| round 2, images | 86% | 100% | 21% | 0.58 | 1.34 | 26 resample, 2 line drop |
+| round 2, briefs | 81% | 100% | 25.5% | 0.60 | 1.57 | 34 resample, 4 line drop |
+
+Round 2 is the adapter to use: same build rate as round 1, best match and reward. Expert iteration lifted the image single shot by about 5 points and match by 2 points, but briefs by only 1 point, and the second round gave no more build rate. The failures left are the same kernel buckets as before (booleans 16 of 28 on images, 28 of 38 on briefs; fillets 9 and 8). Nudging every number on the failing line by 0.01 mm fixes 1 to 3 in each set (`nudge.py`), so they are not coincident faces. Most are cuts that miss the solid or meet it in a way the kernel cannot resolve (#721). On the 100 test pairs the image-only SFT (`out/vlm/lora_qwen35`) is 90% single shot and 100% with the loop (1.31 tries).
 
 ## Part dimensions in the prompt (#565)
 
