@@ -1,0 +1,8 @@
+scan: cloud cube.ply
+cloud_add_outliers scan count=50 distance=40
+crop scan box=-100,-100,-100,100,100,100
+denoise scan stat k=16 sigma=2
+downsample scan voxel=2
+normals scan k=20 toward=10,10,10
+colour scan by=normal
+info scan

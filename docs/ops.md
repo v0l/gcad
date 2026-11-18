@@ -706,16 +706,17 @@ Point clouds, gcad #444 to #449. A cloud is a named body like a mesh: `scan: clo
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| crop | missing | `crop scan box=x0,y0,z0,x1,y1,z1 \| sphere=c,r \| plane=p keep=above\|below \| polygon=x,y ...` | `clouds::crop_keeps_the_points_in_a_box` |
-| voxel downsample | missing | `downsample scan voxel=5`, centroid per voxel | `clouds::voxel_downsample_gives_one_point_per_occupied_voxel` |
-| every and count downsample | missing | `downsample scan every=10`, `downsample scan count=N` with a fixed seed | `clouds::downsample_every_and_count_are_seeded` |
-| statistical outlier removal | missing | `denoise scan stat k=16 sigma=2` | `clouds::statistical_denoise_removes_the_outliers_and_few_good_points` |
-| radius outlier removal | missing | `denoise scan radius=10 min=5` | `clouds::radius_denoise_removes_isolated_points` |
-| normals | missing | `normals scan k=20 [toward=x,y,z]`, oriented consistently | `clouds::normals_on_the_cube_faces_are_within_2_degrees_and_consistent` |
-| transforms | missing | `move`, `rotate`, `scale`, `transform scan <4x4>` on a cloud | `clouds::cloud_transforms_match_the_solid_transforms` |
-| merge | missing | `merge a b into all`, each point keeps its scan id | `clouds::merge_keeps_every_scan_id` |
-| colour and info | missing | `colour scan by=height\|intensity\|normal\|class`, `info scan` | `clouds::colour_by_and_info` |
-| large clouds | missing | 10 million points through voxel and stat in a recorded time | `clouds::ten_million_points_through_voxel_and_stat` |
+| crop | supported | `crop scan box=x0,y0,z0,x1,y1,z1 \| sphere=c,r \| plane=p keep=above\|below \| polygon=x,y ...` | `clouds::crop_keeps_the_points_in_a_box` |
+| voxel downsample | supported | `downsample scan voxel=5`, centroid per voxel | `clouds::voxel_downsample_gives_one_point_per_occupied_voxel` |
+| every and count downsample | supported | `downsample scan every=10`, `downsample scan count=N` with a fixed seed | `clouds::downsample_every_and_count_are_seeded` |
+| statistical outlier removal | supported | `denoise scan stat k=16 sigma=2` | `clouds::statistical_denoise_removes_the_outliers_and_few_good_points` |
+| radius outlier removal | supported | `denoise scan radius=10 min=5` | `clouds::radius_denoise_removes_isolated_points` |
+| normals | supported | `normals scan k=20 [toward=x,y,z\|origin]`, oriented by a minimum spanning tree, toward a viewpoint, or toward each E57 scan origin | `clouds::normals_on_the_cube_faces_are_within_2_degrees_and_consistent`, `clouds::tree_orientation_is_consistent_across_all_six_faces` |
+| transforms | supported | `move`, `rotate`, `scale`, `transform scan <4x4>` on a cloud | `clouds::cloud_transforms_match_the_solid_transforms` |
+| merge | supported | `merge a b into all`, each point keeps its scan id | `clouds::merge_keeps_every_scan_id` |
+| colour and info | supported | `colour scan by=height\|intensity\|normal\|class`, `info scan` | `clouds::colour_by_and_info` |
+| large clouds | supported | 10 million points through voxel and stat: 3.7 s total on a 48-thread machine, release build, including generating the cloud | `clouds::ten_million_points_through_voxel_and_stat` |
+| test helpers | supported | `cloud_add_outliers scan count=50 distance=40`, `scan: cloud_synthetic count=N seed=S`; example `examples/clouds/clean.gcad` | `clouds::clean_example_runs` |
 
 ### Registration (#446)
 

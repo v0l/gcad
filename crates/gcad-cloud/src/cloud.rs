@@ -10,6 +10,7 @@ pub struct Cloud {
     pub intensity: Option<Vec<f32>>,
     pub classes: Option<Vec<u8>>,
     pub scans: Vec<u16>,
+    pub origins: Vec<(u16, P3)>,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -53,6 +54,7 @@ impl Cloud {
             intensity: column(layout.intensity, capacity),
             classes: column(layout.classes, capacity),
             scans: Vec::with_capacity(capacity),
+            origins: Vec::new(),
         }
     }
 
@@ -161,12 +163,19 @@ impl Cloud {
         let mut merged = Cloud::with_layout(union, self.len() + other.len());
         (0..self.len()).for_each(|i| merged.push(self.point(i)));
         (0..other.len()).for_each(|i| merged.push(other.point(i)));
+        merged.origins = self
+            .origins
+            .iter()
+            .chain(&other.origins)
+            .copied()
+            .collect();
         *self = merged;
     }
 
     pub fn select(&self, indices: &[usize]) -> Cloud {
         let mut out = Cloud::with_layout(self.layout(), indices.len());
         indices.iter().for_each(|&i| out.push(self.point(i)));
+        out.origins = self.origins.clone();
         out
     }
 

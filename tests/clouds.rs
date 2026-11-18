@@ -343,7 +343,6 @@ fn imported_scan() -> String {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn crop_keeps_the_points_in_a_box() {
     let before = cloud_of(&load("cube_binary.ply", ""), "scan");
     let expected = before.positions.iter().filter(|p| p[0] <= 10.0).count();
@@ -353,7 +352,6 @@ fn crop_keeps_the_points_in_a_box() {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn voxel_downsample_gives_one_point_per_occupied_voxel() {
     let before = cloud_of(&load("cube_binary.ply", ""), "scan");
     let cells: std::collections::HashSet<[i64; 3]> = before
@@ -366,7 +364,6 @@ fn voxel_downsample_gives_one_point_per_occupied_voxel() {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn downsample_every_and_count_are_seeded() {
     let one = build(&format!("{}downsample scan count=300", imported_scan()));
     let two = build(&format!("{}downsample scan count=300", imported_scan()));
@@ -377,7 +374,6 @@ fn downsample_every_and_count_are_seeded() {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn statistical_denoise_removes_the_outliers_and_few_good_points() {
     let model = build(&format!(
         "{}denoise scan stat k=16 sigma=2",
@@ -395,14 +391,12 @@ fn fixture_with_outliers() -> String {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn radius_denoise_removes_isolated_points() {
     let model = build(&format!("{}denoise scan radius=10 min=5", fixture_with_outliers()));
     assert_eq!(value(&model, "scan.points"), 2646.0);
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn normals_on_the_cube_faces_are_within_2_degrees_and_consistent() {
     let model = build(&format!("{}normals scan k=20 toward=10,10,10", imported_scan()));
     let cloud = cloud_of(&model, "scan");
@@ -410,13 +404,27 @@ fn normals_on_the_cube_faces_are_within_2_degrees_and_consistent() {
     for (p, n) in cloud.positions.iter().zip(normals) {
         let axis = (0..3).max_by(|&a, &b| n[a].abs().total_cmp(&n[b].abs())).unwrap();
         assert!(n[axis].abs() > (2.0f32.to_radians()).cos());
-        let outward = (p[axis] - 10.0).signum() as f32;
-        assert_eq!(n[axis].signum(), outward);
+        let inward = (10.0 - p[axis]).signum() as f32;
+        assert_eq!(n[axis].signum(), inward);
     }
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
+fn tree_orientation_is_consistent_across_all_six_faces() {
+    let model = build(&format!("{}normals scan k=20", imported_scan()));
+    let cloud = cloud_of(&model, "scan");
+    let normals = cloud.normals.as_ref().expect("normals");
+    let mut sides = std::collections::HashSet::new();
+    for (p, n) in cloud.positions.iter().zip(normals) {
+        let axis = (0..3).max_by(|&a, &b| n[a].abs().total_cmp(&n[b].abs())).unwrap();
+        assert!(n[axis].abs() > (2.0f32.to_radians()).cos());
+        let faces_out = n[axis].signum() == (p[axis] - 10.0).signum() as f32;
+        sides.insert(faces_out);
+    }
+    assert_eq!(sides.len(), 1, "every normal points out, or every one points in");
+}
+
+#[test]
 fn cloud_transforms_match_the_solid_transforms() {
     let model = build(&format!(
         "{}move scan 5,0,0\nrotate scan z 90\nscale scan 2",
@@ -431,7 +439,6 @@ fn cloud_transforms_match_the_solid_transforms() {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn merge_keeps_every_scan_id() {
     let model = build(&format!(
         "a: cloud {0}\nb: cloud {1}\nmerge a b into all",
@@ -443,7 +450,6 @@ fn merge_keeps_every_scan_id() {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn colour_by_and_info() {
     let model = build(&format!("{}colour scan by=height\ninfo scan", imported_scan()));
     assert!(cloud_of(&model, "scan").colours.is_some());
@@ -452,7 +458,6 @@ fn colour_by_and_info() {
 }
 
 #[test]
-#[ignore = "missing: clean and sample, gcad #445"]
 fn ten_million_points_through_voxel_and_stat() {
     let source = "scan: cloud_synthetic count=10000000 seed=1\ndownsample scan voxel=0.05\ndenoise scan stat k=16 sigma=2";
     let started = std::time::Instant::now();
@@ -738,4 +743,20 @@ fn deviation_colour_map_renders() {
     );
     let model = build(&source);
     assert!(cloud_of(&model, "scan").colours.is_some());
+}
+
+#[test]
+fn clean_example_runs() {
+    let source = std::fs::read_to_string(format!(
+        "{}/examples/clouds/clean.gcad",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("example exists")
+    .replace(
+        "cloud cube.ply",
+        &format!("cloud {}/examples/clouds/cube.ply", env!("CARGO_MANIFEST_DIR")),
+    );
+    let model = build(&source);
+    assert!(cloud_of(&model, "scan").normals.is_some());
+    assert!(value(&model, "scan.points") < 2646.0);
 }

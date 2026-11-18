@@ -57,6 +57,10 @@ impl Collector {
         }
     }
 
+    pub fn origin(&mut self, scan: u16, at: [f64; 3]) {
+        self.cloud.origins.push((scan, at));
+    }
+
     pub fn seen(&self) -> u64 {
         self.seen
     }

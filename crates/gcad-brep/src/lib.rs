@@ -4,6 +4,7 @@ mod assembly;
 mod blends;
 mod bodies;
 mod clearance;
+mod cloud_ops;
 mod clouds;
 mod constrain;
 mod enclosure;
@@ -573,6 +574,16 @@ pub const OPERATIONS: &[&str] = &[
     "measure",
     "import",
     "cloud",
+    "crop",
+    "downsample",
+    "denoise",
+    "normals",
+    "transform",
+    "merge",
+    "colour",
+    "info",
+    "cloud_add_outliers",
+    "cloud_synthetic",
     "if",
     "include",
     "point",
@@ -689,6 +700,16 @@ const MESH_SAFE: &[&str] = &[
     "point",
     "import",
     "cloud",
+    "crop",
+    "downsample",
+    "denoise",
+    "normals",
+    "transform",
+    "merge",
+    "colour",
+    "info",
+    "cloud_add_outliers",
+    "cloud_synthetic",
 ];
 
 impl Model {
@@ -794,6 +815,9 @@ impl Model {
     }
 
     fn apply_op(&mut self, line: &Line) -> Result<String> {
+        if let Some(done) = self.cloud_op(line) {
+            return done;
+        }
         if !gcad_mesh::rig_ops::SCULPT_OPS.contains(&line.op.as_str()) {
             self.scene.close_corrective()?;
         }

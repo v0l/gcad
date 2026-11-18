@@ -6,6 +6,9 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+### Added
+- Point clouds, part 2 of 6 (gcad #445): `crop`, `downsample`, `denoise`, `normals`, `move`, `rotate`, `scale`, `transform`, `merge`, `colour` and `info` on clouds, and `examples/clouds/clean.gcad`.
+
 ## [0.8.0] - 2026-11-16
 
 ### Added

@@ -648,6 +648,40 @@ intensity, height, normal or class, with an adjustable point size. It draws at m
 points, spread evenly through the cloud, so a 10 million point scan stays interactive.
 The fixtures in `tests/fixtures/clouds` are made by `tools/clouds-fixtures.sh`.
 
+### Cleaning and sampling
+
+Each op names a cloud and replaces it in place; `merge` makes a new one.
+
+```
+crop scan box=x0,y0,z0,x1,y1,z1
+crop scan sphere=cx,cy,cz,r
+crop scan plane=XY offset=5 keep=above
+crop scan polygon=0,0 10,0 10,10 0,10
+downsample scan voxel=5
+downsample scan every=10
+downsample scan count=100000
+denoise scan stat k=16 sigma=2
+denoise scan radius=10 min=5
+normals scan k=20 toward=0,0,100
+move scan 5,0,0
+rotate scan z 90
+scale scan 2
+transform scan 1,0,0,5, 0,1,0,0, 0,0,1,0, 0,0,0,1
+merge a b c into all
+colour scan by=height
+info scan
+```
+
+`polygon` is a prism along z. `voxel` keeps the centroid of each occupied cell, averaging colour,
+intensity and normal. `count` is a uniform random sample with a fixed seed (`seed=` to change it).
+`stat` removes points whose mean distance to their k nearest neighbours is above the mean plus
+`sigma` standard deviations; `radius` removes points with fewer than `min` neighbours inside the
+radius. `normals` fits a plane to k neighbours; without `toward` the signs are propagated along a
+minimum spanning tree of the neighbour graph, `toward=origin` (and the default for a cloud with E57
+poses) faces each scan's origin. `merge` keeps a scan id per point, renumbering a clash.
+`colour by=` stores the colours the viewer would show. `info` prints count, bounds, mean spacing
+and density. The transforms are the ones solids use; normals turn with them.
+
 ## Assemblies
 
 A design with more than one part is a `.gasm` file, an assembly: it brings the parts

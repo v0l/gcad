@@ -51,6 +51,10 @@ fn read_from<T: Read + Seek>(source: T, options: &Options) -> Result<Imported> {
     let total: u64 = picked.iter().map(|(_, s)| s.records).sum();
     let mut collector = Collector::new(layout, options.max_points, Some(total));
     for (index, scan) in &picked {
+        if let Some(t) = &scan.transform {
+            let at = [t.translation.x, t.translation.y, t.translation.z];
+            collector.origin(*index as u16 + 1, at);
+        }
         let mut reader = file
             .pointcloud_simple(scan)
             .map_err(|e| anyhow!("scan {index}: {e}"))?;
