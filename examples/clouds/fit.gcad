@@ -1,4 +1,6 @@
 scan: cloud_synthetic cylinder r=10 h=40 noise=0.2 count=20000
 fit scan cylinder tol=0.5 into=pin
-circle d=pin.radius*2
-extrude 40
+plate: rect 60 60 at=0,0
+extrude 5
+plane pin.cylinder
+hole pin.radius*2 0,0

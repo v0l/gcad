@@ -42,7 +42,7 @@ impl Model {
         }
     }
 
-    fn publish_primitive(&mut self, name: &str, found: &Found) {
+    fn publish_primitive(&mut self, name: &str, found: &Found, cloud: &Cloud) {
         match found.primitive {
             Primitive::Plane { origin, normal } => {
                 self.publish_vector(name, "origin", origin);
@@ -67,6 +67,22 @@ impl Model {
                 self.publish_vector(name, "origin", origin);
                 self.publish_vector(name, "axis", axis);
                 self.scope.insert(format!("{name}.radius"), radius);
+                let high = found
+                    .inliers
+                    .iter()
+                    .map(|&i| {
+                        let p = cloud.positions[i];
+                        (0..3).map(|k| (p[k] - origin[k]) * axis[k]).sum::<f64>()
+                    })
+                    .fold(f64::NEG_INFINITY, f64::max);
+                let rim = std::array::from_fn::<f64, 3, _>(|k| origin[k] + axis[k] * high);
+                self.fits.insert(
+                    format!("{name}.cylinder"),
+                    Frame::from_normal(
+                        Point3::new(rim[0], rim[1], rim[2]),
+                        Vector3::new(axis[0], axis[1], axis[2]),
+                    ),
+                );
             }
             Primitive::Cone {
                 apex,
@@ -136,7 +152,7 @@ impl Model {
             }
             for (k, one) in found.iter().enumerate() {
                 let name = format!("{into}{}", k + 1);
-                self.publish_primitive(&name, one);
+                self.publish_primitive(&name, one, &cloud);
                 self.publish_cloud(&name, cloud.select(&one.inliers));
             }
             self.scope.insert(format!("{into}.count"), found.len() as f64);
@@ -150,7 +166,7 @@ impl Model {
             let all: Vec<usize> = (0..working.len()).collect();
             let one = fit_one(&working, kind, tol, &all, seed)
                 .ok_or_else(|| anyhow!("no {text} found within tol={tol}; try a larger tol"))?;
-            self.publish_primitive(&into, &one);
+            self.publish_primitive(&into, &one, &cloud);
             self.scope.insert(format!("{into}.count"), 1.0);
             let inliers = cloud.select(&one.inliers);
             let report = format!(

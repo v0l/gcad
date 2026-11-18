@@ -704,14 +704,13 @@ rest become the clouds `parts.1`, `parts.2`, and so on, largest first, with `par
 `fit` is RANSAC refined by Levenberg-Marquardt on the inliers; a cylinder, sphere or cone gets
 normals estimated if the cloud has none. A fit gives `f.rms`, `f.inliers` and the inlier cloud `f`.
 A plane has `f.origin.x|y|z`, `f.normal.x|y|z` and works as a workplane: `plane f.plane`. A cylinder
-has `f.origin`, `f.axis` and `f.radius`, a sphere `f.centre` and `f.radius`, a cone `f.apex`,
+has `f.origin`, `f.axis` and `f.radius`, and `plane f.cylinder` puts a workplane on its top rim, so `hole f.radius*2 0,0` drills it, a sphere `f.centre` and `f.radius`, a cone `f.apex`,
 `f.axis` and `f.angle` (half angle, degrees). With `all`, `max=N` primitives are peeled off
 (`min=` points each, default 1% of the cloud) as `f1`, `f2`, ... with `f.count`. `grow` is region
 growing on normals (`normals scan` first) giving `regions.1`, ... and `regions.count`. `slice`
 takes the points within `thickness` of a plane (`x`, `y`, `z`, a named plane or a fitted plane,
-moved by `offset`), takes the convex outline simplified to `tol` and leaves it as the sketch, so
-`extrude 20` follows; `s.area` and `s.corners` are values. The outline is convex, so a concave
-profile loses its dents. `classify scan ground` stores class 2 for ground and 1 otherwise, by a
+moved by `offset`), traces the outline of the slab (concave profiles keep their dents) and leaves it as the sketch, so
+`extrude 20` follows; `s.area` and `s.corners` are values. `classify scan ground` stores class 2 for ground and 1 otherwise, by a
 progressive morphological filter on a grid of `cell`, with `tol` height and `slope`.
 
 ## Assemblies

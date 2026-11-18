@@ -595,6 +595,75 @@ fn slice_of_a_scanned_extrusion_rebuilds_its_volume() {
     assert_volume(&model, 8000.0, 0.01);
 }
 
+fn l_shape_scan() -> String {
+    let inside = |x: f64, y: f64| (0.0..=40.0).contains(&x) && (0.0..=40.0).contains(&y) && (x <= 15.0 || y <= 15.0);
+    let mut text = String::new();
+    for k in 0..=20 {
+        let z = k as f64;
+        for i in 0..=160 {
+            for j in 0..=160 {
+                let (x, y) = (i as f64 * 0.25, j as f64 * 0.25);
+                let near_edge = [x, y].iter().any(|v| (v % 40.0).abs() < 1e-9)
+                    || (x == 15.0 && y >= 15.0)
+                    || (y == 15.0 && x >= 15.0);
+                if inside(x, y) && (near_edge || k == 10) {
+                    text += &format!("{x} {y} {z}\n");
+                }
+            }
+        }
+    }
+    let path = scratch("l_shape.xyz");
+    std::fs::write(&path, text).unwrap();
+    format!("scan: cloud {path}\n")
+}
+
+#[test]
+fn slice_of_a_scanned_l_shaped_extrusion_keeps_its_concave_area() {
+    let source = format!(
+        "{}slice scan plane=z offset=10 thickness=0.5 into=s\nextrude 20",
+        l_shape_scan()
+    );
+    let model = build(&source);
+    near(value(&model, "s.area"), 975.0, 9.75);
+    assert_volume(&model, 19500.0, 0.01);
+}
+
+#[test]
+fn a_fitted_cylinder_drives_a_hole_of_its_radius_along_its_axis() {
+    let mut text = String::new();
+    let mut state = 99u64;
+    let mut noise = move || {
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((state >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+    };
+    for i in 0..=120 {
+        for j in 0..=120 {
+            let (x, y) = (i as f64 * 0.5, j as f64 * 0.5);
+            if (x - 30.0).hypot(y - 30.0) > 6.0 {
+                for z in [0.0, 5.0] {
+                    text += &format!("{x} {y} {}\n", z + 0.05 * noise());
+                }
+            }
+        }
+    }
+    for k in 0..4000 {
+        let a = k as f64 * 0.0157;
+        let z = (k % 10) as f64 * 0.5555;
+        let r = 6.0 + 0.05 * noise();
+        text += &format!("{} {} {z}\n", 30.0 + r * a.cos(), 30.0 + r * a.sin());
+    }
+    let path = scratch("drilled_plate.xyz");
+    std::fs::write(&path, text).unwrap();
+    let source = format!(
+        "scan: cloud {path}\ncrop scan box=20,20,-1,40,40,6\nfit scan cylinder tol=0.3 into=c\nplate: rect 60 60 at=30,30\nextrude 5\nplane c.cylinder\nhole c.radius*2 0,0\n"
+    );
+    let model = build(&source);
+    near(value(&model, "c.radius"), 6.0, 0.1);
+    assert!(value(&model, "c.axis.z").abs() >= 0.5f64.to_radians().cos());
+    let drilled = volume(&model);
+    near(drilled, 60.0 * 60.0 * 5.0 - std::f64::consts::PI * 36.0 * 5.0, 15.0);
+}
+
 fn terrain_las() -> String {
     let mut cloud = Cloud::with_layout(
         gcad_cloud::Layout {
@@ -831,7 +900,7 @@ fn clean_example_runs() {
 
 #[test]
 fn fit_and_slice_examples_run() {
-    for (name, expected) in [("fit", 12566.37), ("slice", 8000.0)] {
+    for (name, expected) in [("fit", 16428.76), ("slice", 8000.0)] {
         let source = std::fs::read_to_string(format!(
             "{}/examples/clouds/{name}.gcad",
             env!("CARGO_MANIFEST_DIR")

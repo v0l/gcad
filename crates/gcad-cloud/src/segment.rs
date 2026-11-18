@@ -105,34 +105,121 @@ pub fn slab(cloud: &Cloud, origin: P3, x: P3, y: P3, normal: P3, thickness: f64)
         .collect()
 }
 
-fn turn(o: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
-    (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+fn spacing_2d(points: &[[f64; 2]]) -> f64 {
+    let flat: Vec<P3> = points.iter().map(|p| [p[0], p[1], 0.0]).collect();
+    let tree = KdTree::build(&flat);
+    let step = (points.len() / 4000).max(1);
+    let found: Vec<f64> = (0..points.len())
+        .step_by(step)
+        .filter_map(|i| tree.nearest(flat[i], 2).into_iter().find(|(j, _)| *j != i).map(|(_, d)| d))
+        .collect();
+    found.iter().sum::<f64>() / found.len().max(1) as f64
 }
 
-fn hull(points: &[[f64; 2]]) -> Vec<[f64; 2]> {
-    let mut sorted = points.to_vec();
-    sorted.sort_by(|a, b| a[0].total_cmp(&b[0]).then(a[1].total_cmp(&b[1])));
-    sorted.dedup();
-    if sorted.len() < 3 {
-        return sorted;
+const AROUND: [(i64, i64); 8] = [(-1, 0), (-1, -1), (0, -1), (1, -1), (1, 0), (1, 1), (0, 1), (-1, 1)];
+
+fn boundary(points: &[[f64; 2]]) -> Option<Vec<[f64; 2]>> {
+    if points.len() < 3 {
+        return None;
     }
-    let mut chain: Vec<[f64; 2]> = Vec::new();
-    for pass in 0..2 {
-        let floor = chain.len() + 1;
-        let order: Vec<[f64; 2]> = if pass == 0 {
-            sorted.clone()
-        } else {
-            sorted.iter().rev().copied().collect()
-        };
-        for p in order {
-            while chain.len() >= floor.max(2) && turn(chain[chain.len() - 2], chain[chain.len() - 1], p) <= 0.0 {
-                chain.pop();
-            }
-            chain.push(p);
+    let (mut lo, mut hi) = ([f64::INFINITY; 2], [f64::NEG_INFINITY; 2]);
+    for p in points {
+        for k in 0..2 {
+            lo[k] = lo[k].min(p[k]);
+            hi[k] = hi[k].max(p[k]);
         }
-        chain.pop();
     }
-    chain
+    let extent = (hi[0] - lo[0]).max(hi[1] - lo[1]);
+    let cell = (spacing_2d(points) * 1.5).max(extent / 2000.0);
+    if !(cell > 0.0) {
+        return None;
+    }
+    let nx = ((hi[0] - lo[0]) / cell) as usize + 3;
+    let ny = ((hi[1] - lo[1]) / cell) as usize + 3;
+    let at = |p: &[f64; 2]| {
+        (
+            ((p[0] - lo[0]) / cell) as usize + 1,
+            ((p[1] - lo[1]) / cell) as usize + 1,
+        )
+    };
+    let mut sums = vec![([0.0f64; 2], 0usize); nx * ny];
+    let mut members: Vec<Vec<[f64; 2]>> = vec![Vec::new(); nx * ny];
+    for p in points {
+        let (i, j) = at(p);
+        let entry = &mut sums[j * nx + i];
+        entry.0[0] += p[0];
+        entry.0[1] += p[1];
+        entry.1 += 1;
+        members[j * nx + i].push(*p);
+    }
+    let mut outside = vec![false; nx * ny];
+    let mut stack = vec![(0usize, 0usize)];
+    outside[0] = true;
+    while let Some((i, j)) = stack.pop() {
+        for (di, dj) in [(-1i64, 0i64), (1, 0), (0, -1), (0, 1)] {
+            let (a, b) = (i as i64 + di, j as i64 + dj);
+            if a < 0 || b < 0 || a >= nx as i64 || b >= ny as i64 {
+                continue;
+            }
+            let c = b as usize * nx + a as usize;
+            if !outside[c] && sums[c].1 == 0 {
+                outside[c] = true;
+                stack.push((a as usize, b as usize));
+            }
+        }
+    }
+    let filled = |i: i64, j: i64| {
+        i >= 0 && j >= 0 && i < nx as i64 && j < ny as i64 && !outside[j as usize * nx + i as usize]
+    };
+    let start = (0..nx * ny).find(|&c| !outside[c])?;
+    let (si, sj) = ((start % nx) as i64, (start / nx) as i64);
+    let mut trace = vec![(si, sj)];
+    let (mut current, mut from) = ((si, sj), 0usize);
+    for _ in 0..8 * nx * ny {
+        let next = (0..8).find_map(|k| {
+            let d = (from + k) % 8;
+            let probe = (current.0 + AROUND[d].0, current.1 + AROUND[d].1);
+            filled(probe.0, probe.1).then_some((probe, d))
+        });
+        let Some((probe, d)) = next else {
+            break;
+        };
+        from = (d + 5) % 8;
+        current = probe;
+        if current == (si, sj) {
+            break;
+        }
+        trace.push(current);
+    }
+    let centre = |i: i64, j: i64| {
+        let (sum, count) = sums[j as usize * nx + i as usize];
+        [sum[0] / count as f64, sum[1] / count as f64]
+    };
+    let corners: Vec<[f64; 2]> = trace
+        .iter()
+        .filter(|&&(i, j)| sums[j as usize * nx + i as usize].1 > 0)
+        .map(|&(i, j)| {
+            let here = centre(i, j);
+            let mut inward = [0.0, 0.0];
+            for (di, dj) in AROUND {
+                let (a, b) = (i + di, j + dj);
+                if filled(a, b) && sums[b as usize * nx + a as usize].1 > 0 {
+                    let c = centre(a, b);
+                    inward[0] += c[0] - here[0];
+                    inward[1] += c[1] - here[1];
+                }
+            }
+            members[j as usize * nx + i as usize]
+                .iter()
+                .copied()
+                .min_by(|p, q| {
+                    let score = |r: &[f64; 2]| (r[0] - here[0]) * inward[0] + (r[1] - here[1]) * inward[1];
+                    score(p).total_cmp(&score(q))
+                })
+                .unwrap_or(here)
+        })
+        .collect();
+    (corners.len() >= 3).then_some(corners)
 }
 
 fn deviation(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
@@ -159,10 +246,9 @@ fn simplify(points: &[[f64; 2]], tol: f64, keep: &mut Vec<[f64; 2]>) {
 }
 
 pub fn outline(points: &[[f64; 2]], tol: f64) -> Result<Vec<[f64; 2]>> {
-    let ordered = hull(points);
-    if ordered.len() < 3 {
-        bail!("the slab holds too few points for a profile ({} on the outline)", ordered.len());
-    }
+    let Some(ordered) = boundary(points) else {
+        bail!("the slab holds {} point(s), too few for a profile", points.len());
+    };
     let first = ordered[0];
     let opposite = (0..ordered.len())
         .max_by(|&a, &b| {
