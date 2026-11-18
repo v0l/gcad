@@ -56,6 +56,7 @@ tests/rig.rs rig: ok. 37 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/shapes.rs shapes: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/simulation.rs simulation: ok. 105 passed; 0 failed; 9 ignored; 0 measured; 0 filtered out
 tests/simulation.rs simulation: test result_goes_stale ... ok
+tests/segment.rs segment: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/sketch.rs sketch: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/skill_doc.rs skill_doc: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/skinning.rs skinning: ok. 17 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
