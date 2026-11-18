@@ -35,13 +35,14 @@ def main():
     parser.add_argument("--briefs", default=str(DATA / "out" / "vlm_brief" / "briefs.jsonl"))
     parser.add_argument("--split", default="test")
     parser.add_argument("--limit", type=int, default=100)
+    parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--max-new-tokens", type=int, default=700)
     parser.add_argument("--max-lines", type=int, default=60)
     parser.add_argument("--out", required=True)
     args = parser.parse_args()
 
     briefs = {j["id"]: j["brief"] for j in map(json.loads, Path(args.briefs).read_text().splitlines()) if j.get("brief")}
-    rows = [r for r in read_pairs(split=args.split, max_lines=args.max_lines) if r["id"] in briefs][: args.limit]
+    rows = [r for r in read_pairs(split=args.split, max_lines=args.max_lines) if r["id"] in briefs][args.offset : args.offset + args.limit]
     fmt = format_for(args.base)
     processor = AutoProcessor.from_pretrained(args.base)
     model = AutoModelForImageTextToText.from_pretrained(args.base, dtype=torch.bfloat16, device_map={"": 0})

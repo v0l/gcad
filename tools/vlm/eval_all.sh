@@ -7,6 +7,7 @@ LOCK="${LOCK:-/tmp/gpu27.lock}"
 ADAPTER="$1"
 R="$2"
 LIMIT="${LIMIT:-100}"
+OFFSET="${OFFSET:-0}"
 K="${K:-8}"
 MIN_FREE_MB="${MIN_FREE_MB:-30000}"
 
@@ -29,8 +30,8 @@ export HF_HUB_OFFLINE=1
 cd "$HERE" || exit 1
 mkdir -p "$R"
 
-gpu "'$PY' eval.py --adapter '$ADAPTER' --limit $LIMIT --out '$R/eval_images.jsonl'" | tail -1 || exit 1
-gpu "'$PY' eval_brief.py --adapter '$ADAPTER' --briefs '$BRIEF/briefs.jsonl' --limit $LIMIT --out '$R/eval_briefs.jsonl'" | tail -1 || exit 1
+gpu "'$PY' eval.py --adapter '$ADAPTER' --limit $LIMIT --offset $OFFSET --out '$R/eval_images.jsonl'" | tail -1 || exit 1
+gpu "'$PY' eval_brief.py --adapter '$ADAPTER' --briefs '$BRIEF/briefs.jsonl' --limit $LIMIT --offset $OFFSET --out '$R/eval_briefs.jsonl'" | tail -1 || exit 1
 gpu "'$PY' passk.py --adapter '$ADAPTER' --results '$R/eval_images.jsonl' --out '$R/passk_images.jsonl' --k $K" | tail -1 || exit 1
 gpu "'$PY' passk.py --adapter '$ADAPTER' --results '$R/eval_briefs.jsonl' --briefs '$BRIEF/briefs.jsonl' --out '$R/passk_briefs.jsonl' --k $K" | tail -1 || exit 1
 "$PY" resample_eval.py "$R/eval_images.jsonl" --samples "$R/passk_images.jsonl" --out "$R/loop_images.jsonl" | tail -1
