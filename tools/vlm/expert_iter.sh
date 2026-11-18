@@ -68,11 +68,5 @@ if [ ! -f "$LORA/adapter_config.json" ] || [ ! -f "$R/sft.done" ]; then
   touch "$R/sft.done"
 fi
 
-gpu "'$PY' eval.py --adapter '$LORA' --limit $LIMIT --out '$R/eval_images.jsonl'" | tail -1 || exit 1
-gpu "'$PY' eval_brief.py --adapter '$LORA' --briefs '$BRIEF/briefs.jsonl' --limit $LIMIT --out '$R/eval_briefs.jsonl'" | tail -1 || exit 1
-gpu "'$PY' passk.py --adapter '$LORA' --results '$R/eval_images.jsonl' --out '$R/passk_images.jsonl' --k $K" | tail -1 || exit 1
-gpu "'$PY' passk.py --adapter '$LORA' --results '$R/eval_briefs.jsonl' --briefs '$BRIEF/briefs.jsonl' --out '$R/passk_briefs.jsonl' --k $K" | tail -1 || exit 1
-"$PY" resample_eval.py "$R/eval_images.jsonl" --samples "$R/passk_images.jsonl" --out "$R/loop_images.jsonl" | tail -1
-"$PY" resample_eval.py "$R/eval_briefs.jsonl" --samples "$R/passk_briefs.jsonl" --out "$R/loop_briefs.jsonl" | tail -1
-"$PY" failures.py "images=$R/eval_images.jsonl" "briefs=$R/eval_briefs.jsonl"
+LIMIT="$LIMIT" K="$K" MIN_FREE_MB="$MIN_FREE_MB" LOCK="$LOCK" "$HERE/eval_all.sh" "$LORA" "$R" || exit 1
 echo "== $(date -Is) round $ROUND finished"
