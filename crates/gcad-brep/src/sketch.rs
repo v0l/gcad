@@ -159,6 +159,9 @@ impl Model {
     }
 
     pub(crate) fn plane_from(&self, on: &str) -> Result<Frame> {
+        if let Some(frame) = self.fits.get(on) {
+            return Ok(*frame);
+        }
         match Frame::named(on) {
             Some(frame) => Ok(frame),
             None => self.face_frame(on),

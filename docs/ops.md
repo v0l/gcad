@@ -732,14 +732,15 @@ Point clouds, gcad #444 to #449. A cloud is a named body like a mesh: `scan: clo
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| plane peeling | missing | `fit scan plane tol=0.5 into=f all max=20` | `clouds::fit_all_finds_six_planes_on_a_scanned_box` |
-| cylinder | missing | `fit scan cylinder tol=0.5 into=c`, `c.radius`, `c.axis` | `clouds::fit_cylinder_finds_radius_and_axis` |
-| sphere and cone | missing | `fit scan sphere\|cone tol=0.5 into=s` | `clouds::fit_sphere_and_cone` |
-| clustering | missing | `cluster scan dist=5 min=100 into=parts` | `clouds::three_separated_blobs_cluster_into_three` |
-| region growing | missing | `grow scan angle=5 curvature=0.05 into=regions` | `clouds::region_growing_splits_a_box_into_its_faces` |
-| slices to sketches | missing | `slice scan plane=z thickness=1 into=s`, then `extrude s 20` | `clouds::slice_of_a_scanned_extrusion_rebuilds_its_volume` |
-| ground filter | missing | `classify scan ground` | `clouds::ground_filter_matches_the_stored_classification` |
-| fits feed solids | missing | `plane f.plane`, `hole d=f.radius*2` at `f.axis` | `clouds::a_fitted_plane_makes_a_workplane_and_a_cylinder_a_hole` |
+| plane peeling | supported | `fit scan plane tol=0.5 into=f all max=20` | `clouds::fit_all_finds_six_planes_on_a_scanned_box` |
+| cylinder | supported | `fit scan cylinder tol=0.5 into=c`, `c.radius`, `c.axis` | `clouds::fit_cylinder_finds_radius_and_axis` |
+| sphere and cone | supported | `fit scan sphere\|cone tol=0.5 into=s` | `clouds::fit_sphere_and_cone` |
+| clustering | supported | `cluster scan dist=5 min=100 into=parts` | `clouds::three_separated_blobs_cluster_into_three` |
+| region growing | supported | `grow scan angle=5 curvature=0.05 into=regions` | `clouds::region_growing_splits_a_box_into_its_faces` |
+| slices to sketches | supported | `slice scan plane=z offset=10 thickness=1 into=s`, then `extrude 20` | `clouds::slice_of_a_scanned_extrusion_rebuilds_its_volume` |
+| ground filter | supported | `classify scan ground` | `clouds::ground_filter_matches_the_stored_classification` |
+| fits feed solids | supported | `plane f.plane` for a fitted plane; `f.radius`, `f.axis.x` and the rest are values in any expression, for example `circle d=f.radius*2` | `clouds::a_fitted_plane_makes_a_workplane_and_a_cylinder_a_hole` |
+| examples | supported | `examples/clouds/fit.gcad` turns a fitted cylinder into a part, `examples/clouds/slice.gcad` turns a scanned profile into an editable extrusion | `clouds::fit_and_slice_examples_run` |
 
 ### Reconstruction (#448)
 

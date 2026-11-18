@@ -80,11 +80,11 @@ pub fn par_map<T: Send, F: Fn(usize) -> T + Sync>(n: usize, f: F) -> Vec<T> {
     (0..n).map(f).collect()
 }
 
-fn dot(a: P3, b: P3) -> f64 {
+pub(crate) fn dot(a: P3, b: P3) -> f64 {
     a[0] * b[0] + a[1] * b[1] + a[2] * b[2]
 }
 
-fn cross(a: P3, b: P3) -> P3 {
+pub(crate) fn cross(a: P3, b: P3) -> P3 {
     [
         a[1] * b[2] - a[2] * b[1],
         a[2] * b[0] - a[0] * b[2],
@@ -92,11 +92,11 @@ fn cross(a: P3, b: P3) -> P3 {
     ]
 }
 
-fn sub(a: P3, b: P3) -> P3 {
+pub(crate) fn sub(a: P3, b: P3) -> P3 {
     [a[0] - b[0], a[1] - b[1], a[2] - b[2]]
 }
 
-fn unit_or_zero(v: P3) -> P3 {
+pub(crate) fn unit_or_zero(v: P3) -> P3 {
     let length = dot(v, v).sqrt();
     if length < 1.0e-300 {
         [0.0; 3]
@@ -314,7 +314,7 @@ pub fn denoise_radius(cloud: &Cloud, radius: f64, min: usize) -> Result<Cloud> {
     Ok(cloud.select(&kept))
 }
 
-fn eigen_symmetric(mut a: [[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
+pub(crate) fn eigen_symmetric(mut a: [[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
     let mut v = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
     for _ in 0..40 {
         let off = a[0][1].abs() + a[0][2].abs() + a[1][2].abs();
@@ -350,14 +350,14 @@ fn eigen_symmetric(mut a: [[f64; 3]; 3]) -> ([f64; 3], [[f64; 3]; 3]) {
     ([a[0][0], a[1][1], a[2][2]], v)
 }
 
-struct Fit {
-    centroid: P3,
-    normal: P3,
-    variation: f64,
-    spread: f64,
+pub(crate) struct Fit {
+    pub(crate) centroid: P3,
+    pub(crate) normal: P3,
+    pub(crate) variation: f64,
+    pub(crate) spread: f64,
 }
 
-fn fit_plane(points: &[P3]) -> Fit {
+pub(crate) fn fit_plane(points: &[P3]) -> Fit {
     let n = points.len() as f64;
     let centroid = points
         .iter()
@@ -751,6 +751,85 @@ pub fn synthetic(count: usize, seed: u64, size: f64) -> Cloud {
     for _ in 0..count {
         let noise = rng.unit() + rng.unit() + rng.unit() - 1.5;
         positions.push([rng.unit() * size, rng.unit() * size, noise * 0.02]);
+    }
+    Cloud::from_positions(positions)
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Shape {
+    pub radius: f64,
+    pub height: f64,
+    pub noise: f64,
+    pub spacing: f64,
+}
+
+fn jitter(rng: &mut Rng, noise: f64) -> f64 {
+    (rng.unit() * 2.0 - 1.0) * noise
+}
+
+fn ball_point(rng: &mut Rng, radius: f64) -> P3 {
+    loop {
+        let d = [
+            rng.unit() * 2.0 - 1.0,
+            rng.unit() * 2.0 - 1.0,
+            rng.unit() * 2.0 - 1.0,
+        ];
+        if dot(d, d) <= 1.0 {
+            return d.map(|v| v * radius);
+        }
+    }
+}
+
+pub fn synthetic_shape(name: &str, count: usize, seed: u64, shape: Shape) -> Result<Cloud> {
+    let mut rng = Rng::new(seed);
+    let Shape {
+        radius,
+        height,
+        noise,
+        spacing,
+    } = shape;
+    if radius <= 0.0 || height <= 0.0 || noise < 0.0 || count == 0 {
+        bail!("`{name}` needs a positive r, h and count, and a noise of 0 or more");
+    }
+    let tau = std::f64::consts::TAU;
+    let mut positions = Vec::with_capacity(count);
+    match name {
+        "cylinder" | "two_cylinders" => {
+            let copies = if name == "cylinder" { 1 } else { 2 };
+            for c in 0..copies {
+                for _ in 0..count / copies {
+                    let a = rng.unit() * tau;
+                    let r = radius + jitter(&mut rng, noise);
+                    positions.push([
+                        r * a.cos() + c as f64 * spacing,
+                        r * a.sin(),
+                        rng.unit() * height,
+                    ]);
+                }
+            }
+        }
+        "sphere" => {
+            for _ in 0..count {
+                let z = rng.unit() * 2.0 - 1.0;
+                let a = rng.unit() * tau;
+                let ring = (1.0 - z * z).sqrt();
+                let r = radius + jitter(&mut rng, noise);
+                positions.push([r * ring * a.cos(), r * ring * a.sin(), r * z]);
+            }
+        }
+        other => bail!("`cloud_synthetic` shapes are cylinder, two_cylinders and sphere, not `{other}`"),
+    }
+    Ok(Cloud::from_positions(positions))
+}
+
+pub fn synthetic_blobs(blobs: usize, per_blob: usize, seed: u64, radius: f64, spacing: f64) -> Cloud {
+    let mut rng = Rng::new(seed);
+    let mut positions = Vec::with_capacity(blobs * per_blob);
+    for b in 0..blobs {
+        for _ in 0..per_blob {
+            let p = ball_point(&mut rng, radius);
+            positions.push([p[0] + b as f64 * spacing, p[1], p[2]]);
+        }
     }
     Cloud::from_positions(positions)
 }

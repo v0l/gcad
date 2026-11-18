@@ -4,6 +4,7 @@ mod assembly;
 mod blends;
 mod bodies;
 mod clearance;
+mod cloud_fit;
 mod cloud_ops;
 mod clouds;
 mod constrain;
@@ -146,6 +147,7 @@ pub struct Model {
     pub scene: gcad_mesh::interp::Scene,
     pub arch: arch::Arch,
     pub clouds: Vec<(String, std::sync::Arc<gcad_cloud::Cloud>)>,
+    pub fits: HashMap<String, Frame>,
 }
 
 #[derive(Clone)]
@@ -584,6 +586,11 @@ pub const OPERATIONS: &[&str] = &[
     "info",
     "cloud_add_outliers",
     "cloud_synthetic",
+    "cluster",
+    "fit",
+    "grow",
+    "slice",
+    "classify",
     "if",
     "include",
     "point",
@@ -710,6 +717,11 @@ const MESH_SAFE: &[&str] = &[
     "info",
     "cloud_add_outliers",
     "cloud_synthetic",
+    "cluster",
+    "fit",
+    "grow",
+    "slice",
+    "classify",
 ];
 
 impl Model {

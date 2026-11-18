@@ -46,12 +46,17 @@ impl Model {
             "colour" => self.cloud_colour(line),
             "info" => self.cloud_info(line),
             "cloud_add_outliers" => self.cloud_outliers(line),
+            "fit" => self.cloud_fit(line),
+            "cluster" => self.cloud_cluster(line),
+            "grow" => self.cloud_grow(line),
+            "slice" => self.cloud_slice(line),
+            "classify" => self.cloud_classify(line),
             "cloud_synthetic" => self.cloud_synthetic(line),
             _ => return None,
         })
     }
 
-    fn named_cloud(&self, name: &str, op: &str) -> Result<Arc<Cloud>> {
+    pub(crate) fn named_cloud(&self, name: &str, op: &str) -> Result<Arc<Cloud>> {
         self.cloud(name).cloned().ok_or_else(|| {
             let known: Vec<_> = self.clouds.iter().map(|(n, _)| n.as_str()).collect();
             anyhow!("`{op}` needs a point cloud, but `{name}` is not one; clouds are {known:?}")
@@ -323,7 +328,12 @@ impl Model {
     }
 
     fn cloud_synthetic(&mut self, line: &Line) -> Result<String> {
-        let args = Args::new(line, &[], &["count", "seed", "size"], false)?;
+        let args = Args::new(
+            line,
+            &["shape"],
+            &["count", "seed", "size", "r", "h", "noise", "spacing", "blobs"],
+            false,
+        )?;
         let name = label_of(line);
         if self.clouds.iter().any(|(n, _)| *n == name)
             || self.bodies.iter().any(|(n, _)| *n == name)
@@ -331,8 +341,34 @@ impl Model {
         {
             bail!("there is already a body called `{name}`");
         }
-        let count = whole(args.number("count", &self.scope)?, "count")?;
         let seed = whole(args.optional_number("seed", &self.scope)?.unwrap_or(1.0), "seed")? as u64;
+        let radius = args.optional_number("r", &self.scope)?.unwrap_or(10.0);
+        let spacing = args.optional_number("spacing", &self.scope)?.unwrap_or(50.0);
+        if args.has("blobs") {
+            let blobs = whole(args.number("blobs", &self.scope)?, "blobs")?;
+            let count = whole(args.optional_number("count", &self.scope)?.unwrap_or(500.0), "count")?;
+            if blobs == 0 || count == 0 || radius <= 0.0 {
+                bail!("`blobs` needs a positive blob count, count and r");
+            }
+            let cloud = ops::synthetic_blobs(blobs, count, seed, radius, spacing);
+            return Ok(self.replace_cloud(&name, cloud));
+        }
+        if let Ok(shape) = args.text("shape") {
+            let count = whole(args.optional_number("count", &self.scope)?.unwrap_or(20000.0), "count")?;
+            let cloud = ops::synthetic_shape(
+                shape,
+                count,
+                seed,
+                ops::Shape {
+                    radius,
+                    height: args.optional_number("h", &self.scope)?.unwrap_or(40.0),
+                    noise: args.optional_number("noise", &self.scope)?.unwrap_or(0.0),
+                    spacing,
+                },
+            )?;
+            return Ok(self.replace_cloud(&name, cloud));
+        }
+        let count = whole(args.number("count", &self.scope)?, "count")?;
         let size = args.optional_number("size", &self.scope)?.unwrap_or(100.0);
         if count == 0 || size <= 0.0 {
             bail!("`cloud_synthetic` needs a positive count and size");

@@ -687,6 +687,33 @@ Recorded time: `scan: cloud_synthetic count=10000000 seed=1`, `downsample scan v
 (`clouds::ten_million_points_through_voxel_and_stat`), generation of the 10 million points
 included; the kd-tree queries of `stat`, `radius` and `normals` run on all cores.
 
+### Segmentation and fitting
+
+```
+cluster scan dist=5 min=100 into=parts
+fit scan plane tol=0.5 into=f
+fit scan plane tol=0.5 into=f all max=20
+fit scan cylinder|sphere|cone tol=0.5 into=c
+grow scan angle=5 curvature=0.05 into=regions
+slice scan plane=z offset=10 thickness=1 into=s
+classify scan ground cell=4 tol=0.6
+```
+
+`cluster` is Euclidean: points closer than `dist` join, groups under `min` are dropped, and the
+rest become the clouds `parts.1`, `parts.2`, and so on, largest first, with `parts.count`.
+`fit` is RANSAC refined by Levenberg-Marquardt on the inliers; a cylinder, sphere or cone gets
+normals estimated if the cloud has none. A fit gives `f.rms`, `f.inliers` and the inlier cloud `f`.
+A plane has `f.origin.x|y|z`, `f.normal.x|y|z` and works as a workplane: `plane f.plane`. A cylinder
+has `f.origin`, `f.axis` and `f.radius`, a sphere `f.centre` and `f.radius`, a cone `f.apex`,
+`f.axis` and `f.angle` (half angle, degrees). With `all`, `max=N` primitives are peeled off
+(`min=` points each, default 1% of the cloud) as `f1`, `f2`, ... with `f.count`. `grow` is region
+growing on normals (`normals scan` first) giving `regions.1`, ... and `regions.count`. `slice`
+takes the points within `thickness` of a plane (`x`, `y`, `z`, a named plane or a fitted plane,
+moved by `offset`), takes the convex outline simplified to `tol` and leaves it as the sketch, so
+`extrude 20` follows; `s.area` and `s.corners` are values. The outline is convex, so a concave
+profile loses its dents. `classify scan ground` stores class 2 for ground and 1 otherwise, by a
+progressive morphological filter on a grid of `cell`, with `tol` height and `slope`.
+
 ## Assemblies
 
 A design with more than one part is a `.gasm` file, an assembly: it brings the parts

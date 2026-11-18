@@ -1,10 +1,12 @@
 pub mod cloud;
 pub mod colour;
 pub mod e57;
+pub mod fit;
 pub mod kdtree;
 pub mod las;
 pub mod ops;
 pub mod ply;
+pub mod segment;
 pub mod sample;
 pub mod xyz;
 

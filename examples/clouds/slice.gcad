@@ -1,0 +1,3 @@
+scan: cloud cube.ply
+slice scan plane=z offset=10 thickness=1 into=profile
+extrude 20

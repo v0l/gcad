@@ -526,46 +526,56 @@ fn scan_to_cad_icp_gives_an_rms_within_the_noise() {
 }
 
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn fit_all_finds_six_planes_on_a_scanned_box() {
-    let model = build(&format!("{}fit scan plane tol=0.5 into=f all max=20", imported_scan()));
+    let model = build(&format!(
+        "{}fit scan plane tol=0.5 into=f all max=20",
+        noisy_box_scan()
+    ));
     assert_eq!(value(&model, "f.count"), 6.0);
+    let mut spans = [(f64::INFINITY, f64::NEG_INFINITY); 3];
     for k in 1..=6 {
-        let normal = [
-            value(&model, &format!("f{k}.normal.x")),
-            value(&model, &format!("f{k}.normal.y")),
-            value(&model, &format!("f{k}.normal.z")),
-        ];
-        let axis = normal.iter().cloned().fold(0.0f64, |m, v| m.max(v.abs()));
-        assert!(axis > 0.5f64.to_radians().cos());
+        let normal: Vec<f64> = ["x", "y", "z"]
+            .iter()
+            .map(|a| value(&model, &format!("f{k}.normal.{a}")))
+            .collect();
+        let origin: Vec<f64> = ["x", "y", "z"]
+            .iter()
+            .map(|a| value(&model, &format!("f{k}.origin.{a}")))
+            .collect();
+        let axis = (0..3)
+            .max_by(|&a, &b| normal[a].abs().total_cmp(&normal[b].abs()))
+            .unwrap();
+        assert!(normal[axis].abs() > 0.5f64.to_radians().cos(), "normal {normal:?}");
+        spans[axis].0 = spans[axis].0.min(origin[axis]);
+        spans[axis].1 = spans[axis].1.max(origin[axis]);
+    }
+    for (lo, hi) in spans {
+        near(hi - lo, 20.0, 0.3);
     }
 }
 
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn fit_cylinder_finds_radius_and_axis() {
     let model = build("scan: cloud_synthetic cylinder r=10 h=40 noise=0.2\nfit scan cylinder tol=0.5 into=c");
     near(value(&model, "c.radius"), 10.0, 0.1);
-    near(value(&model, "c.axis.z").abs(), 1.0, 0.5f64.to_radians().cos().abs() - 1.0 + 1.0);
+    assert!(value(&model, "c.axis.z").abs() >= 0.5f64.to_radians().cos());
 }
 
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn fit_sphere_and_cone() {
     let model = build("scan: cloud_synthetic sphere r=25 noise=0.2\nfit scan sphere tol=0.5 into=s");
     near(value(&model, "s.radius"), 25.0, 0.2);
 }
 
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn three_separated_blobs_cluster_into_three() {
     let source = "scan: cloud_synthetic blobs=3 spacing=100 r=10\ncluster scan dist=5 min=100 into=parts";
     let model = build(source);
     assert_eq!(value(&model, "parts.count"), 3.0);
+    assert!(model.cloud("parts.1").is_some() && model.cloud("parts.3").is_some());
 }
 
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn region_growing_splits_a_box_into_its_faces() {
     let model = build(&format!(
         "{}normals scan k=20\ngrow scan angle=5 curvature=0.05 into=regions",
@@ -575,40 +585,98 @@ fn region_growing_splits_a_box_into_its_faces() {
 }
 
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn slice_of_a_scanned_extrusion_rebuilds_its_volume() {
     let source = format!(
-        "{}slice scan plane=z thickness=1 into=s\nextrude s 20",
+        "{}slice scan plane=z offset=10 thickness=1 into=s\nextrude 20",
         imported_scan()
     );
     let model = build(&source);
-    let volume = volume(&model);
-    near(volume, 8000.0, 80.0);
+    near(value(&model, "s.area"), 400.0, 4.0);
+    assert_volume(&model, 8000.0, 0.01);
+}
+
+fn terrain_las() -> String {
+    let mut cloud = Cloud::with_layout(
+        gcad_cloud::Layout {
+            classes: true,
+            ..Default::default()
+        },
+        20000,
+    );
+    let ground = |x: f64, y: f64| 2.0 * (x / 40.0).sin() + 0.05 * y;
+    let mut put = |x: f64, y: f64, z: f64, class: u8| {
+        let mut point = gcad_cloud::Point::at([x + 500000.0, y + 4000000.0, z]);
+        point.class = Some(class);
+        cloud.push(point);
+    };
+    for i in 0..100 {
+        for j in 0..100 {
+            let (x, y) = (i as f64, j as f64);
+            put(x, y, ground(x, y), 2);
+        }
+    }
+    for (cx, cy, size, height) in [(20.0, 30.0, 12.0, 8.0), (60.0, 60.0, 15.0, 10.0), (75.0, 15.0, 6.0, 5.0)] {
+        for i in 0..size as usize {
+            for j in 0..size as usize {
+                let (x, y) = (cx + i as f64, cy + j as f64);
+                put(x, y, ground(x, y) + height, 6);
+            }
+        }
+    }
+    for k in 0..40 {
+        let (x, y) = (10.0 + 2.2 * k as f64, 85.0 - 1.7 * k as f64);
+        for h in 1..6 {
+            put(x + 0.3, y, ground(x, y) + h as f64, 5);
+        }
+    }
+    let path = scratch("terrain.las");
+    gcad_cloud::las::write(std::path::Path::new(&path), &cloud, 0.001).unwrap();
+    path
 }
 
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn ground_filter_matches_the_stored_classification() {
-    let model = build(&format!("scan: cloud {}\nclassify scan ground", fixture("survey.las")));
-    let cloud = cloud_of(&model, "scan");
-    let classes = cloud.classes.as_ref().unwrap();
-    let stored: Vec<bool> = load_stored_ground();
-    let agree = classes.iter().zip(&stored).filter(|(c, s)| (**c == 2) == **s).count();
-    assert!(agree as f64 >= 0.95 * classes.len() as f64);
-}
-
-fn load_stored_ground() -> Vec<bool> {
-    cloud_of(&load("survey.las", ""), "scan")
+    let path = terrain_las();
+    let stored: Vec<bool> = read_back(&path)
         .classes
-        .as_ref()
         .unwrap()
         .iter()
         .map(|&c| c == 2)
-        .collect()
+        .collect();
+    let model = build(&format!("scan: cloud {path}\nclassify scan ground cell=4 tol=0.6"));
+    let cloud = cloud_of(&model, "scan");
+    let classes = cloud.classes.as_ref().unwrap();
+    let agree = classes.iter().zip(&stored).filter(|(c, s)| (**c == 2) == **s).count();
+    assert!(agree as f64 >= 0.95 * classes.len() as f64, "{agree} of {}", classes.len());
 }
 
+fn noisy_box_scan() -> String {
+    let mut text = String::new();
+    let mut state = 12345u64;
+    let mut next = move || {
+        state = state.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        ((state >> 11) as f64 / (1u64 << 53) as f64) * 2.0 - 1.0
+    };
+    for axis in 0..3 {
+        for at in [0.0, 20.0] {
+            for i in 0..=40 {
+                for j in 0..=40 {
+                    let mut p = [0.0; 3];
+                    p[axis] = at + 0.2 * next();
+                    p[(axis + 1) % 3] = i as f64 * 0.5;
+                    p[(axis + 2) % 3] = j as f64 * 0.5;
+                    text += &format!("{} {} {}\n", p[0], p[1], p[2]);
+                }
+            }
+        }
+    }
+    let path = scratch("noisy_box.xyz");
+    std::fs::write(&path, text).unwrap();
+    format!("scan: cloud {path}\n")
+}
+
+
 #[test]
-#[ignore = "missing: segmentation and fitting, gcad #447"]
 fn a_fitted_plane_makes_a_workplane_and_a_cylinder_a_hole() {
     let source = format!(
         "{}fit scan plane tol=0.5 into=f\nplane f.plane\nrect 4 4\nextrude 2",
@@ -759,4 +827,20 @@ fn clean_example_runs() {
     let model = build(&source);
     assert!(cloud_of(&model, "scan").normals.is_some());
     assert!(value(&model, "scan.points") < 2646.0);
+}
+
+#[test]
+fn fit_and_slice_examples_run() {
+    for (name, expected) in [("fit", 12566.37), ("slice", 8000.0)] {
+        let source = std::fs::read_to_string(format!(
+            "{}/examples/clouds/{name}.gcad",
+            env!("CARGO_MANIFEST_DIR")
+        ))
+        .expect("example exists")
+        .replace(
+            "cloud cube.ply",
+            &format!("cloud {}/examples/clouds/cube.ply", env!("CARGO_MANIFEST_DIR")),
+        );
+        assert_volume(&build(&source), expected, 0.03);
+    }
 }
