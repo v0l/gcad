@@ -167,8 +167,9 @@ Minds-eye is a held-out evaluation. Its tasks are never training data, and nothi
 |---|---|---|---|---|---|---|---|---|
 | local-render (qwen3.8-27b + skill) | 15 | 47% | 4.9 | 0.81 | 3.88 | 714k | 683 | reference |
 | opus-render (claude-opus-5-5, thinking high) | 16 | 100% | 5.6 | 0.88 | 6.68 | 515k | 218 | 5-0 vs local |
+| gcadvlm-r2 (Qwen3.5-4B, expert iteration round 2, repair loop) | 16 | 100% | 1.6 | 0.11 | 3.98 | 1k | 21 | 0-5 vs local |
 
-Qwen3.5-4B-Base has not been run on minds-eye yet. The earlier Qwen3-VL SFT adapter built 1 of 16 runs (judge 1.0): it was trained on four renders in and a program out, never on a text brief or a tool loop, so it wrote `plane`/`rect`/`extrude` lines until the token limit. The opus row below is the bar.
+The gcadvlm-r2 row is `out/vlm_ei/r2/lora` run through `tools/vlm/infer.py` on the task prompt (config `configs/gcadvlm-r2.json`, agent `vlm`: one greedy program, then the repair loop, no renders). Every run builds, but only the bracket scores (5 and 6, against opus 8 and 8): the judge calls it a clean flat L plate with countersunk holes, not a bent angle bracket. The other seven tasks score 1. The sword is a flat L bar, the chest, cottage, rocket and tractor are box-and-plate mechanical parts, and the knight fell through to the stub cube. The model writes small machined parts whatever it is asked for, because every training target is a CAD part from the pair datasets. Greedy decoding gives the same program for both seeds. The earlier Qwen3-VL SFT adapter built 1 of 16 runs (judge 1.0): it was trained on four renders in and a program out, never on a text brief or a tool loop, so it wrote `plane`/`rect`/`extrude` lines until the token limit.
 
 ## General gcad model (#627)
 
