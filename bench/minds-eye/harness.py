@@ -129,7 +129,37 @@ def run_agent_agentbench(cfg, task, workdir, log):
             "tool_calls": calls, "renders": None}
 
 
-AGENTS = {"api": run_agent_api, "cli": run_agent_cli, "agentbench": run_agent_agentbench}
+def vlm_command(cfg, task, out):
+    return ["flock", cfg.get("lock", "/tmp/gpu27.lock"), os.path.expanduser(cfg.get("python", "~/gcad-datasets/venv-vlm/bin/python")),
+            os.path.join(REPO, "tools", "vlm", "infer.py"), "--adapter", os.path.expanduser(cfg["adapter"]),
+            "--k", str(cfg.get("k", 8)), "--brief", task["prompt"], "--out", out]
+
+
+def last_json(text):
+    for line in reversed(text.splitlines()):
+        if line.startswith("{"):
+            try:
+                return json.loads(line)
+            except json.JSONDecodeError:
+                continue
+    return {}
+
+
+def run_agent_vlm(cfg, task, workdir, log):
+    env = {**os.environ, "HF_HUB_OFFLINE": "1", "PYTORCH_CUDA_ALLOC_CONF": "expandable_segments:True"}
+    started = time.time()
+    try:
+        p = subprocess.run(vlm_command(cfg, task, os.path.join(workdir, "model.gcad")), capture_output=True, text=True,
+                           timeout=cfg["budget"]["seconds"], env=env)
+    except subprocess.TimeoutExpired:
+        return {"stop": "time budget", "seconds": round(time.time() - started, 1), "tokens": {}, "tool_calls": None, "renders": 0}
+    log.write(json.dumps({"stderr": p.stderr[-4000:]}) + "\n")
+    info = last_json(p.stderr)
+    return {"stop": info.get("stage", f"exit {p.returncode}"), "seconds": round(time.time() - started, 1),
+            "tokens": info.get("tokens", {}), "tool_calls": info.get("tries"), "renders": 0}
+
+
+AGENTS = {"api": run_agent_api, "cli": run_agent_cli, "agentbench": run_agent_agentbench, "vlm": run_agent_vlm}
 
 
 def run_one(cfg, task, seed, keep):

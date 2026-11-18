@@ -26,6 +26,24 @@ class Requests(unittest.TestCase):
         self.assertEqual(request_body(cfg, [], [])["reasoning_effort"], "high")
 
 
+class Vlm(unittest.TestCase):
+    def test_command_passes_prompt_and_adapter(self):
+        cmd = harness.vlm_command({"adapter": "/a", "k": 4}, {"prompt": "A sword."}, "/w/model.gcad")
+        self.assertEqual(cmd[0:2], ["flock", "/tmp/gpu27.lock"])
+        self.assertTrue(cmd[3].endswith(os.path.join("tools", "vlm", "infer.py")))
+        self.assertEqual(cmd[4:], ["--adapter", "/a", "--k", "4", "--brief", "A sword.", "--out", "/w/model.gcad"])
+
+    def test_last_json_skips_log_lines(self):
+        text = 'Loading weights\n{"stage": "resample", "tries": 2}\nwarning: x\n'
+        self.assertEqual(harness.last_json(text), {"stage": "resample", "tries": 2})
+        self.assertEqual(harness.last_json("no json\n"), {})
+
+    def test_config_is_the_round_2_adapter(self):
+        cfg = harness.load_config(os.path.join(os.path.dirname(__file__), "configs", "gcadvlm-r2.json"))
+        self.assertEqual((cfg["agent"], cfg["render"]), ("vlm", False))
+        self.assertTrue(cfg["adapter"].endswith("vlm_ei/r2/lora"))
+
+
 class Transcript(unittest.TestCase):
     def test_scrub_images_replaces_data_urls_with_saved_paths(self):
         from agent_api import scrub_images

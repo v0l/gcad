@@ -51,6 +51,7 @@ def generator(model, processor, text, image_paths, max_new_tokens=700):
     pad = processor.tokenizer.pad_token_id
     images = [Image.open(p).convert("RGB").resize((IMAGE_SIDE, IMAGE_SIDE)) for p in image_paths]
     batch = processor(text=[prompt_text(processor, fmt, len(images), text)], images=images or None, return_tensors="pt").to(model.device)
+    usage = {"input": 0, "output": 0}
 
     def generate(n, temperature):
         kwargs = {"max_new_tokens": max_new_tokens, "eos_token_id": [stop], "pad_token_id": pad if pad is not None else stop, "num_return_sequences": n}
@@ -58,8 +59,11 @@ def generator(model, processor, text, image_paths, max_new_tokens=700):
         with torch.no_grad():
             out = model.generate(**batch, **kwargs)
         comps = [completion_tokens(c.tolist(), stop, pad) for c in out[:, batch["input_ids"].shape[1]:]]
+        usage["input"] += batch["input_ids"].shape[1] * n
+        usage["output"] += sum(len(c) for c in comps)
         return processor.tokenizer.batch_decode(comps, skip_special_tokens=True)
 
+    generate.usage = usage
     return generate
 
 
@@ -78,12 +82,13 @@ def main():
     if args.images and len(args.images) != len(VIEWS):
         parser.error(f"--images takes {len(VIEWS)} views: {' '.join(VIEWS)}")
     model, processor = load(args.adapter)
-    result = solve(generator(model, processor, args.brief or PROMPT, args.images), args.k)
+    generate = generator(model, processor, args.brief or PROMPT, args.images)
+    result = solve(generate, args.k)
     if args.out:
         Path(args.out).write_text(result["program"])
     else:
         sys.stdout.write(result["program"])
-    print(json.dumps({k: v for k, v in result.items() if k != "program"}), file=sys.stderr)
+    print(json.dumps({**{k: v for k, v in result.items() if k != "program"}, "tokens": generate.usage}), file=sys.stderr)
     sys.exit(0 if result["built"] else 1)
 
 
