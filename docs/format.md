@@ -682,6 +682,11 @@ poses) faces each scan's origin. `merge` keeps a scan id per point, renumbering 
 `colour by=` stores the colours the viewer would show. `info` prints count, bounds, mean spacing
 and density. The transforms are the ones solids use; normals turn with them.
 
+Recorded time: `scan: cloud_synthetic count=10000000 seed=1`, `downsample scan voxel=0.05` and
+`denoise scan stat k=16 sigma=2` run in 3.7 s in a release build on a 48-thread machine
+(`clouds::ten_million_points_through_voxel_and_stat`), generation of the 10 million points
+included; the kd-tree queries of `stat`, `radius` and `normals` run on all cores.
+
 ## Assemblies
 
 A design with more than one part is a `.gasm` file, an assembly: it brings the parts
