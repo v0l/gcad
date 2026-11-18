@@ -20,6 +20,7 @@ pub mod mate;
 pub mod materials;
 mod measure;
 mod member;
+mod mesh_recon;
 mod meshes;
 mod oring;
 pub mod parity;
@@ -591,6 +592,12 @@ pub const OPERATIONS: &[&str] = &[
     "grow",
     "slice",
     "classify",
+    "mesh",
+    "fill",
+    "clean",
+    "open_hole",
+    "points",
+    "sample",
     "if",
     "include",
     "point",
@@ -722,6 +729,12 @@ const MESH_SAFE: &[&str] = &[
     "grow",
     "slice",
     "classify",
+    "mesh",
+    "fill",
+    "clean",
+    "open_hole",
+    "points",
+    "sample",
 ];
 
 impl Model {
@@ -828,6 +841,9 @@ impl Model {
 
     fn apply_op(&mut self, line: &Line) -> Result<String> {
         if let Some(done) = self.cloud_op(line) {
+            return done;
+        }
+        if let Some(done) = self.recon_op(line) {
             return done;
         }
         if !gcad_mesh::rig_ops::SCULPT_OPS.contains(&line.op.as_str()) {

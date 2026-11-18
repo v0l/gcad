@@ -251,6 +251,127 @@ impl<R: BufRead> Values<'_, R> {
     }
 }
 
+impl<R: BufRead> Values<'_, R> {
+    fn record_listed(
+        &mut self,
+        element: &Element,
+        mut keep: impl FnMut(Role, f64, Scalar),
+        mut list: impl FnMut(&[f64]),
+    ) -> Result<()> {
+        if self.encoding == Encoding::Ascii {
+            self.next_line()?;
+        }
+        let mut items: Vec<f64> = Vec::new();
+        for property in &element.properties {
+            match property.kind {
+                Kind::Value(kind) => {
+                    let v = self.value(kind)?;
+                    keep(property.role, v, kind);
+                }
+                Kind::List(count, item) => {
+                    let n = self.value(count)? as usize;
+                    items.clear();
+                    for _ in 0..n {
+                        items.push(self.value(item)?);
+                    }
+                    list(&items);
+                }
+            }
+        }
+        Ok(())
+    }
+}
+
+pub struct MeshFile {
+    pub positions: Vec<[f64; 3]>,
+    pub triangles: Vec<[u32; 3]>,
+    pub colours: Option<Vec<[u8; 3]>>,
+}
+
+pub fn read_mesh(source: Box<dyn Source>) -> Result<MeshFile> {
+    let mut reader = BufReader::with_capacity(1 << 16, source);
+    let header = read_header(&mut reader)?;
+    let mut values = Values {
+        reader: &mut reader,
+        encoding: header.encoding,
+        line: Vec::new(),
+        text: String::new(),
+    };
+    let mut positions: Vec<[f64; 3]> = Vec::new();
+    let mut colours: Vec<[u8; 3]> = Vec::new();
+    let mut with_colours = false;
+    let mut triangles: Vec<[u32; 3]> = Vec::new();
+    let mut saw_vertex = false;
+    for element in &header.elements {
+        match element.name.as_str() {
+            "vertex" => {
+                saw_vertex = true;
+                let has = |role: Role| element.properties.iter().any(|p| p.role == role);
+                if !(has(Role::X) && has(Role::Y) && has(Role::Z)) {
+                    bail!("the PLY vertex element has no x, y and z");
+                }
+                with_colours = has(Role::Red) && has(Role::Green) && has(Role::Blue);
+                for _ in 0..element.count {
+                    let mut p = [0.0f64; 3];
+                    let mut c = [200u8; 3];
+                    values.record(element, |role, v, kind| match role {
+                        Role::X => p[0] = v,
+                        Role::Y => p[1] = v,
+                        Role::Z => p[2] = v,
+                        Role::Red => c[0] = byte_of(v, kind),
+                        Role::Green => c[1] = byte_of(v, kind),
+                        Role::Blue => c[2] = byte_of(v, kind),
+                        _ => {}
+                    })?;
+                    positions.push(p);
+                    colours.push(c);
+                }
+            }
+            "face" => {
+                let count = positions.len();
+                let mut bad = None;
+                for _ in 0..element.count {
+                    values.record_listed(
+                        element,
+                        |_, _, _| {},
+                        |items| {
+                            if items.len() < 3 {
+                                return;
+                            }
+                            if items.iter().any(|&v| v < 0.0 || v as usize >= count) {
+                                bad = Some(items.to_vec());
+                                return;
+                            }
+                            for t in 1..items.len() - 1 {
+                                triangles.push([items[0] as u32, items[t] as u32, items[t + 1] as u32]);
+                            }
+                        },
+                    )?;
+                }
+                if let Some(items) = bad {
+                    bail!("a PLY face uses a vertex that does not exist: {items:?}");
+                }
+            }
+            _ => {
+                for _ in 0..element.count {
+                    values.record(element, |_, _, _| {})?;
+                }
+            }
+        }
+    }
+    if !saw_vertex {
+        bail!("the PLY file has no `vertex` element");
+    }
+    if triangles.is_empty() {
+        bail!("the PLY file holds no faces, read it as a cloud instead");
+    }
+    Ok(MeshFile {
+        positions,
+        triangles,
+        colours: with_colours.then_some(colours),
+    })
+}
+
 fn byte_of(value: f64, kind: Scalar) -> u8 {
     let scaled = match kind {
         Scalar::F32 | Scalar::F64 if value <= 1.0 => value * 255.0,

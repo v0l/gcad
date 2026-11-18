@@ -746,11 +746,11 @@ Point clouds, gcad #444 to #449. A cloud is a named body like a mesh: `scan: clo
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| Poisson | missing | `mesh scan poisson depth=9 trim=0.1 into=m` | `clouds::poisson_of_a_sphere_cloud_is_watertight_with_the_right_volume` |
-| ball pivoting | missing | `mesh scan pivot r=2,4,8 into=m` | `clouds::ball_pivoting_covers_the_sphere_area` |
-| hole fill and decimate | missing | `fill m max_edges=100`, `decimate m to=50000` | `clouds::filling_a_known_hole_closes_it_and_decimation_hits_the_target` |
-| clean and Taubin | missing | `clean m`, `smooth m taubin iters=10` | `clouds::clean_and_taubin_smoothing_keep_the_mesh_manifold` |
-| scanner meshes | missing | PLY faces with colours, `points m every=1`, `sample m count=N` | `clouds::a_scanner_ply_mesh_with_colours_imports_and_samples_back_to_a_cloud` |
+| Poisson | supported | `mesh scan poisson depth=9 trim=0.1 into=m` | `clouds::poisson_of_a_sphere_cloud_is_watertight_with_the_right_volume`, `clouds::the_stanford_bunny_reconstructs_to_a_manifold_mesh`, `clouds::one_million_points_through_poisson` |
+| ball pivoting | supported | `mesh scan pivot r=2,4,8 into=m` | `clouds::ball_pivoting_covers_the_sphere_area` |
+| hole fill and decimate | supported | `fill m max_edges=100`, `decimate m to=50000`, `decimate m ratio=0.1` | `clouds::filling_a_known_hole_closes_it_and_decimation_hits_the_target` |
+| clean and Taubin | supported | `clean m`, `smooth m taubin iters=10` | `clouds::clean_and_taubin_smoothing_keep_the_mesh_manifold` |
+| scanner meshes | supported | PLY faces with colours, `points m every=1`, `sample m count=N` | `clouds::a_scanner_ply_mesh_with_colours_imports_and_samples_back_to_a_cloud` |
 
 ### Inspection (#449)
 

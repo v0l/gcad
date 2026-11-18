@@ -8,6 +8,7 @@ pub mod grid;
 pub mod masking;
 pub mod plate;
 pub mod quadric;
+pub mod repair;
 pub mod rig;
 pub mod sculpt;
 pub mod sdf;
@@ -33,6 +34,7 @@ pub struct Mesh {
     pub parts: Vec<String>,
     pub mask: Vec<f64>,
     pub hidden: Vec<u16>,
+    pub vertex_colours: Vec<[u8; 3]>,
     pub layers: Vec<channels::Layer>,
 }
 
@@ -452,6 +454,9 @@ pub(crate) fn surface_distance(mesh: &Mesh, core: &[bool], limit: f64) -> Vec<f6
 impl Mesh {
     pub fn blend_colours(&self, tints: &[[f64; 3]], soft: &[f64]) -> Vec<[f64; 3]> {
         let own = |i: usize| {
+            if let Some(c) = self.vertex_colours.get(i) {
+                return c.map(|v| v as f64 / 255.0);
+            }
             tints
                 .get(self.labels[i] as usize)
                 .copied()

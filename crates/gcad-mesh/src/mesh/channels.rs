@@ -86,11 +86,24 @@ impl Mesh {
                 None => layer.delta = pick(&layer.delta),
             }
         }
+        if !self.vertex_colours.is_empty() {
+            self.vertex_colours = keep
+                .iter()
+                .map(|&i| self.vertex_colours.get(i as usize).copied().unwrap_or([200; 3]))
+                .collect();
+        }
         self.positions = pick(&self.positions);
         self.labels = keep.iter().map(|&i| self.labels[i as usize]).collect();
     }
 
     pub(crate) fn merge_channels(&mut self, other: &Mesh, before: usize) {
+        if !self.vertex_colours.is_empty() || !other.vertex_colours.is_empty() {
+            self.vertex_colours.resize(before, [200; 3]);
+            self.vertex_colours.extend(
+                (0..other.positions.len())
+                    .map(|i| other.vertex_colours.get(i).copied().unwrap_or([200; 3])),
+            );
+        }
         if !self.mask.is_empty() || !other.mask.is_empty() {
             self.mask.resize(before, 0.0);
             self.mask.extend(
@@ -111,6 +124,7 @@ impl Mesh {
 
     pub(crate) fn transform_channels(&self, out: &mut Mesh, f: &impl Fn(P3) -> P3) {
         out.mask = self.mask.clone();
+        out.vertex_colours = self.vertex_colours.clone();
         out.hidden = self.hidden.clone();
         out.layers = self
             .layers

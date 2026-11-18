@@ -62,10 +62,59 @@ fn moved(cloud: &Cloud, by: [f64; 3]) -> Cloud {
     out
 }
 
+fn scanner_sphere(radius: f64, rings: usize, sectors: usize) -> String {
+    let mut vertices = Vec::new();
+    for r in 0..=rings {
+        let phi = std::f64::consts::PI * r as f64 / rings as f64;
+        for s in 0..sectors {
+            let theta = std::f64::consts::TAU * s as f64 / sectors as f64;
+            let p = [
+                radius * phi.sin() * theta.cos(),
+                radius * phi.sin() * theta.sin(),
+                radius * phi.cos(),
+            ];
+            let colour = [
+                (127.5 + 127.5 * theta.cos()) as u8,
+                (255.0 * r as f64 / rings as f64) as u8,
+                (127.5 + 127.5 * theta.sin()) as u8,
+            ];
+            vertices.push((p, colour));
+        }
+    }
+    let mut faces = Vec::new();
+    for r in 0..rings {
+        for s in 0..sectors {
+            let a = (r * sectors + s) as u32;
+            let b = (r * sectors + (s + 1) % sectors) as u32;
+            let c = ((r + 1) * sectors + s) as u32;
+            let d = ((r + 1) * sectors + (s + 1) % sectors) as u32;
+            if r > 0 {
+                faces.push([a, c, b]);
+            }
+            if r + 1 < rings {
+                faces.push([b, c, d]);
+            }
+        }
+    }
+    let mut text = format!(
+        "ply\nformat ascii 1.0\ncomment scanner style mesh with vertex colours\nelement vertex {}\nproperty float x\nproperty float y\nproperty float z\nproperty uchar red\nproperty uchar green\nproperty uchar blue\nelement face {}\nproperty list uchar int vertex_indices\nend_header\n",
+        vertices.len(),
+        faces.len()
+    );
+    for (p, c) in &vertices {
+        text.push_str(&format!("{:.4} {:.4} {:.4} {} {} {}\n", p[0], p[1], p[2], c[0], c[1], c[2]));
+    }
+    for f in &faces {
+        text.push_str(&format!("3 {} {} {}\n", f[0], f[1], f[2]));
+    }
+    text
+}
+
 fn main() -> anyhow::Result<()> {
     let dir = std::env::args().nth(1).unwrap_or_else(|| "tests/fixtures/clouds".into());
     let dir = Path::new(&dir);
     std::fs::create_dir_all(dir)?;
+    std::fs::write(dir.join("scanner_mesh.ply"), scanner_sphere(10.0, 40, 80))?;
     let mut rng = Noise(7);
     let cube = cube_surface(20.0, 1.0, 0.05, &mut rng);
     let mut ascii = Vec::new();

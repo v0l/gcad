@@ -1,0 +1,10 @@
+scan: cloud_synthetic sphere count=40000 r=50 noise=0.2
+normals scan k=20
+poisson: mesh scan poisson depth=8 trim=0.1
+pivot: mesh scan pivot r=3,6,12
+clean pivot
+fill pivot max_edges=100
+smooth poisson taubin iters=10
+decimate poisson ratio=0.25
+rebuilt: points poisson every=1
+resampled: sample poisson count=5000

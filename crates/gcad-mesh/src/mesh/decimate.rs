@@ -446,6 +446,14 @@ impl Mesh {
                 Vec::new()
             },
             hidden: self.hidden.clone(),
+            vertex_colours: if self.vertex_colours.len() == self.positions.len() {
+                representative
+                    .iter()
+                    .map(|&i| self.vertex_colours[i as usize])
+                    .collect()
+            } else {
+                Vec::new()
+            },
             layers: Vec::new(),
         };
         (mesh, representative)

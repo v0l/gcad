@@ -467,6 +467,18 @@ fn ten_million_points_through_voxel_and_stat() {
 }
 
 #[test]
+fn one_million_points_through_poisson() {
+    let source = "scan: cloud_synthetic sphere count=1000000 r=50 noise=0.1\nnormals scan k=12\nmesh scan poisson depth=9 into=m";
+    let started = std::time::Instant::now();
+    let model = build(source);
+    let seconds = started.elapsed().as_secs_f64();
+    println!("1M point Poisson, normals included: {seconds:.1} s");
+    let mesh = model.meshes().last().unwrap().1.clone();
+    assert_eq!(mesh.open_edges(), 0);
+    assert!(seconds < 300.0);
+}
+
+#[test]
 #[ignore = "missing: registration, gcad #446"]
 fn point_pairs_with_three_exact_pairs_give_zero_rms() {
     let source = format!(
@@ -756,7 +768,6 @@ fn a_fitted_plane_makes_a_workplane_and_a_cylinder_a_hole() {
 }
 
 #[test]
-#[ignore = "missing: surface reconstruction, gcad #448"]
 fn poisson_of_a_sphere_cloud_is_watertight_with_the_right_volume() {
     let source = "scan: cloud_synthetic sphere r=50 noise=0.2\nnormals scan k=20\nmesh scan poisson depth=9 trim=0.1 into=m";
     let model = build(source);
@@ -764,10 +775,10 @@ fn poisson_of_a_sphere_cloud_is_watertight_with_the_right_volume() {
     assert_eq!(mesh.open_edges(), 0);
     let exact = 4.0 / 3.0 * std::f64::consts::PI * 50.0f64.powi(3);
     near(mesh.volume(), exact, exact * 0.01);
+    assert!(mesh.volume() > 0.0);
 }
 
 #[test]
-#[ignore = "missing: surface reconstruction, gcad #448"]
 fn ball_pivoting_covers_the_sphere_area() {
     let source = "scan: cloud_synthetic sphere r=50 noise=0.2\nnormals scan k=20\nmesh scan pivot r=2,4,8 into=m";
     let model = build(source);
@@ -777,7 +788,6 @@ fn ball_pivoting_covers_the_sphere_area() {
 }
 
 #[test]
-#[ignore = "missing: surface reconstruction, gcad #448"]
 fn filling_a_known_hole_closes_it_and_decimation_hits_the_target() {
     let source = "ball: blob 0,0,0 r=10\nremesh 0.5\nopen_hole ball at=0,0,10 r=3\nfill ball max_edges=100\ndecimate ball to=500";
     let model = build(source);
@@ -787,7 +797,24 @@ fn filling_a_known_hole_closes_it_and_decimation_hits_the_target() {
 }
 
 #[test]
-#[ignore = "missing: surface reconstruction, gcad #448"]
+fn the_stanford_bunny_reconstructs_to_a_manifold_mesh() {
+    let source = format!(
+        "bunny: import {} mesh\nclean bunny\nscan: points bunny every=1\nnormals scan k=20\nrebuilt: mesh scan poisson depth=8 trim=0.05",
+        fixture("bunny.obj")
+    );
+    let model = build(&source);
+    let mesh = model
+        .meshes()
+        .into_iter()
+        .find(|(n, _)| n == "rebuilt")
+        .expect("mesh")
+        .1;
+    assert_eq!(mesh.open_edges(), 0);
+    println!("bunny poisson triangles {}", mesh.triangles.len());
+    assert!(mesh.triangles.len() > 5_000);
+}
+
+#[test]
 fn clean_and_taubin_smoothing_keep_the_mesh_manifold() {
     let source = "ball: blob 0,0,0 r=10\nremesh 0.5\nsmooth ball taubin iters=10\nclean ball";
     let model = build(source);
@@ -795,7 +822,6 @@ fn clean_and_taubin_smoothing_keep_the_mesh_manifold() {
 }
 
 #[test]
-#[ignore = "missing: surface reconstruction, gcad #448"]
 fn a_scanner_ply_mesh_with_colours_imports_and_samples_back_to_a_cloud() {
     let source = format!(
         "m: import {} mesh\ns: points m every=1\nt: sample m count=1000",

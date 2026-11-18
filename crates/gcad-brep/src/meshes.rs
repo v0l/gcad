@@ -224,7 +224,22 @@ impl Model {
                         .collect(),
                 )
             }
-            other => bail!("`import ... mesh` reads .obj and .stl files, not `.{other}`"),
+            "ply" => {
+                let source = crate::host::open(path)
+                    .with_context(|| format!("reading {}", path.display()))?;
+                let file = gcad_cloud::ply::read_mesh(Box::new(source))
+                    .with_context(|| format!("reading {}", path.display()))?;
+                let mut mesh = mesh::Mesh {
+                    labels: vec![0; file.positions.len()],
+                    positions: file.positions,
+                    triangles: file.triangles,
+                    parts: vec!["mesh".to_string()],
+                    ..Default::default()
+                };
+                mesh.vertex_colours = file.colours.unwrap_or_default();
+                mesh
+            }
+            other => bail!("`import ... mesh` reads .obj, .stl and .ply files, not `.{other}`"),
         };
         if mesh.parts == ["mesh"] {
             mesh.parts = vec![label_of(line)];

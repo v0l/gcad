@@ -722,7 +722,10 @@ impl Model {
             Some(dir) if file.is_relative() => dir.join(&file),
             _ => file,
         };
-        if args.values.get("as").copied() == Some("cloud") || super::clouds::is_cloud_file(&path) {
+        if args.values.get("as").copied() == Some("cloud")
+            || (args.values.get("as").copied() != Some("mesh")
+                && super::clouds::is_cloud_file(&path))
+        {
             return self.import_cloud(line, &args, &path);
         }
         match args.values.get("as").copied() {

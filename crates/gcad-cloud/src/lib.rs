@@ -5,8 +5,10 @@ pub mod fit;
 pub mod kdtree;
 pub mod las;
 pub mod ops;
+pub mod pivot;
 pub mod ply;
 pub mod segment;
+pub mod poisson;
 pub mod sample;
 pub mod xyz;
 

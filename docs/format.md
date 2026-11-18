@@ -682,6 +682,49 @@ poses) faces each scan's origin. `merge` keeps a scan id per point, renumbering 
 `colour by=` stores the colours the viewer would show. `info` prints count, bounds, mean spacing
 and density. The transforms are the ones solids use; normals turn with them.
 
+### Reconstruction
+
+```
+poisson: mesh scan poisson depth=9 trim=0.1
+pivot: mesh scan pivot r=2,4,8
+fill pivot max_edges=100
+clean pivot
+smooth poisson taubin iters=10
+decimate poisson to=50000
+decimate poisson ratio=0.1
+rebuilt: points poisson every=1
+resampled: sample poisson count=100000
+m: import scan.ply mesh
+```
+
+`mesh cloud method` needs normals (run `normals` first) and makes a named mesh body, named by the
+label or `into=`. `poisson` is a screened Poisson reconstruction after Kazhdan and Hoppe, "Screened
+Poisson Surface Reconstruction" (ACM TOG 2013), written in Rust for gcad (no code taken from the
+reference implementation, whose MIT licence therefore does not apply): the oriented normals are
+splatted trilinearly onto a sparse grid whose cell is the bounding box over 2^depth (never finer
+than twice the mean point spacing), the divergence of that field is the right hand side of a screened
+Poisson equation solved by preconditioned conjugate gradients, and the zero level set is extracted
+with dual contouring cells. `trim` drops triangles whose sample density is below that share of the
+median, so the surface does not balloon over gaps, and small holes left by trimming are filled.
+`pivot` is ball pivoting after Bernardini et al., "The Ball-Pivoting Algorithm for Surface
+Reconstruction" (IEEE TVCG 1999): the radii run from small to large and the surface stays open where
+the scan has no points. Colours carry to the mesh vertices from the nearest cloud point.
+`fill` closes boundary loops of up to `max_edges` edges with a fan. `clean` welds duplicate
+vertices, drops degenerate and duplicate triangles, non-manifold edges and fans, and islands under
+2% of the largest piece (`islands=` to change). `smooth m taubin` is the lambda 0.5, mu -0.53
+smoother that does not shrink the surface. `decimate m to=N|ratio=r` uses the quadric decimation
+of the mesh ops. `open_hole m at=x,y,z r=3` removes the triangles near a point. `import file.ply
+mesh` reads faces and vertex colours; `points m` turns vertices into a cloud with normals and
+colours, and `sample m count=N` draws area weighted points.
+
+![The Stanford bunny rebuilt with Poisson reconstruction](point-cloud-reconstruction.png)
+
+Recorded time: `scan: cloud_synthetic sphere count=1000000 r=50 noise=0.1`, `normals scan k=12` and
+`mesh scan poisson depth=9` run in 16 s in a release build on a 48-thread machine
+(`clouds::one_million_points_through_poisson`). The Stanford bunny (35947 points as a cloud)
+reconstructs at depth 8 to a closed mesh of 39200 triangles
+(`clouds::the_stanford_bunny_reconstructs_to_a_manifold_mesh`).
+
 Recorded time: `scan: cloud_synthetic count=10000000 seed=1`, `downsample scan voxel=0.05` and
 `denoise scan stat k=16 sigma=2` run in 3.7 s in a release build on a 48-thread machine
 (`clouds::ten_million_points_through_voxel_and_stat`), generation of the 10 million points
