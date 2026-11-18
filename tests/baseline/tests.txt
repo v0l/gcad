@@ -28,7 +28,7 @@ tests/c_abi.rs c_abi: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered 
 tests/cache.rs cache: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc.rs calc: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc_thread.rs calc_thread: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/clouds.rs clouds: ok. 46 passed; 0 failed; 17 ignored; 0 measured; 0 filtered out
+tests/clouds.rs clouds: ok. 53 passed; 0 failed; 12 ignored; 0 measured; 0 filtered out
 tests/dependencies.rs dependencies: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/examples.rs examples: ok. 8 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/features.rs features: ok. 87 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
