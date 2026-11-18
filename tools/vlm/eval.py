@@ -56,6 +56,7 @@ def main():
     parser.add_argument("--base", default=BASE)
     parser.add_argument("--split", default="test")
     parser.add_argument("--limit", type=int, default=200)
+    parser.add_argument("--offset", type=int, default=0)
     parser.add_argument("--max-new-tokens", type=int, default=700)
     parser.add_argument("--temperature", type=float, default=0.0)
     parser.add_argument("--max-lines", type=int, default=60)
@@ -71,7 +72,7 @@ def main():
     if args.adapter:
         model = PeftModel.from_pretrained(model, args.adapter)
     model.eval()
-    rows = read_pairs(split=args.split, max_lines=args.max_lines)[: args.limit]
+    rows = read_pairs(split=args.split, max_lines=args.max_lines)[args.offset : args.offset + args.limit]
     results = []
     with ThreadPoolExecutor(4) as pool, open(args.out, "w") as f:
         pending = []
