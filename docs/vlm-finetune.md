@@ -85,6 +85,19 @@ Dropping lines alone, without resampling, also reaches 100% (`repair_eval.py`: m
 
 `expert_iter.sh` (round `ROUND`, from adapter `START`) samples 8 programs at temperature 0.8 for 1100 text briefs and 500 image prompts from the training split (`expert_iter.py sample`, resumable, scored with `reward.py`), then builds the SFT set (`expert_iter.py build`): for each prompt the best stopped, built sample with reward 0.75 or more, two distinct ones when some of its samples failed, and the ground truth where too few samples qualify; plus 2000 ground-truth rows from prompts that were not sampled. It fine-tunes 300 steps at lr 5e-5 from `START`, then evaluates single shot, resampling and the loop on both test sets and buckets the failures. Later rounds skip prompts sampled in earlier rounds. Data comes from `out/vlm_brief/mixed_train.jsonl` and the training split only; `expert_iter.py` refuses data under `bench/minds-eye`. Tests: `tools/vlm/test_expert_iter.py`.
 
+Round 1 from `out/vlm/lora_brief`: on the training prompts 68% of brief samples and 77% of image samples built; 2% of brief prompts and 0.6% of image prompts had no sample that built. The SFT set was 1314 of the model's own programs, 909 ground-truth fills and 2000 replay rows.
+
+`dpo.py` (with `dpo.sh`) is a build-preference pass on the same samples: for each prompt with a failing sample, the best built sample (or the ground truth) is chosen and up to two distinct failing samples are rejected, 2016 pairs; loss is DPO against the frozen starting adapter plus `alpha` times the chosen NLL per token. Tests: `tools/vlm/test_dpo.py`.
+
+| model | images single shot | images match | briefs single shot | briefs match | images loop (tries) | briefs loop (tries) |
+|---|---|---|---|---|---|---|
+| brief SFT (`out/vlm/lora_brief`), start | 86% | 18% | 75% | 19% | 100% (1.35) | 100% (1.71) |
+| expert iteration round 1 (`out/vlm_ei/r1/lora`) | 91% | 19% | 73% | 19% | 100% (1.22) | 100% (1.72) |
+| r1 then DPO, beta 0.1, alpha 0.5, lr 2e-5, 252 steps | 84% | 11% | 76% | 14% | 100% (1.53) | 100% (1.57) |
+| r1 then DPO, beta 0.2, alpha 1.0, lr 5e-6, 120 steps | 90% | 18% | 74% | 18% | 100% (1.20) | 100% (1.57) |
+
+DPO does not help: the strong run raised the preference margin to about 12 nats and lost a third of the match rate, the gentle one changed nothing. On 100 briefs the single shot moves by a few points run to run (round 1 fixed 7 of the starting adapter's failures and broke 9 others, with 18 failing in both), so a change under about 5 points is noise.
+
 ## Part dimensions in the prompt (#565)
 
 A person asking for a part gives sizes, not four renders alone. `tools/vlm/part_dims.py` reads a pair's `.gcad` and writes the dimensions as plain English in mm, rounded to two decimals at most:
