@@ -24,8 +24,20 @@
         <Component Id="AppDocs" Guid="38868f7d-fee8-4a3b-aea9-f85ae1b17de5">
           <File Id="ReadmeMd" Source="README.md" KeyPath="yes" />
         </Component>
+        <Directory Id="DocsDir" Name="docs">
+          <Component Id="FormatDoc" Guid="0e1c6f0a-5b57-4c61-9b0e-3f6a1d7a9c42">
+            <File Id="FormatMd" Source="docs\format.md" KeyPath="yes" />
+          </Component>
+        </Directory>
+        <Directory Id="SkillsDir" Name="skills">
+          <Directory Id="SkillGcadDir" Name="gcad" />
+        </Directory>
       </Directory>
     </StandardDirectory>
+
+    <ComponentGroup Id="SkillFiles" Directory="SkillGcadDir">
+      <Files Include="skills\gcad\**" />
+    </ComponentGroup>
 
     <StandardDirectory Id="ProgramMenuFolder">
       <Component Id="AppShortcut" Guid="69dc123b-c44c-4c2d-a6e3-0a8e6aeaee4c">
@@ -37,6 +49,8 @@
     <Feature Id="Main" Title="gcad" Level="1">
       <ComponentRef Id="AppExe" />
       <ComponentRef Id="AppDocs" />
+      <ComponentRef Id="FormatDoc" />
+      <ComponentGroupRef Id="SkillFiles" />
       <ComponentRef Id="AppShortcut" />
     </Feature>
   </Package>
