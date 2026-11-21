@@ -83,6 +83,18 @@ jobs:
             -d "BinDir=target/${{ matrix.target }}/release" \
             -o "dist/$name.msi" packaging/windows/gcad.wxs
           (cd dist && sha256sum "$name.msi" > "$name.msi.sha256")
+      - name: msi contents
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          tools/check-msi-manifest.sh
+          name=gcad-${{ matrix.target }}
+          out="$RUNNER_TEMP/msi-extract"
+          msiexec //a "$(cygpath -w "$PWD/dist/$name.msi")" //qn "TARGETDIR=$(cygpath -w "$out")"
+          for f in gcad.exe docs/format.md skills/gcad/SKILL.md skills/gcad/references/parts.md; do
+            find "$out" -type f -path "*/gcad/$f" | grep -q . || { echo "msi is missing $f"; find "$out" -type f; exit 1; }
+          done
       - uses: actions/upload-artifact@v4
         with:
           name: gcad-${{ matrix.target }}
