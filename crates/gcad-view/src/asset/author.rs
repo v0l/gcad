@@ -1793,6 +1793,41 @@ pub(crate) fn capture_inputs(
 }
 
 #[cfg(test)]
+pub(crate) fn plate_skinned_fixture() -> std::path::PathBuf {
+    let root = Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
+    let path = root.join("examples/game-assets/plate-skinned.gasset");
+    let weights = root.join("target/game-asset-plate.v2.weights.json");
+    if !weights.exists() {
+        let asset = load_for_binding(&path, &[], "plate").unwrap();
+        let index = |name: &str| {
+            asset
+                .scene
+                .nodes
+                .iter()
+                .position(|n| n.name == name)
+                .unwrap()
+        };
+        let skin = super::skin::Skin::assign(
+            &asset.scene,
+            index("plate"),
+            vec![index("base"), index("tip")],
+            super::skin::Assignment::Linear {
+                axis: 1,
+                start_mm: -15.,
+                end_mm: 15.,
+            },
+        )
+        .unwrap();
+        let bytes = asset.weight_file(&skin).unwrap().to_json().unwrap();
+        std::fs::create_dir_all(weights.parent().unwrap()).unwrap();
+        let temporary = weights.with_extension(format!("tmp{}", std::process::id()));
+        std::fs::write(&temporary, bytes).unwrap();
+        std::fs::rename(&temporary, &weights).unwrap();
+    }
+    path
+}
+
+#[cfg(test)]
 mod tests {
     #[test]
     fn mesh_body_source_loads_with_its_rig_clips_and_exports_skinned_glb() {

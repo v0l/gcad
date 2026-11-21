@@ -99,12 +99,9 @@ mod tests {
     use crate::asset::animation::{Interpolation, Track, Values};
     #[test]
     fn overlay_uses_animated_world_pose_and_retains_parent_links() {
-        let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
-        let mut asset = crate::asset::author::load(
-            &root.join("examples/game-assets/plate-skinned.gasset"),
-            &[],
-        )
-        .unwrap();
+        let mut asset =
+            crate::asset::author::load(&crate::asset::author::plate_skinned_fixture(), &[])
+                .unwrap();
         let base = asset
             .scene
             .nodes

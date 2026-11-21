@@ -884,8 +884,7 @@ mod tests {
     use super::*;
     #[test]
     fn playback_matches_checked_skin_deformation_and_rejects_stale_rest_data() {
-        let path = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."))
-            .join("examples/game-assets/plate-skinned.gasset");
+        let path = crate::asset::author::plate_skinned_fixture();
         let mut asset = crate::asset::author::load(&path, &[]).unwrap();
         let playback = Playback::new(&asset).unwrap();
         for time in [0., 0.3, 0.7] {

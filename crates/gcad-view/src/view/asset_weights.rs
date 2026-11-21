@@ -91,12 +91,9 @@ mod tests {
     use super::*;
     #[test]
     fn weight_preview_matches_vertex_bindings_without_changing_pose_or_export() {
-        let root = std::path::Path::new(concat!(env!("CARGO_MANIFEST_DIR"), "/../.."));
-        let asset = crate::asset::author::load(
-            &root.join("examples/game-assets/plate-skinned.gasset"),
-            &[],
-        )
-        .unwrap();
+        let asset =
+            crate::asset::author::load(&crate::asset::author::plate_skinned_fixture(), &[])
+                .unwrap();
         let before = asset.encode_glb().unwrap();
         let skin = &asset.skins[0];
         let palette = skin
