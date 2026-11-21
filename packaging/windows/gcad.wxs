@@ -30,14 +30,49 @@
           </Component>
         </Directory>
         <Directory Id="SkillsDir" Name="skills">
-          <Directory Id="SkillGcadDir" Name="gcad" />
+          <Directory Id="SkillGcadDir" Name="gcad">
+            <Component Id="SkillMain">
+              <File Id="SkillMainF" Source="skills\gcad\SKILL.md" KeyPath="yes" />
+            </Component>
+            <Directory Id="SkillRefsDir" Name="references">
+              <Component Id="SkillRefArchitecture">
+                <File Id="SkillRefArchitectureF" Source="skills\gcad\references\architecture.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefAssemblies">
+                <File Id="SkillRefAssembliesF" Source="skills\gcad\references\assemblies.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefDrawings">
+                <File Id="SkillRefDrawingsF" Source="skills\gcad\references\drawings.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefGameAssets">
+                <File Id="SkillRefGameAssetsF" Source="skills\gcad\references\game-assets.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefMeshes">
+                <File Id="SkillRefMeshesF" Source="skills\gcad\references\meshes.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefOutput">
+                <File Id="SkillRefOutputF" Source="skills\gcad\references\output.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefParts">
+                <File Id="SkillRefPartsF" Source="skills\gcad\references\parts.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefPointClouds">
+                <File Id="SkillRefPointCloudsF" Source="skills\gcad\references\point-clouds.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefSheetMetal">
+                <File Id="SkillRefSheetMetalF" Source="skills\gcad\references\sheet-metal-weldments.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefSimulation">
+                <File Id="SkillRefSimulationF" Source="skills\gcad\references\simulation.md" KeyPath="yes" />
+              </Component>
+              <Component Id="SkillRefStandardParts">
+                <File Id="SkillRefStandardPartsF" Source="skills\gcad\references\standard-parts.md" KeyPath="yes" />
+              </Component>
+            </Directory>
+          </Directory>
         </Directory>
       </Directory>
     </StandardDirectory>
-
-    <ComponentGroup Id="SkillFiles" Directory="SkillGcadDir">
-      <Files Include="skills\gcad\**" />
-    </ComponentGroup>
 
     <StandardDirectory Id="ProgramMenuFolder">
       <Component Id="AppShortcut" Guid="69dc123b-c44c-4c2d-a6e3-0a8e6aeaee4c">
@@ -50,7 +85,18 @@
       <ComponentRef Id="AppExe" />
       <ComponentRef Id="AppDocs" />
       <ComponentRef Id="FormatDoc" />
-      <ComponentGroupRef Id="SkillFiles" />
+      <ComponentRef Id="SkillMain" />
+      <ComponentRef Id="SkillRefArchitecture" />
+      <ComponentRef Id="SkillRefAssemblies" />
+      <ComponentRef Id="SkillRefDrawings" />
+      <ComponentRef Id="SkillRefGameAssets" />
+      <ComponentRef Id="SkillRefMeshes" />
+      <ComponentRef Id="SkillRefOutput" />
+      <ComponentRef Id="SkillRefParts" />
+      <ComponentRef Id="SkillRefPointClouds" />
+      <ComponentRef Id="SkillRefSheetMetal" />
+      <ComponentRef Id="SkillRefSimulation" />
+      <ComponentRef Id="SkillRefStandardParts" />
       <ComponentRef Id="AppShortcut" />
     </Feature>
   </Package>
