@@ -275,6 +275,11 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `garage_door` | `on= at= w= h= panels=4` | an opening with `name.panel.N` bodies |
 | `slab` | `level points` `type=mat:t+mat:t` `slope= falls_to=x,y` | one body per layer, `slab.material`, stacked bottom to top with the top of the last layer on the level; `slope` tilts the top and bottom planes, rising away from the low point `falls_to`, with the sides vertical |
 | `slab_opening` | `slab points` | a hole through every layer of the slab, inside its edge |
+| `terrain` | `t1: terrain points file.csv\|grid WxD slope=sx,sy at=x,y depth=d` | a triangulated ground solid |
+| `pad`, `cut_fill` | `p1: pad outline level=z`, `cut_fill t1 p1` | reports cut and fill volumes |
+| `site_boundary`, `road`, `retaining`, `tree` | see docs/ops.md | site elements; walls inside the setback fail |
+| `sun` | `sun lat= date=21-06 time=15:00` | altitude and azimuth |
+| `check` | `check uvalue\|heatloss\|bridges\|daylight\|stairs\|ramps\|doors\|egress\|rooms\|compartments\|shadow` | reported by `gcad check` |
 | `foundation` | `strip wall w= d=` \| `pad x,y w= l= d=`, `top=` `material=concrete` | a strip `w` wide centred under a closed wall loop, top at the wall's base; a pad `w` by `l` (`l` is `w` unless given) centred on the point, top at 0; both `d` deep |
 | `ground_slab` | `wall type=mat:t+mat:t` `top=` | a slab filling the inside faces of a closed wall loop, top on the wall's base unless `top=` |
 | `room` | `name at=x,y level= name= number= floor= ceiling= wall=` | finds the rectangle of wall faces around the point on that level (`room_separator` lines count as walls); a room that is not closed fails with `not closed`; reports area, perimeter and volume, the height being the lowest wall top over the level. Columns are not deducted from net area (limitation) |

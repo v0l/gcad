@@ -7,6 +7,7 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Buildings, stage F (#353): `terrain` from points or a grid, `pad`, `cut_fill`, `site_boundary` with setbacks, `road`, `retaining`, `tree`, `sun lat= date= time=`, and `check uvalue|heatloss|bridges|daylight|stairs|ramps|doors|egress|rooms|compartments|shadow`.
 - Buildings, stage E (#352): `gcad export house.gcad house.ifc` writes IFC4 (project, site, building, storeys, walls with material layer sets and `Pset_WallCommon`, slabs, roofs, stairs and flights, railings, columns, beams, doors and windows with openings that void and fill, spaces with `NetFloorArea`, `GrossFloorArea`, `Height` and `NetVolume`, colours, stable GlobalIds); `import model.ifc` reads the geometry as an underlay; `gcad check model.ifc` checks references, storeys and openings; `underlay plan.png scale=1:100 dpi=100` sizes an image reference.
 - Buildings, stage C (#350): `room` with name, number and finishes, `room_separator`, `zone`, `area_scheme`, and `gcad schedule file doors|windows|rooms|areas|zones|finishes|walls|slabs|roofs|stairs|columns|materials|members --csv|--json|--svg [--rates rates.toml]` with net wall areas after openings, quantities per material and layer, and cost columns; `schedule doors place=x,y` draws the table in a `.gdwg`.
 - Point clouds, part 2 of 6 (gcad #445): `crop`, `downsample`, `denoise`, `normals`, `move`, `rotate`, `scale`, `transform`, `merge`, `colour` and `info` on clouds, and `examples/clouds/clean.gcad`.
