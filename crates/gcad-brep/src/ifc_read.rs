@@ -513,6 +513,49 @@ impl Ifc {
     }
 }
 
+fn footprint(
+    name: &str,
+    class: &str,
+    triangles: &[[[f64; 3]; 3]],
+    scale: f64,
+) -> Option<crate::arch::Reference> {
+    let key = |p: [f64; 3]| ((p[0] * scale).round() as i64, (p[1] * scale).round() as i64);
+    let mut edges: std::collections::BTreeMap<((i64, i64), (i64, i64)), usize> = Default::default();
+    let mut z = f64::MAX;
+    for t in triangles {
+        for p in t {
+            z = z.min(p[2] * scale);
+        }
+        let u = [t[1][0] - t[0][0], t[1][1] - t[0][1], t[1][2] - t[0][2]];
+        let v = [t[2][0] - t[0][0], t[2][1] - t[0][1], t[2][2] - t[0][2]];
+        let nz = u[0] * v[1] - u[1] * v[0];
+        let normal =
+            (u[1] * v[2] - u[2] * v[1]).powi(2) + (u[2] * v[0] - u[0] * v[2]).powi(2) + nz * nz;
+        if normal <= 0.0 || nz <= 0.0 || nz * nz < 0.9 * normal {
+            continue;
+        }
+        for k in 0..3 {
+            let (a, b) = (key(t[k]), key(t[(k + 1) % 3]));
+            if a == b {
+                continue;
+            }
+            let ordered = if a < b { (a, b) } else { (b, a) };
+            *edges.entry(ordered).or_default() += 1;
+        }
+    }
+    let rings: Vec<Vec<(f64, f64)>> = edges
+        .into_iter()
+        .filter(|(_, n)| *n == 1)
+        .map(|((a, b), _)| vec![(a.0 as f64, a.1 as f64), (b.0 as f64, b.1 as f64)])
+        .collect();
+    (!rings.is_empty()).then(|| crate::arch::Reference {
+        name: name.to_string(),
+        class: class.to_ascii_lowercase(),
+        z,
+        rings,
+    })
+}
+
 impl crate::Model {
     pub(crate) fn import_ifc(
         &mut self,
@@ -527,7 +570,20 @@ impl crate::Model {
         let mut made = 0;
         let mut skipped = 0;
         for (id, element) in ifc.elements() {
-            if matches!(element.class.as_str(), "IFCSPACE" | "IFCOPENINGELEMENT") {
+            if element.class == "IFCOPENINGELEMENT" {
+                continue;
+            }
+            if element.class == "IFCSPACE" {
+                for (_, triangles) in ifc.items_of(element).into_iter().enumerate() {
+                    if let Some(reference) = footprint(
+                        &element.args.get(2).and_then(Arg::text).unwrap_or("space").to_string(),
+                        &element.class,
+                        &triangles,
+                        scale,
+                    ) {
+                        self.arch.references.push(reference);
+                    }
+                }
                 continue;
             }
             let name = element
@@ -537,6 +593,11 @@ impl crate::Model {
                 .filter(|n| !n.is_empty())
                 .map_or_else(|| format!("{}{id}", element.class.to_lowercase()), str::to_string);
             for (k, triangles) in ifc.items_of(element).into_iter().enumerate() {
+                if matches!(element.class.as_str(), "IFCWALL" | "IFCSLAB" | "IFCSPACE") {
+                    if let Some(reference) = footprint(&name, &element.class, &triangles, scale) {
+                        self.arch.references.push(reference);
+                    }
+                }
                 let faces: Vec<Vec<Vec<Point3>>> = triangles
                     .iter()
                     .map(|t| vec![t.iter().map(|p| point3(p.map(|c| c * scale))).collect()])

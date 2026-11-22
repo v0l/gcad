@@ -2001,6 +2001,32 @@ fn image_underlay() {
 }
 
 #[test]
+fn imported_ifc_is_a_plan_reference() {
+    let dir = house_files("imported_ifc_is_a_plan_reference", &[]);
+    std::fs::copy("examples/architecture/house.gcad", dir.join("house.gcad")).expect("example");
+    let (ok, text) = gcad(&dir, &["export", "house.gcad", "house.ifc"]);
+    assert!(ok, "{text}");
+    std::fs::write(dir.join("vendor.gcad"), "level L0 0 \"Ground\"\nimport house.ifc\n").expect("vendor");
+    std::fs::write(
+        dir.join("ref.gdwg"),
+        "part vendor.gcad\nsheet \"Ref\" size=A3 scale=1:100\nplan L0 cut=1200\n",
+    )
+    .expect("sheet");
+    let drawing = gcad::drafting::run(&dir.join("ref.gdwg"), &[]).expect("runs");
+    assert!(
+        drawing.failed().is_none(),
+        "{:?}",
+        drawing.failed().map(|(l, e)| format!("{}: {e:#}", l.text))
+    );
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    std::fs::write(dir.join("ref.svg"), &svg).expect("svg");
+    for kind in ["ifcwall", "ifcslab"] {
+        assert!(svg.contains(&format!("data-kind=\"{kind}\"")), "{kind}");
+    }
+    assert!(svg.contains("class=\"reference\""));
+}
+
+#[test]
 fn underlay_is_drawn_in_render() {
     let dir = house_files("underlay_is_drawn_in_render", &[]);
     let image = image::RgbImage::from_pixel(100, 50, image::Rgb([220, 30, 30]));

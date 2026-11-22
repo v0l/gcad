@@ -252,6 +252,15 @@ pub struct Arch {
     pub built: Vec<Built>,
     pub classes: Vec<(String, String)>,
     pub underlays: Vec<Underlay>,
+    pub references: Vec<Reference>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Reference {
+    pub name: String,
+    pub class: String,
+    pub z: f64,
+    pub rings: Vec<Vec<gcad_mesh::arch::P2>>,
 }
 
 impl Arch {
@@ -262,7 +271,8 @@ impl Arch {
     }
 
     pub fn carries_architecture(&self) -> bool {
-        !self.classes.is_empty() || !self.levels.is_empty() || !self.built.is_empty()
+        !self.references.is_empty()
+            || !self.classes.is_empty() || !self.levels.is_empty() || !self.built.is_empty()
     }
 
     pub fn absorb(
@@ -317,6 +327,7 @@ impl Arch {
                 self.classes.push((label, op.clone()));
             }
         }
+        self.references.extend(part.references.iter().cloned());
         self.walls.extend(part.walls.iter().cloned().map(|w| Wall {
             name: tag(&w.name),
             ..w
