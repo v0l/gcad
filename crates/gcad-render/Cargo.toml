@@ -15,6 +15,7 @@ gcad-geom.workspace = true
 gcad-mesh.workspace = true
 gcad-plot.workspace = true
 anyhow.workspace = true
+flate2.workspace = true
 image.workspace = true
 monstertruck.workspace = true
 rayon.workspace = true

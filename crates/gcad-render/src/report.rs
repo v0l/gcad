@@ -77,12 +77,15 @@ pub fn pdf(model: &Model, title: &str) -> Result<Vec<u8>> {
         &mut out,
         b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 595 842] /Resources << /XObject << /Im0 4 0 R >> >> /Contents 5 0 R >>".to_vec(),
     );
+    let mut encoder = flate2::write::ZlibEncoder::new(Vec::new(), flate2::Compression::best());
+    std::io::Write::write_all(&mut encoder, &pixels)?;
+    let packed = encoder.finish()?;
     let mut image = format!(
-        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Length {} >>\nstream\n",
-        pixels.len()
+        "<< /Type /XObject /Subtype /Image /Width {width} /Height {height} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /FlateDecode /Length {} >>\nstream\n",
+        packed.len()
     )
     .into_bytes();
-    image.extend(&pixels);
+    image.extend(&packed);
     image.extend(b"\nendstream");
     object(&mut out, image);
     let content = b"q 595 0 0 842 0 0 cm /Im0 Do Q";

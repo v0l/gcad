@@ -156,6 +156,7 @@ fn inspection_report_pdf_is_written_and_failing_checks_exit_nonzero() {
     let bytes = std::fs::read(&pdf).unwrap();
     assert!(bytes.starts_with(b"%PDF-1.4"));
     assert!(bytes.ends_with(b"%%EOF\n"));
+    assert!(bytes.len() < 1_000_000, "{} bytes", bytes.len());
     let source = std::fs::read_to_string(format!("{}/examples/clouds/inspect.gcad", env!("CARGO_MANIFEST_DIR")))
         .unwrap()
         .replace("check d.max < 2", "check d.max < 0.3")

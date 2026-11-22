@@ -2227,6 +2227,7 @@ name = "gcad-render"
 version = "0.8.0"
 dependencies = [
  "anyhow",
+ "flate2",
  "gcad-brep",
  "gcad-cloud",
  "gcad-geom",
