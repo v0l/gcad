@@ -173,6 +173,7 @@ pub fn read(source: Box<dyn Source>, options: &Options, pts: bool) -> Result<Imp
                 colours: columns.colour.is_some_and(|c| c + 2 < columns.width),
                 intensity: columns.intensity.is_some(),
                 classes: columns.class.is_some(),
+                deviation: false,
             };
             collector = Some((
                 Collector::new(layout, options.max_points, declared),

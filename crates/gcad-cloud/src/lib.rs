@@ -1,9 +1,11 @@
 pub mod cloud;
 pub mod colour;
+pub mod deviation;
 pub mod e57;
 pub mod fit;
 pub mod kdtree;
 pub mod las;
+pub mod measure;
 pub mod ops;
 pub mod pivot;
 pub mod ply;

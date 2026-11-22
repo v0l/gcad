@@ -196,22 +196,23 @@ impl Model {
     }
 
     pub fn cad_points(&self, name: &str, count: usize) -> Result<Cloud> {
+        let triangles = self.cad_triangles(name, 1.0)?;
+        Ok(register::sample_triangles(&triangles, count, SEED))
+    }
+
+    pub fn cad_triangles(&self, name: &str, fineness: f64) -> Result<Vec<[[f64; 3]; 3]>> {
         let mut triangles: Vec<[[f64; 3]; 3]> = Vec::new();
         if let Some((_, solid)) = self.named_solids().into_iter().find(|(n, _)| n == name) {
-            let tolerance = geometry::mesh_tolerance(solid);
-            for shell in solid.boundaries() {
-                for face in shell.robust_triangulation(tolerance).face_iter() {
-                    let Some(mesh) = face.surface() else { continue };
-                    let positions = mesh.positions();
-                    for t in mesh.faces().triangle_iter() {
-                        triangles.push(t.map(|v| {
-                            let p = positions[v.pos];
-                            [p.x, p.y, p.z]
-                        }));
-                    }
-                }
+            let tolerance = geometry::mesh_tolerance(solid) * fineness;
+            let mesh = geometry::mesh(solid, tolerance);
+            let positions = mesh.positions();
+            for t in mesh.faces().triangle_iter() {
+                triangles.push(t.map(|v| {
+                    let p = positions[v.pos];
+                    [p.x, p.y, p.z]
+                }));
             }
-        } else if let Some((_, mesh)) = self.meshes().into_iter().find(|(n, _)| n == name) {
+        } else if let Some(mesh) = self.mesh_named(name) {
             triangles.extend(
                 mesh.triangles
                     .iter()
@@ -224,7 +225,7 @@ impl Model {
         if triangles.is_empty() {
             bail!("`{name}` has no surface to align to");
         }
-        Ok(register::sample_triangles(&triangles, count, SEED))
+        Ok(triangles)
     }
 
     fn align_scans(&mut self, line: &Line) -> Result<String> {

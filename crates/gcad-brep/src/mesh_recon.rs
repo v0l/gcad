@@ -73,7 +73,7 @@ impl Model {
         })
     }
 
-    fn mesh_named(&self, name: &str) -> Option<Arc<Mesh>> {
+    pub(crate) fn mesh_named(&self, name: &str) -> Option<Arc<Mesh>> {
         if let Some((_, mesh)) = self.scene.mesh_bodies.iter().find(|(n, _)| n == name) {
             return Some(mesh.clone());
         }
@@ -313,6 +313,7 @@ impl Model {
             colours: !mesh.vertex_colours.is_empty(),
             intensity: false,
             classes: false,
+            deviation: false,
         };
         let mut cloud = Cloud::with_layout(layout, mesh.positions.len() / every + 1);
         for i in (0..mesh.positions.len()).step_by(every) {
@@ -349,6 +350,7 @@ impl Model {
             colours: !mesh.vertex_colours.is_empty(),
             intensity: false,
             classes: false,
+            deviation: false,
         };
         let mut cloud = Cloud::with_layout(layout, count);
         let mut rng = Random(seed.wrapping_mul(0x9e37_79b9_7f4a_7c15) ^ 0xd1b5_4a32_d192_ed03);

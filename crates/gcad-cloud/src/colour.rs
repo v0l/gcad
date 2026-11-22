@@ -8,15 +8,17 @@ pub enum ColourBy {
     Height,
     Normal,
     Class,
+    Deviation,
 }
 
 impl ColourBy {
-    pub const ALL: [ColourBy; 5] = [
+    pub const ALL: [ColourBy; 6] = [
         ColourBy::Rgb,
         ColourBy::Intensity,
         ColourBy::Height,
         ColourBy::Normal,
         ColourBy::Class,
+        ColourBy::Deviation,
     ];
 
     pub fn name(self) -> &'static str {
@@ -26,6 +28,7 @@ impl ColourBy {
             ColourBy::Height => "height",
             ColourBy::Normal => "normal",
             ColourBy::Class => "class",
+            ColourBy::Deviation => "deviation",
         }
     }
 
@@ -40,6 +43,7 @@ impl ColourBy {
             ColourBy::Height => true,
             ColourBy::Normal => cloud.normals.is_some(),
             ColourBy::Class => cloud.classes.is_some(),
+            ColourBy::Deviation => cloud.deviation.is_some(),
         }
     }
 }
@@ -59,6 +63,33 @@ pub fn ramp(t: f32) -> [u8; 3] {
     let at = (t.floor() as usize).min(RAMP.len() - 2);
     let f = t - at as f32;
     std::array::from_fn(|k| ((RAMP[at][k] * (1.0 - f) + RAMP[at + 1][k] * f) * 255.0).round() as u8)
+}
+
+const DIVERGING: [[f32; 3]; 5] = [
+    [0.1, 0.2, 0.85],
+    [0.2, 0.7, 0.95],
+    [0.25, 0.8, 0.3],
+    [0.98, 0.75, 0.1],
+    [0.85, 0.1, 0.1],
+];
+
+pub fn diverging(t: f32) -> [u8; 3] {
+    let t = t.clamp(0.0, 1.0) * (DIVERGING.len() - 1) as f32;
+    let at = (t.floor() as usize).min(DIVERGING.len() - 2);
+    let f = t - at as f32;
+    std::array::from_fn(|k| {
+        ((DIVERGING[at][k] * (1.0 - f) + DIVERGING[at + 1][k] * f) * 255.0).round() as u8
+    })
+}
+
+pub fn deviation_limit(cloud: &Cloud) -> f64 {
+    if cloud.deviation_limit > 0.0 {
+        return cloud.deviation_limit;
+    }
+    cloud
+        .deviation
+        .as_deref()
+        .map_or(1.0, |d| d.iter().fold(1.0e-9_f64, |m, &v| m.max((v as f64).abs())))
 }
 
 pub fn class_colour(class: u8) -> [u8; 3] {
@@ -123,6 +154,14 @@ pub fn colours(cloud: &Cloud, by: ColourBy, indices: &[usize]) -> Vec<[u8; 3]> {
         ColourBy::Class => {
             let c = cloud.classes.as_deref().unwrap_or(&[]);
             indices.iter().map(|&i| class_colour(c[i])).collect()
+        }
+        ColourBy::Deviation => {
+            let c = cloud.deviation.as_deref().unwrap_or(&[]);
+            let range = deviation_limit(cloud) as f32;
+            indices
+                .iter()
+                .map(|&i| diverging(0.5 + 0.5 * c[i] / range))
+                .collect()
         }
     }
 }

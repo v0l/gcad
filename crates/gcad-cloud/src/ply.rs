@@ -399,6 +399,7 @@ pub fn read(source: Box<dyn Source>, options: &Options) -> Result<Imported> {
         colours: has(Role::Red) && has(Role::Green) && has(Role::Blue),
         intensity: has(Role::Intensity),
         classes: has(Role::Class),
+        deviation: false,
     };
     let mut values = Values {
         reader: &mut reader,

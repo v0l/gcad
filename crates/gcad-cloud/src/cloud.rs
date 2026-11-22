@@ -9,6 +9,8 @@ pub struct Cloud {
     pub colours: Option<Vec<[u8; 3]>>,
     pub intensity: Option<Vec<f32>>,
     pub classes: Option<Vec<u8>>,
+    pub deviation: Option<Vec<f32>>,
+    pub deviation_limit: f64,
     pub scans: Vec<u16>,
     pub origins: Vec<(u16, P3)>,
 }
@@ -20,6 +22,7 @@ pub struct Point {
     pub colour: Option<[u8; 3]>,
     pub intensity: Option<f32>,
     pub class: Option<u8>,
+    pub deviation: Option<f32>,
     pub scan: u16,
 }
 
@@ -38,6 +41,7 @@ pub struct Layout {
     pub colours: bool,
     pub intensity: bool,
     pub classes: bool,
+    pub deviation: bool,
 }
 
 const FILL_COLOUR: [u8; 3] = [180, 180, 180];
@@ -53,6 +57,8 @@ impl Cloud {
             colours: column(layout.colours, capacity),
             intensity: column(layout.intensity, capacity),
             classes: column(layout.classes, capacity),
+            deviation: column(layout.deviation, capacity),
+            deviation_limit: 0.0,
             scans: Vec::with_capacity(capacity),
             origins: Vec::new(),
         }
@@ -81,6 +87,7 @@ impl Cloud {
             colours: self.colours.is_some(),
             intensity: self.intensity.is_some(),
             classes: self.classes.is_some(),
+            deviation: self.deviation.is_some(),
         }
     }
 
@@ -99,6 +106,9 @@ impl Cloud {
         if let Some(column) = &mut self.classes {
             column.push(point.class.unwrap_or(0));
         }
+        if let Some(column) = &mut self.deviation {
+            column.push(point.deviation.unwrap_or(0.0));
+        }
     }
 
     pub fn set(&mut self, index: usize, point: Point) {
@@ -116,6 +126,9 @@ impl Cloud {
         if let Some(column) = &mut self.classes {
             column[index] = point.class.unwrap_or(0);
         }
+        if let Some(column) = &mut self.deviation {
+            column[index] = point.deviation.unwrap_or(0.0);
+        }
     }
 
     pub fn point(&self, index: usize) -> Point {
@@ -125,6 +138,7 @@ impl Cloud {
             colour: self.colours.as_ref().map(|c| c[index]),
             intensity: self.intensity.as_ref().map(|c| c[index]),
             class: self.classes.as_ref().map(|c| c[index]),
+            deviation: self.deviation.as_ref().map(|c| c[index]),
             scan: self.scans[index],
         }
     }
@@ -150,6 +164,7 @@ impl Cloud {
             + self.colours.as_ref().map_or(0, |_| n * 3)
             + self.intensity.as_ref().map_or(0, |_| n * 4)
             + self.classes.as_ref().map_or(0, |_| n)
+            + self.deviation.as_ref().map_or(0, |_| n * 4)
     }
 
     pub fn merge(&mut self, other: &Cloud) {
@@ -159,10 +174,12 @@ impl Cloud {
             colours: a.colours || b.colours,
             intensity: a.intensity || b.intensity,
             classes: a.classes || b.classes,
+            deviation: a.deviation || b.deviation,
         };
         let mut merged = Cloud::with_layout(union, self.len() + other.len());
         (0..self.len()).for_each(|i| merged.push(self.point(i)));
         (0..other.len()).for_each(|i| merged.push(other.point(i)));
+        merged.deviation_limit = self.deviation_limit.max(other.deviation_limit);
         merged.origins = self
             .origins
             .iter()
@@ -176,6 +193,7 @@ impl Cloud {
         let mut out = Cloud::with_layout(self.layout(), indices.len());
         indices.iter().for_each(|&i| out.push(self.point(i)));
         out.origins = self.origins.clone();
+        out.deviation_limit = self.deviation_limit;
         out
     }
 
@@ -204,6 +222,9 @@ impl Cloud {
         }
         if self.classes.is_some() {
             fields.push("classes");
+        }
+        if self.deviation.is_some() {
+            fields.push("deviation");
         }
         let has = if fields.is_empty() {
             String::new()
