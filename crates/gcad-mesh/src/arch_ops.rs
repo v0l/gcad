@@ -1,4 +1,4 @@
-use crate::arch::layout::{dot, left, signed_area, sub};
+use crate::arch::layout::{dot, signed_area, sub};
 use crate::arch::{Chain, Justify, Layer, P2, WallLine, bands, end_cut};
 use crate::interp::Scene;
 use crate::mesh::{Mesh, P3};
@@ -7,7 +7,9 @@ use crate::solid::triangulate;
 use anyhow::{Context, Result, anyhow, bail};
 use std::sync::Arc;
 
-pub const OPS: &[&str] = &["units", "building", "grid", "wall_type", "wall"];
+pub const OPS: &[&str] = &[
+    "units", "building", "grid", "wall_type", "wall", "door", "window", "opening",
+];
 
 pub fn handles(line: &Line) -> bool {
     match line.op.as_str() {
@@ -52,8 +54,19 @@ impl Wall {
     }
 }
 
+#[derive(Clone, Debug)]
+struct Opening {
+    name: String,
+    host: String,
+    at: f64,
+    w: f64,
+    h: f64,
+    sill: f64,
+}
+
 #[derive(Default)]
 pub struct ArchOps {
+    openings: Vec<Opening>,
     grids: Vec<(String, bool, f64)>,
     types: Vec<(String, Vec<Layer>)>,
     walls: Vec<Wall>,
@@ -160,6 +173,7 @@ impl ArchOps {
             "grid" => self.grid(scope, line),
             "wall_type" => self.wall_type(scope, line),
             "wall" => self.wall(scope, line),
+            "door" | "window" | "opening" => self.opening(scope, line),
             other => bail!("`{other}` is not a building operation"),
         }
     }
@@ -295,6 +309,58 @@ impl ArchOps {
         Ok(())
     }
 
+    fn opening(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let op = line.op.as_str();
+        let name = line
+            .label
+            .clone()
+            .ok_or_else(|| anyhow!("`{op}` needs a label, like `d1: door on=w1 at=2000 w=900 h=2100`"))?;
+        let mut o = Opening {
+            name,
+            host: String::new(),
+            at: f64::NAN,
+            w: f64::NAN,
+            h: f64::NAN,
+            sill: if op == "window" { 900.0 } else { 0.0 },
+        };
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "on" => o.host = text.clone(),
+                "at" => o.at = number(text, scope, key)?,
+                "w" => o.w = number(text, scope, key)?,
+                "h" => o.h = number(text, scope, key)?,
+                "sill" => o.sill = number(text, scope, key)?,
+                "mark" | "swing" | "hinge" | "frame" | "leaf" | "panes" | "mullion" | "glazing"
+                | "depth" | "threshold" | "head" => {}
+                other => bail!("`{op}` has no `{other}=` argument"),
+            }
+        }
+        for (value, what) in [(o.at, "at"), (o.w, "w"), (o.h, "h")] {
+            if value.is_nan() {
+                bail!("`{op}` needs `{what}=`");
+            }
+        }
+        let wall = self
+            .walls
+            .iter()
+            .find(|w| w.name == o.host)
+            .ok_or_else(|| anyhow!("`{}` is on `{}`, which is not a wall", o.name, o.host))?;
+        let starts = wall.chain.starts();
+        let (i, _, _) = wall.chain.locate(o.at);
+        let (s0, s1) = (o.at - o.w / 2.0, o.at + o.w / 2.0);
+        if o.w <= 0.0 || o.h <= 0.0 {
+            bail!("an opening needs w and h above zero");
+        }
+        if s0 < starts[i] - 1.0e-6 || s1 > starts[i + 1] + 1.0e-6 {
+            bail!("`{}` must sit on one straight run of `{}`", o.name, wall.name);
+        }
+        if o.sill < -1.0e-6 || o.sill + o.h > wall.top - wall.base + 1.0e-6 {
+            bail!("`{}` reaches above the top of `{}`", o.name, wall.name);
+        }
+        self.openings.push(o);
+        Ok(())
+    }
+
     fn wall_lines(&self) -> Vec<WallLine> {
         self.walls
             .iter()
@@ -325,15 +391,49 @@ impl ArchOps {
                 let j = (i + 1) % right.len();
                 let dir = wall.chain.dir(i);
                 let origin = wall.chain.points[i];
-                let along = |p: P2| dot(sub(p, origin), dir) + starts[i];
-                let _ = along;
-                let ring = [right[i].0, right[j].0, leftside[j].0, leftside[i].0];
-                extrude(&mut mesh, part, &ring, &[], (wall.base, wall.top), &|p, z| {
-                    [p.0, p.1, z]
-                });
+                let on = |edge: &[(P2, f64)], s: f64| -> P2 {
+                    let (a, b) = (edge[i].0, edge[j].0);
+                    let (sa, sb) = (
+                        dot(sub(a, origin), dir) + starts[i],
+                        dot(sub(b, origin), dir) + starts[i],
+                    );
+                    if s <= sa + 1.0e-9 {
+                        a
+                    } else if s >= sb - 1.0e-9 {
+                        b
+                    } else {
+                        (a.0 + dir.0 * (s - sa), a.1 + dir.1 * (s - sa))
+                    }
+                };
+                let mut gaps: Vec<&Opening> = self
+                    .openings
+                    .iter()
+                    .filter(|o| o.host == wall.name && wall.chain.locate(o.at).0 == i)
+                    .collect();
+                gaps.sort_by(|a, b| a.at.total_cmp(&b.at));
+                let mut boxes: Vec<(f64, f64, f64, f64)> = Vec::new();
+                let mut cursor = f64::NEG_INFINITY;
+                for o in gaps {
+                    let (s0, s1) = (o.at - o.w / 2.0, o.at + o.w / 2.0);
+                    boxes.push((cursor, s0, wall.base, wall.top));
+                    if o.sill > 1.0e-6 {
+                        boxes.push((s0, s1, wall.base, wall.base + o.sill));
+                    }
+                    if o.sill + o.h < wall.top - wall.base - 1.0e-6 {
+                        boxes.push((s0, s1, wall.base + o.sill + o.h, wall.top));
+                    }
+                    cursor = s1;
+                }
+                boxes.push((cursor, f64::INFINITY, wall.base, wall.top));
+                for (s0, s1, z0, z1) in boxes {
+                    if s1 - s0 < 1.0e-6 {
+                        continue;
+                    }
+                    let ring = [on(&right, s0), on(&right, s1), on(&leftside, s1), on(&leftside, s0)];
+                    extrude(&mut mesh, part, &ring, &[], (z0, z1), &|p, z| [p.0, p.1, z]);
+                }
             }
         }
-        let _ = left((1.0, 0.0));
         mesh
     }
 

@@ -2093,7 +2093,6 @@ fn shadow_of_a_wall() {
 }
 
 #[test]
-#[ignore = "missing: mesh walls for games"]
 fn mesh_wall_matches_the_kernel() {
     let source = datums(
         "w1: wall 0,0 4000,0 4000,3000 0,3000 closed type=int top=L1 justify=outside\nd1: door on=w1 at=2000 w=900 h=2100",
