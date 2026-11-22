@@ -118,3 +118,95 @@ fn deviation_colour_map_colours_by_sign() {
     assert_eq!(colours[moved], gcad_cloud::colour::diverging(1.0));
     assert_eq!(colours[still], gcad_cloud::colour::diverging(0.5));
 }
+
+fn scratch(name: &str) -> String {
+    let dir = std::env::temp_dir().join(format!("gcad-inspect-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    dir.join(name).display().to_string()
+}
+
+fn inspect(args: &[&str]) -> std::process::Output {
+    std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .arg("inspect")
+        .args(args)
+        .current_dir(env!("CARGO_MANIFEST_DIR"))
+        .output()
+        .expect("runs")
+}
+
+#[test]
+fn inspection_report_csv_is_stable() {
+    let path = scratch("report.csv");
+    let run = || {
+        let out = inspect(&["examples/clouds/inspect.gcad", "--report", &path]);
+        assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+        std::fs::read_to_string(&path).expect("a report")
+    };
+    let first = run();
+    assert_eq!(first, run());
+    assert!(first.contains("deviation,d,points,60000"));
+    assert!(first.contains("check,line 6,d.max<2,pass"));
+    assert!(first.ends_with("summary,checks,failed,0\n"));
+}
+
+#[test]
+fn inspection_report_pdf_is_written_and_failing_checks_exit_nonzero() {
+    let pdf = scratch("report.pdf");
+    assert!(inspect(&["examples/clouds/inspect.gcad", "--report", &pdf]).status.success());
+    let bytes = std::fs::read(&pdf).unwrap();
+    assert!(bytes.starts_with(b"%PDF-1.4"));
+    assert!(bytes.ends_with(b"%%EOF\n"));
+    let source = std::fs::read_to_string(format!("{}/examples/clouds/inspect.gcad", env!("CARGO_MANIFEST_DIR")))
+        .unwrap()
+        .replace("check d.max < 2", "check d.max < 0.3")
+        .replace("include ../robot/", &format!("include {}/examples/robot/", env!("CARGO_MANIFEST_DIR")));
+    let failing = scratch("failing.gcad");
+    std::fs::write(&failing, source).unwrap();
+    let csv = scratch("failing.csv");
+    let out = inspect(&[&failing, "--report", &csv]);
+    assert!(!out.status.success());
+    let text = std::fs::read_to_string(&csv).unwrap();
+    assert!(text.contains("FAIL"), "{text}");
+}
+
+#[test]
+fn scan_section_is_drawn_beside_the_cad_section() {
+    let dir = scratch("section");
+    std::fs::create_dir_all(&dir).unwrap();
+    std::fs::write(
+        format!("{dir}/p.gcad"),
+        format!("{CUBE}scan: cloud {}\ncloud_offset scan by=1 box=19.5,0.5,0.5,21,19.5,19.5 dir=1,0,0\ndeviation scan to=part max=0.5 into=d\n", fixture("cube_binary.ply")),
+    )
+    .unwrap();
+    std::fs::write(
+        format!("{dir}/s.gdwg"),
+        "part p.gcad\nsheet \"s\" size=A3 scale=1:0.5\nscansection scan to=part axis=y at=10 thickness=1 tol=0.5\n",
+    )
+    .unwrap();
+    let drawing = gcad::drafting::run(std::path::Path::new(&format!("{dir}/s.gdwg")), &[]).unwrap();
+    if let Some((line, error)) = drawing.failed() {
+        panic!("{}: {error:#}", line.text);
+    }
+    let text = drawing.steps.last().unwrap().1.as_ref().unwrap().clone();
+    assert!(text.contains("beyond 0.5"), "{text}");
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    assert!(svg.contains("CAD section y=10"));
+    assert!(svg.contains("scan section y=10"));
+    assert!(svg.contains("#d91a1a"), "red deviation markers");
+}
+
+#[test]
+fn deviation_colour_map_renders() {
+    let model = build(&format!(
+        "{}cloud_offset scan by=1 box=19.5,0.5,0.5,21,19.5,19.5 dir=1,0,0\ndeviation scan to=part max=0.5 into=d",
+        cube_scan()
+    ));
+    let path = scratch("map.png");
+    gcad::cloud_render::render_clouds(&model, &path).unwrap();
+    let image = image::open(&path).unwrap().to_rgb8();
+    assert_eq!(image.width(), 1350);
+    let seen = |c: [u8; 3]| image.pixels().any(|p| p.0 == c);
+    assert!(seen(gcad_cloud::colour::diverging(1.0)), "the moved face is red");
+    assert!(seen(gcad_cloud::colour::diverging(0.5)), "the rest is green");
+    assert!(image.get_pixel(1215, 100).0 != [255, 255, 255], "legend bar drawn");
+}
