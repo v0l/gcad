@@ -597,21 +597,21 @@ Architecture stage C (gcad #350).
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| rooms | missing | `kitchen: room at=x,y name="Kitchen" floor=tile ceiling=plaster wall=paint level=L0`, boundary from the walls, area, perimeter and volume | `arch::room_found_from_the_walls` |
-| room checks | missing | a room whose walls do not close fails | `arch::unclosed_room_fails` |
-| room separators | missing | `room_separator x,y x,y` | `arch::room_separator_splits_a_space` |
-| net and gross areas | missing | `area_scheme gross\|net\|rentable`, `gcad schedule f rooms\|areas --csv` | `arch::net_and_gross_area` |
-| zones | missing | `zone day hall living` | `arch::zones_sum_their_rooms` |
-| rooms on several levels | missing | `room ... level=L1` | `arch::rooms_on_two_levels` |
-| door and window schedules | missing | `gcad schedule f doors\|windows --csv\|--json\|--svg` | `arch::door_and_window_schedule` |
-| wall schedules | missing | `gcad schedule f walls`, gross and net area after openings | `arch::wall_schedule_nets_out_openings` |
-| quantities by material and layer | missing | `gcad schedule f materials` | `arch::material_quantities_by_layer` |
-| slab, roof, stair and column schedules | missing | `gcad schedule f slabs\|roofs\|stairs\|columns` | `arch::element_schedules` |
-| finish schedules | missing | `gcad schedule f finishes` | `arch::finish_schedule` |
-| cost columns | missing | `--rates rates.toml` (price per `m2`, `m3`, `m`, `item`) | `arch::cost_columns_from_rates` |
-| stable schedules | missing | rows sorted by name, the same bytes every run | `arch::schedule_csv_is_sorted_and_stable` |
-| schedules in drawings | missing | `schedule doors place=x,y` in a `.gdwg` | `arch::schedule_table_on_a_sheet` |
-| building elements in the BOM | missing | `gcad bom house.gasm` lists layers and leaves | `arch::bom_lists_building_elements` |
+| rooms | supported | `kitchen: room at=x,y name="Kitchen" floor=tile ceiling=plaster wall=paint level=L0`, boundary from the walls, area, perimeter and volume | `arch::room_found_from_the_walls` |
+| room checks | supported | a room whose walls do not close fails | `arch::unclosed_room_fails` |
+| room separators | supported | `room_separator x,y x,y` | `arch::room_separator_splits_a_space` |
+| net and gross areas | supported | `area_scheme gross\|net\|rentable`, `gcad schedule f rooms\|areas --csv` | `arch::net_and_gross_area` |
+| zones | supported | `zone day hall living` | `arch::zones_sum_their_rooms` |
+| rooms on several levels | supported | `room ... level=L1` | `arch::rooms_on_two_levels` |
+| door and window schedules | supported | `gcad schedule f doors\|windows --csv\|--json\|--svg` | `arch::door_and_window_schedule` |
+| wall schedules | supported | `gcad schedule f walls`, gross and net area after openings | `arch::wall_schedule_nets_out_openings` |
+| quantities by material and layer | supported | `gcad schedule f materials` | `arch::material_quantities_by_layer` |
+| slab, roof, stair and column schedules | supported | `gcad schedule f slabs\|roofs\|stairs\|columns` | `arch::element_schedules` |
+| finish schedules | supported | `gcad schedule f finishes` | `arch::finish_schedule` |
+| cost columns | supported | `--rates rates.toml` (price per `m2`, `m3`, `m`, `item`) | `arch::cost_columns_from_rates` |
+| stable schedules | supported | rows sorted by name, the same bytes every run | `arch::schedule_csv_is_sorted_and_stable` |
+| schedules in drawings | supported | `schedule doors place=x,y` in a `.gdwg` | `arch::schedule_table_on_a_sheet` |
+| building elements in the BOM | supported | `gcad bom house.gasm` lists layers and leaves | `arch::bom_lists_building_elements` |
 
 ## Architectural drawings
 
