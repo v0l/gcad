@@ -7,6 +7,7 @@ mod railing;
 mod roof;
 mod room;
 mod schedule;
+mod check;
 mod site;
 mod slab;
 mod stair;

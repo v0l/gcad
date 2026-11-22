@@ -659,9 +659,9 @@ Architecture stage F (gcad #353).
 | pads and cut and fill | supported | `pad <outline> level=1000`, `cut_fill t1 p1` | `arch::cut_and_fill_of_a_pad` |
 | site boundary | supported | `site_boundary x,y ... setback=3000` | `arch::site_boundary_area_and_setback` |
 | roads, retaining walls and trees | supported | `road x,y x,y width=3500 type=asphalt:100`, `retaining x,y x,y h=1200 t=250`, `tree x,y h=6000 spread=4000` | `arch::site_elements` |
-| U-values | missing | `check uvalue w1` (layer conductivities from the material library, Rsi 0.13, Rse 0.04) | `arch::u_value_of_a_wall` |
-| heat loss | missing | `check heatloss dt=20` | `arch::heat_loss_estimate` |
-| thermal bridges | missing | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
+| U-values | supported | `check uvalue w1` (layer conductivities from the material library, Rsi 0.13, Rse 0.04) | `arch::u_value_of_a_wall` |
+| heat loss | supported | `check heatloss dt=20` | `arch::heat_loss_estimate` |
+| thermal bridges | supported | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
 | daylight | missing | `check daylight min=0.1` (glazing to floor area per room) | `arch::daylight_ratio` |
 | stair and ramp rules | missing | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
 | door widths and turning circles | missing | `check doors clear=775 turning=1500` | `arch::door_clear_width_check` |

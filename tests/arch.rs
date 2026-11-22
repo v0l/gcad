@@ -1993,7 +1993,6 @@ fn site_elements() {
 }
 
 #[test]
-#[ignore = "missing: U-values"]
 fn u_value_of_a_wall() {
     let text = summary(&datums(
         "w1: wall 0,0 4000,0 type=ext top=L1\ncheck uvalue w1",
@@ -2003,7 +2002,6 @@ fn u_value_of_a_wall() {
 }
 
 #[test]
-#[ignore = "missing: heat loss"]
 fn heat_loss_estimate() {
     let text = summary(&with("check heatloss outer dt=20"));
     let r = 0.13 + 0.1 / 0.81 + 0.1 / 0.022 + 0.1 / 1.33 + 0.04;
@@ -2013,7 +2011,6 @@ fn heat_loss_estimate() {
 }
 
 #[test]
-#[ignore = "missing: thermal bridge flags"]
 fn thermal_bridge_at_a_slab_edge() {
     let text = summary(&with(
         "s1: slab L1 A1 B1 B2 A2 type=concrete:200\ncheck bridges",
