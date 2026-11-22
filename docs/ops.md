@@ -683,6 +683,8 @@ Architecture stage G (gcad #354): the same lines build flat meshes with no kerne
 |---|---|---|---|
 | mesh walls and openings | supported | `wall`, `door`, `window` through `gcad_mesh::build` | `arch::mesh_wall_matches_the_kernel` |
 | mesh house within budget | supported | walls, slab, roof, stair under 4000 triangles and 5 ms | `arch::mesh_house_within_budget` |
+| mesh wall layers | supported | `wall_type ext brick:100 pir:100 block:100` gives wall parts named and coloured by layer | `arch::mesh_wall_layers_are_coloured_parts` |
+| mesh instancing | supported | `building "house"` then `repeat of=house count=20 step=10000,0`: one mesh per body, `Model.groups` and 20 `Model.instances` transforms, GLB nodes share the mesh | `arch::mesh_street_shares_one_mesh` |
 | mesh railings | supported | `railing path x,y,z ... height=900 post=50@1500 top=round:40 glass=12` as posts, glass and a rail | `arch::mesh_railing_matches_the_kernel` |
 | mesh columns | supported | `column A1 rect 300x300\|round 300 base=L0 top=L1` | `arch::mesh_column_matches_the_kernel` |
 | mesh L stairs | supported | `stair ... shape=L` as two stepped flights and a landing block | `arch::mesh_l_stair_matches_the_kernel` |

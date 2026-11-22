@@ -2238,6 +2238,41 @@ fn mesh_railing_matches_the_kernel() {
 }
 
 #[test]
+fn mesh_street_shares_one_mesh() {
+    let source = format!(
+        "{}building \"house\"\nw1: wall A1 B1 B2 A2 closed type=ext base=L0 top=L1\nd1: door on=w1 at=2000 w=900 h=2100\nrepeat of=house count=20 step=10000,0",
+        DATUMS.replace("x=4000", "x=8000").replace("y=3000", "y=6000")
+    );
+    let model = gcad_mesh::build_with(
+        &source,
+        &gcad_mesh::Options {
+            y_up: false,
+            ..Default::default()
+        },
+    )
+    .expect("builds");
+    assert_eq!(model.groups.len(), 1);
+    assert_eq!(model.instance_count(0), 20);
+    assert!(model.unique_triangles() < 4000);
+}
+
+#[test]
+fn mesh_wall_layers_are_coloured_parts() {
+    let model = gcad_mesh::build_with(
+        &datums("w1: wall A1 B1 type=ext base=L0 top=L1"),
+        &gcad_mesh::Options {
+            y_up: false,
+            ..Default::default()
+        },
+    )
+    .expect("builds");
+    let wall = model.body("w1").expect("wall");
+    let names: Vec<&str> = wall.parts.iter().map(|p| p.name.as_str()).collect();
+    assert_eq!(names, ["brick", "pir", "block"]);
+    assert_ne!(wall.parts[0].colour, wall.parts[2].colour);
+}
+
+#[test]
 fn mesh_door_is_a_hinged_node() {
     let model = gcad_mesh::build_with(
         &building(),

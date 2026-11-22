@@ -60,7 +60,10 @@ pub fn mesh_model(model: &Model, y_up: bool) -> gcad_mesh::Model {
             y_up,
         )
     }));
-    gcad_mesh::Model { bodies }
+    gcad_mesh::Model {
+        bodies,
+        ..Default::default()
+    }
 }
 
 pub(crate) const GLB_TOLERANCE: f64 = 3e-3;

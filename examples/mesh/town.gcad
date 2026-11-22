@@ -1,0 +1,22 @@
+units mm
+level L0 0 "Ground"
+level L1 2700 "First"
+grid A x=0
+grid B x=8000
+grid 1 y=0
+grid 2 y=6000
+wall_type ext brick:100 pir:100 block:100
+wall_type int block:100
+building "house"
+outer: wall A1 B1 B2 A2 closed type=ext base=L0 top=L1 justify=outside
+d1: door on=outer at=2000 w=900 h=2100
+win1: window on=outer at=6000 w=1200 h=1200 sill=900
+r1: roof outer type=gable pitch=35 overhang=300 thickness=200 base=L1
+repeat of=house count=20 step=10000,0
+building "dungeon"
+wall_type rock block:300
+room: wall 0,-20000 6000,-20000 6000,-26000 0,-26000 closed type=rock base=L0 top=L1 justify=outside
+cell: wall 3000,-20000 3000,-23000 type=rock base=L0 top=L1
+gate: door on=room at=1500 w=900 h=2100 hinge=right
+p1: column 1500,-24000 rect 400x400 base=L0 top=L1
+p2: column 4500,-24000 round 400 base=L0 top=L1

@@ -77,7 +77,40 @@ fn a_street_of_twenty_houses_shares_one_mesh() {
     let json_len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
     let json = std::str::from_utf8(&glb[20..20 + json_len]).unwrap();
     let nodes = json.matches("\"translation\"").count();
+    assert!(model.groups[0].bodies.iter().any(|b| b == "d1.leaf"));
     assert!(nodes >= 19 * model.groups[0].bodies.len(), "{nodes}");
+}
+
+#[test]
+fn the_example_house_builds_in_five_milliseconds() {
+    let source = include_str!("../../../examples/mesh/house.gcad");
+    let options = gcad_mesh::Options {
+        y_up: false,
+        ..Default::default()
+    };
+    gcad_mesh::build_with(source, &options).expect("warm up");
+    let started = std::time::Instant::now();
+    gcad_mesh::build_with(source, &options).expect("builds");
+    let took = started.elapsed().as_secs_f64();
+    let limit = if cfg!(debug_assertions) { 0.05 } else { 0.005 };
+    assert!(took < limit, "{took}s");
+}
+
+#[test]
+fn the_town_example_has_twenty_houses_and_a_dungeon() {
+    let source = include_str!("../../../examples/mesh/town.gcad");
+    let model = gcad_mesh::build_with(
+        source,
+        &gcad_mesh::Options {
+            y_up: false,
+            ..Default::default()
+        },
+    )
+    .expect("builds");
+    let house = model.groups.iter().position(|g| g.name == "house").expect("house group");
+    assert_eq!(model.instance_count(house), 20);
+    assert!(model.body("gate.leaf").and_then(|b| b.pivot).is_some());
+    assert!(model.unique_triangles() < 8000);
 }
 
 #[test]

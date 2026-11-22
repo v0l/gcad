@@ -424,6 +424,7 @@ impl ArchOps {
         if o.sill < -1.0e-6 || o.sill + o.h > wall.top - wall.base + 1.0e-6 {
             bail!("`{}` reaches above the top of `{}`", o.name, wall.name);
         }
+        self.owners.push((o.name.clone(), self.current.clone()));
         self.openings.push(o);
         Ok(())
     }
