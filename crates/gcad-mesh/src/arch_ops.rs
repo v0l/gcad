@@ -67,6 +67,7 @@ struct Opening {
     w: f64,
     h: f64,
     sill: f64,
+    kind: String,
 }
 
 #[derive(Default)]
@@ -330,6 +331,7 @@ impl ArchOps {
             w: f64::NAN,
             h: f64::NAN,
             sill: if op == "window" { 900.0 } else { 0.0 },
+            kind: op.to_string(),
         };
         for (key, text) in &line.named {
             match key.as_str() {
@@ -544,6 +546,65 @@ impl ArchOps {
         Ok(())
     }
 
+    fn fills(&self, wall: &Wall) -> Vec<(String, Mesh)> {
+        let starts = wall.chain.starts();
+        let (lo, hi) = wall.span();
+        let mut out = Vec::new();
+        for o in self.openings.iter().filter(|o| o.host == wall.name) {
+            if o.kind == "opening" {
+                continue;
+            }
+            let (i, _, dir) = wall.chain.locate(o.at);
+            let origin = wall.chain.points[i];
+            let n = (-dir.1, dir.0);
+            let place = |p: P2, d: f64| -> P3 {
+                let s = p.0 - starts[i];
+                [
+                    origin.0 + dir.0 * s + n.0 * d,
+                    origin.1 + dir.1 * s + n.1 * d,
+                    wall.base + p.1,
+                ]
+            };
+            let (s0, s1) = (o.at - o.w / 2.0, o.at + o.w / 2.0);
+            let (z0, z1) = (o.sill, o.sill + o.h);
+            let rect = |a: f64, b: f64, c: f64, d: f64| [(a, c), (b, c), (b, d), (a, d)];
+            let make = |ring: &[P2], holes: &[Vec<P2>], depth: (f64, f64), material: &str| {
+                let mut mesh = Mesh::default();
+                let part = mesh.part_index(material);
+                extrude(&mut mesh, part, ring, holes, depth, &place);
+                mesh
+            };
+            if o.kind == "door" {
+                let (fw, fd, leaf) = (70.0, 45.0, 44.0);
+                let (b0, b1) = (hi - fd, hi);
+                let frame = [
+                    (s0, z0), (s0 + fw, z0), (s0 + fw, z1 - fw), (s1 - fw, z1 - fw),
+                    (s1 - fw, z0), (s1, z0), (s1, z1), (s0, z1),
+                ];
+                out.push((format!("{}.frame", o.name), make(&frame, &[], (b0, b1), "wood")));
+                let mid = (b0 + b1) / 2.0;
+                out.push((
+                    format!("{}.leaf", o.name),
+                    make(&rect(s0 + fw, s1 - fw, z0, z1 - fw), &[], (mid - leaf / 2.0, mid + leaf / 2.0), "wood"),
+                ));
+            } else {
+                let fw = 60.0;
+                let mid = (lo + hi) / 2.0;
+                let outer = rect(s0, s1, z0, z1);
+                let inner = rect(s0 + fw, s1 - fw, z0 + fw, z1 - fw);
+                out.push((
+                    format!("{}.frame", o.name),
+                    make(&outer, &[inner.to_vec()], (mid - 35.0, mid + 35.0), "wood"),
+                ));
+                out.push((
+                    format!("{}.glass", o.name),
+                    make(&inner, &[], (mid - 12.0, mid + 12.0), "glass"),
+                ));
+            }
+        }
+        out
+    }
+
     fn wall_lines(&self) -> Vec<WallLine> {
         self.walls
             .iter()
@@ -625,6 +686,9 @@ impl ArchOps {
         let mut built: Vec<(String, Mesh)> = (0..self.walls.len())
             .map(|i| (self.walls[i].name.clone(), self.wall_mesh(i, &lines)))
             .collect();
+        for wall in &self.walls {
+            built.extend(self.fills(wall));
+        }
         built.extend(self.done);
         for (name, mesh) in built {
             for part in &mesh.parts {
