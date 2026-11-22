@@ -650,6 +650,7 @@ Architecture stage E (gcad #352).
 | IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon`. `ThermalTransmittance` is a plain sum of layer resistances plus 0.17 until the thermal calculation (#353) supplies it | `arch::ifc_wall_layers` |
 | IFC room fire rating | supported | `room ... fire=REI60` writes `Pset_SpaceCommon.FireRating`, plus `IsExternal`, `GrossPlannedArea`, `NetPlannedArea` | `arch::ifc_room_fire_rating_and_common_fields` |
 | IFC grid and curtain wall quantities | supported | `grid` lines write `IfcGrid`, `curtainwall` writes `Qto_CurtainWallBaseQuantities` | `arch::ifc_grid_and_curtain_wall_quantities` |
+| IFC site terrain | supported | `terrain` triangles export as an `IfcTriangulatedFaceSet` on `IfcSite` | `arch::ifc_site_carries_the_terrain` |
 | IFC extruded bodies | supported | walls, slabs, columns and beams that are prisms (vertical outline, flat top and bottom) write `IfcExtrudedAreaSolid`; others stay faceted | `arch::ifc_prisms_are_extruded_and_keep_their_volume` |
 | IFC vendor part | supported | `part stool vendor.ifc` places an IFC of one furnishing (faceted brep, triangulated or polygonal face set) | `arch::vendor_ifc_is_a_part` |
 | IFC plan reference | supported | an imported IFC draws its wall, slab and space outline dashed in `plan` views (class `reference`) | `arch::imported_ifc_is_a_plan_reference` |
@@ -668,19 +669,25 @@ Architecture stage F (gcad #353).
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| terrain | missing | `t1: terrain points site.csv\|contour site.dxf\|grid 20000x20000 slope=0.1,0 depth=1000` | `arch::terrain_from_points` |
-| pads and cut and fill | missing | `pad <outline> level=1000`, `cut_fill t1 p1` | `arch::cut_and_fill_of_a_pad` |
-| site boundary | missing | `site_boundary x,y ... setback=3000` | `arch::site_boundary_area_and_setback` |
-| roads, retaining walls and trees | missing | `road x,y x,y width=3500 type=asphalt:100`, `retaining x,y x,y h=1200 t=250`, `tree x,y h=6000 spread=4000` | `arch::site_elements` |
-| U-values | missing | `check uvalue w1` (layer conductivities from the material library, Rsi 0.13, Rse 0.04) | `arch::u_value_of_a_wall` |
-| heat loss | missing | `check heatloss dt=20` | `arch::heat_loss_estimate` |
-| thermal bridges | missing | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
-| daylight | missing | `check daylight min=0.1` (glazing to floor area per room) | `arch::daylight_ratio` |
-| stair and ramp rules | missing | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
-| door widths and turning circles | missing | `check doors clear=775 turning=1500` | `arch::door_clear_width_check` |
-| egress, room and compartment checks | missing | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
-| sun position | missing | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
-| shadow study | missing | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall` |
+| terrain | supported | `t1: terrain points site.csv\|contour site.dxf\|grid 20000x20000 slope=0.1,0 depth=1000` | `arch::terrain_from_points` |
+| pads and cut and fill | supported | `pad <outline> level=1000`, `cut_fill t1 p1` | `arch::cut_and_fill_of_a_pad` |
+| site boundary | supported | `site_boundary x,y ... setback=3000` | `arch::site_boundary_area_and_setback` |
+| roads, retaining walls and trees | supported | `road x,y x,y width=3500 type=asphalt:100`, `retaining x,y x,y h=1200 t=250`, `tree x,y h=6000 spread=4000` | `arch::site_elements` |
+| U-values | supported | `check uvalue w1` (layer conductivities from the material library, Rsi 0.13, Rse 0.04) | `arch::u_value_of_a_wall` |
+| heat loss | supported | `check heatloss dt=20` | `arch::heat_loss_estimate` |
+| thermal bridges | supported | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
+| daylight | supported | `check daylight min=0.1` (glazing to floor area per room) | `arch::daylight_ratio` |
+| stair and ramp rules | supported | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
+| door widths and turning circles | supported | `check doors clear=775 turning=1500` | `arch::door_clear_width_check`, `arch::failed_check_fails_the_run_unless_warn`, `arch::setback_violation_fails_the_run` |
+| egress, room and compartment checks | supported | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
+| sun position | supported | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
+| shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall`, `arch::render_sun_shades_the_ground_behind_a_wall` |
+| hours of sun | supported | `check sunhours x,y,z min=` casts rays to the sun every 6 minutes against every body | `arch::sun_hours_open_and_behind_a_wall` |
+| solar gain | supported | `check solargain g=0.6` sums window area times clear-sky irradiance by facing | `arch::solar_gain_south_over_north` |
+| accessible route | supported | `check route x,y x,y clear=800 width=900` through the doors between two points | `arch::accessible_route_fails_on_a_narrow_door` |
+| escape windows | supported | `check escape area=0.33 w=450 h=450 sill=1100` on every room | `arch::escape_window_size` |
+| driveway slopes | supported | `check driveway max=0.1` on each `road` against the terrain | `arch::driveway_slope_is_checked` |
+| contours in plans | supported | `plan L0 contours=500` draws terrain contours on layer `A-SITE`; `terrain contour site.dxf` reads them from LWPOLYLINE group 38 or POLYLINE vertices | `arch::plan_draws_contours`, `arch::terrain_from_dxf_contours` |
 
 ## Buildings in gcad-mesh
 

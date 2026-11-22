@@ -371,8 +371,47 @@ pub fn write(model: &Model, project: &str) -> String {
         text(&project_name)
     ));
     let site_place = w.place(None, [0.0, 0.0, 0.0]);
+    let terrain_shape = {
+        let mut points: Vec<[f64; 3]> = Vec::new();
+        let mut index: std::collections::HashMap<[i64; 3], usize> = Default::default();
+        let mut faces: Vec<[usize; 3]> = Vec::new();
+        for terrain in &arch.terrains {
+            for t in &terrain.tris {
+                let ids = t.map(|p| {
+                    let key = p.map(|c| (c * 1000.0).round() as i64);
+                    *index.entry(key).or_insert_with(|| {
+                        points.push(p);
+                        points.len() - 1
+                    })
+                });
+                if ids[0] != ids[1] && ids[1] != ids[2] && ids[0] != ids[2] {
+                    faces.push(ids);
+                }
+            }
+        }
+        if faces.is_empty() {
+            "$".to_string()
+        } else {
+            let coordinates = points
+                .iter()
+                .map(|p| format!("({},{},{})", real(p[0]), real(p[1]), real(p[2])))
+                .collect::<Vec<_>>()
+                .join(",");
+            let list = w.add(format!("IFCCARTESIANPOINTLIST3D(({coordinates}))"));
+            let indices = faces
+                .iter()
+                .map(|[a, b, c]| format!("({},{},{})", a + 1, b + 1, c + 1))
+                .collect::<Vec<_>>()
+                .join(",");
+            let set = w.add(format!("IFCTRIANGULATEDFACESET(#{list},$,.T.,({indices}),$)"));
+            let shape = w.add(format!(
+                "IFCSHAPEREPRESENTATION(#{context},'Body','Tessellation',(#{set}))"
+            ));
+            format!("#{}", w.add(format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{shape}))")))
+        }
+    };
     let site = w.add(format!(
-        "IFCSITE('{}',$,'Site',$,$,#{site_place},$,$,.ELEMENT.,$,$,$,$,$)",
+        "IFCSITE('{}',$,'Site',$,$,#{site_place},{terrain_shape},$,.ELEMENT.,$,$,$,$,$)",
         global_id("site", "site")
     ));
     let building_place = w.place(Some(site_place), [0.0, 0.0, building.datum]);

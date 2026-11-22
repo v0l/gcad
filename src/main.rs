@@ -521,6 +521,9 @@ enum Command {
         /// For a flow simulation, draw the air speed on slices through the parts
         #[arg(long)]
         flow: bool,
+        /// Light the model from the position of its `sun` line and draw the shadows
+        #[arg(long)]
+        sun: bool,
         /// For a flow simulation, draw the mean streamlines round the parts in 3D, coloured by speed
         #[arg(long)]
         lines: bool,
@@ -841,8 +844,10 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         };
         match result {
             Ok(summary) => println!(
-                "{:>4} {:<width$}  {spent}ok  {summary}",
-                line.number, line.text
+                "{:>4} {:<width$}  {spent}{}  {summary}",
+                line.number,
+                line.text,
+                if summary.starts_with("FAIL:") { "fail" } else { "ok" }
             ),
             Err(error) => {
                 println!(
@@ -872,6 +877,10 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
     match run.steps.last() {
         Some((line, Err(_))) => bail!("stopped at line {}", line.number),
         _ => finished(&run)?,
+    }
+    let failed = gcad::report::failed_checks(&run.model);
+    if failed > 0 {
+        bail!("{failed} check(s) failed");
     }
     if run.model.sim.is_some() {
         let path = std::path::Path::new(file);
@@ -2481,6 +2490,7 @@ fn main() -> Result<()> {
             output,
             explode,
             flow,
+            sun,
             lines,
             turns,
             clip,
@@ -2518,6 +2528,13 @@ fn main() -> Result<()> {
                 let times = if times.is_empty() { vec![0.0] } else { times };
                 let rows = render::posed_rows(&run.model, clip.as_deref(), &times)?;
                 return render::render_sheet(&parts, &rows, turns, &output);
+            }
+            if sun {
+                let direction = run
+                    .model
+                    .sun_direction()
+                    .ok_or_else(|| anyhow!("`--sun` needs a `sun lat= date= time=` line in the file"))?;
+                return render::render_with_sun(&parts, &meshes, direction, &output);
             }
             render::render_with_meshes(&parts, &meshes, &output)
         }
