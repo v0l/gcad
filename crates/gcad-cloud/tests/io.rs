@@ -16,6 +16,7 @@ fn rich() -> Cloud {
         colours: true,
         intensity: true,
         classes: true,
+        deviation: false,
     };
     let mut cloud = Cloud::with_layout(layout, 4);
     for k in 0..4 {

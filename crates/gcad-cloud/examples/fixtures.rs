@@ -20,6 +20,7 @@ fn cube_surface(side: f64, step: f64, noise: f64, rng: &mut Noise) -> Cloud {
         colours: true,
         intensity: true,
         classes: true,
+        deviation: false,
     };
     let mut cloud = Cloud::with_layout(layout, 6 * (n + 1) * (n + 1));
     let faces: [(usize, f64, [f32; 3], [u8; 3], u8); 6] = [
