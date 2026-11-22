@@ -23,7 +23,16 @@ fn consumed_bytes_and_missing_observations_survive_later_file_changes() {
     let optional = root.join("optional.bin");
     std::fs::write(&source, b"consumed").unwrap();
     let (_, reads) = host::recording(|| {
-        assert_eq!(host::read(&source).unwrap(), b"consumed");
+        let read = host::read(&source);
+        assert_eq!(
+            read.as_deref().ok(),
+            Some(&b"consumed"[..]),
+            "read {read:?} of {} on {:?}, on disk {:?}, covered by snapshot {}",
+            source.display(),
+            std::thread::current().id(),
+            std::fs::read(&source),
+            host::covering(&source).is_some()
+        );
         assert!(host::is_file(&source));
         assert!(!host::is_file(&optional));
         assert!(host::read(&optional).is_err());
