@@ -706,6 +706,7 @@ pub const OPERATIONS: &[&str] = &[
     "downpipe",
     "parapet",
     "fur",
+    "terrain",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -1007,6 +1008,7 @@ impl Model {
             "wall_sweep" => self.op_wall_sweep(line),
             "wall_cut" => self.op_wall_cut(line),
             "opening" | "door" | "window" | "garage_door" => self.op_opening(line),
+            "terrain" => self.op_terrain(line),
             "slab" => self.op_slab(line),
             "slab_opening" => self.op_slab_opening(line),
             "foundation" => self.op_foundation(line),

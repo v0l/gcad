@@ -7,6 +7,7 @@ mod railing;
 mod roof;
 mod room;
 mod schedule;
+mod site;
 mod slab;
 mod stair;
 mod structure;
@@ -229,8 +230,16 @@ pub struct Built {
     pub bodies: Vec<String>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Terrain {
+    pub name: String,
+    pub tris: Vec<[[f64; 3]; 3]>,
+    pub depth: f64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Arch {
+    pub terrains: Vec<Terrain>,
     pub units: Option<String>,
     pub building: Option<Building>,
     pub levels: Vec<Level>,

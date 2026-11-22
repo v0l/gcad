@@ -1939,7 +1939,6 @@ fn image_underlay() {
 }
 
 #[test]
-#[ignore = "missing: terrain"]
 fn terrain_from_points() {
     let dir = house_files(
         "terrain_from_points",

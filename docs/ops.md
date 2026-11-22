@@ -655,7 +655,7 @@ Architecture stage F (gcad #353).
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| terrain | missing | `t1: terrain points site.csv\|contour site.dxf\|grid 20000x20000 slope=0.1,0 depth=1000` | `arch::terrain_from_points` |
+| terrain | supported | `t1: terrain points site.csv\|contour site.dxf\|grid 20000x20000 slope=0.1,0 depth=1000` | `arch::terrain_from_points` |
 | pads and cut and fill | missing | `pad <outline> level=1000`, `cut_fill t1 p1` | `arch::cut_and_fill_of_a_pad` |
 | site boundary | missing | `site_boundary x,y ... setback=3000` | `arch::site_boundary_area_and_setback` |
 | roads, retaining walls and trees | missing | `road x,y x,y width=3500 type=asphalt:100`, `retaining x,y x,y h=1200 t=250`, `tree x,y h=6000 spread=4000` | `arch::site_elements` |
