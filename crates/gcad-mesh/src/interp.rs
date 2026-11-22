@@ -130,6 +130,8 @@ pub struct Scene {
     pub part_soft: HashMap<(String, String), f64>,
     pub solid_bodies: Vec<String>,
     pub pivots: Vec<(String, [f64; 3])>,
+    pub groups: Vec<(String, String)>,
+    pub instances: Vec<(String, [f64; 3])>,
 }
 
 const IDENTITY: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];

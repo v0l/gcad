@@ -73,6 +73,9 @@ struct Opening {
 
 #[derive(Default)]
 pub struct ArchOps {
+    current: String,
+    owners: Vec<(String, String)>,
+    repeats: Vec<(String, [f64; 3])>,
     openings: Vec<Opening>,
     grids: Vec<(String, bool, f64)>,
     types: Vec<(String, Vec<Layer>)>,
@@ -196,13 +199,30 @@ impl ArchOps {
         eval_point(word, scope)
     }
 
+    pub fn handles(&self, line: &Line) -> bool {
+        match line.op.as_str() {
+            "level" => line.positional.len() >= 2,
+            "repeat" | "array" => line
+                .named
+                .iter()
+                .any(|(k, v)| k == "of" && self.owners.iter().any(|(_, b)| b == v)),
+            other => OPS.contains(&other),
+        }
+    }
+
     pub fn apply(&mut self, scope: &mut Scope, line: &Line) -> Result<()> {
         match line.op.as_str() {
             "units" => match line.positional.as_slice() {
                 [unit] if unit == "mm" && line.named.is_empty() => Ok(()),
                 _ => bail!("only `units mm` is supported; lengths are millimetres"),
             },
-            "building" => Ok(()),
+            "building" => {
+                if let [name] = line.positional.as_slice() {
+                    self.current = name.clone();
+                }
+                Ok(())
+            }
+            "repeat" | "array" => self.repeat(scope, line),
             "level" => self.level(scope, line),
             "grid" => self.grid(scope, line),
             "wall_type" => self.wall_type(scope, line),
@@ -293,6 +313,7 @@ impl ArchOps {
         if self.walls.iter().any(|w| w.name == name) {
             bail!("there is already a wall `{name}`");
         }
+        self.owners.push((name.clone(), self.current.clone()));
         let mut words: Vec<&str> = line.positional.iter().map(String::as_str).collect();
         let closed = words.contains(&"closed");
         words.retain(|w| *w != "closed");
@@ -407,10 +428,36 @@ impl ArchOps {
         Ok(())
     }
 
-    fn free(&self, name: &str) -> Result<()> {
+    fn repeat(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let mut of = None;
+        let (mut count, mut step) = (f64::NAN, None);
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "of" => of = Some(text.clone()),
+                "count" => count = number(text, scope, key)?,
+                "step" => step = Some(eval_point(text, scope)?),
+                other => bail!("a building `repeat` takes of=, count= and step=, not `{other}=`"),
+            }
+        }
+        let of = of.ok_or_else(|| anyhow!("`repeat` needs `of=`"))?;
+        if count < 2.0 || count.fract() != 0.0 {
+            bail!("count must be a whole number of at least 2, got {count}");
+        }
+        let (sx, sy) = step.ok_or_else(|| anyhow!("`repeat` needs `step=x,y`"))?;
+        if self.repeats.iter().all(|(b, _)| *b != of) {
+            self.repeats.push((of.clone(), [0.0; 3]));
+        }
+        for k in 1..count as usize {
+            self.repeats.push((of.clone(), [sx * k as f64, sy * k as f64, 0.0]));
+        }
+        Ok(())
+    }
+
+    fn free(&mut self, name: &str) -> Result<()> {
         if self.walls.iter().any(|w| w.name == name) || self.done.iter().any(|(n, _)| n == name) {
             bail!("there is already something called `{name}`");
         }
+        self.owners.push((name.to_string(), self.current.clone()));
         Ok(())
     }
 
@@ -899,6 +946,18 @@ impl ArchOps {
         }
         built.extend(self.done.into_iter().map(|(n, m)| (n, m, None)));
         for (name, mesh, pivot) in built {
+            let owner = |n: &str| {
+                let base = n.split('.').next().unwrap_or(n);
+                self.owners.iter().find(|(o, _)| o == base).map(|(_, b)| b.clone())
+            };
+            let group = self
+                .repeats
+                .iter()
+                .find(|(b, _)| Some(b) == owner(&name).as_ref())
+                .map(|(b, _)| b.clone());
+            if let Some(group) = group {
+                scene.groups.push((name.clone(), group));
+            }
             if let Some(p) = pivot {
                 scene.pivots.push((name.clone(), p));
             }
@@ -909,6 +968,9 @@ impl ArchOps {
             }
             scene.solid_bodies.push(name.clone());
             scene.mesh_bodies.push((name, Arc::new(mesh)));
+        }
+        for (group, at) in &self.repeats {
+            scene.instances.push((group.clone(), *at));
         }
         Ok(())
     }

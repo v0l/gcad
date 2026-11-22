@@ -53,6 +53,34 @@ fn wall_layers_are_named_and_coloured_parts() {
 }
 
 #[test]
+fn a_street_of_twenty_houses_shares_one_mesh() {
+    let source = format!(
+        "{HEAD}building \"house\"\nw1: wall A1 B1 B2 A2 closed type=ext base=L0 top=L1 justify=outside\nd1: door on=w1 at=2000 w=900 h=2100\nr1: roof w1 type=gable pitch=35 overhang=300 thickness=200 base=L1\nrepeat of=house count=20 step=10000,0"
+    );
+    let options = gcad_mesh::Options {
+        y_up: false,
+        ..Default::default()
+    };
+    let model = gcad_mesh::build_with(&source, &options).expect("builds");
+    assert_eq!(model.groups.len(), 1);
+    assert_eq!(model.groups[0].name, "house");
+    assert_eq!(model.instance_count(0), 20);
+    let single = gcad_mesh::build_with(
+        &source.replace("repeat of=house count=20 step=10000,0", ""),
+        &options,
+    )
+    .expect("builds");
+    assert_eq!(model.unique_triangles(), single.unique_triangles());
+    assert!(model.unique_triangles() < 4000);
+    assert_eq!(model.instances[19].transform[12], 190000.0);
+    let glb = model.to_glb().expect("glb");
+    let json_len = u32::from_le_bytes(glb[12..16].try_into().unwrap()) as usize;
+    let json = std::str::from_utf8(&glb[20..20 + json_len]).unwrap();
+    let nodes = json.matches("\"translation\"").count();
+    assert!(nodes >= 19 * model.groups[0].bodies.len(), "{nodes}");
+}
+
+#[test]
 fn a_straight_wall_is_a_prism() {
     let (v, _) = volume(&format!("{HEAD}w1: wall A1 B1 type=int base=L0 top=L1"));
     assert!((v - 8000.0 * 100.0 * 2700.0).abs() < 1.0e3, "{v}");

@@ -154,8 +154,22 @@ pub struct Body {
 }
 
 #[derive(Clone, Debug, Default)]
+pub struct Group {
+    pub name: String,
+    pub bodies: Vec<String>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Instance {
+    pub group: usize,
+    pub transform: Matrix,
+}
+
+#[derive(Clone, Debug, Default)]
 pub struct Model {
     pub bodies: Vec<Body>,
+    pub groups: Vec<Group>,
+    pub instances: Vec<Instance>,
 }
 
 fn to_up(p: P3, y_up: bool) -> P3 {
@@ -359,6 +373,29 @@ impl Model {
         self.bodies.iter().find(|b| b.name == name)
     }
 
+    pub fn unique_triangles(&self) -> usize {
+        self.bodies.iter().map(|b| b.indices.len() / 3).sum()
+    }
+
+    pub fn instance_count(&self, group: usize) -> usize {
+        self.instances.iter().filter(|i| i.group == group).count()
+    }
+
+    fn copies_of(&self, body: &str) -> Vec<[f64; 3]> {
+        let Some(g) = self.groups.iter().position(|g| g.bodies.iter().any(|b| b == body)) else {
+            return Vec::new();
+        };
+        self.instances
+            .iter()
+            .filter(|i| i.group == g)
+            .map(|i| {
+                let t = i.transform;
+                [t[12] as f64, t[13] as f64, t[14] as f64]
+            })
+            .filter(|t| t.iter().any(|v| *v != 0.0))
+            .collect()
+    }
+
     pub fn to_glb(&self) -> Result<Vec<u8>> {
         let bodies: Vec<gltf::Body<'_>> = self
             .bodies
@@ -370,6 +407,7 @@ impl Model {
                 colours: b.tints.clone(),
                 gloss: b.gloss.clone(),
                 detail: b.detail.clone(),
+                copies: self.copies_of(&b.name),
             })
             .collect();
         gltf::glb(&bodies)
@@ -468,7 +506,7 @@ impl Run {
     }
 
     fn apply(&mut self, line: &Line) -> Result<()> {
-        if crate::arch_ops::handles(line) {
+        if self.arch.handles(line) {
             return self.arch.apply(&mut self.scope, line);
         }
         if !SUBSET.contains(&line.op.as_str()) && !solid_ops::OPS.contains(&line.op.as_str()) {
@@ -624,6 +662,31 @@ pub fn build_with(source: &str, options: &Options) -> std::result::Result<Model,
 
 fn collect(run: &Run, y_up: bool) -> Model {
     let scene = &run.scene;
+    let mut groups: Vec<Group> = Vec::new();
+    for (body, group) in &scene.groups {
+        match groups.iter_mut().find(|g| g.name == *group) {
+            Some(g) => g.bodies.push(body.clone()),
+            None => groups.push(Group {
+                name: group.clone(),
+                bodies: vec![body.clone()],
+            }),
+        }
+    }
+    let instances = scene
+        .instances
+        .iter()
+        .filter_map(|(group, at)| {
+            let g = groups.iter().position(|g| g.name == *group)?;
+            let mut transform = [0.0f32; 16];
+            transform[0] = 1.0;
+            transform[5] = 1.0;
+            transform[10] = 1.0;
+            transform[15] = 1.0;
+            let t = f3(to_up(*at, y_up));
+            transform[12..15].copy_from_slice(&t);
+            Some(Instance { group: g, transform })
+        })
+        .collect();
     let rest = scene.rest_meshes();
     let tints = scene.mesh_tints(&run.colours);
     let shading = scene.mesh_shading(&run.colours);
@@ -656,7 +719,11 @@ fn collect(run: &Run, y_up: bool) -> Model {
             .with_pivot(scene.pivot_of(&name))
         })
         .collect();
-    Model { bodies }
+    Model {
+        bodies,
+        groups,
+        instances,
+    }
 }
 
 fn parts_of(

@@ -14,6 +14,7 @@ pub struct Body<'a> {
     pub colours: Vec<[f64; 3]>,
     pub gloss: Vec<crate::interp::Shine>,
     pub detail: Option<Detail>,
+    pub copies: Vec<[f64; 3]>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -686,6 +687,11 @@ pub fn glb(bodies: &[Body<'_>]) -> Result<Vec<u8>> {
         }
         nodes.push(node);
         scene.push(nodes.len() - 1);
+        let mesh_of_body = mesh_indices[0];
+        for at in &body.copies {
+            nodes.push(json!({"name": body.name, "mesh": mesh_of_body, "translation": [at[0], at[1], at[2]]}));
+            scene.push(nodes.len() - 1);
+        }
         for (k, (name, mesh_index)) in lod_nodes.iter().enumerate() {
             let mut lod = json!({"name": name, "mesh": mesh_index, "extras": {"lod": k + 1}});
             if let Some(skin) = nodes[nodes.len() - 1 - k]["skin"].as_u64() {
