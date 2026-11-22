@@ -18,6 +18,7 @@ mod fuse;
 pub mod glb;
 mod holes;
 pub mod ifc;
+pub mod ifc_read;
 mod import;
 pub mod mate;
 pub mod materials;

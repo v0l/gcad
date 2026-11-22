@@ -1882,7 +1882,6 @@ fn ifc_step_syntax_is_valid() {
 }
 
 #[test]
-#[ignore = "missing: IFC import"]
 fn ifc_round_trip() {
     let dir = house_files("ifc_round_trip", &[]);
     let (ok, text) = gcad(&dir, &["export", "house.gcad", "house.ifc"]);
@@ -1894,7 +1893,6 @@ fn ifc_round_trip() {
 }
 
 #[test]
-#[ignore = "missing: IFC checks"]
 fn ifc_check_finds_orphans() {
     let dir = house_files("ifc_check_finds_orphans", &[]);
     assert!(gcad(&dir, &["export", "house.gcad", "house.ifc"]).0);

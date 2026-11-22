@@ -2069,6 +2069,20 @@ fn main() -> Result<()> {
             Ok(())
         }
         #[cfg(feature = "game-assets")]
+        Command::Check { file, time: _ } if file.to_ascii_lowercase().ends_with(".ifc") => {
+            let text = std::fs::read_to_string(&file)?;
+            let ifc = gcad_brep::ifc_read::Ifc::parse(&text)?;
+            let problems = ifc.problems();
+            for problem in &problems {
+                println!("ERROR  {problem}");
+            }
+            anyhow::ensure!(problems.is_empty(), "{} problems in {file}", problems.len());
+            println!("{} entities, schema {}", ifc.entities.len(), ifc.schema);
+            println!("every reference is defined");
+            println!("every element is in a storey");
+            println!("every opening voids a host");
+            Ok(())
+        }
         Command::Check { file, time } if file.to_ascii_lowercase().ends_with(".gasset") => {
             let start = std::time::Instant::now();
             let asset = gcad::asset::author::load(std::path::Path::new(&file), &vars)?;

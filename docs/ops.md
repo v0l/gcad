@@ -644,8 +644,8 @@ Architecture stage E (gcad #352).
 | IFC element classes | supported | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
 | stable GlobalIds | supported | ids derived from element names | `arch::ifc_global_ids_are_stable` |
 | IFC syntax | supported | unique ids, balanced parentheses, every reference defined | `arch::ifc_step_syntax_is_valid` |
-| IFC import | missing | `import model.ifc` as a read-only underlay | `arch::ifc_round_trip` |
-| IFC checks | missing | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
+| IFC import | supported | `import model.ifc` as a read-only underlay | `arch::ifc_round_trip` |
+| IFC checks | supported | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
 | image underlays | missing | `underlay plan.png scale=1:100 dpi=100` | `arch::image_underlay` |
 
 ## Site and analysis
