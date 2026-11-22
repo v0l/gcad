@@ -127,7 +127,7 @@ pub fn shoulders(b: &Bearing) -> Shoulders {
     let row = file()
         .shoulders
         .iter()
-        .find(|r| (r[0] - b.corner).abs() < 1.0e-9)
+        .find(|r| r[0] >= b.corner - 1.0e-9)
         .unwrap_or_else(|| file().shoulders.last().expect("shoulder rows"));
     let height = if b.light_series { row[2] } else { row[3] };
     Shoulders {
