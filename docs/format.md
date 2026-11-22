@@ -858,6 +858,11 @@ Nuts and washers sit on z=0 and go up, inserts hang down from z=0.
 | `standoff:M3x10` | hex standoff, tapped through, standing on z=0 (brass) | `body`, `bore` |
 | `bearing:608` | deep groove ball bearing, solid with shallow seal grooves, standing on z=0: 623 to 626, 695, 688, 698, 608, 609, 6000 to 6005, 6200 to 6204, 6800 to 6804 | `ring` (outer race), `bore`, `seal` |
 | `dowel:4x16` | ISO 8734 dowel pin, chamfered, standing on z=0 | `pin` |
+| `iso4762:M6x25`, `iso4017`, `iso4014`, `iso7380`, `iso10642` | catalogue screws by standard number, M2 to M24 where the standard lists them; `gcad parts show` gives the BOM line | `head`, `shank` |
+| `iso4032:M6`, `iso4035`, `iso7040`, `iso7089`, `iso7093` | catalogue nuts and washers | `nut` or `washer`, `bore` |
+| `iso2338:6x24`, `iso8734:6x24`, `din6885:8x7x32`, `din471:25`, `din472:50` | catalogue dowels, parallel keys and circlips (the number is the shaft or bore diameter) | `pin`, `key`, `clip`, `bore` |
+| `gt2pulley:20x6x5`, `htd3pulley`, `htd5pulley` | pulley of `teeth x belt width x bore`, outside diameter from the pitch line differential | `pulley`, `bore` |
+| `gt2belt:6x200`, `htd3belt`, `htd5belt`, `extrusion:2020x300`, `spec:nema17@42x42x40` | bought, not modelled: a ring, a bar or a box that is the clearance envelope, listed in the BOM | `belt`, `profile`, `body` |
 | `oring:214`, `oring:40x2.65` | nitrile o-ring by AS568 dash number or ISO 3601 inside diameter x cross-section, a torus about z centred on z=0 | `ring` |
 
 Screws are drawn plain, without a modelled thread. The bill of materials lists them by

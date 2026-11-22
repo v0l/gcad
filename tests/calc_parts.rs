@@ -126,6 +126,12 @@ fn cli_lists_and_shows_parts() {
 }
 
 #[test]
+fn catalogue_bearings_are_standard_parts() {
+    let text = bom("calc_parts_bearings", "part a bearing:6305\npart b bearing:608\n");
+    assert!(text.contains("6305 bearing 25x62x17") && text.contains("608 bearing 8x22x7"), "{text}");
+}
+
+#[test]
 fn cli_bearing_report_has_life_and_seats() {
     let (ok, text) = gcad(&["calc", "bearing", "6205", "--radial", "2", "--rpm", "3000", "--formulas"]);
     assert!(ok, "{text}");
