@@ -683,7 +683,7 @@ Architecture stage G (gcad #354): the same lines build flat meshes with no kerne
 |---|---|---|---|
 | mesh walls and openings | supported | `wall`, `door`, `window` through `gcad_mesh::build` | `arch::mesh_wall_matches_the_kernel` |
 | mesh house within budget | supported | walls, slab, roof, stair under 4000 triangles and 5 ms | `arch::mesh_house_within_budget` |
-| door nodes | supported | `d1.leaf` a named body pivoting at its hinge | `arch::mesh_door_is_a_hinged_node` |
+| door nodes | supported | `d1.leaf` a named body pivoting at its hinge | `arch::mesh_door_is_a_hinged_node`, `arch::mesh_door_swings_about_its_hinge_into_the_room` |
 
 ## Point clouds
 

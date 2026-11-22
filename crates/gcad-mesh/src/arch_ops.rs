@@ -68,6 +68,7 @@ struct Opening {
     h: f64,
     sill: f64,
     kind: String,
+    hinge_right: bool,
 }
 
 #[derive(Default)]
@@ -332,6 +333,7 @@ impl ArchOps {
             h: f64::NAN,
             sill: if op == "window" { 900.0 } else { 0.0 },
             kind: op.to_string(),
+            hinge_right: false,
         };
         for (key, text) in &line.named {
             match key.as_str() {
@@ -340,7 +342,12 @@ impl ArchOps {
                 "w" => o.w = number(text, scope, key)?,
                 "h" => o.h = number(text, scope, key)?,
                 "sill" => o.sill = number(text, scope, key)?,
-                "mark" | "swing" | "hinge" | "frame" | "leaf" | "panes" | "mullion" | "glazing"
+                "hinge" => match text.as_str() {
+                    "left" => o.hinge_right = false,
+                    "right" => o.hinge_right = true,
+                    other => bail!("hinge is left or right, not `{other}`"),
+                },
+                "mark" | "swing" | "frame" | "leaf" | "panes" | "mullion" | "glazing"
                 | "depth" | "threshold" | "head" => {}
                 other => bail!("`{op}` has no `{other}=` argument"),
             }
@@ -546,7 +553,7 @@ impl ArchOps {
         Ok(())
     }
 
-    fn fills(&self, wall: &Wall) -> Vec<(String, Mesh)> {
+    fn fills(&self, wall: &Wall) -> Vec<(String, Mesh, Option<P3>)> {
         let starts = wall.chain.starts();
         let (lo, hi) = wall.span();
         let mut out = Vec::new();
@@ -581,11 +588,13 @@ impl ArchOps {
                     (s0, z0), (s0 + fw, z0), (s0 + fw, z1 - fw), (s1 - fw, z1 - fw),
                     (s1 - fw, z0), (s1, z0), (s1, z1), (s0, z1),
                 ];
-                out.push((format!("{}.frame", o.name), make(&frame, &[], (b0, b1), "wood")));
+                out.push((format!("{}.frame", o.name), make(&frame, &[], (b0, b1), "wood"), None));
                 let mid = (b0 + b1) / 2.0;
+                let hinge_s = if o.hinge_right { s1 - fw } else { s0 + fw };
                 out.push((
                     format!("{}.leaf", o.name),
                     make(&rect(s0 + fw, s1 - fw, z0, z1 - fw), &[], (mid - leaf / 2.0, mid + leaf / 2.0), "wood"),
+                    Some(place((hinge_s, z0), mid)),
                 ));
             } else {
                 let fw = 60.0;
@@ -595,10 +604,12 @@ impl ArchOps {
                 out.push((
                     format!("{}.frame", o.name),
                     make(&outer, &[inner.to_vec()], (mid - 35.0, mid + 35.0), "wood"),
+                    None,
                 ));
                 out.push((
                     format!("{}.glass", o.name),
                     make(&inner, &[], (mid - 12.0, mid + 12.0), "glass"),
+                    None,
                 ));
             }
         }
@@ -683,14 +694,17 @@ impl ArchOps {
 
     pub fn finish(self, scene: &mut Scene) -> Result<()> {
         let lines = self.wall_lines();
-        let mut built: Vec<(String, Mesh)> = (0..self.walls.len())
-            .map(|i| (self.walls[i].name.clone(), self.wall_mesh(i, &lines)))
+        let mut built: Vec<(String, Mesh, Option<P3>)> = (0..self.walls.len())
+            .map(|i| (self.walls[i].name.clone(), self.wall_mesh(i, &lines), None))
             .collect();
         for wall in &self.walls {
             built.extend(self.fills(wall));
         }
-        built.extend(self.done);
-        for (name, mesh) in built {
+        built.extend(self.done.into_iter().map(|(n, m)| (n, m, None)));
+        for (name, mesh, pivot) in built {
+            if let Some(p) = pivot {
+                scene.pivots.push((name.clone(), p));
+            }
             for part in &mesh.parts {
                 scene
                     .part_colours

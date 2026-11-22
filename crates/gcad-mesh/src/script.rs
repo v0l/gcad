@@ -144,6 +144,7 @@ pub struct Body {
     pub clips: Vec<Clip>,
     pub targets: Vec<MorphTarget>,
     pub target_weights: Vec<f32>,
+    pub pivot: Option<[f32; 3]>,
     y_up: bool,
     mesh: Arc<Mesh>,
     rig: Option<Rig>,
@@ -187,6 +188,11 @@ fn matrix_of(xf: &Xf, y_up: bool) -> Matrix {
 }
 
 impl Body {
+    fn with_pivot(mut self, pivot: Option<[f64; 3]>) -> Body {
+        self.pivot = pivot.map(|p| f3(to_up(p, self.y_up)));
+        self
+    }
+
     pub fn new(raw: RawBody, y_up: bool) -> Body {
         body_of(raw, y_up)
     }
@@ -647,6 +653,7 @@ fn collect(run: &Run, y_up: bool) -> Model {
                 },
                 y_up,
             )
+            .with_pivot(scene.pivot_of(&name))
         })
         .collect();
     Model { bodies }
@@ -816,6 +823,7 @@ fn body_of(raw: RawBody, y_up: bool) -> Body {
         clips,
         targets,
         target_weights,
+        pivot: None,
         y_up,
         mesh,
         rig: active,

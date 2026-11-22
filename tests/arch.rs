@@ -2205,3 +2205,40 @@ fn mesh_door_is_a_hinged_node() {
         .fold(f32::INFINITY, f32::min);
     near(min_x as f64, 2000.0 - 450.0 + 70.0, 1.0e-3);
 }
+
+#[test]
+fn mesh_door_swings_about_its_hinge_into_the_room() {
+    let model = gcad_mesh::build_with(
+        &building(),
+        &gcad_mesh::Options {
+            y_up: false,
+            ..Default::default()
+        },
+    )
+    .expect("builds");
+    let door = model.body("d1.leaf").expect("a door node");
+    let pivot = door.pivot.expect("a pivot");
+    near(pivot[0] as f64, 1620.0, 1.0e-3);
+    near(pivot[1] as f64, 277.5, 1.0e-3);
+    let turned: Vec<[f64; 2]> = door
+        .positions
+        .iter()
+        .map(|p| {
+            let (x, y) = ((p[0] - pivot[0]) as f64, (p[1] - pivot[1]) as f64);
+            [pivot[0] as f64 - y, pivot[1] as f64 + x]
+        })
+        .collect();
+    assert!(
+        turned
+            .iter()
+            .any(|p| (p[0] - 1620.0).abs() < 25.0 && (p[1] - 277.5).abs() < 1.0),
+        "the hinge edge moved"
+    );
+    let (y_lo, y_hi) = turned
+        .iter()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), p| {
+            (a.min(p[1]), b.max(p[1]))
+        });
+    assert!(y_hi > 277.5 + 700.0, "the leaf opens into the room: {y_hi}");
+    assert!(y_lo > 277.5 - 30.0, "and not out of it: {y_lo}");
+}

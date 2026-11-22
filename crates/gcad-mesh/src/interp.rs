@@ -129,6 +129,7 @@ pub struct Scene {
     pub part_metal: HashMap<(String, String), (f64, f64)>,
     pub part_soft: HashMap<(String, String), f64>,
     pub solid_bodies: Vec<String>,
+    pub pivots: Vec<(String, [f64; 3])>,
 }
 
 const IDENTITY: [[f64; 3]; 3] = [[1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]];
@@ -168,6 +169,10 @@ impl Scene {
         } else {
             1.0
         }
+    }
+
+    pub fn pivot_of(&self, body: &str) -> Option<[f64; 3]> {
+        self.pivots.iter().find(|(n, _)| n == body).map(|(_, p)| *p)
     }
 
     pub fn body_name(&self) -> String {
