@@ -10,7 +10,10 @@ mod schedule;
 mod slab;
 mod stair;
 mod structure;
+mod underlay;
 mod wall;
+
+pub use underlay::Underlay;
 
 use crate::geometry::Profile;
 use gcad_mesh::arch::{Chain, Join, Justify, Layer};
@@ -247,6 +250,7 @@ pub struct Arch {
     pub stairs: Vec<Stair>,
     pub built: Vec<Built>,
     pub classes: Vec<(String, String)>,
+    pub underlays: Vec<Underlay>,
 }
 
 impl Arch {

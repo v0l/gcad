@@ -105,6 +105,49 @@ impl Writer {
         ))
     }
 
+    fn material(&mut self, known: &mut Vec<(String, usize)>, name: &str) -> usize {
+        if let Some((_, id)) = known.iter().find(|(n, _)| n == name) {
+            return *id;
+        }
+        let id = self.add(format!("IFCMATERIAL({},$,$)", text(name)));
+        known.push((name.to_string(), id));
+        id
+    }
+
+    fn property(&mut self, name: &str, value: &str) -> usize {
+        self.add(format!("IFCPROPERTYSINGLEVALUE({},$,{value},$)", text(name)))
+    }
+
+    fn pset(&mut self, kind: &str, owner: &str, target: usize, props: Vec<usize>) {
+        let set = self.add(format!(
+            "IFCPROPERTYSET('{}',$,{},$,{})",
+            global_id(kind, owner),
+            text(kind),
+            Writer::list(&props)
+        ));
+        self.rel(
+            "IFCRELDEFINESBYPROPERTIES",
+            &format!("{owner}.{kind}"),
+            format!("(#{target}),#{set}"),
+        );
+    }
+
+    fn style(&mut self, item: usize, colour: [f64; 3], opacity: Option<f64>) {
+        let rgb = self.add(format!(
+            "IFCCOLOURRGB($,{},{},{})",
+            real(colour[0]),
+            real(colour[1]),
+            real(colour[2])
+        ));
+        let transparency = real(1.0 - opacity.unwrap_or(1.0));
+        let render = self.add(format!(
+            "IFCSURFACESTYLERENDERING(#{rgb},{transparency},$,$,$,$,$,$,.NOTDEFINED.)"
+        ));
+        let style = self.add(format!("IFCSURFACESTYLE($,.BOTH.,(#{render}))"));
+        let assignment = self.add(format!("IFCPRESENTATIONSTYLEASSIGNMENT((#{style}))"));
+        self.add(format!("IFCSTYLEDITEM(#{item},(#{assignment}),$)"));
+    }
+
     fn faceted(&mut self, solid: &crate::Solid) -> Option<usize> {
         let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
         let (points, triangles) = geometry::welded(&mesh);
@@ -236,6 +279,7 @@ pub fn write(model: &Model, project: &str) -> String {
         )));
     }
 
+    let mut materials: Vec<(String, usize)> = Vec::new();
     let body_of = |name: &str| model.named_solids().into_iter().find(|(n, _)| n == name);
     let mut elements: Vec<Element> = Vec::new();
     let mut by_name: Vec<(String, usize)> = Vec::new();
@@ -247,6 +291,9 @@ pub fn write(model: &Model, project: &str) -> String {
             if let Some((_, solid)) = body_of(name) {
                 low = low.min(geometry::bounds(solid).min().z);
                 if let Some(item) = w.faceted(solid) {
+                    if let Some(colour) = model.colours.get(name) {
+                        w.style(item, *colour, model.opacities.get(name).copied());
+                    }
                     items.push(item);
                 }
             }
@@ -311,6 +358,70 @@ pub fn write(model: &Model, project: &str) -> String {
                 spatial: false,
             });
             by_name.push((name.clone(), id));
+            if op == "wall"
+                && let Some(wall) = arch.wall(&name)
+            {
+                let layers = &wall.tiers[0].layers;
+                let ids: Vec<usize> = layers
+                    .iter()
+                    .map(|layer| {
+                        let material = w.material(&mut materials, &layer.material);
+                        w.add(format!(
+                            "IFCMATERIALLAYER(#{material},{},$,{},$,$,$)",
+                            real(layer.thickness),
+                            text(&layer.material)
+                        ))
+                    })
+                    .collect();
+                let set = w.add(format!(
+                    "IFCMATERIALLAYERSET({},{},$)",
+                    Writer::list(&ids),
+                    text(&name)
+                ));
+                let (lo, _) = wall.outer_span();
+                let usage = w.add(format!(
+                    "IFCMATERIALLAYERSETUSAGE(#{set},.AXIS2.,.POSITIVE.,{})",
+                    real(lo)
+                ));
+                w.rel(
+                    "IFCRELASSOCIATESMATERIAL",
+                    &format!("{name}.material"),
+                    format!("(#{id}),#{usage}"),
+                );
+                let conductivity: Option<Vec<f64>> = layers
+                    .iter()
+                    .map(|l| {
+                        model
+                            .library
+                            .get(&crate::materials::slug(&l.material))
+                            .and_then(|e| e.mechanics.conductivity)
+                            .filter(|k| *k > 0.0)
+                    })
+                    .collect();
+                let mut props = vec![w.property("Reference", &format!("IFCIDENTIFIER({})", text(&name)))];
+                if let Some(k) = conductivity {
+                    let resistance: f64 = 0.17
+                        + layers
+                            .iter()
+                            .zip(&k)
+                            .map(|(l, k)| l.thickness / 1000.0 / k)
+                            .sum::<f64>();
+                    props.push(w.property(
+                        "ThermalTransmittance",
+                        &format!("IFCTHERMALTRANSMITTANCEMEASURE({})", real(1.0 / resistance)),
+                    ));
+                }
+                w.pset("Pset_WallCommon", &name, id, props);
+            } else if matches!(class, "IFCSLAB" | "IFCROOF" | "IFCCOLUMN" | "IFCBEAM") {
+                let props = vec![w.property("Reference", &format!("IFCIDENTIFIER({})", text(&name)))];
+                let kind = match class {
+                    "IFCSLAB" => "Pset_SlabCommon",
+                    "IFCROOF" => "Pset_RoofCommon",
+                    "IFCCOLUMN" => "Pset_ColumnCommon",
+                    _ => "Pset_BeamCommon",
+                };
+                w.pset(kind, &name, id, props);
+            }
             if !flights.is_empty() {
                 let mut ids = Vec::new();
                 for flight in &flights {
@@ -382,6 +493,14 @@ pub fn write(model: &Model, project: &str) -> String {
             level,
             spatial: false,
         });
+        let mark = opening.mark.clone().unwrap_or_else(|| opening.name.clone());
+        let props = vec![w.property("Reference", &format!("IFCIDENTIFIER({})", text(&mark)))];
+        let kind = if class == "IFCWINDOW" {
+            "Pset_WindowCommon"
+        } else {
+            "Pset_DoorCommon"
+        };
+        w.pset(kind, &opening.name, filler, props);
     }
 
     for room in &arch.rooms {
@@ -397,6 +516,11 @@ pub fn write(model: &Model, project: &str) -> String {
             level: level_of(&levels, room.level),
             spatial: true,
         });
+        let props = vec![
+            w.property("Reference", &format!("IFCIDENTIFIER({})", text(&room.number))),
+            w.property("Category", &format!("IFCLABEL({})", text(&room.floor))),
+        ];
+        w.pset("Pset_SpaceCommon", &room.name, id, props);
         let mut quantity = |kind: &str, name: &str, value: f64| {
             w.add(format!("{kind}('{name}',$,$,{},$)", real(value)))
         };

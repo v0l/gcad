@@ -263,6 +263,7 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `level` | `name height "title"` | a named height; the name is a number from then on, so `top=L1-300` works |
 | `grid` | `name x=\|y=` | a grid line; each crossing of an x and a y line is a point, `A1`, and `A1+0,500` offsets it |
 | `gridfile` | `file.csv` | grid lines from `name,axis,offset` rows |
+| `underlay` | `plan.png` `scale=1:100` `dpi=` | sizes an image as a reference: pixels at `dpi` times the scale, reported in mm |
 | `wall_type` | `name material:thickness ...` | layers outside to inside; `air` is a cavity with no body |
 | `wall` | `points` `closed` \| `arc a b c` \| `profile`, `type=` `base=` `top=` `justify=outside\|centre\|inside` `offset=` `top_offset=a,b` `batter=` `pilaster=WxD@at` | one body per layer, named `wall.material` (`.2` for a repeat); the outside is on the right walking from point to point; `type=ext:0..900,int:900..L1` stacks types; ends that meet another wall mitre at an L and stop at the other wall's face at a T |
 | `wall_join` | `a b mitre\|butt\|tee` | sets how two walls meet; with `butt` the first runs through |
