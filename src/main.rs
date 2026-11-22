@@ -580,6 +580,11 @@ enum Command {
         #[command(subcommand)]
         what: CalcKind,
     },
+    /// Standard parts catalogue: gcad parts list, gcad parts show iso4762:M6x25
+    Parts {
+        #[command(subcommand)]
+        action: PartsAction,
+    },
     /// Print the format reference: every operation, selector and assembly line
     Docs,
     /// Serve the Language Server Protocol on stdio: diagnostics as `check` reports them, document symbols and op hover
@@ -663,6 +668,34 @@ enum CalcKind {
         #[arg(long)]
         formulas: bool,
     },
+    /// Bearing lookup, seats and L10 life: gcad calc bearing 6205 --radial 2 --rpm 3000
+    Bearing {
+        /// 608, 6205, 6305, F608, 51104 or LM8UU
+        name: String,
+        /// Radial load in kN
+        #[arg(long, default_value_t = 0.0)]
+        radial: f64,
+        /// Axial load in kN
+        #[arg(long, default_value_t = 0.0)]
+        axial: f64,
+        /// Speed in rpm, to give life in hours
+        #[arg(long)]
+        rpm: Option<f64>,
+        /// Fit load class: light, normal or heavy (default: from the load)
+        #[arg(long)]
+        load: Option<gcad::calc::bearing::Load>,
+        /// Show the formulas and sources
+        #[arg(long)]
+        formulas: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum PartsAction {
+    /// List the standards, or the sizes of one: gcad parts list [kind]
+    List { kind: Option<String> },
+    /// Show one part: its spec string, size, material and BOM line
+    Show { spec: String },
 }
 
 #[derive(Subcommand)]
@@ -2204,6 +2237,32 @@ fn main() -> Result<()> {
                         gcad::calc::materials::report(material).render(formulas)
                     );
                 }
+                CalcKind::Bearing {
+                    name,
+                    radial,
+                    axial,
+                    rpm,
+                    load,
+                    formulas,
+                } => {
+                    let report = gcad::calc::bearing::report(&gcad::calc::bearing::Input {
+                        bearing: gcad::calc::bearing::find(&name)?,
+                        radial_kn: radial,
+                        axial_kn: axial,
+                        rpm,
+                        load,
+                    })?;
+                    println!("{}", report.render(formulas));
+                }
+            }
+            Ok(())
+        }
+        Command::Parts { action } => {
+            match action {
+                PartsAction::List { kind } => {
+                    println!("{}", gcad::calc::parts::list(kind.as_deref())?)
+                }
+                PartsAction::Show { spec } => println!("{}", gcad::calc::parts::show(&spec)?),
             }
             Ok(())
         }

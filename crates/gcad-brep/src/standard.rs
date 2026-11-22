@@ -120,8 +120,10 @@ pub struct Standard {
 }
 
 pub fn is_standard(spec: &str) -> bool {
-    spec.split_once(':')
-        .is_some_and(|(kind, _)| KINDS.iter().any(|(k, _)| *k == kind))
+    crate::calc::parts::knows(spec)
+        || spec
+            .split_once(':')
+            .is_some_and(|(kind, _)| KINDS.iter().any(|(k, _)| *k == kind))
 }
 
 fn sized(size: &str, kind: &str) -> Result<(&'static Metric, Option<f64>)> {
@@ -144,6 +146,20 @@ fn hex_corners(across_flats: f64) -> f64 {
 }
 
 pub fn standard(spec: &str) -> Result<Standard> {
+    if crate::calc::parts::knows(spec) {
+        let part = crate::calc::parts::resolve(spec)?;
+        if let Some(alias) = &part.alias {
+            let inner = standard(alias)?;
+            return Ok(Standard {
+                title: part.title,
+                source: inner.source,
+            });
+        }
+        return Ok(Standard {
+            title: part.title,
+            source: part.source,
+        });
+    }
     let (kind, size) = spec
         .split_once(':')
         .ok_or_else(|| anyhow!("a standard part is written kind:size, like shcs:M3x10"))?;

@@ -2,6 +2,7 @@ pub mod bearing;
 pub mod fit;
 pub mod materials;
 pub mod oring;
+pub mod parts;
 pub mod tables;
 pub mod thread;
 
