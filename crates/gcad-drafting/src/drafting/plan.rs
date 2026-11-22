@@ -437,7 +437,7 @@ impl State {
             y1 = y1.max(p.1);
         }
         self.plan_level = z;
-        let margin = 1500.0;
+        let margin = 2200.0;
         let window = match named(line, "window") {
             Some(t) => {
                 let (a, b, c, d) = super::quad(t, &self.scope)?;
@@ -942,7 +942,7 @@ impl State {
         let (_, _, bx1, by1) = frame.box_paper();
         let (x, y) = match named(line, "place") {
             Some(t) => super::pair(t, &self.scope)?,
-            None => (bx1 - 5000.0 / frame.scale - 20.0, by1 - 6.0),
+            None => (bx1 - 5000.0 / frame.scale - 20.0, by1 - 5.0),
         };
         let metre = 1000.0 / frame.scale;
         let ticks = match named(line, "length") {
@@ -988,8 +988,8 @@ impl State {
     }
 
     fn level_note(&self, frame: &Frame, level_z: f64, title: &str) -> Vec<Mark> {
-        let (_, _, bx1, by1) = frame.box_paper();
-        let (x, y) = (bx1 - 40.0, by1 - 14.0);
+        let (bx0, _, _, by1) = frame.box_paper();
+        let (x, y) = (bx0 + 6.0, by1 - 5.0);
         let words = format!(
             "{}{} {title}",
             if level_z >= 0.0 { "+" } else { "" },
@@ -1014,5 +1014,5 @@ impl State {
 }
 
 fn clip_hatch(rings: &[Vec<(f64, f64)>], pattern: &super::hatch::Pattern) -> Vec<Mark> {
-    hatch_marks(rings, pattern)
+    hatch_marks(rings, pattern, 1.0)
 }

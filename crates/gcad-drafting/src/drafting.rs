@@ -1,5 +1,6 @@
 mod annotate;
 mod building;
+mod elevation;
 mod hatch;
 mod plan;
 mod scan;

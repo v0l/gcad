@@ -62,9 +62,10 @@ pub fn default_pattern(material: &str) -> &'static str {
     }
 }
 
-pub fn hatch_marks(rings: &[Vec<(f64, f64)>], pattern: &Pattern) -> Vec<Mark> {
+pub fn hatch_marks(rings: &[Vec<(f64, f64)>], pattern: &Pattern, stretch: f64) -> Vec<Mark> {
     let mut marks = Vec::new();
-    for &(angle, spacing, dashed) in pattern.lines {
+    for &(angle, base, dashed) in pattern.lines {
+        let spacing = base * stretch;
         let a = angle.to_radians();
         let direction = (a.cos(), -a.sin());
         let normal = (-direction.1, direction.0);

@@ -1,7 +1,6 @@
-use super::hatch::{default_pattern, hatch_marks, pattern};
 use super::plan::{CUT_WEIGHT, HIDDEN_WEIGHT, PROJECTED_WEIGHT, circle, group, stroke, text};
 use super::{
-    Anchor, BLACK, Frame, Mark, State, TEXT, clip_line, clip_polygon, dimension, direction, named,
+    Anchor, BLACK, Frame, Mark, State, TEXT, clip_line, clip_polygon, dimension, flatten, named,
     number, pair, quad, scale_of,
 };
 use crate::geometry;
@@ -59,6 +58,49 @@ pub(super) fn clip_marks(marks: Vec<Mark>, area: Box4) -> Vec<Mark> {
             }
         })
         .collect()
+}
+
+fn translate(mark: &Mark, dx: f64, dy: f64) -> Mark {
+    match mark {
+        Mark::Group { class, data, marks } => Mark::Group {
+            class: class.clone(),
+            data: data.clone(),
+            marks: marks.iter().map(|m| translate(m, dx, dy)).collect(),
+        },
+        Mark::Text {
+            x,
+            y,
+            size,
+            text,
+            anchor,
+            angle,
+        } => Mark::Text {
+            x: x + dx,
+            y: y + dy,
+            size: *size,
+            text: text.clone(),
+            anchor: *anchor,
+            angle: *angle,
+        },
+        Mark::Shape {
+            loops,
+            closed,
+            fill,
+            stroke,
+            width,
+            dashed,
+        } => Mark::Shape {
+            loops: loops
+                .iter()
+                .map(|l| l.iter().map(|p| (p.0 + dx, p.1 + dy)).collect())
+                .collect(),
+            closed: *closed,
+            fill: *fill,
+            stroke: *stroke,
+            width: *width,
+            dashed: *dashed,
+        },
+    }
 }
 
 fn unit(v: (f64, f64)) -> (f64, f64) {
@@ -164,9 +206,9 @@ impl State {
         let base = match named(line, "offset") {
             Some(t) => eval(t, &self.scope)?,
             None => match kind.as_str() {
-                "walls" => 8.0,
-                "openings" => 24.0,
-                _ => 32.0,
+                "walls" => 16.0,
+                "openings" => 32.0,
+                _ => 40.0,
             },
         };
         let paper = |u: f64| {
@@ -354,7 +396,46 @@ impl State {
             other => bail!("`tag` takes door, window, room, wall, stair or column, not `{other}`"),
         }
         let count = marks.len();
-        self.sheet()?.marks.extend(marks);
+        let mut placed: Vec<Mark> = Vec::new();
+        let fixed: Vec<super::annotate::Rect> = flatten(&self.sheet()?.marks)
+            .into_iter()
+            .filter(|m| matches!(m, Mark::Text { .. }))
+            .flat_map(super::annotate::mark_rects)
+            .collect();
+        for mark in marks {
+            let mut taken = fixed.clone();
+            taken.extend(placed.iter().flat_map(super::annotate::mark_rects));
+            let own = super::annotate::mark_rects(&mark);
+            let mut best = mark.clone();
+            'search: for r in [0.0, 3.0, 6.0, 9.0, 12.0, 16.0, 22.0, 30.0] {
+                for (dx, dy) in [
+                    (r, 0.0),
+                    (-r, 0.0),
+                    (0.0, r),
+                    (0.0, -r),
+                    (r, r),
+                    (-r, -r),
+                    (r, -r),
+                    (-r, r),
+                ] {
+                    let clear = own.iter().all(|rect| {
+                        let moved = (
+                            rect.0 + dx - 0.5,
+                            rect.1 + dy - 0.5,
+                            rect.2 + dx + 0.5,
+                            rect.3 + dy + 0.5,
+                        );
+                        taken.iter().all(|t| !super::annotate::overlaps(moved, *t))
+                    });
+                    if clear {
+                        best = translate(&mark, dx, dy);
+                        break 'search;
+                    }
+                }
+            }
+            placed.push(best);
+        }
+        self.sheet()?.marks.extend(placed);
         Ok(format!("{count} {kind} tags"))
     }
 
@@ -388,117 +469,6 @@ impl State {
             "section" => self.op_building_section(line),
             other => bail!("cannot detail a `{other}`"),
         }
-    }
-
-    pub(super) fn op_elevation(&mut self, line: &Line) -> Result<String> {
-        let from = named(line, "from").unwrap_or("-y").to_string();
-        let mut view = Line {
-            number: line.number,
-            text: line.text.clone(),
-            label: None,
-            op: "view".into(),
-            positional: Vec::new(),
-            named: vec![
-                ("from".into(), from.clone()),
-                (
-                    "label".into(),
-                    named(line, "label")
-                        .map(str::to_string)
-                        .unwrap_or_else(|| format!("elevation {from}")),
-                ),
-            ],
-        };
-        for key in ["scale", "place", "window"] {
-            if let Some(v) = named(line, key) {
-                view.named.push((key.to_string(), v.to_string()));
-            }
-        }
-        self.op_view(&view, false)?;
-        self.last_view = Some(line.clone());
-        let frame = self.frame()?.clone();
-        let (toward, _) = direction(&from)?;
-        let hatches = self.elevation_hatches(&frame, toward)?;
-        self.sheet()?.marks.extend(hatches);
-        let levels: Vec<(f64, String)> = self
-            .model()?
-            .arch
-            .levels
-            .iter()
-            .map(|l| (l.z, l.title.clone()))
-            .collect();
-        let count = levels.len();
-        if named(line, "levels").is_none_or(|t| t != "0") {
-            for (z, title) in levels {
-                let level = Line {
-                    number: line.number,
-                    text: String::new(),
-                    label: None,
-                    op: "level".into(),
-                    positional: vec![number(z), title],
-                    named: Vec::new(),
-                };
-                self.op_level(&level)?;
-            }
-        }
-        Ok(format!("elevation from {from}, {count} levels"))
-    }
-
-    fn elevation_hatches(&self, frame: &Frame, toward: Vector3) -> Result<Vec<Mark>> {
-        let model = self.model()?;
-        let area = frame.box_paper();
-        let mut out = Vec::new();
-        for wall in &model.arch.walls {
-            for (body, t, l) in wall.layer_names() {
-                let material = &wall.tiers[t].layers[l].material;
-                let name = self
-                    .hatches
-                    .get(material)
-                    .map(String::as_str)
-                    .unwrap_or_else(|| default_pattern(material));
-                let Some(pattern) = pattern(name) else {
-                    continue;
-                };
-                let Ok(solid) = model.named_body(&body) else {
-                    continue;
-                };
-                let mesh = geometry::mesh(&solid, geometry::mesh_tolerance(&solid));
-                let positions = mesh.positions();
-                let mut faces = Vec::new();
-                for tri in mesh.faces().triangle_iter() {
-                    let [a, b, c] = tri.map(|v| positions[v.pos]);
-                    let normal = (b - a).cross(c - a);
-                    let len = normal.magnitude();
-                    if len < 1e-9 || normal.dot(toward) / len > -0.99 {
-                        continue;
-                    }
-                    let depth = ((a.to_vec() + b.to_vec() + c.to_vec()) / 3.0).dot(toward);
-                    faces.push((depth, [a, b, c]));
-                }
-                let Some(near) = faces.iter().map(|f| f.0).min_by(f64::total_cmp) else {
-                    continue;
-                };
-                let mut strokes = Vec::new();
-                for (depth, tri) in &faces {
-                    if *depth > near + 1.0 {
-                        continue;
-                    }
-                    let ring: Vec<(f64, f64)> =
-                        tri.iter().map(|p| frame.paper(frame.uv(*p))).collect();
-                    let ring = clip_polygon(&ring, area);
-                    if ring.len() > 2 {
-                        strokes.extend(hatch_marks(&[ring], pattern));
-                    }
-                }
-                if !strokes.is_empty() {
-                    out.push(group(
-                        &format!("hatch {}", pattern.name),
-                        vec![("material", material.clone()), ("layer", "A-WALL".into())],
-                        strokes,
-                    ));
-                }
-            }
-        }
-        Ok(out)
     }
 
     pub(super) fn is_building_section(line: &Line) -> bool {

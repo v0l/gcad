@@ -623,10 +623,10 @@ Architecture stage D (gcad #351). Lines of a `.gdwg` file.
 | plan symbols | supported | `plan ... grids=1 levels=1`, `northarrow`, `scalebar` | `arch::plan_symbols` |
 | stair arrows | supported | UP or DN text, arrow and break line on a plan | `arch::plan_stair_arrow` |
 | reflected ceiling plans | supported | `rcp L0` | `arch::reflected_ceiling_plan` |
-| elevations | supported | `elevation from=+y\|-y\|+x\|-x` with level marks | `arch::elevation_with_level_marks` |
+| elevations | supported | `elevation from=+y\|-y\|+x\|-x` with level marks | `arch::elevation_with_level_marks`, `arch::elevation_draws_only_the_outside`, `arch::example_house_sheets_stay_small` |
 | building sections | supported | `section a-a x,y x,y` with layer hatches | `arch::section_through_two_points` |
 | material hatches | supported | `hatch brick pattern=brick` (ISO 128 table by material) | `arch::hatch_fill_area_matches_the_layer` |
-| tags | supported | `tag door\|window\|wall\|stair\|column` | `arch::tags_carry_the_marks` |
+| tags | supported | `tag door\|window\|wall\|stair\|column` | `arch::tags_carry_the_marks`, `arch::tags_do_not_overlap` |
 | room tags | supported | `tag room`: name and area | `arch::room_tags_show_the_area` |
 | automatic dimensions | supported | `dim auto walls\|openings\|grid side=-y` | `arch::auto_dims_sum_to_the_overall` |
 | detail viewports | supported | `viewport window=u0,v0,u1,v1 scale=1:5 label=` | `arch::viewport_detail_at_a_new_scale` |

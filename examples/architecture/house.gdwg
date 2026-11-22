@@ -38,9 +38,9 @@ section a-a 5750,-1000 5750,9000
 sheet "Section B-B through the living room" size=A1 scale=1:50 number=A-302
 section b-b 2500,-1000 2500,9000
 
-sheet "Eaves detail" size=A3 scale=1:50 number=A-401
-plan L0 cut=1200 grids=0
-viewport window=-300,-300,500,500 scale=1:5 label="corner" place=30,30
+sheet "Eaves detail" size=A3 scale=1:100 number=A-401
+plan L0 cut=1200 grids=0 place=20,20
+viewport window=-300,-300,300,300 scale=1:5 label="corner" place=250,120
 
 sheet "Schedules" size=A3 number=A-501
 schedule doors place=30,230
