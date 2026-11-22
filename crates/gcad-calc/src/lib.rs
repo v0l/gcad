@@ -1,3 +1,4 @@
+pub mod bearing;
 pub mod fit;
 pub mod materials;
 pub mod oring;
