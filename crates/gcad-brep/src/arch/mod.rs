@@ -146,8 +146,28 @@ pub struct Roof {
 #[derive(Clone, Debug)]
 pub struct Room {
     pub name: String,
+    pub title: String,
+    pub number: String,
+    pub floor: String,
+    pub ceiling: String,
+    pub wall: String,
     pub level: f64,
+    pub height: f64,
     pub rect: [f64; 4],
+}
+
+impl Room {
+    pub fn area(&self) -> f64 {
+        (self.rect[2] - self.rect[0]) * (self.rect[3] - self.rect[1]) / 1.0e6
+    }
+
+    pub fn perimeter(&self) -> f64 {
+        2.0 * (self.rect[2] - self.rect[0] + self.rect[3] - self.rect[1]) / 1000.0
+    }
+
+    pub fn volume(&self) -> f64 {
+        self.area() * self.height / 1000.0
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -199,6 +219,7 @@ pub struct Arch {
     pub slabs: Vec<Slab>,
     pub roofs: Vec<Roof>,
     pub rooms: Vec<Room>,
+    pub separators: Vec<(gcad_mesh::arch::P2, gcad_mesh::arch::P2)>,
     pub stairs: Vec<Stair>,
     pub built: Vec<Built>,
 }
