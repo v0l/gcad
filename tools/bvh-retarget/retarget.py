@@ -213,6 +213,81 @@ def number(v, places):
     return "0" if text in ("", "-0") else text
 
 
+def quat_of(r):
+    w = math.sqrt(max(0.0, 1 + r[0, 0] + r[1, 1] + r[2, 2])) / 2
+    x = math.copysign(math.sqrt(max(0.0, 1 + r[0, 0] - r[1, 1] - r[2, 2])) / 2, r[2, 1] - r[1, 2])
+    y = math.copysign(math.sqrt(max(0.0, 1 - r[0, 0] + r[1, 1] - r[2, 2])) / 2, r[0, 2] - r[2, 0])
+    z = math.copysign(math.sqrt(max(0.0, 1 - r[0, 0] - r[1, 1] + r[2, 2])) / 2, r[1, 0] - r[0, 1])
+    q = np.array([x, y, z, w])
+    return q / np.linalg.norm(q)
+
+
+def slerp(a, b, t):
+    d = float(np.dot(a, b))
+    if d < 0:
+        b, d = -b, -d
+    if d > 0.9995:
+        q = a + t * (b - a)
+        return q / np.linalg.norm(q)
+    th = math.acos(d)
+    return (math.sin((1 - t) * th) * a + math.sin(t * th) * b) / math.sin(th)
+
+
+def quat_error(a, b):
+    return math.degrees(2 * math.acos(min(1.0, abs(float(np.dot(a, b))))))
+
+
+def lerp_any(a, b, t):
+    if isinstance(a, np.ndarray):
+        return slerp(a, b, t)
+    return a + (b - a) * t
+
+
+def simplify(times, values, error, tolerance):
+    keep = [0]
+    while keep[-1] < len(values) - 1:
+        start = keep[-1]
+        end = start + 1
+        while end + 1 < len(values):
+            trial = end + 1
+            span = times[trial] - times[start]
+            ok = all(
+                error(lerp_any(values[start], values[trial], (times[k] - times[start]) / span), values[k])
+                <= tolerance
+                for k in range(start + 1, trial)
+            )
+            if not ok:
+                break
+            end = trial
+        keep.append(end)
+    if len(keep) == 2 and all(error(values[0], v) <= tolerance for v in values):
+        keep = [0, len(values) - 1]
+    return keep
+
+
+def euler_zyx(r):
+    ry = math.degrees(math.asin(max(-1.0, min(1.0, -r[2, 0]))))
+    if abs(r[2, 0]) < 0.99999:
+        rx = math.degrees(math.atan2(r[2, 1], r[2, 2]))
+        rz = math.degrees(math.atan2(r[1, 0], r[0, 0]))
+    else:
+        rx = math.degrees(math.atan2(-r[1, 2], r[1, 1]))
+        rz = 0.0
+    return rx, ry, rz
+
+
+def reduced_keys(out, frames, lifts, order, root, fps, reduce):
+    times = [t / fps for t in range(len(frames))]
+    places = reduce.get("places", 1)
+    for b in order:
+        quats = [quat_of(f[0][b]) for f in frames]
+        for i in simplify(times, quats, quat_error, reduce["angle"]):
+            angles = ",".join(number(v, places) for v in euler_zyx(frames[i][0][b]))
+            out.append(f"key t={number(times[i], 3)} bone={b} rotate={angles}")
+    for i in simplify(times, lifts, lambda a, b: abs(a - b), reduce["lift"]):
+        out.append(f"key t={number(times[i], 3)} bone={root} move=0,0,{number(lifts[i], places)}")
+
+
 def retarget(name, clip, config, base, bones, order):
     src = Bvh(base / clip["file"])
     source_of = config["map"]
@@ -275,6 +350,16 @@ def retarget(name, clip, config, base, bones, order):
         print(name, "loop", i, j, file=sys.stderr)
     lift_mode = clip.get("lift", "ground")
     out = [f"clip {name} fps={fps}"]
+    reduce = config.get("reduce")
+    if reduce:
+        lifts = []
+        for local, target in frames:
+            wr, wt = fk(bones, order, local)
+            low = lowest(bones, wr, wt, contacts)
+            lifts.append({"ground": target - low, "plant": -low}.get(lift_mode, 0.0))
+        reduced_keys(out, frames, lifts, order, root, fps, reduce)
+        print(name, "frames", len(frames), "keys", len(out) - 1, file=sys.stderr)
+        return out
     for t, (local, target) in enumerate(frames):
         wr, wt = fk(bones, order, local)
         low = lowest(bones, wr, wt, contacts)

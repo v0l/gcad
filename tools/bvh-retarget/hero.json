@@ -1,5 +1,6 @@
 {
  "rig": "hero.gcad",
+ "reduce": {"angle": 0.4, "lift": 0.3, "places": 1},
  "root": "hips_b",
  "map": {
   "hips_b": [
