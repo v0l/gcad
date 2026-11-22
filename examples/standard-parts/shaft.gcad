@@ -1,0 +1,6 @@
+circle 32
+collar: extrude -6
+plane XY
+circle 25.01
+shaft: extrude 40
+material steel

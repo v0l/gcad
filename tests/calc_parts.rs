@@ -205,6 +205,16 @@ fn strict_turns_warnings_into_a_failure() {
 }
 
 #[test]
+fn the_standard_part_examples_check_clean_in_strict_mode() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    for name in ["lid.gasm", "flange.gcad", "shaft.gasm"] {
+        let path = format!("{root}/examples/standard-parts/{name}");
+        let (ok, text) = gcad(&["check", &path, "--strict"]);
+        assert!(ok && !text.contains("warning"), "{name}: {text}");
+    }
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));

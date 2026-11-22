@@ -39,7 +39,8 @@ calculator that exists.
 1. Run `gcad calc` before drawing the feature. Never guess a groove, tap drill or fit.
 2. Put every bought part in the model with `part name kind:size`, so `gcad bom` lists it.
 3. Cite the standard in the answer (AS568 or ISO 3601, ISO 273, ISO 286, ISO 4762, ISO 15 for bearings).
-4. `gcad check` prints `warning:` lines: a screw length that is not an ISO 888 length, or a tapped hole shorter than the minimum engagement. Fix the model, do not ignore them.
+4. `gcad check` prints `warning:` lines: a screw length that is not an ISO 888 length, or a tapped hole shorter than the minimum engagement. Fix the model, do not ignore them. See docs/standard-parts.md for the full list. Run `gcad check file --strict` to make warnings fail.
+5. Size by hand only with a calculator number: `oring_groove face 40 depth=1.96 width=3.53`, `hole M6 x,y fit=tap depth=16`, a bearing shaft at the `gcad calc bearing` fit with a shoulder at its `shaft shoulder` size. Worked designs are in `examples/standard-parts/`.
 
 ## Worked example
 

@@ -1,0 +1,6 @@
+rect 60 60
+base: extrude 18
+material aluminium
+plane base.end
+tapped: hole M6 0,0 fit=tap depth=16
+thread M6 on=tapped.side

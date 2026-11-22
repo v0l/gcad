@@ -35,3 +35,21 @@ a `.gasm`, so `gcad bom` lists them with a material and mass. See `gcad parts li
 ```
 3 part s iso4762:M6x27  ok  s from iso4762:M6x27; warning: 27 mm is not a standard length for M6 (iso4762); the nearest ISO 888 length is 25 mm
 ```
+
+A screw into a hole under its tap drill (run in `/tmp`, `part plate` has a 4 mm hole):
+
+```
+4 concentric s:shank.side plate:h.side  ok  moved s, now held by `plate`; radius 3.000 in 2.000; warning: the 4.00 mm hole is narrower than the 5.00 mm tap drill of M6, so the screw cannot enter it
+```
+
+## Worked designs
+
+`examples/standard-parts/` holds three designs made only from `gcad calc`, `gcad parts` and the skill, each checking clean with `--strict`:
+
+- `lid.gcad` and `lid.gasm`: an o-ring sealed lid. `gcad calc oring face 40 --pressure 5` gives ISO 3601 40x2.65, a 3.53 wide and 1.96 deep groove; `gcad calc thread M4` gives the 4.5 mm clearance holes (`hole M4`).
+- `flange.gcad`: a flange with a tapped hole. `gcad calc thread M6 --material alu --depth 16` gives a 5 mm tap drill and 13 mm of thread against 12 mm needed in aluminium.
+- `shaft.gcad` and `shaft.gasm`: a shaft with a collar, carrying a 6205. `gcad calc bearing 6205` gives a 25 mm bore with the shaft at m5 (25.008 to 25.017 mm) and a shoulder at least 30.6 mm across; the collar is 32 mm.
+
+```
+3 concentric b:bore.side shaft:shaft.side  ok  moved b, now held by `shaft`; radius 12.500 in 12.505
+```
