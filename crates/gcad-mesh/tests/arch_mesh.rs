@@ -28,6 +28,13 @@ fn volume(source: &str) -> (f64, usize) {
 }
 
 #[test]
+fn the_house_example_builds_under_the_budget() {
+    let source = include_str!("../../../examples/mesh/house.gcad");
+    let (_, triangles) = volume(source);
+    assert!(triangles < 4000, "{triangles}");
+}
+
+#[test]
 fn a_straight_wall_is_a_prism() {
     let (v, _) = volume(&format!("{HEAD}w1: wall A1 B1 type=int base=L0 top=L1"));
     assert!((v - 8000.0 * 100.0 * 2700.0).abs() < 1.0e3, "{v}");

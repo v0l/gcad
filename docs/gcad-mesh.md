@@ -208,6 +208,10 @@ Measured against the kernel on the eight kids-free-games props (`tests/solid_sil
 - `gcad_mesh::build`, median of 20, release: barrier 0.24 ms, hurdle 0.14, gate 0.20, train 0.39, coin 0.05, arch 0.26, road 0.17, building 0.44. All eight: 1.9 ms.
 - wasm32 `gcad_mesh.wasm` (release, no wasm-opt): 1,051,538 B before, 1,107,810 B after, +56,272 B (+5.4%).
 
+## Buildings
+
+Architecture stage G (gcad #354): `units`, `building`, `level L1 2700`, `grid`, `wall_type`, `wall` (straight and polyline, `closed`), `door`, `window`, `opening`, `slab`, `roof` and a straight `stair` build with no kernel as flat extrusions. A wall is one prism per layer per straight run, split into spans, sill pieces and head pieces around each opening, so corners share the kernel's mitre layout from `gcad-mesh/src/arch/`. Parts are named by layer material (`brick`, `pir`, `block`) and coloured by material. A door is the bodies `d1.frame` and `d1.leaf`; a window is `w1.frame` and `w1.glass`. Volumes match the kernel within 1 percent (`arch::mesh_wall_matches_the_kernel`). `examples/mesh/house.gcad` builds under 4000 triangles.
+
 ## GLB writer sharing
 
 `gcad_mesh::glb::Buffer` is the one GLB buffer layer (buffer views, accessors, bounds, chunk packing). The mesh

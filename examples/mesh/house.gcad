@@ -1,0 +1,16 @@
+units mm
+level L0 0 "Ground"
+level L1 2700 "First"
+level L2 5400 "Roof"
+grid A x=0
+grid B x=8000
+grid 1 y=0
+grid 2 y=6000
+wall_type ext brick:100 pir:100 block:100
+wall_type int block:100
+outer: wall A1 B1 B2 A2 closed type=ext base=L0 top=L1 justify=outside
+inner: wall 4000,300 4000,5700 type=int base=L0 top=L1 justify=centre
+d1: door on=outer at=2000 w=900 h=2100
+win1: window on=outer at=6000 w=1200 h=1200 sill=900
+s1: slab L1 A1 B1 B2 A2 type=concrete:200
+r1: roof outer type=hip pitch=35 overhang=300 thickness=200 base=L1
