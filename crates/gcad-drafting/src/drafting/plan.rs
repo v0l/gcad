@@ -512,7 +512,7 @@ impl State {
         marks.extend(self.opening_marks(&frame, cut_z));
         marks.extend(self.stair_marks(&frame, level_z, cut_z));
         marks.extend(self.slab_edges(&frame, level_z));
-        if named(line, "grids").is_some_and(|t| t != "0") {
+        if named(line, "grids").is_none_or(|t| t != "0") {
             marks.extend(self.grid_marks(&frame));
         }
         if named(line, "levels").is_some_and(|t| t != "0") {

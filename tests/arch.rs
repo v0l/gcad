@@ -1766,7 +1766,6 @@ fn sheet_set_with_a_drawing_list() {
 }
 
 #[test]
-#[ignore = "missing: DXF plans with layers"]
 fn plan_dxf_has_layers_by_class() {
     let dir = house_files(
         "plan_dxf_has_layers_by_class",

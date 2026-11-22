@@ -2550,17 +2550,106 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
     out
 }
 
+fn dxf_marks(
+    out: &mut String,
+    marks: &[Mark],
+    layer: &str,
+    height: f64,
+    layers: &mut std::collections::BTreeSet<String>,
+) {
+    for mark in marks {
+        match mark {
+            Mark::Group { data, marks, .. } => {
+                let own = data
+                    .iter()
+                    .find(|(k, _)| k == "layer")
+                    .map_or(layer, |(_, v)| v.as_str());
+                dxf_marks(out, marks, own, height, layers);
+            }
+            Mark::Shape { loops, closed, .. } => {
+                layers.insert(layer.to_string());
+                for l in loops {
+                    let n = l.len();
+                    let count = if *closed { n } else { n.saturating_sub(1) };
+                    for i in 0..count {
+                        let (a, b) = (l[i], l[(i + 1) % n]);
+                        let _ = write!(
+                            out,
+                            "0\nLINE\n8\n{layer}\n10\n{:.4}\n20\n{:.4}\n30\n0.0\n11\n{:.4}\n21\n{:.4}\n31\n0.0\n",
+                            a.0,
+                            height - a.1,
+                            b.0,
+                            height - b.1
+                        );
+                    }
+                }
+            }
+            Mark::Text {
+                x,
+                y,
+                size,
+                text,
+                angle,
+                ..
+            } => {
+                layers.insert(layer.to_string());
+                let _ = write!(
+                    out,
+                    "0\nTEXT\n8\n{layer}\n10\n{x:.4}\n20\n{:.4}\n30\n0.0\n40\n{size:.3}\n1\n{text}\n50\n{:.2}\n",
+                    height - y,
+                    -angle
+                );
+            }
+        }
+    }
+}
+
+pub fn dxf(sheet: &Sheet) -> String {
+    let mut body = String::new();
+    let mut layers = std::collections::BTreeSet::new();
+    dxf_marks(&mut body, &sheet.marks, "A-ANNO", sheet.height, &mut layers);
+    let mut out = String::from(
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n",
+    );
+    let _ = write!(
+        out,
+        "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n{}\n",
+        layers.len()
+    );
+    for layer in &layers {
+        let _ = write!(out, "0\nLAYER\n2\n{layer}\n70\n0\n62\n7\n6\nCONTINUOUS\n");
+    }
+    out.push_str("0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
+    out.push_str(&body);
+    out.push_str("0\nENDSEC\n0\nEOF\n");
+    out
+}
+
 pub fn write(drawing: &Drawing, output: &str) -> Result<Vec<String>> {
     if drawing.sheets.is_empty() {
         bail!("the drawing has no sheets");
     }
     let lower = output.to_ascii_lowercase();
+    if lower.ends_with(".dxf") {
+        if drawing.sheets.len() == 1 {
+            std::fs::write(output, dxf(&drawing.sheets[0]))?;
+            return Ok(vec![output.to_string()]);
+        }
+        let stem = &output[..output.len() - 4];
+        let mut written = Vec::new();
+        for (i, sheet) in drawing.sheets.iter().enumerate() {
+            let name = format!("{stem}-{}.dxf", i + 1);
+            std::fs::write(&name, dxf(sheet))?;
+            written.push(name);
+        }
+        return Ok(written);
+    }
     if lower.ends_with(".pdf") {
         std::fs::write(output, pdf(&drawing.sheets))?;
         return Ok(vec![output.to_string()]);
     }
     if !lower.ends_with(".svg") {
-        bail!("a drawing exports as .pdf or .svg");
+        bail!("a drawing exports as .pdf, .svg or .dxf");
     }
     if drawing.sheets.len() == 1 {
         std::fs::write(output, svg(&drawing.sheets[0]))?;
