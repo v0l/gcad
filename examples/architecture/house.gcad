@@ -35,3 +35,6 @@ rl1: railing along=st1.edge height=900 post=50@1500 baluster=12@120
 bal: balcony on=outer at=21000 level=L1+250 w=3000 d=1200 slab=concrete:200 railing=1100
 roof1: roof outer type=gable pitch=40 overhang=400 thickness=250 ridge=x base=L2 walls=outer
 chimney1: chimney 8000,5200 w=700 d=600 up_to=roof1 over=900 material=brick
+living: room at=2500,2000 name="Living" floor=oak ceiling=plaster wall=paint
+kitchen: room at=2500,6000 name="Kitchen" floor=tile ceiling=plaster wall=paint
+zone day living kitchen

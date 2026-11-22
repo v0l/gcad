@@ -394,6 +394,7 @@ impl State {
             "callout" => self.op_callout(line),
             "label" => self.op_label(line),
             "cutlist" => self.op_cutlist(line),
+            "schedule" => self.op_schedule(line),
             "nest" => self.op_nest(line),
             other => bail!("`{other}` is not a drawing operation; see `gcad docs`"),
         }
@@ -1771,6 +1772,20 @@ impl State {
         Ok(())
     }
 
+    fn op_schedule(&mut self, line: &Line) -> Result<String> {
+        let kind = text_of(line, 0).ok_or_else(|| anyhow!("write `schedule doors place=x,y`"))?;
+        let table = self.model()?.schedule(&kind, None)?;
+        let at = named(line, "place")
+            .map(|t| pair(t, &self.scope))
+            .transpose()?;
+        let (widths, row_h) = table_layout(&table);
+        let height = (table.rows.len() + 2) as f64 * row_h;
+        let (x, y) = self.place(widths.iter().sum(), height, at)?;
+        let marks = table_marks(&kind, &table, x, y - height);
+        self.sheet()?.marks.extend(marks);
+        Ok(format!("{kind} schedule: {} rows", table.rows.len()))
+    }
+
     fn op_cutlist(&mut self, line: &Line) -> Result<String> {
         let patterns = line.positional.clone();
         let names = self.picked_by(line)?;
@@ -1919,6 +1934,89 @@ impl State {
         self.sheet()?.marks.extend(marks);
         Ok(format!("{count} members in {} rows", table.len() - 1))
     }
+}
+
+fn table_layout(table: &crate::model::arch::Table) -> (Vec<f64>, f64) {
+    let widths = (0..table.header.len())
+        .map(|k| {
+            table
+                .rows
+                .iter()
+                .map(|r| text_width(&r[k], TEXT))
+                .chain([text_width(&table.header[k], TEXT)])
+                .fold(0.0, f64::max)
+                + 3.0
+        })
+        .collect();
+    (widths, TEXT * 1.7)
+}
+
+fn table_marks(title: &str, table: &crate::model::arch::Table, x: f64, top: f64) -> Vec<Mark> {
+    let (widths, row_h) = table_layout(table);
+    let total: f64 = widths.iter().sum();
+    let rule = |yy: f64, width: f64| Mark::Shape {
+        loops: vec![vec![(x, yy), (x + total, yy)]],
+        closed: false,
+        fill: None,
+        stroke: Some(BLACK),
+        width,
+        dashed: false,
+    };
+    let mut marks = vec![Mark::Text {
+        x: x + 1.2,
+        y: top + row_h * 0.72,
+        size: TEXT,
+        text: title.to_uppercase(),
+        anchor: Anchor::Start,
+        angle: 0.0,
+    }];
+    let mut lines = vec![table.header.clone()];
+    lines.extend(table.rows.iter().cloned());
+    for (r, cells) in lines.iter().enumerate() {
+        let yy = top + (r + 1) as f64 * row_h;
+        marks.push(rule(yy, if r == 0 { 0.25 } else { 0.1 }));
+        let mut cx = x;
+        for (k, cell) in cells.iter().enumerate() {
+            marks.push(Mark::Text {
+                x: cx + 1.2,
+                y: yy + row_h * 0.72,
+                size: TEXT,
+                text: cell.clone(),
+                anchor: Anchor::Start,
+                angle: 0.0,
+            });
+            cx += widths[k];
+        }
+    }
+    let bottom = top + (lines.len() + 1) as f64 * row_h;
+    marks.push(Mark::Shape {
+        loops: vec![vec![
+            (x, top),
+            (x + total, top),
+            (x + total, bottom),
+            (x, bottom),
+        ]],
+        closed: true,
+        fill: None,
+        stroke: Some(BLACK),
+        width: 0.25,
+        dashed: false,
+    });
+    marks
+}
+
+pub fn table_svg(title: &str, table: &crate::model::arch::Table) -> String {
+    let (widths, row_h) = table_layout(table);
+    let width = widths.iter().sum::<f64>() + 20.0;
+    let height = (table.rows.len() + 2) as f64 * row_h + 20.0;
+    let sheet = Sheet {
+        name: title.to_string(),
+        width,
+        height,
+        scale: 1.0,
+        marks: table_marks(title, table, 10.0, 10.0),
+    };
+    svg(&sheet)
 }
 
 fn scale_text(scale: f64) -> String {

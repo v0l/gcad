@@ -80,7 +80,67 @@ impl Model {
                 out.push((a[a.len() - 1], b[b.len() - 1]));
             }
         }
+        out.extend(self.arch.separators.iter().copied());
         out
+    }
+
+    fn ceiling_at(&self, level: f64) -> f64 {
+        self.arch
+            .walls
+            .iter()
+            .filter(|w| w.base <= level + EPS && level < w.top - EPS)
+            .map(|w| w.top)
+            .fold(f64::INFINITY, f64::min)
+    }
+
+    pub(crate) fn op_zone(&mut self, line: &Line) -> Result<String> {
+        let [name, members @ ..] = line.positional.as_slice() else {
+            bail!("write `zone day hall living`");
+        };
+        if members.is_empty() || !line.named.is_empty() {
+            bail!("write `zone day hall living`, a name and the rooms in it");
+        }
+        for member in members {
+            if !self.arch.rooms.iter().any(|r| r.name == *member) {
+                bail!("zone `{name}` names no room `{member}`");
+            }
+        }
+        if self.arch.zones.iter().any(|(n, _)| n == name) {
+            bail!("there is already a zone `{name}`");
+        }
+        self.arch.zones.push((name.clone(), members.to_vec()));
+        Ok(format!("zone {name}: {}", members.join(", ")))
+    }
+
+    pub(crate) fn op_area_scheme(&mut self, line: &Line) -> Result<String> {
+        match line.positional.as_slice() {
+            [scheme] if ["gross", "net", "rentable"].contains(&scheme.as_str()) => {
+                self.arch.area_scheme = Some(scheme.clone());
+                Ok(format!("area scheme {scheme}"))
+            }
+            _ => bail!("write `area_scheme gross`, `net` or `rentable`"),
+        }
+    }
+
+    pub(crate) fn op_room_separator(&mut self, line: &Line) -> Result<String> {
+        let [a, b] = line.positional.as_slice() else {
+            bail!("write `room_separator x,y x,y`");
+        };
+        if !line.named.is_empty() {
+            bail!("`room_separator` takes two points");
+        }
+        let (a, b) = (self.plan_point(a)?, self.plan_point(b)?);
+        if (a.0 - b.0).hypot(a.1 - b.1) < EPS {
+            bail!("a room separator needs two different points");
+        }
+        self.arch.separators.push((a, b));
+        Ok(format!(
+            "room separator from {},{} to {},{}",
+            crate::parse::label(a.0),
+            crate::parse::label(a.1),
+            crate::parse::label(b.0),
+            crate::parse::label(b.1)
+        ))
     }
 
     pub(crate) fn op_room(&mut self, line: &Line) -> Result<String> {
@@ -94,13 +154,31 @@ impl Model {
         }
         let mut at = None;
         let mut level = 0.0;
+        let mut room = Room {
+            name: name.clone(),
+            title: name.clone(),
+            number: String::new(),
+            floor: String::new(),
+            ceiling: String::new(),
+            wall: String::new(),
+            level: 0.0,
+            height: 0.0,
+            rect: [0.0; 4],
+        };
         for (key, text) in &line.named {
             match key.as_str() {
+                "name" => room.title = text.clone(),
+                "number" => room.number = text.clone(),
+                "floor" => room.floor = text.clone(),
+                "ceiling" => room.ceiling = text.clone(),
+                "wall" => room.wall = text.clone(),
                 "at" => at = Some(eval_point(text, &self.scope)?),
                 "level" => {
                     level = eval(text, &self.scope).with_context(|| format!("`level={text}`"))?
                 }
-                other => bail!("`room` takes at= and level=, not `{other}=`"),
+                other => bail!(
+                    "`room` takes at=, level=, name=, number=, floor=, ceiling= and wall=, not `{other}=`"
+                ),
             }
         }
         let p = at.ok_or_else(|| anyhow!("a room needs `at=x,y`, a point inside it"))?;
@@ -113,7 +191,7 @@ impl Model {
         };
         let lost = || {
             anyhow!(
-                "no walls close room `{name}` around {},{}",
+                "room `{name}` is not closed: no walls close it around {},{}",
                 crate::parse::label(p.0),
                 crate::parse::label(p.1)
             )
@@ -133,17 +211,19 @@ impl Model {
                 "room `{name}` is not a rectangle of wall faces; only rectangular rooms are found for now"
             );
         }
-        self.arch.rooms.push(Room {
-            name: name.clone(),
-            level,
-            rect,
-        });
-        Ok(format!(
-            "room {name}: {} x {}, {} m²",
+        room.level = level;
+        room.rect = rect;
+        room.height = self.ceiling_at(level) - level;
+        let text = format!(
+            "room {name}: {} x {}, area {:.2} m², perimeter {:.2} m, volume {:.2} m³",
             crate::parse::label(x1 - x0),
             crate::parse::label(y1 - y0),
-            crate::parse::label((x1 - x0) * (y1 - y0) / 1.0e6)
-        ))
+            room.area(),
+            room.perimeter(),
+            room.volume()
+        );
+        self.arch.rooms.push(room);
+        Ok(text)
     }
 
     pub(crate) fn op_room_cover(&mut self, line: &Line) -> Result<String> {

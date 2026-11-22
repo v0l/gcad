@@ -1378,7 +1378,6 @@ fn balcony_slab_and_railing() {
 }
 
 #[test]
-#[ignore = "missing: rooms"]
 fn room_found_from_the_walls() {
     let text = summary(&datums(
         "w: wall 0,0 4000,0 4000,3000 0,3000 closed type=int top=L1 justify=outside\nkitchen: room at=2000,1500 name=\"Kitchen\" floor=tile ceiling=plaster wall=paint",
@@ -1393,7 +1392,6 @@ fn room_found_from_the_walls() {
 }
 
 #[test]
-#[ignore = "missing: room checks"]
 fn unclosed_room_fails() {
     assert!(
         failure(&datums(
@@ -1404,7 +1402,6 @@ fn unclosed_room_fails() {
 }
 
 #[test]
-#[ignore = "missing: room separators"]
 fn room_separator_splits_a_space() {
     let text = summary(&datums(
         "w: wall 0,0 4000,0 4000,3000 0,3000 closed type=int top=L1 justify=outside\nroom_separator 2000,0 2000,3000\na: room at=1000,1500\nb: room at=3000,1500",
@@ -1416,7 +1413,6 @@ fn room_separator_splits_a_space() {
 }
 
 #[test]
-#[ignore = "missing: net and gross areas"]
 fn net_and_gross_area() {
     let csv = schedule(
         "net_and_gross_area",
@@ -1440,7 +1436,6 @@ fn net_and_gross_area() {
 }
 
 #[test]
-#[ignore = "missing: zones"]
 fn zones_sum_their_rooms() {
     let csv = schedule(
         "zones_sum_their_rooms",
@@ -1455,7 +1450,6 @@ fn zones_sum_their_rooms() {
 }
 
 #[test]
-#[ignore = "missing: rooms on several levels"]
 fn rooms_on_two_levels() {
     let csv = schedule(
         "rooms_on_two_levels",
@@ -1473,7 +1467,6 @@ fn rooms_on_two_levels() {
 }
 
 #[test]
-#[ignore = "missing: door and window schedules"]
 fn door_and_window_schedule() {
     let doors = schedule("door_and_window_schedule", &building(), "doors");
     assert!(doors.lines().next().expect("header").starts_with("mark,"));
@@ -1489,7 +1482,6 @@ fn door_and_window_schedule() {
 }
 
 #[test]
-#[ignore = "missing: wall schedules"]
 fn wall_schedule_nets_out_openings() {
     let csv = schedule("wall_schedule_nets_out_openings", &building(), "walls");
     let gross = 2.0 * (OUT_X - T + OUT_Y - T) * H / 1.0e6;
@@ -1499,7 +1491,6 @@ fn wall_schedule_nets_out_openings() {
 }
 
 #[test]
-#[ignore = "missing: quantities by material and layer"]
 fn material_quantities_by_layer() {
     let csv = schedule(
         "material_quantities_by_layer",
@@ -1513,7 +1504,6 @@ fn material_quantities_by_layer() {
 }
 
 #[test]
-#[ignore = "missing: slab, roof, stair and column schedules"]
 fn element_schedules() {
     let source = with(
         "s1: slab L1 A1 B1 B2 A2 type=concrete:200\nr1: roof outer type=gable pitch=45 overhang=0 thickness=200 ridge=x base=L1\nc1: column A1 rect 300x300 top=L1",
@@ -1535,7 +1525,6 @@ fn element_schedules() {
 }
 
 #[test]
-#[ignore = "missing: finish schedules"]
 fn finish_schedule() {
     let csv = schedule(
         "finish_schedule",
@@ -1551,7 +1540,6 @@ fn finish_schedule() {
 }
 
 #[test]
-#[ignore = "missing: cost columns"]
 fn cost_columns_from_rates() {
     let dir = house_files(
         "cost_columns_from_rates",
@@ -1588,7 +1576,6 @@ fn cost_columns_from_rates() {
 }
 
 #[test]
-#[ignore = "missing: stable schedule output"]
 fn schedule_csv_is_sorted_and_stable() {
     let a = schedule("schedule_csv_is_sorted_a", &building(), "walls");
     let b = schedule("schedule_csv_is_sorted_b", &building(), "walls");
@@ -1604,7 +1591,6 @@ fn schedule_csv_is_sorted_and_stable() {
 }
 
 #[test]
-#[ignore = "missing: schedules in drawings"]
 fn schedule_table_on_a_sheet() {
     let svg = plan_svg(
         "schedule_table_on_a_sheet",
@@ -1614,7 +1600,6 @@ fn schedule_table_on_a_sheet() {
 }
 
 #[test]
-#[ignore = "missing: building elements in the bill of materials"]
 fn bom_lists_building_elements() {
     let dir = house_files("bom_lists_building_elements", &[]);
     let (ok, text) = gcad(&dir, &["bom", "house.gcad"]);

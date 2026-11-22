@@ -276,7 +276,10 @@ Buildings (the model is in [architecture.md](architecture.md)):
 | `slab_opening` | `slab points` | a hole through every layer of the slab, inside its edge |
 | `foundation` | `strip wall w= d=` \| `pad x,y w= l= d=`, `top=` `material=concrete` | a strip `w` wide centred under a closed wall loop, top at the wall's base; a pad `w` by `l` (`l` is `w` unless given) centred on the point, top at 0; both `d` deep |
 | `ground_slab` | `wall type=mat:t+mat:t` `top=` | a slab filling the inside faces of a closed wall loop, top on the wall's base unless `top=` |
-| `room` | `name at=x,y level=` | finds the rectangle of wall faces around the point on that level; a room that is not a rectangle of wall faces fails for now |
+| `room` | `name at=x,y level= name= number= floor= ceiling= wall=` | finds the rectangle of wall faces around the point on that level (`room_separator` lines count as walls); a room that is not closed fails with `not closed`; reports area, perimeter and volume, the height being the lowest wall top over the level. Columns are not deducted from net area (limitation) |
+| `room_separator` | `x,y x,y` | a line that closes a room like a wall without being one |
+| `zone` | `name room room ...` | groups rooms; the `zones` schedule sums their areas |
+| `area_scheme` | `gross\|net\|rentable` | which area the `areas` schedule reports as `area`; gross is the outer wall outline, net the sum of rooms |
 | `ceiling` | `room= h= type=mat:t+mat:t` | layers filling the room, the bottom `h` above the room's level |
 | `floor_finish` | `room= type=mat:t+mat:t` | layers filling the room, the bottom on the room's level |
 | `column` | `point rect WxD\|round D\|member section` `base= top= material=concrete` | an upright centred on the point from `base` to `top` |
