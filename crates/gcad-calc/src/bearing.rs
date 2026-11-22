@@ -10,7 +10,7 @@ pub const SOURCES: [&str; 5] = [
     "ISO 15 boundary dimensions; C and C0 from the SKF catalogue values at https://mechcodex.com/reference/ball-bearing-dimensions",
     "speeds, corner radii, thrust and linear bearings: https://iskbearing.com/product-details/6205 (same address for each number)",
     "miniature bearings: https://tflbearing.com/products/ball-bearings/miniature-deep-groove-ball-bearings-6 and https://product.minebeamitsumi.com/en/product/category/bearing/miniature_small/parts/608.html",
-    "shoulders and fillets: DIN 5418:1993 table 1, https://www.normsplash.com/Samples/DIN/148879982/DIN-5418-1993-en.pdf",
+    "shoulders: SKF General Catalogue 17000/1 EN abutment and fillet dimensions, https://www.skf.com/binaries/pub12/Images/0901d196802809de-Rolling-bearings---17000_1-EN_tcm_12-121486.pdf; estimates from DIN 5418:1993 table 1, https://www.normsplash.com/Samples/DIN/148879982/DIN-5418-1993-en.pdf",
     "life: ISO 281 basic rating life, L10 = (C / P)^3 million revolutions for ball bearings",
 ];
 
@@ -59,6 +59,7 @@ struct File {
     thrust: Vec<Row>,
     linear: Vec<Row>,
     shoulders: Vec<[f64; 4]>,
+    abutment: Vec<(String, f64, f64, f64)>,
     f0: f64,
     radial_x: f64,
     load_factors: Vec<[f64; 3]>,
@@ -120,10 +121,24 @@ pub struct Shoulders {
     pub shaft_min: f64,
     pub housing_max: f64,
     pub fillet_max: f64,
-    pub height: f64,
+    pub estimated: bool,
 }
 
 pub fn shoulders(b: &Bearing) -> Shoulders {
+    let catalogue = if matches!(b.kind, Kind::Radial | Kind::Flanged) {
+        let plain = b.name.trim_start_matches('F');
+        file().abutment.iter().find(|r| r.0 == plain)
+    } else {
+        None
+    };
+    if let Some(r) = catalogue {
+        return Shoulders {
+            shaft_min: r.1,
+            housing_max: r.2,
+            fillet_max: r.3,
+            estimated: false,
+        };
+    }
     let row = file()
         .shoulders
         .iter()
@@ -134,7 +149,7 @@ pub fn shoulders(b: &Bearing) -> Shoulders {
         shaft_min: b.bore + 2.0 * height,
         housing_max: b.outer - 2.0 * height,
         fillet_max: row[1],
-        height,
+        estimated: true,
     }
 }
 
@@ -317,12 +332,13 @@ pub fn report(input: &Input) -> Result<Report> {
             rows.push(("shaft".into(), limits_text(shaft, b.bore)?));
             rows.push(("housing".into(), limits_text(housing, b.outer)?));
             let s = shoulders(b);
+            let tag = if s.estimated { " (estimated)" } else { "" };
             rows.push((
-                "shaft shoulder".into(),
+                format!("shaft shoulder{tag}"),
                 format!("at least {:.1} mm across, fillet up to {} mm", s.shaft_min, s.fillet_max),
             ));
             rows.push((
-                "housing shoulder".into(),
+                format!("housing shoulder{tag}"),
                 format!("at most {:.1} mm across, fillet up to {} mm", s.housing_max, s.fillet_max),
             ));
         }
@@ -369,7 +385,7 @@ pub fn report(input: &Input) -> Result<Report> {
         formulas: vec![
             "P = Fr when Fa/Fr <= e, else P = 0.56 Fr + Y Fa; e and Y from f0 Fa / C0 (f0 = 14)".into(),
             "L10 = (C / P)^3 million revolutions; L10h = L10 x 1e6 / (60 n)".into(),
-            "shaft shoulder dia >= d + 2 h, housing shoulder dia <= D - 2 h, h from DIN 5418 for the corner radius".into(),
+            "shoulders: da min, Da max and ra max are SKF catalogue values where the row says so; rows marked (estimated) use d + 2 h and D - 2 h with h from DIN 5418 for the corner radius".into(),
             "shaft js5 up to 10 mm bore, else js5 light, k5 normal, m5 heavy (P/C up to 0.05, 0.10, above); housing H7".into(),
         ],
         sources: SOURCES.iter().map(|s| s.to_string()).collect(),

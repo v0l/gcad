@@ -52,14 +52,48 @@ fn heavy_series_63xx_match_iso_15() {
 }
 
 #[test]
-fn shoulders_follow_din_5418() {
-    let s = bearing::shoulders(bearing::find("6205").expect("6205"));
-    near(s.height, 4.5, 1e-9);
-    near(s.shaft_min, 34.0, 1e-9);
-    near(s.housing_max, 43.0, 1e-9);
-    near(s.fillet_max, 1.5, 1e-9);
-    let light = bearing::shoulders(bearing::find("6005").expect("6005"));
-    near(light.height, 2.3, 1e-9);
+fn shoulders_follow_the_skf_catalogue() {
+    let near_pair = |name: &str, shaft: f64, housing: f64, fillet: f64| {
+        let s = bearing::shoulders(bearing::find(name).expect(name));
+        assert!(!s.estimated, "{name}");
+        near(s.shaft_min, shaft, 1e-9);
+        near(s.housing_max, housing, 1e-9);
+        near(s.fillet_max, fillet, 1e-9);
+    };
+    near_pair("6205", 30.6, 46.4, 1.0);
+    near_pair("6005", 28.2, 43.8, 0.6);
+    near_pair("6305", 32.0, 55.0, 1.0);
+    near_pair("608", 10.0, 20.0, 0.3);
+    near_pair("F608", 10.0, 20.0, 0.3);
+}
+
+#[test]
+fn sizes_without_catalogue_shoulders_are_estimated_from_din_5418() {
+    let s = bearing::shoulders(bearing::find("6006").expect("6006"));
+    assert!(s.estimated);
+    near(s.shaft_min, 34.6, 1e-9);
+    let (ok, text) = (true, gcad_text("6006"));
+    assert!(ok && text.contains("shaft shoulder (estimated)"), "{text}");
+    assert!(gcad_text("6205").contains("shaft shoulder  "), "catalogue rows are not tagged");
+    assert!(gcad_text("6205").contains("at least 30.6 mm"));
+}
+
+fn gcad_text(name: &str) -> String {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["calc", "bearing", name])
+        .output()
+        .expect("runs");
+    String::from_utf8_lossy(&out.stdout).to_string()
+}
+
+#[test]
+fn formulas_say_which_shoulders_are_estimates() {
+    let out = std::process::Command::new(env!("CARGO_BIN_EXE_gcad"))
+        .args(["calc", "bearing", "6205", "--formulas"])
+        .output()
+        .expect("runs");
+    let text = String::from_utf8_lossy(&out.stdout);
+    assert!(text.contains("(estimated)") && text.contains("SKF catalogue values"), "{text}");
 }
 
 #[test]
