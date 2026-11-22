@@ -126,8 +126,37 @@ fn point_pairs_with_three_exact_pairs_give_zero_rms() {
     assert!(shift < 1.0e-9 && angle < 1.0e-6);
 }
 
+fn coarse_recovery(a: &Cloud, b: &Cloud, truth: &M4, voxel: f64, reach: f64, coarse_first: bool) -> (f64, f64) {
+    let target = register::with_normals(a).unwrap();
+    let moved = ops::transform(b, truth).unwrap();
+    let start = if coarse_first {
+        register::coarse(&moved, &target, voxel, 1).unwrap()
+    } else {
+        ops::IDENTITY
+    };
+    let settings = Settings { plane: true, max_dist: reach, iters: 50, trim: 0.9 };
+    let result = icp(&moved, &target, start, &settings).unwrap();
+    let error = matrix_error(&result.matrix, truth);
+    println!("coarse_first={coarse_first} shift {} angle {}", error.0, error.1);
+    error
+}
+
+fn offset_motion(about: [f64; 3], axis: [f64; 3]) -> M4 {
+    ops::multiply(
+        ops::translation([500.0, 0.0, 0.0]),
+        ops::about(about, ops::rotation(axis, 90.0)),
+    )
+}
+
 #[test]
 fn coarse_alignment_recovers_a_90_degree_500_offset() {
+    let a = bracket_cloud(40000, 1, 0.0);
+    let b = bracket_cloud(40000, 2, 0.0);
+    let truth = offset_motion([60.0, 40.0, 15.0], [0.0, 0.0, 1.0]);
+    let (shift, angle) = coarse_recovery(&a, &b, &truth, 6.0, 15.0, true);
+    assert!(shift < 0.01 && angle < 0.01, "shift {shift} angle {angle}");
+    let (shift, angle) = coarse_recovery(&a, &b, &truth, 6.0, 1000.0, false);
+    assert!(shift >= 0.5 || angle >= 0.1, "icp alone matched: shift {shift} angle {angle}");
     let model = build(&format!(
         "{BRACKET}a: sample part count=40000 seed=1\nb: sample part count=40000 seed=2\nrotate b axis=z angle=90 about=60,40,15\nmove b by=500,0,0\nalign b to=a coarse voxel=6"
     ));
@@ -135,25 +164,71 @@ fn coarse_alignment_recovers_a_90_degree_500_offset() {
     assert!(rms < 0.5, "rms {rms}");
 }
 
-#[test]
-fn coarse_alignment_recovers_the_bunny_offset() {
+fn bunny_clouds() -> (Cloud, Cloud) {
     let source = format!(
-        "bunny: import {} mesh\nclean bunny\na: points bunny every=1\nb: points bunny every=2\nscale a 1000\nscale b 1000\nrotate b axis=y angle=90\nmove b by=500,0,0\nalign b to=a coarse voxel=8",
+        "bunny: import {} mesh\nclean bunny\na: points bunny every=1\nb: points bunny every=2\nscale a 1000\nscale b 1000",
         fixture("bunny.obj")
     );
     let model = build(&source);
-    let rms = rms_to(&cloud_of(&model, "a"), &cloud_of(&model, "b"));
-    assert!(rms < 1.0, "rms {rms}");
+    ((*cloud_of(&model, "a")).clone(), (*cloud_of(&model, "b")).clone())
+}
+
+#[test]
+fn coarse_alignment_recovers_the_bunny_offset() {
+    let (a, b) = bunny_clouds();
+    let truth = offset_motion([0.0; 3], [0.0, 1.0, 0.0]);
+    let (shift, angle) = coarse_recovery(&a, &b, &truth, 8.0, 40.0, true);
+    assert!(shift < 0.01 && angle < 0.01, "shift {shift} angle {angle}");
+    let (shift, angle) = coarse_recovery(&a, &b, &truth, 8.0, 1000.0, false);
+    assert!(shift >= 0.5 || angle >= 0.1, "icp alone matched: shift {shift} angle {angle}");
+}
+
+fn plane_faces_fit_within(model: &Model, noise: f64) -> Result<usize, String> {
+    let faces: [&[f64]; 3] = [&[0.0, 40.0, 120.0], &[0.0, 40.0, 90.0], &[0.0, 30.0]];
+    let count = value(model, "f.count") as usize;
+    let mut checked = 0;
+    for k in 1..=count {
+        let name = format!("f{k}");
+        if cloud_of(model, &name).len() < 300 {
+            continue;
+        }
+        let normal: Vec<f64> = ["x", "y", "z"].iter().map(|a| value(model, &format!("{name}.normal.{a}"))).collect();
+        let origin: Vec<f64> = ["x", "y", "z"].iter().map(|a| value(model, &format!("{name}.origin.{a}"))).collect();
+        let axis = (0..3).max_by(|&a, &b| normal[a].abs().total_cmp(&normal[b].abs())).unwrap();
+        let offset = faces[axis].iter().map(|f| (origin[axis] - f).abs()).fold(f64::INFINITY, f64::min);
+        let rms = value(model, &format!("{name}.rms"));
+        println!("{name} axis {axis} normal {normal:?} origin {origin:?} points {} offset error {offset} rms {rms}", cloud_of(model, &name).len());        if offset > 0.1 {
+            return Err(format!("{name} is {offset} from every face on its axis"));
+        }
+        if rms > 3.0 * noise {
+            return Err(format!("{name} residual rms {rms} above 3x noise"));
+        }
+        checked += 1;
+    }
+    Ok(checked)
+}
+
+fn partial_scans(motion: &str, align: &str) -> Model {
+    build(&format!(
+        "{BRACKET}a: sample part count=60000 seed=1 noise=0.05 box=-1,-1,-1,70,100,40\nb: sample part count=60000 seed=2 noise=0.05 box=30,-1,-1,130,100,40\n{motion}{align}merge a b into all\nfit all plane tol=0.3 into=f all max=20"
+    ))
 }
 
 #[test]
 fn overlapping_partial_scans_merge_into_a_clean_cloud() {
-    let source = format!(
-        "{BRACKET}a: sample part count=40000 seed=1 noise=0.05 box=-1,-1,-1,70,100,40\nb: sample part count=40000 seed=2 noise=0.05 box=50,-1,-1,130,100,40\nrotate b axis=z angle=3 about=60,40,15\nmove b by=2,-1,1\nalign b to=a icp plane max_dist=20 iters=100\nmerge a b into all\nfit all plane tol=0.3 into=f all max=20"
+    let model = partial_scans(
+        "rotate b axis=z angle=3 about=60,40,15\nmove b by=2,-1,1\n",
+        "align b to=a icp plane max_dist=20 iters=100\n",
     );
-    let model = build(&source);
     assert_eq!(cloud_of(&model, "all").scan_ids().len(), 2);
-    assert!(value(&model, "f.count") >= 6.0);
+    let checked = plane_faces_fit_within(&model, 0.05).expect("planes fit within the noise");
+    assert!(checked >= 6, "only {checked} large planes");
+}
+
+#[test]
+fn a_scan_left_0_3_mm_off_fails_the_plane_check() {
+    let model = partial_scans("move b by=0.3,0,0\n", "");
+    assert!(plane_faces_fit_within(&model, 0.05).is_err());
 }
 
 #[test]
@@ -173,6 +248,22 @@ fn scan_to_cad_icp_gives_an_rms_within_the_noise() {
     ));
     let rms = reported_rms(steps.last().unwrap());
     assert!(rms < 0.15, "rms {rms}");
+}
+
+#[test]
+fn sampling_a_solid_lies_on_its_surface_with_the_requested_noise() {
+    let flat = bracket_cloud(5000, 1, 0.0);
+    assert_eq!(flat.len(), 5000);
+    let on_face = |p: &[f64; 3]| {
+        let near = |v: f64, f: f64| (v - f).abs() < 1.0e-6;
+        near(p[2], 0.0) || near(p[2], 30.0) || near(p[1], 0.0) || near(p[0], 0.0) || near(p[0], 120.0) || near(p[1], 90.0) || near(p[1], 40.0) || near(p[0], 40.0)
+    };
+    assert!(flat.positions.iter().all(on_face));
+    let noisy = bracket_cloud(5000, 1, 0.1);
+    let off = noisy.positions.iter().filter(|p| !on_face(p)).count();
+    assert!(off > 4000);
+    let boxed = build(&format!("{BRACKET}s: sample part count=2000 box=-1,-1,-1,20,100,40"));
+    assert!(cloud_of(&boxed, "s").positions.iter().all(|p| p[0] <= 20.0));
 }
 
 #[test]

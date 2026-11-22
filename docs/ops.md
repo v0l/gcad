@@ -725,9 +725,11 @@ Point clouds, gcad #444 to #449. A cloud is a named body like a mesh: `scan: clo
 | point pairs | supported | `align b to=a pairs=bx,by,bz>ax,ay,az ...`, rigid fit (Horn), reports the RMS | `clouds_register::point_pairs_with_three_exact_pairs_give_zero_rms` |
 | ICP | supported | `align b to=a icp point\|plane max_dist=20 iters=50 trim=0.9`, reports iterations, pairs and RMS | `clouds_register::icp_recovers_a_known_transform_for_point_and_plane`, `clouds_register::align_icp_reports_iterations_rms_and_a_transform_line` |
 | coarse alignment | supported | `align b to=a coarse voxel=10` (FPFH with RANSAC, then plane ICP) | `clouds_register::coarse_alignment_recovers_a_90_degree_500_offset`, `clouds_register::coarse_alignment_recovers_the_bunny_offset` |
-| multi-scan | supported | `align scans s1 s2 s3 ... [voxel=N]`, sequential pairwise ICP, no loop closure | `clouds_register::align_scans_chains_sequentially_and_says_so`, `clouds_register::overlapping_partial_scans_merge_into_a_clean_cloud` |
+| multi-scan | supported | `align scans s1 s2 s3 ... [voxel=N]`, sequential pairwise ICP, no loop closure | `clouds_register::align_scans_chains_sequentially_and_says_so` |
+| merged partial scans | supported | two partial scans of a solid, aligned and merged, fit planes with 0.05 noise residual and under 0.1 mm face offset; 0.3 mm misalignment fails | `clouds_register::overlapping_partial_scans_merge_into_a_clean_cloud`, `clouds_register::a_scan_left_0_3_mm_off_fails_the_plane_check` |
 | scan to CAD | supported | `align scan to=<solid or mesh body>`, ICP against 40000 points sampled from it (`count=`) | `clouds_register::scan_to_cad_icp_gives_an_rms_within_the_noise` |
-| sample a solid | supported | `s: sample part count=20000 seed=1 noise=0.1 box=x0,y0,z0,x1,y1,z1`, a partial scan for tests | `clouds_register::overlapping_partial_scans_merge_into_a_clean_cloud` |
+| sample a solid | supported | `s: sample part count=20000 seed=1 noise=0.1 box=x0,y0,z0,x1,y1,z1`, a partial scan for tests | `clouds_register::sampling_a_solid_lies_on_its_surface_with_the_requested_noise` |
+| result reuse | supported | the printed `transform b <4x4>` line is the reproducible record: it replaces the `align` and does not run ICP again. The part cache is keyed on files read, and `align` reads none and is deterministic (fixed seeds), so it is not cached separately | `clouds_register::align_icp_reports_iterations_rms_and_a_transform_line` |
 | align errors | supported | fewer than 3 pairs, unknown target | `clouds_register::align_errors_say_what_is_wrong` |
 | register example | supported | `examples/clouds/register.gcad` | `clouds_register::register_example_runs` |
 
