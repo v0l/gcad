@@ -1,5 +1,5 @@
 use crate::arch::roof;
-use crate::arch::stair::{StairRule, check, flight_profile, steps};
+use crate::arch::stair::{StairRule, check, flight_profile, path_length, point_along, post_stations, split_treads, steps};
 use crate::arch::layout::{dot, signed_area, sub};
 use crate::arch::{Chain, Justify, Layer, P2, WallLine, bands, end_cut};
 use crate::interp::Scene;
@@ -11,7 +11,7 @@ use std::sync::Arc;
 
 pub const OPS: &[&str] = &[
     "units", "building", "grid", "wall_type", "wall", "door", "window", "opening", "slab",
-    "roof", "stair",
+    "roof", "stair", "railing", "column",
 ];
 
 const STAIR_WAIST: f64 = 150.0;
@@ -153,6 +153,33 @@ pub fn extrude(
     orient(mesh, first);
 }
 
+const ROUND_SIDES: usize = 48;
+
+fn round_ring(diameter: f64) -> Vec<P2> {
+    let n = ROUND_SIDES as f64;
+    let r = diameter / 2.0 * (std::f64::consts::TAU / (n * (std::f64::consts::TAU / n).sin())).sqrt();
+    (0..ROUND_SIDES)
+        .map(|k| {
+            let a = std::f64::consts::TAU * k as f64 / n;
+            (r * a.cos(), r * a.sin())
+        })
+        .collect()
+}
+
+fn member(mesh: &mut Mesh, part: u16, ring: &[P2], from: P3, to: P3) {
+    use crate::mesh::{cross, normalized, scale, sub};
+    let d = sub(to, from);
+    let len = crate::mesh::length(d);
+    let along = normalized(d);
+    let up = [0.0, 0.0, 1.0];
+    let lift = sub(up, scale(along, crate::mesh::dot(up, along)));
+    let y = normalized(lift);
+    let x = cross(y, along);
+    extrude(mesh, part, ring, &[], (0.0, len), &|p, t| {
+        std::array::from_fn(|k| from[k] + along[k] * t + x[k] * p.0 + y[k] * p.1)
+    });
+}
+
 pub fn column_box(mesh: &mut Mesh, part: u16, ring: &[P2], z0: f64, z1: f64) {
     extrude(mesh, part, ring, &[], (z0, z1), &|p, z| [p.0, p.1, z]);
 }
@@ -184,6 +211,8 @@ impl ArchOps {
             "slab" => self.slab(scope, line),
             "roof" => self.roof(scope, line),
             "stair" => self.stair(scope, line),
+            "railing" => self.railing(scope, line),
+            "column" => self.column(scope, line),
             other => bail!("`{other}` is not a building operation"),
         }
     }
@@ -516,6 +545,7 @@ impl ArchOps {
         let mut rule = StairRule::default();
         let (mut risers, mut tread) = (None, None);
         let mut material = "oak".to_string();
+        let mut shape = "straight".to_string();
         for (key, text) in &line.named {
             match key.as_str() {
                 "from" => from = number(text, scope, key)?,
@@ -529,7 +559,7 @@ impl ArchOps {
                 "tread" if text != "auto" => tread = Some(number(text, scope, key)?),
                 "tread" => {}
                 "material" => material = text.clone(),
-                "shape" if text == "straight" => {}
+                "shape" if text == "straight" || text == "L" => shape = text.clone(),
                 other => bail!("gcad-mesh `stair` takes from=, to=, at=, dir=, width=, risers=, tread=, max_rise=, min_tread= and material= for a straight flight, not `{other}=`"),
             }
         }
@@ -542,13 +572,180 @@ impl ArchOps {
         }
         let s = steps(to - from, &rule, risers, tread).map_err(|e| anyhow!(e))?;
         check(&s, &rule).map_err(|e| anyhow!(e))?;
-        let profile = flight_profile(&s, s.treads(), 0.0, STAIR_WAIST);
+        let total = s.treads();
+        let counts = match shape.as_str() {
+            "straight" => vec![total],
+            _ => split_treads(total, 1, 1).map_err(|e| anyhow!(e))?,
+        };
         let (sin, cos) = dir.to_radians().sin_cos();
+        let forward = (cos, sin);
+        let sideways = (-sin, cos);
+        let plan = |start: P2, d: P2, s: f64, u: f64| -> P2 {
+            let side = (-d.1, d.0);
+            (start.0 + d.0 * s + side.0 * u, start.1 + d.1 * s + side.1 * u)
+        };
+        let _ = sideways;
         let mut mesh = Mesh::default();
         let part = mesh.part_index(&material);
-        extrude(&mut mesh, part, &profile, &[], (0.0, width), &|p, u| {
-            [at.0 + cos * p.0 - sin * u, at.1 + sin * p.0 + cos * u, from + p.1]
-        });
+        let mut flight = |start: P2, d: P2, z0: f64, treads: usize, mesh: &mut Mesh| {
+            let profile = flight_profile(&s, treads, 0.0, STAIR_WAIST);
+            extrude(mesh, part, &profile, &[], (0.0, width), &|p, u| {
+                let q = plan(start, d, p.0, u);
+                [q.0, q.1, z0 + p.1]
+            });
+        };
+        flight(at, forward, from, counts[0], &mut mesh);
+        if counts.len() == 2 {
+            let g = counts[0] as f64 * s.tread;
+            let corner: Vec<P2> = [(g, 0.0), (g + width, 0.0), (g + width, width), (g, width)]
+                .iter()
+                .map(|&(a, b)| plan(at, forward, a, b))
+                .collect();
+            let top = from + (counts[0] + 1) as f64 * s.rise;
+            column_box(&mut mesh, part, &corner, top - (STAIR_WAIST + s.rise / 2.0), top);
+            let turned = (-forward.1, forward.0);
+            flight(corner[2], turned, top, counts[1], &mut mesh);
+        }
+        self.done.push((name, mesh));
+        Ok(())
+    }
+
+    fn railing(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let name = line
+            .label
+            .clone()
+            .ok_or_else(|| anyhow!("a railing needs a label, like `rl1: railing path 0,0,0 3000,0,0 height=900`"))?;
+        self.free(&name)?;
+        let (mut height, mut post, mut top) = (900.0, Some((50.0, 1500.0)), Some(("round".to_string(), 40.0)));
+        let (mut glass, mut top_given) = (None, false);
+        let mut material = "steel".to_string();
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "height" => height = number(text, scope, key)?,
+                "post" if text == "none" => post = None,
+                "post" => {
+                    let (size, spacing) = text
+                        .split_once('@')
+                        .ok_or_else(|| anyhow!("`post=` is a size and spacing like `50@1500`, or none"))?;
+                    post = Some((eval(size, scope)?, eval(spacing, scope)?));
+                }
+                "top" => {
+                    top_given = true;
+                    top = if text == "none" {
+                        None
+                    } else {
+                        let (kind, size) = text
+                            .split_once(':')
+                            .filter(|(k, _)| *k == "round" || *k == "rect")
+                            .ok_or_else(|| anyhow!("`top=` is round:D, rect:S or none"))?;
+                        Some((kind.to_string(), eval(size, scope)?))
+                    }
+                }
+                "glass" => glass = Some(number(text, scope, key)?),
+                "material" => material = text.clone(),
+                other => bail!("gcad-mesh `railing` takes height=, post=, top=, glass= and material= on a path, not `{other}=`"),
+            }
+        }
+        if glass.is_some() && !top_given {
+            top = None;
+        }
+        if height <= 0.0 || post.is_some_and(|(s, g)| s <= 0.0 || g <= 0.0) {
+            bail!("a railing's height, post size and spacing must be above zero");
+        }
+        let points = match line.positional.as_slice() {
+            [kind, points @ ..] if kind == "path" => points
+                .iter()
+                .map(|p| crate::args::point3(p, scope))
+                .collect::<Result<Vec<_>>>()?,
+            _ => bail!("write `rl1: railing path x,y,z x,y,z ... height=900`"),
+        };
+        if points.len() < 2 || path_length(&points) < 1.0e-6 {
+            bail!("a railing path needs two or more different points");
+        }
+        let top_size = top.as_ref().map_or(0.0, |t| t.1);
+        let total = path_length(&points);
+        let mut mesh = Mesh::default();
+        if let Some((size, spacing)) = post {
+            let part = mesh.part_index("post");
+            let _ = &material;
+            let h = size / 2.0;
+            let ring = [(-h, -h), (h, -h), (h, h), (-h, h)];
+            for s in post_stations(total, spacing) {
+                let p = point_along(&points, s);
+                column_box(&mut mesh, part, &ring.map(|(a, b)| (a + p[0], b + p[1])), p[2], p[2] + height - top_size);
+            }
+        }
+        if let Some(t) = glass {
+            let part = mesh.part_index("glass");
+            for w in points.windows(2) {
+                let run = (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]);
+                if run < 1.0e-6 {
+                    continue;
+                }
+                let d = ((w[1][0] - w[0][0]) / run, (w[1][1] - w[0][1]) / run);
+                let rise = w[1][2] - w[0][2];
+                let profile = [(0.0, 0.0), (run, rise), (run, rise + height - top_size), (0.0, height - top_size)];
+                extrude(&mut mesh, part, &profile, &[], (-t / 2.0, t / 2.0), &|p, u| {
+                    [w[0][0] + d.0 * p.0 - d.1 * u, w[0][1] + d.1 * p.0 + d.0 * u, w[0][2] + p.1]
+                });
+            }
+        }
+        if let Some((kind, size)) = &top {
+            let part = mesh.part_index(&material);
+            let radius = size / 2.0;
+            let ring = if kind == "round" { round_ring(*size) } else { vec![(-radius, -radius), (radius, -radius), (radius, radius), (-radius, radius)] };
+            for w in points.windows(2) {
+                let run = (w[1][0] - w[0][0]).hypot(w[1][1] - w[0][1]);
+                let cos = if run < 1.0e-9 { 1.0 } else { run / path_length(w) };
+                if path_length(w) < 1.0e-6 {
+                    continue;
+                }
+                let lift = height - radius * cos;
+                member(&mut mesh, part, &ring, [w[0][0], w[0][1], w[0][2] + lift], [w[1][0], w[1][1], w[1][2] + lift]);
+            }
+        }
+        self.done.push((name, mesh));
+        Ok(())
+    }
+
+    fn column(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let name = line
+            .label
+            .clone()
+            .ok_or_else(|| anyhow!("a column needs a label, like `c1: column A1 rect 300x300 top=L1`"))?;
+        self.free(&name)?;
+        let [at, kind, size] = line.positional.as_slice() else {
+            bail!("write `c1: column A1 rect 300x300 base=L0 top=L1`");
+        };
+        let at = self.plan_point(at, scope)?;
+        let (mut base, mut top) = (0.0, f64::NAN);
+        let mut material = "concrete".to_string();
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "base" => base = number(text, scope, key)?,
+                "top" => top = number(text, scope, key)?,
+                "material" => material = text.clone(),
+                other => bail!("`column` takes base=, top= and material=, not `{other}=`"),
+            }
+        }
+        if top.is_nan() || top <= base {
+            bail!("a column needs `top=` above its base");
+        }
+        let ring: Vec<P2> = match kind.as_str() {
+            "rect" | "bar" => {
+                let (w, h) = size
+                    .split_once('x')
+                    .ok_or_else(|| anyhow!("write a rect column as `rect 300x300`"))?;
+                let (w, h) = (eval(w, scope)? / 2.0, eval(h, scope)? / 2.0);
+                vec![(-w, -h), (w, -h), (w, h), (-w, h)]
+            }
+            "round" | "rod" => round_ring(eval(size, scope)?),
+            other => bail!("gcad-mesh columns are rect or round, not `{other}`"),
+        };
+        let ring: Vec<P2> = ring.into_iter().map(|p| (p.0 + at.0, p.1 + at.1)).collect();
+        let mut mesh = Mesh::default();
+        let part = mesh.part_index(&material);
+        column_box(&mut mesh, part, &ring, base, top);
         self.done.push((name, mesh));
         Ok(())
     }

@@ -2183,6 +2183,60 @@ fn mesh_house_within_budget() {
     near(mesh, volume(&build(&source)), 1.0e-2);
 }
 
+fn mesh_bounds(source: &str) -> ([f64; 3], [f64; 3]) {
+    let model = gcad_mesh::build_with(
+        source,
+        &gcad_mesh::Options {
+            y_up: false,
+            ..Default::default()
+        },
+    )
+    .expect("builds in gcad-mesh");
+    model
+        .bodies
+        .iter()
+        .flat_map(|b| b.positions.iter())
+        .fold(([f64::INFINITY; 3], [f64::NEG_INFINITY; 3]), |(lo, hi), p| {
+            (
+                std::array::from_fn(|k| lo[k].min(p[k] as f64)),
+                std::array::from_fn(|k| hi[k].max(p[k] as f64)),
+            )
+        })
+}
+
+fn same_footprint(source: &str) {
+    let (mesh, _) = mesh_volume(source);
+    let kernel = build(source);
+    near(mesh, volume(&kernel), 1.0e-2);
+    let (lo, hi) = mesh_bounds(source);
+    let (klo, khi) = bounds(&kernel);
+    for k in 0..3 {
+        near(lo[k], klo[k], 1.0e-2);
+        near(hi[k], khi[k], 1.0e-2);
+    }
+}
+
+#[test]
+fn mesh_column_matches_the_kernel() {
+    same_footprint(&with(
+        "c1: column A1 rect 300x300 base=L0 top=L1\nc2: column B2 round 300 base=L0 top=L1",
+    ));
+}
+
+#[test]
+fn mesh_l_stair_matches_the_kernel() {
+    same_footprint(
+        "units mm\nlevel L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=0 shape=L width=1000",
+    );
+}
+
+#[test]
+fn mesh_railing_matches_the_kernel() {
+    same_footprint(
+        "units mm\nrl1: railing path 0,0,0 3000,0,0 3000,2000,0 height=900 post=50@1500 top=round:40\ngb: railing path 0,3000,0 3000,3000,0 height=1100 glass=12 post=none",
+    );
+}
+
 #[test]
 fn mesh_door_is_a_hinged_node() {
     let model = gcad_mesh::build_with(
