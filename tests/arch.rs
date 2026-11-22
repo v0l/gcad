@@ -2068,6 +2068,19 @@ fn escape_window_size() {
 }
 
 #[test]
+fn driveway_slope_is_checked() {
+    let source = |to: &str| {
+        format!(
+            "t1: terrain grid 20000x20000 slope=0.12,0 at=0,0 depth=1000\nrd: road 2000,5000 {to},5000 width=3500 type=asphalt:100\ncheck driveway max=0.1"
+        )
+    };
+    let steep = summary(&source("12000"));
+    assert!(steep.starts_with("FAIL") && steep.contains("rd slope 12.0 percent over 10.0"), "{steep}");
+    let flat = summary("t1: terrain grid 20000x20000 slope=0.05,0 at=0,0 depth=1000\nrd: road 2000,5000 12000,5000 width=3500 type=asphalt:100\ncheck driveway max=0.1");
+    assert!(flat.contains("driveways checked"), "{flat}");
+}
+
+#[test]
 fn terrain_from_points() {
     let dir = house_files(
         "terrain_from_points",

@@ -25,6 +25,7 @@ pub(crate) const CHECKS: &[&str] = &[
     "sunhours",
     "solargain",
     "route",
+    "driveway",
     "escape",
 ];
 
@@ -101,6 +102,7 @@ impl Model {
             "bridges" => self.check_bridges(line),
             "shadow" => self.check_shadow(line),
             "sunhours" => self.check_sunhours(line),
+            "driveway" => self.check_driveway(line),
             "solargain" => self.check_solargain(line),
             _ => self.check_more(line, kind),
         })

@@ -262,6 +262,7 @@ pub struct Sun {
 
 #[derive(Clone, Debug, Default)]
 pub struct Arch {
+    pub roads: Vec<(String, gcad_mesh::arch::P2, gcad_mesh::arch::P2)>,
     pub sun: Option<Sun>,
     pub ramps: Vec<(String, f64)>,
     pub pads: Vec<Pad>,

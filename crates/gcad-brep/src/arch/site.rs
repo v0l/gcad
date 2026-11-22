@@ -335,6 +335,8 @@ impl Model {
         }
         let layers = layers.ok_or_else(|| anyhow!("a road needs `type=`, like `asphalt:100`"))?;
         let ring = self.segment_ring(line, width)?;
+        let ends = (self.plan_point(&line.positional[0])?, self.plan_point(&line.positional[1])?);
+        self.arch.roads.push((name.clone(), ends.0, ends.1));
         let mut z = 0.0;
         for (k, l) in layers.iter().enumerate().rev() {
             let body = if layers.len() == 1 { name.clone() } else { format!("{name}.{}", k + 1) };
@@ -343,6 +345,28 @@ impl Model {
             z -= l.thickness;
         }
         Ok(format!("road {name}: {} wide", label(width)))
+    }
+
+    pub(crate) fn check_driveway(&mut self, line: &Line) -> Result<String> {
+        let max = match super::check::named_value(line, "max") {
+            Some(m) => eval(&m, &self.scope)?,
+            None => 0.1,
+        };
+        let mut problems = Vec::new();
+        for (name, a, b) in self.arch.roads.clone() {
+            let heights: Vec<Option<f64>> = self
+                .arch
+                .terrains
+                .iter()
+                .map(|t| height_at(&t.tris, a.0, a.1).zip(height_at(&t.tris, b.0, b.1)).map(|(za, zb)| zb - za))
+                .collect();
+            let Some(Some(rise)) = heights.first().copied() else { continue };
+            let slope = rise.abs() / length(sub(b, a));
+            if slope > max + 1.0e-9 {
+                problems.push(format!("{name} slope {:.1} percent over {:.1}", slope * 100.0, max * 100.0));
+            }
+        }
+        self.finish_check(line, problems, "driveways checked".to_string())
     }
 
     pub(crate) fn op_retaining(&mut self, line: &Line) -> Result<String> {
