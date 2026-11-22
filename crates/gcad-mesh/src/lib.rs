@@ -1,4 +1,5 @@
 pub mod arch;
+pub mod arch_ops;
 pub mod args;
 pub mod brush_ops;
 pub mod ffi;

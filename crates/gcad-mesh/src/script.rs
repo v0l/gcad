@@ -376,6 +376,7 @@ struct Run {
     scope: Scope,
     fixed: Scope,
     colours: HashMap<String, [f64; 3]>,
+    arch: crate::arch_ops::ArchOps,
 }
 
 const SUBSET: &[&str] = &[
@@ -461,6 +462,9 @@ impl Run {
     }
 
     fn apply(&mut self, line: &Line) -> Result<()> {
+        if crate::arch_ops::handles(line) {
+            return self.arch.apply(&mut self.scope, line);
+        }
         if !SUBSET.contains(&line.op.as_str()) && !solid_ops::OPS.contains(&line.op.as_str()) {
             bail!(
                 "`{}` is not a mesh operation; gcad-mesh runs {}",
@@ -591,6 +595,7 @@ pub fn build_with(source: &str, options: &Options) -> std::result::Result<Model,
         scope: fixed.clone(),
         fixed,
         colours: HashMap::new(),
+        arch: Default::default(),
     };
     for line in &lines {
         run.apply(line).map_err(|e| failure(line, e))?;
@@ -600,6 +605,13 @@ pub fn build_with(source: &str, options: &Options) -> std::result::Result<Model,
         text: String::new(),
         message: format!("{e:#}"),
     })?;
+    std::mem::take(&mut run.arch)
+        .finish(&mut run.scene)
+        .map_err(|e| Error {
+            line: 0,
+            text: String::new(),
+            message: format!("{e:#}"),
+        })?;
     run.scene.budget(options.triangles, options.max_error);
     Ok(collect(&run, options.y_up))
 }
