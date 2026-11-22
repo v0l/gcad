@@ -650,6 +650,7 @@ Architecture stage E (gcad #352).
 | IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon`. `ThermalTransmittance` is a plain sum of layer resistances plus 0.17 until the thermal calculation (#353) supplies it | `arch::ifc_wall_layers` |
 | IFC room fire rating | supported | `room ... fire=REI60` writes `Pset_SpaceCommon.FireRating`, plus `IsExternal`, `GrossPlannedArea`, `NetPlannedArea` | `arch::ifc_room_fire_rating_and_common_fields` |
 | IFC grid and curtain wall quantities | supported | `grid` lines write `IfcGrid`, `curtainwall` writes `Qto_CurtainWallBaseQuantities` | `arch::ifc_grid_and_curtain_wall_quantities` |
+| IFC extruded bodies | supported | walls, slabs, columns and beams that are prisms (vertical outline, flat top and bottom) write `IfcExtrudedAreaSolid`; others stay faceted | `arch::ifc_prisms_are_extruded_and_keep_their_volume` |
 | IFC vendor part | supported | `part stool vendor.ifc` places an IFC of one furnishing (faceted brep, triangulated or polygonal face set) | `arch::vendor_ifc_is_a_part` |
 | IFC plan reference | supported | an imported IFC draws its wall, slab and space outline dashed in `plan` views (class `reference`) | `arch::imported_ifc_is_a_plan_reference` |
 | IFC element classes | supported | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |

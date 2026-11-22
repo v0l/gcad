@@ -1952,6 +1952,29 @@ fn vendor_ifc_is_a_part() {
 }
 
 #[test]
+fn ifc_prisms_are_extruded_and_keep_their_volume() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    if !python.exists() {
+        return;
+    }
+    let source = with("s1: slab L1 A1 B1 B2 A2 type=concrete:200\nc1: column A1 rect 300x300 top=L1\nb1: beam A1 B1 bar 200x400 z=L1");
+    let dir = house_files("ifc_prisms_are_extruded", &[("model.gcad", &source)]);
+    assert!(gcad(&dir, &["export", "model.gcad", "model.ifc"]).0);
+    let ifc = std::fs::read_to_string(dir.join("model.ifc")).expect("ifc");
+    assert!(entities(&ifc, "IFCEXTRUDEDAREASOLID") >= 2, "extruded bodies");
+    assert!(ifc.contains("'Body','SweptSolid'"));
+    let script = "import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.validate, ifcopenshell.util.shape as sh\nf = ifcopenshell.open(sys.argv[1])\nlog = ifcopenshell.validate.json_logger()\nifcopenshell.validate.validate(f, log)\nassert not log.statements, log.statements[:3]\ns = ifcopenshell.geom.settings()\nprint(sum(sh.get_volume(ifcopenshell.geom.create_shape(s, e).geometry) for e in f.by_type('IfcElement') if e.Representation))\n";
+    let out = std::process::Command::new(python)
+        .args(["-c", script, dir.join("model.ifc").to_str().expect("path")])
+        .output()
+        .expect("python");
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    let theirs: f64 = text.trim().lines().last().expect("volume").parse().expect("number");
+    near(theirs * 1.0e9, volume(&build(&source)), 5.0e-3);
+}
+
+#[test]
 fn ifc_global_ids_are_stable() {
     let a = ifc_of("ifc_global_ids_are_stable_a", &building());
     let b = ifc_of("ifc_global_ids_are_stable_b", &building());

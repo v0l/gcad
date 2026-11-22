@@ -331,6 +331,77 @@ impl Ifc {
             .collect()
     }
 
+    fn ring(&self, curve: usize) -> Option<Vec<(f64, f64)>> {
+        let curve = self.get(curve)?;
+        let mut ring: Vec<(f64, f64)> = curve
+            .args
+            .first()?
+            .items()
+            .iter()
+            .map(|p| self.point(p.id()?).map(|p| (p[0], p[1])))
+            .collect::<Option<_>>()?;
+        if ring.len() > 1 && ring.first() == ring.last() {
+            ring.pop();
+        }
+        (ring.len() >= 3).then_some(ring)
+    }
+
+    fn extruded(&self, e: &Entity) -> Option<Vec<[[f64; 3]; 3]>> {
+        let profile = self.get(e.args.first()?.id()?)?;
+        let outer = self.ring(profile.args.get(2)?.id()?)?;
+        let mut holes = Vec::new();
+        if profile.class == "IFCARBITRARYPROFILEDEFWITHVOIDS" {
+            for hole in profile.args.get(3)?.items() {
+                holes.push(self.ring(hole.id()?)?);
+            }
+        } else if profile.class != "IFCARBITRARYCLOSEDPROFILEDEF" {
+            return None;
+        }
+        let direction = self.get(e.args.get(2)?.id()?)?;
+        let d = direction.args.first()?.items();
+        let (dx, dy, dz) = (d.first()?.num()?, d.get(1)?.num()?, d.get(2)?.num()?);
+        if dx.abs() > 1.0e-9 || dy.abs() > 1.0e-9 || dz <= 0.0 {
+            return None;
+        }
+        let depth = e.args.get(3)?.num()?;
+        let place = self.get(e.args.get(1)?.id()?)?;
+        let origin = self.point(place.args.first()?.id()?)?;
+        let area = |r: &[(f64, f64)]| {
+            (0..r.len())
+                .map(|k| r[k].0 * r[(k + 1) % r.len()].1 - r[(k + 1) % r.len()].0 * r[k].1)
+                .sum::<f64>()
+        };
+        let oriented = |mut r: Vec<(f64, f64)>, ccw: bool| {
+            if (area(&r) > 0.0) != ccw {
+                r.reverse();
+            }
+            r
+        };
+        let outer = oriented(outer, true);
+        let holes: Vec<Vec<(f64, f64)>> = holes.into_iter().map(|h| oriented(h, false)).collect();
+        let (z0, z1) = (origin[2], origin[2] + depth);
+        let at = |p: (f64, f64), z: f64| [p.0 + origin[0], p.1 + origin[1], z];
+        let mut out = Vec::new();
+        for ring in std::iter::once(&outer).chain(holes.iter()) {
+            for k in 0..ring.len() {
+                let (a, b) = (ring[k], ring[(k + 1) % ring.len()]);
+                out.push([at(a, z0), at(b, z0), at(b, z1)]);
+                out.push([at(a, z0), at(b, z1), at(a, z1)]);
+            }
+        }
+        let to_points = |r: &[(f64, f64)]| -> Vec<gcad_mesh::arch::P2> { r.to_vec() };
+        let hole_points: Vec<Vec<gcad_mesh::arch::P2>> = holes.iter().map(|h| to_points(h)).collect();
+        let (points, triangles) = gcad_mesh::solid::triangulate(&to_points(&outer), &hole_points);
+        for [a, b, c] in triangles {
+            let (p, q, r) = (points[a as usize], points[b as usize], points[c as usize]);
+            let flip = (q.0 - p.0) * (r.1 - p.1) - (q.1 - p.1) * (r.0 - p.0) < 0.0;
+            let (q, r) = if flip { (r, q) } else { (q, r) };
+            out.push([at(p, z1), at(q, z1), at(r, z1)]);
+            out.push([at(p, z0), at(r, z0), at(q, z0)]);
+        }
+        Some(out)
+    }
+
     fn polygonal(&self, e: &Entity) -> Option<Vec<[[f64; 3]; 3]>> {
         let list = self.get(e.args.first()?.id()?)?;
         let points: Vec<[f64; 3]> = list
@@ -411,6 +482,7 @@ impl Ifc {
                     "IFCTRIANGULATEDFACESET" => self.triangulated(item),
                     "IFCFACETEDBREP" => self.faceted(item),
                     "IFCPOLYGONALFACESET" => self.polygonal(item),
+                    "IFCEXTRUDEDAREASOLID" => self.extruded(item),
                     _ => None,
                 };
                 out.extend(triangles);

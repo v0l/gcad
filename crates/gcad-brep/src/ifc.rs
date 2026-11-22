@@ -149,6 +149,141 @@ impl Writer {
         self.add(format!("IFCSTYLEDITEM(#{item},(#{assignment}),$)"));
     }
 
+    fn extruded(&mut self, solid: &crate::Solid) -> Option<usize> {
+        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+        let (points, triangles) = geometry::welded(&mesh);
+        if triangles.is_empty() {
+            return None;
+        }
+        let eps = 1.0e-4;
+        let z0 = points.iter().map(|p| p.z).fold(f64::INFINITY, f64::min);
+        let z1 = points.iter().map(|p| p.z).fold(f64::NEG_INFINITY, f64::max);
+        if z1 - z0 < 1.0e-3 {
+            return None;
+        }
+        let mut edges: std::collections::BTreeMap<(usize, usize), usize> = Default::default();
+        let mut top = 0;
+        for [a, b, c] in &triangles {
+            let (p, q, r) = (points[*a], points[*b], points[*c]);
+            let (u, v) = (q - p, r - p);
+            let normal = u.cross(v);
+            let length = normal.magnitude();
+            if length < 1.0e-12 {
+                continue;
+            }
+            let nz = normal.z / length;
+            if nz.abs() < 1.0e-6 {
+                continue;
+            }
+            let heights = [p.z, q.z, r.z];
+            if nz < -1.0 + 1.0e-6 && heights.iter().all(|z| (z - z0).abs() < eps) {
+                for (s, t) in [(a, b), (b, c), (c, a)] {
+                    let key = if s < t { (*s, *t) } else { (*t, *s) };
+                    *edges.entry(key).or_default() += 1;
+                }
+            } else if nz > 1.0 - 1.0e-6 && heights.iter().all(|z| (z - z1).abs() < eps) {
+                top += 1;
+            } else {
+                return None;
+            }
+        }
+        if top == 0 || edges.is_empty() {
+            return None;
+        }
+        let mut next: std::collections::BTreeMap<usize, Vec<usize>> = Default::default();
+        for ((a, b), n) in &edges {
+            if *n == 1 {
+                next.entry(*a).or_default().push(*b);
+                next.entry(*b).or_default().push(*a);
+            }
+        }
+        if next.values().any(|n| n.len() != 2) {
+            return None;
+        }
+        let mut loops: Vec<Vec<usize>> = Vec::new();
+        let mut seen: std::collections::BTreeSet<usize> = Default::default();
+        for start in next.keys().copied().collect::<Vec<_>>() {
+            if seen.contains(&start) {
+                continue;
+            }
+            let mut ring = vec![start];
+            seen.insert(start);
+            let mut previous = start;
+            let mut at = next[&start][0];
+            while at != start {
+                ring.push(at);
+                seen.insert(at);
+                let options = &next[&at];
+                let following = if options[0] == previous { options[1] } else { options[0] };
+                previous = at;
+                at = following;
+            }
+            loops.push(ring);
+        }
+        let area = |ring: &[usize]| {
+            (0..ring.len())
+                .map(|k| {
+                    let (p, q) = (points[ring[k]], points[ring[(k + 1) % ring.len()]]);
+                    p.x * q.y - q.x * p.y
+                })
+                .sum::<f64>()
+                / 2.0
+        };
+        let outer = (0..loops.len()).max_by(|a, b| area(&loops[*a]).abs().total_cmp(&area(&loops[*b]).abs()))?;
+        let inside = |ring: &[usize], point: Point3| {
+            let mut hit = false;
+            for k in 0..ring.len() {
+                let (p, q) = (points[ring[k]], points[ring[(k + 1) % ring.len()]]);
+                if (p.y > point.y) != (q.y > point.y)
+                    && point.x < (q.x - p.x) * (point.y - p.y) / (q.y - p.y) + p.x
+                {
+                    hit = !hit;
+                }
+            }
+            hit
+        };
+        for (k, ring) in loops.iter().enumerate() {
+            if k != outer && !inside(&loops[outer], points[ring[0]]) {
+                return None;
+            }
+        }
+        let mut curves = Vec::new();
+        for ring in &loops {
+            let mut ids: Vec<usize> = ring
+                .iter()
+                .map(|i| {
+                    let p = points[*i];
+                    self.add(format!("IFCCARTESIANPOINT(({},{}))", real(p.x), real(p.y)))
+                })
+                .collect();
+            ids.push(ids[0]);
+            curves.push(self.add(format!("IFCPOLYLINE({})", Writer::list(&ids))));
+        }
+        let outer_curve = curves[outer];
+        let holes: Vec<usize> = curves
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| *k != outer)
+            .map(|(_, c)| *c)
+            .collect();
+        let profile = if holes.is_empty() {
+            self.add(format!("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#{outer_curve})"))
+        } else {
+            let voids: Vec<usize> = holes.clone();
+            self.add(format!(
+                "IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,#{outer_curve},{})",
+                Writer::list(&voids)
+            ))
+        };
+        let origin = self.point([0.0, 0.0, z0]);
+        let position = self.add(format!("IFCAXIS2PLACEMENT3D(#{origin},$,$)"));
+        let direction = self.add("IFCDIRECTION((0.,0.,1.))".into());
+        Some(self.add(format!(
+            "IFCEXTRUDEDAREASOLID(#{profile},#{position},#{direction},{})",
+            real(z1 - z0)
+        )))
+    }
+
     fn faceted(&mut self, solid: &crate::Solid) -> Option<usize> {
         let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
         let (points, triangles) = geometry::welded(&mesh);
@@ -287,11 +422,19 @@ pub fn write(model: &Model, project: &str) -> String {
 
     let mut represent = |w: &mut Writer, bodies: &[String]| -> (String, f64) {
         let mut items = Vec::new();
+        let mut swept = true;
         let mut low = f64::INFINITY;
         for name in bodies {
             if let Some((_, solid)) = body_of(name) {
                 low = low.min(geometry::bounds(solid).min().z);
-                if let Some(item) = w.faceted(solid) {
+                let item = match w.extruded(solid) {
+                    Some(item) => Some(item),
+                    None => {
+                        swept = false;
+                        w.faceted(solid)
+                    }
+                };
+                if let Some(item) = item {
                     if let Some(colour) = model.colours.get(name) {
                         w.style(item, *colour, model.opacities.get(name).copied());
                     }
@@ -302,8 +445,9 @@ pub fn write(model: &Model, project: &str) -> String {
         if items.is_empty() {
             return ("$".into(), if low.is_finite() { low } else { 0.0 });
         }
+        let kind = if swept { "SweptSolid" } else { "Tessellation" };
         let shape = w.add(format!(
-            "IFCSHAPEREPRESENTATION(#{context},'Body','Tessellation',{})",
+            "IFCSHAPEREPRESENTATION(#{context},'Body','{kind}',{})",
             Writer::list(&items)
         ));
         let definition = w.add(format!("IFCPRODUCTDEFINITIONSHAPE($,$,({}))", format!("#{shape}")));
