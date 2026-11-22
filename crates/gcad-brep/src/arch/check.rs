@@ -23,6 +23,9 @@ pub(crate) const CHECKS: &[&str] = &[
     "compartments",
     "shadow",
     "sunhours",
+    "solargain",
+    "route",
+    "escape",
 ];
 
 pub(crate) fn named_value(line: &Line, key: &str) -> Option<String> {
@@ -98,6 +101,7 @@ impl Model {
             "bridges" => self.check_bridges(line),
             "shadow" => self.check_shadow(line),
             "sunhours" => self.check_sunhours(line),
+            "solargain" => self.check_solargain(line),
             _ => self.check_more(line, kind),
         })
     }
@@ -223,6 +227,86 @@ impl Model {
                     self.checks.iter().filter(|c| !c.passed).map(|c| c.detail.clone()),
                 );
                 "compartments checked".to_string()
+            }
+            "route" => {
+                let clear = number(self, "clear")?.unwrap_or(800.0);
+                let width = number(self, "width")?.unwrap_or(900.0);
+                let from = self.plan_point(line.positional.get(1).ok_or_else(|| anyhow!("write `check route x,y x,y`"))?)?;
+                let to = self.plan_point(line.positional.get(2).ok_or_else(|| anyhow!("write `check route x,y x,y`"))?)?;
+                let rooms = self.arch.rooms.clone();
+                let room_of = |p: (f64, f64)| {
+                    rooms.iter().position(|r| p.0 >= r.rect[0] && p.0 <= r.rect[2] && p.1 >= r.rect[1] && p.1 <= r.rect[3])
+                };
+                let (a, b) = (
+                    room_of(from).ok_or_else(|| anyhow!("the start of the route is in no room"))?,
+                    room_of(to).ok_or_else(|| anyhow!("the end of the route is in no room"))?,
+                );
+                let doors: Vec<(usize, usize, String, f64)> = self
+                    .arch
+                    .openings
+                    .iter()
+                    .filter_map(|o| {
+                        let Fill::Door { frame, .. } = &o.fill else { return None };
+                        let inside: Vec<usize> = (0..rooms.len()).filter(|&k| self.opening_in(o, &rooms[k])).collect();
+                        let mark = o.mark.clone().unwrap_or_else(|| o.name.clone());
+                        (inside.len() >= 2).then(|| (inside[0], inside[1], mark, o.w - 2.0 * frame.0))
+                    })
+                    .collect();
+                let mut came: Vec<Option<usize>> = vec![None; rooms.len()];
+                let mut seen = vec![false; rooms.len()];
+                let mut queue = std::collections::VecDeque::from([a]);
+                seen[a] = true;
+                while let Some(r) = queue.pop_front() {
+                    for (k, d) in doors.iter().enumerate() {
+                        let next = if d.0 == r { d.1 } else if d.1 == r { d.0 } else { continue };
+                        if !seen[next] {
+                            seen[next] = true;
+                            came[next] = Some(k);
+                            queue.push_back(next);
+                        }
+                    }
+                }
+                if !seen[b] {
+                    problems.push(format!("no route from {} to {}", rooms[a].name, rooms[b].name));
+                }
+                let mut at = b;
+                while let Some(k) = came[at] {
+                    let d = &doors[k];
+                    if d.3 < clear {
+                        problems.push(format!("{} clear {} under {} on the route", d.2, label(d.3), label(clear)));
+                    }
+                    at = if d.0 == at { d.1 } else { d.0 };
+                }
+                for r in [a, b] {
+                    let small = (rooms[r].rect[2] - rooms[r].rect[0]).min(rooms[r].rect[3] - rooms[r].rect[1]);
+                    if small < width {
+                        problems.push(format!("{} width {} under {}", rooms[r].name, label(small), label(width)));
+                    }
+                }
+                let max = number(self, "slope")?.unwrap_or(1.0 / 12.0);
+                for (name, slope) in &self.arch.ramps {
+                    if *slope > max + 1.0e-9 {
+                        problems.push(format!("{name} slope 1:{:.1} over 1:{:.1}", 1.0 / slope, 1.0 / max));
+                    }
+                }
+                "route clear".to_string()
+            }
+            "escape" => {
+                let area = number(self, "area")?.unwrap_or(0.33);
+                let w = number(self, "w")?.unwrap_or(450.0);
+                let h = number(self, "h")?.unwrap_or(450.0);
+                let sill = number(self, "sill")?.unwrap_or(1100.0);
+                for r in self.arch.rooms.clone() {
+                    let fits = self.arch.openings.iter().any(|o| {
+                        let Fill::Window { frame, .. } = &o.fill else { return false };
+                        let (cw, ch) = (o.w - 2.0 * frame, o.h - 2.0 * frame);
+                        self.opening_in(o, &r) && cw >= w && ch >= h && cw * ch / 1.0e6 >= area && o.sill <= sill
+                    });
+                    if !fits {
+                        problems.push(format!("{} no escape window of {area} m², {} x {}, sill under {}", r.name, label(w), label(h), label(sill)));
+                    }
+                }
+                "escape windows checked".to_string()
             }
             other => bail!("`check {other}` is not available in {}", line.text),
         };

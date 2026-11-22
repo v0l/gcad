@@ -140,6 +140,51 @@ impl Model {
         Ok(format!("sun altitude {altitude:.2} azimuth {azimuth:.2}"))
     }
 
+    pub(crate) fn check_solargain(&mut self, line: &Line) -> Result<String> {
+        let sun = self.arch.sun.ok_or_else(|| anyhow!("`check solargain` needs a `sun` line first"))?;
+        let g = named_value(line, "g").map(|v| eval(&v, &self.scope)).transpose()?.unwrap_or(0.6);
+        let north = self.arch.building.as_ref().map_or(0.0, |b| b.north).to_radians();
+        let (n, e) = ((-north.sin(), north.cos()), (north.cos(), north.sin()));
+        let names = ["north", "north-east", "east", "south-east", "south", "south-west", "west", "north-west"];
+        let mut parts = Vec::new();
+        let mut total = 0.0;
+        let windows: Vec<_> = self
+            .arch
+            .openings
+            .iter()
+            .filter(|o| matches!(o.fill, super::Fill::Window { .. }))
+            .cloned()
+            .collect();
+        for o in &windows {
+            let Some(wall) = self.arch.wall(&o.host) else { continue };
+            let (_, _, dir) = wall.line.locate(o.at);
+            let normal = (dir.1, -dir.0);
+            let facing = (normal.0 * e.0 + normal.1 * e.1).atan2(normal.0 * n.0 + normal.1 * n.1).to_degrees().rem_euclid(360.0);
+            let direction = (facing / 45.0).round() as usize % 8;
+            let area = o.w * o.h / 1.0e6;
+            let step = 0.1;
+            let mut wh = 0.0;
+            let mut time = 0.0;
+            while time < 24.0 {
+                let (alt, az) = position(sun.lat, sun.day, time + step / 2.0);
+                if alt > 0.0 {
+                    let sin_alt = alt.to_radians().sin();
+                    let air_mass = 1.0 / sin_alt;
+                    let dni = 1353.0 * 0.7_f64.powf(air_mass.powf(0.678));
+                    let incidence = alt.to_radians().cos() * (az - facing).to_radians().cos();
+                    wh += (dni * incidence.max(0.0) + 0.05 * dni * sin_alt) * step;
+                }
+                time += step;
+            }
+            let kwh = wh * area * g / 1000.0;
+            total += kwh;
+            let mark = o.mark.clone().unwrap_or_else(|| o.name.clone());
+            parts.push(format!("{mark} {} {kwh:.2} kWh/day", names[direction]));
+        }
+        let text = format!("solar gain {} total {total:.2} kWh/day", parts.join("; "));
+        self.finish_check(line, Vec::new(), text)
+    }
+
     pub(crate) fn check_shadow(&mut self, line: &Line) -> Result<String> {
         let name = line
             .positional

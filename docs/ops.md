@@ -675,6 +675,9 @@ Architecture stage F (gcad #353).
 | sun position | supported | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
 | shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall`, `arch::render_sun_shades_the_ground_behind_a_wall` |
 | hours of sun | supported | `check sunhours x,y,z min=` casts rays to the sun every 6 minutes against every body | `arch::sun_hours_open_and_behind_a_wall` |
+| solar gain | supported | `check solargain g=0.6` sums window area times clear-sky irradiance by facing | `arch::solar_gain_south_over_north` |
+| accessible route | supported | `check route x,y x,y clear=800 width=900` through the doors between two points | `arch::accessible_route_fails_on_a_narrow_door` |
+| escape windows | supported | `check escape area=0.33 w=450 h=450 sill=1100` on every room | `arch::escape_window_size` |
 
 ## Buildings in gcad-mesh
 

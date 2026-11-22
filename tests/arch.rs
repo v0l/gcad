@@ -2036,6 +2036,38 @@ fn sun_hours_open_and_behind_a_wall() {
 }
 
 #[test]
+fn solar_gain_south_over_north() {
+    let text = summary(
+        "units mm\nbuilding \"T\" north=0 datum=0\nlevel L0 0\nlevel L1 2700\nwall_type ext brick:100 pir:100 block:100\nbox: wall 0,0 8000,0 8000,6000 0,6000 closed type=ext base=L0 top=L1 justify=outside\nws: window on=box at=4000 w=1200 h=1200 sill=900 mark=WS\nwn: window on=box at=18000 w=1200 h=1200 sill=900 mark=WN\nsun lat=53.3 date=21-06 time=12:00\ncheck solargain",
+    );
+    let south = number_after(&text, "WS south ");
+    let north = number_after(&text, "WN north ");
+    assert!(south > 2.0 * north && north > 0.0, "{text}");
+}
+
+#[test]
+fn accessible_route_fails_on_a_narrow_door() {
+    let rooms = "hall: room at=2000,3000\nliving: room at=6000,3000\n";
+    let narrow = summary(&with(&format!(
+        "{rooms}d2: door on=inner at=2000 w=700 h=2040 mark=D02\ncheck route 2000,3000 6000,3000 clear=700"
+    )));
+    assert!(narrow.starts_with("FAIL") && narrow.contains("D02 clear 560 under 700"), "{narrow}");
+    let wide = summary(&with(&format!(
+        "{rooms}d2: door on=inner at=2000 w=900 h=2040 mark=D02\ncheck route 2000,3000 6000,3000 clear=700"
+    )));
+    assert!(wide.contains("route clear"), "{wide}");
+}
+
+#[test]
+fn escape_window_size() {
+    let text = summary(&with(
+        "hall: room at=2000,3000\nliving: room at=6000,3000\ncheck escape area=0.33 w=450 h=450",
+    ));
+    assert!(text.contains("hall no escape window"), "{text}");
+    assert!(!text.contains("living no escape"), "{text}");
+}
+
+#[test]
 fn terrain_from_points() {
     let dir = house_files(
         "terrain_from_points",
