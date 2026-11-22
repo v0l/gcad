@@ -2135,7 +2135,6 @@ fn underlay_is_drawn_in_render() {
 }
 
 #[test]
-#[ignore = "missing: terrain"]
 fn render_sun_shades_the_ground_behind_a_wall() {
     let dir = house_files(
         "render_sun",
@@ -2514,6 +2513,13 @@ fn ifc_assembly_exports_placed_architecture() {
     for (class, n) in [("IFCWALL", 10), ("IFCDOOR", 12), ("IFCWINDOW", 12), ("IFCSPACE", 4)] {
         assert_eq!(entities(&twice, class), n, "{class}");
     }
+    std::fs::write(dir.join("plain.gcad"), building()).expect("plain");
+    std::fs::write(
+        dir.join("moved.gasm"),
+        "part a plain.gcad\npart b plain.gcad\nrotate b 90 axis=z\nmove b 20000,0,0\n",
+    )
+    .expect("moved");
+    let twice = read("moved.gasm", "moved.ifc");
     let mut high_x = f64::MIN;
     let mut high_y = f64::MIN;
     for line in twice.lines().filter(|l| l.contains("=IFCCARTESIANPOINTLIST3D(")) {
@@ -2530,5 +2536,5 @@ fn ifc_assembly_exports_placed_architecture() {
         }
     }
     assert!((20000.0..20500.0).contains(&high_x), "max x {high_x}");
-    assert!((10000.0..10500.0).contains(&high_y), "max y {high_y}");
+    assert!((8000.0..8500.0).contains(&high_y), "max y {high_y}");
 }
