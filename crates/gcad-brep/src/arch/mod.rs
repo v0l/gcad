@@ -256,6 +256,8 @@ pub struct SiteBoundary {
 pub struct Sun {
     pub altitude: f64,
     pub azimuth: f64,
+    pub lat: f64,
+    pub day: f64,
 }
 
 #[derive(Clone, Debug, Default)]

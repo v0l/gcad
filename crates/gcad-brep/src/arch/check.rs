@@ -22,6 +22,7 @@ pub(crate) const CHECKS: &[&str] = &[
     "rooms",
     "compartments",
     "shadow",
+    "sunhours",
 ];
 
 pub(crate) fn named_value(line: &Line, key: &str) -> Option<String> {
@@ -96,6 +97,7 @@ impl Model {
             "heatloss" => self.check_heatloss(line),
             "bridges" => self.check_bridges(line),
             "shadow" => self.check_shadow(line),
+            "sunhours" => self.check_sunhours(line),
             _ => self.check_more(line, kind),
         })
     }

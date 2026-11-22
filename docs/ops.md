@@ -674,6 +674,7 @@ Architecture stage F (gcad #353).
 | egress, room and compartment checks | supported | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
 | sun position | supported | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
 | shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall`, `arch::render_sun_shades_the_ground_behind_a_wall` |
+| hours of sun | supported | `check sunhours x,y,z min=` casts rays to the sun every 6 minutes against every body | `arch::sun_hours_open_and_behind_a_wall` |
 
 ## Buildings in gcad-mesh
 

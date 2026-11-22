@@ -2021,6 +2021,21 @@ fn render_sun_shades_the_ground_behind_a_wall() {
 }
 
 #[test]
+fn sun_hours_open_and_behind_a_wall() {
+    let open = summary("sun lat=53.3 date=21-06 time=12:00\ncheck sunhours 0,0,1000");
+    let day = 2.0 * (-(53.3_f64.to_radians().tan()) * 23.44_f64.to_radians().tan()).acos().to_degrees() / 15.0;
+    assert!((number_after(&open, "sunhours ") - day).abs() < 0.1, "{open} vs {day}");
+    let walled = |x: &str| {
+        summary(&datums(&format!(
+            "w1: wall -3000,0 3000,0 type=int top=3000\nsun lat=53.3 date=21-06 time=12:00\ncheck sunhours {x}"
+        )))
+    };
+    let south = number_after(&walled("0,-300,100"), "sunhours ");
+    let north = number_after(&walled("0,300,100"), "sunhours ");
+    assert!(north < south - 2.0 && south < day, "north {north} south {south} day {day}");
+}
+
+#[test]
 fn terrain_from_points() {
     let dir = house_files(
         "terrain_from_points",
