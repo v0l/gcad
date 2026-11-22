@@ -8,7 +8,7 @@ use crate::parse::{Line, eval};
 use anyhow::{Result, anyhow, bail};
 use gcad_mesh::arch::P2;
 use gcad_mesh::arch::layout::{left, signed_area};
-use monstertruck::modeling::Vector3;
+use monstertruck::modeling::*;
 
 pub(super) const CUT_WEIGHT: f64 = 0.35;
 pub(super) const PROJECTED_WEIGHT: f64 = 0.18;
@@ -156,9 +156,36 @@ impl State {
         Ok((level.name.clone(), level.z, level.title.clone()))
     }
 
-    fn cut_pieces(&self) -> Result<Vec<Piece>> {
+    fn cut_pieces(&self, slabs: bool) -> Result<Vec<Piece>> {
         let arch = &self.model()?.arch;
         let mut pieces = Vec::new();
+        if slabs {
+            for stair in &arch.stairs {
+                for built in arch.built.iter().filter(|b| b.owner == stair.name) {
+                    for body in &built.bodies {
+                        let material = self
+                            .model()?
+                            .materials
+                            .get(body)
+                            .map_or_else(|| "timber".to_string(), |m| m.name.clone());
+                        pieces.push(Piece {
+                            body: body.clone(),
+                            material,
+                            layer: "A-STRS",
+                        });
+                    }
+                }
+            }
+            for slab in &arch.slabs {
+                for (body, l) in slab.layer_names() {
+                    pieces.push(Piece {
+                        body,
+                        material: slab.layers[l].material.clone(),
+                        layer: "A-FLOR",
+                    });
+                }
+            }
+        }
         for wall in &arch.walls {
             for (body, t, l) in wall.layer_names() {
                 pieces.push(Piece {
@@ -180,24 +207,42 @@ impl State {
 
     pub(super) fn cut_polygons(
         &self,
-        z: f64,
+        normal: Vector3,
+        at: f64,
+        project: &(dyn Fn(monstertruck::modeling::Point3) -> P2 + Sync),
+        slabs: bool,
     ) -> Result<Vec<(String, &'static str, String, Polygon)>> {
         let model = self.model()?;
-        let pieces = self.cut_pieces()?;
+        let pieces = self.cut_pieces(slabs)?;
         let solids: Vec<(String, &'static str, String, monstertruck::modeling::Solid)> = pieces
             .into_iter()
             .filter_map(|p| {
                 let solid = model.named_body(&p.body).ok()?;
                 let b = geometry::bounds(&solid);
-                (b.min().z <= z && z <= b.max().z).then_some((p.body, p.layer, p.material, solid))
+                let along: Vec<f64> = (0..8)
+                    .map(|i| {
+                        let pick =
+                            |bit: usize, lo: f64, hi: f64| if i & bit == 0 { lo } else { hi };
+                        monstertruck::modeling::Point3::new(
+                            pick(1, b.min().x, b.max().x),
+                            pick(2, b.min().y, b.max().y),
+                            pick(4, b.min().z, b.max().z),
+                        )
+                        .to_vec()
+                        .dot(normal)
+                    })
+                    .collect();
+                let lo = along.iter().cloned().fold(f64::MAX, f64::min);
+                let hi = along.iter().cloned().fold(f64::MIN, f64::max);
+                (lo <= at && at <= hi).then_some((p.body, p.layer, p.material, solid))
             })
             .collect();
         let loops: Vec<Vec<Vec<P2>>> =
             crate::host::each(solids.iter().collect(), |(_, _, _, s)| {
                 let mesh = geometry::mesh(s, geometry::mesh_tolerance(s));
-                section_of(&mesh, s, Vector3::unit_z(), z)
+                section_of(&mesh, s, normal, at)
                     .into_iter()
-                    .map(|l| l.into_iter().map(|p| (p.x, p.y)).collect())
+                    .map(|l| l.into_iter().map(project).collect())
                     .collect()
             })
             .into_iter()
@@ -282,7 +327,11 @@ impl State {
                         Some(Mark::Shape { loops, .. }) => loops.clone(),
                         _ => continue,
                     };
-                    (rings, get("area").unwrap_or_default(), get("layer").unwrap_or_default())
+                    (
+                        rings,
+                        get("area").unwrap_or_default(),
+                        get("layer").unwrap_or_default(),
+                    )
                 }
                 _ => continue,
             };
@@ -341,10 +390,11 @@ impl State {
             let mut pts: Vec<P2> = Vec::new();
             for wall in &model.arch.walls {
                 let (lo, hi) = wall.outer_span();
-                for p in &wall.line.points {
+                for i in 0..wall.line.segments() {
+                    let n = left(wall.line.dir(i));
+                    let (a, b) = wall.line.ends(i);
                     for d in [lo, hi] {
-                        for i in 0..wall.line.segments() {
-                            let n = left(wall.line.dir(i));
+                        for p in [a, b] {
                             pts.push((p.0 + n.0 * d, p.1 + n.1 * d));
                         }
                     }
@@ -386,8 +436,15 @@ impl State {
             x1 = x1.max(p.0);
             y1 = y1.max(p.1);
         }
+        self.plan_level = z;
         let margin = 1500.0;
-        let window = (x0 - margin, y0 - margin, x1 + margin, y1 + margin);
+        let window = match named(line, "window") {
+            Some(t) => {
+                let (a, b, c, d) = super::quad(t, &self.scope)?;
+                (a.min(c), b.min(d), a.max(c), b.max(d))
+            }
+            None => (x0 - margin, y0 - margin, x1 + margin, y1 + margin),
+        };
         let (w, h) = ((window.2 - window.0) / scale, (window.3 - window.1) / scale);
         let at = named(line, "place")
             .map(|t| super::pair(t, &self.scope))
@@ -404,7 +461,7 @@ impl State {
         Ok((z, z + cut, frame, title))
     }
 
-    fn finish_plan(
+    pub(super) fn finish_plan(
         &mut self,
         line: &Line,
         frame: Frame,
@@ -413,26 +470,32 @@ impl State {
         kind: &str,
     ) -> Result<String> {
         let (bx0, by0, _, _) = frame.box_paper();
-        let label = named(line, "label")
-            .map(|t| t.trim_matches('"').to_string())
-            .or_else(|| line.label.clone())
-            .unwrap_or_else(|| {
+        let label = match named(line, "label") {
+            Some(t) => t.trim_matches('"').to_string(),
+            None => line.label.clone().unwrap_or_else(|| {
                 let level = line.positional.first().cloned().unwrap_or_default();
                 if title.is_empty() {
                     format!("{kind} {level}")
                 } else {
                     format!("{kind} {level} {title}")
                 }
-            });
+            }),
+        };
         let mut marks = marks;
-        marks.push(text(
-            bx0,
-            by0 - 4.0,
-            3.5,
-            &format!("{label}  {}", scale_text(frame.scale)),
-            Anchor::Start,
-        ));
+        if named(line, "window").is_some() {
+            marks = super::building::clip_marks(marks, frame.box_paper());
+        }
+        if !label.is_empty() {
+            marks.push(text(
+                bx0,
+                by0 - 4.0,
+                3.5,
+                &format!("{label} {}", scale_text(frame.scale)),
+                Anchor::Start,
+            ));
+        }
         self.view_geometry = None;
+        self.last_view = Some(line.clone());
         self.view_box = Some(frame.box_paper());
         self.sheet()?.marks.extend(marks);
         self.frame = Some(frame);
@@ -444,7 +507,7 @@ impl State {
 
     pub(super) fn op_plan(&mut self, line: &Line) -> Result<String> {
         let (level_z, cut_z, frame, title) = self.open_plan(line, 1200.0, "plan")?;
-        let cut = self.cut_polygons(cut_z)?;
+        let cut = self.cut_polygons(Vector3::unit_z(), cut_z, &|p| (p.x, p.y), false)?;
         let mut marks = self.poche_marks(&frame, &cut);
         marks.extend(self.opening_marks(&frame, cut_z));
         marks.extend(self.stair_marks(&frame, level_z, cut_z));
@@ -463,7 +526,7 @@ impl State {
     pub(super) fn op_rcp(&mut self, line: &Line) -> Result<String> {
         let (level_z, cut_z, frame, title) =
             self.open_plan(line, 2400.0, "reflected ceiling plan")?;
-        let cut = self.cut_polygons(cut_z)?;
+        let cut = self.cut_polygons(Vector3::unit_z(), cut_z, &|p| (p.x, p.y), false)?;
         let mut marks = Vec::new();
         for (body, layer, _, polygon) in &cut {
             let rings: Vec<Vec<(f64, f64)>> = polygon

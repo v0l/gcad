@@ -1,4 +1,5 @@
 mod annotate;
+mod building;
 mod hatch;
 mod plan;
 mod scan;
@@ -135,6 +136,9 @@ struct State {
     view_geometry: Option<(usize, usize, usize)>,
     view_box: Option<(f64, f64, f64, f64)>,
     hatches: BTreeMap<String, String>,
+    plan_level: f64,
+    last_view: Option<Line>,
+    lists: Vec<(usize, Option<(f64, f64)>)>,
 }
 
 pub(crate) const MARGIN: f64 = 10.0;
@@ -165,6 +169,9 @@ pub fn run_source(path: &Path, source: &str, vars: &[(String, f64)]) -> Result<D
         view_geometry: None,
         view_box: None,
         hatches: BTreeMap::new(),
+        plan_level: 0.0,
+        last_view: None,
+        lists: Vec::new(),
     };
     let fixed: Scope = vars.iter().cloned().collect();
     for line in lines {
@@ -181,6 +188,7 @@ pub fn run_source(path: &Path, source: &str, vars: &[(String, f64)]) -> Result<D
         }
     }
     let count = state.drawing.sheets.len();
+    state.fill_lists();
     let title = state.drawing.title.clone();
     let file = state
         .model_file
@@ -409,9 +417,18 @@ impl State {
             }
             "sheet" => self.op_sheet(line),
             "view" => self.op_view(line, false),
+            "section" if Self::is_building_section(line) => {
+                let result = self.op_building_section(line);
+                result
+            }
             "section" => self.op_view(line, true),
             "dims" => self.op_dims(line),
+            "dim" if line.positional.first().is_some_and(|w| w == "auto") => self.op_dim_auto(line),
             "dim" => self.op_dim(line),
+            "tag" => self.op_tag(line),
+            "viewport" => self.op_viewport(line),
+            "elevation" => self.op_elevation(line),
+            "drawinglist" => self.op_drawinglist(line),
             "level" => self.op_level(line),
             "note" => self.op_note(line),
             "callout" => self.op_callout(line),

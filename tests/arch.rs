@@ -1666,7 +1666,6 @@ fn reflected_ceiling_plan() {
 }
 
 #[test]
-#[ignore = "missing: elevations"]
 fn elevation_with_level_marks() {
     let svg = plan_svg(
         "elevation_with_level_marks",
@@ -1676,7 +1675,6 @@ fn elevation_with_level_marks() {
 }
 
 #[test]
-#[ignore = "missing: building sections"]
 fn section_through_two_points() {
     let svg = plan_svg(
         "section_through_two_points",
@@ -1696,7 +1694,6 @@ fn hatch_fill_area_matches_the_layer() {
 }
 
 #[test]
-#[ignore = "missing: tags"]
 fn tags_carry_the_marks() {
     let svg = plan_svg(
         "tags_carry_the_marks",
@@ -1708,7 +1705,6 @@ fn tags_carry_the_marks() {
 }
 
 #[test]
-#[ignore = "missing: room tags"]
 fn room_tags_show_the_area() {
     let dir = house_files(
         "room_tags_show_the_area",
@@ -1727,7 +1723,6 @@ fn room_tags_show_the_area() {
 }
 
 #[test]
-#[ignore = "missing: automatic dimension chains"]
 fn auto_dims_sum_to_the_overall() {
     let svg = plan_svg(
         "auto_dims_sum_to_the_overall",
@@ -1747,17 +1742,15 @@ fn auto_dims_sum_to_the_overall() {
 }
 
 #[test]
-#[ignore = "missing: detail viewports"]
 fn viewport_detail_at_a_new_scale() {
     let svg = plan_svg(
         "viewport_detail_at_a_new_scale",
-        "part house.gcad\nsheet \"Details\" size=A3 scale=1:50\nplan L0 cut=1200\nviewport window=-500,-500,1000,1000 scale=1:5 label=\"corner\"",
+        "part house.gcad\nsheet \"Details\" size=A3 scale=1:50\nplan L0 cut=1200\nviewport window=-100,-100,300,300 scale=1:5 label=\"corner\"",
     );
     assert!(svg.contains(">corner 1:5<"));
 }
 
 #[test]
-#[ignore = "missing: sheet sets"]
 fn sheet_set_with_a_drawing_list() {
     let dir = house_files(
         "sheet_set_with_a_drawing_list",
