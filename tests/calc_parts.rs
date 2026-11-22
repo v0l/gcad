@@ -117,6 +117,31 @@ fn a_shaft_that_does_not_fit_the_bearing_bore_is_warned_about() {
     assert!(!good.contains("warning"), "{good}");
 }
 
+fn shoulder_check(name: &str, collar: &str) -> String {
+    let dir = std::path::PathBuf::from(common::scratch(name));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("shaft.gcad"),
+        format!("circle {collar}\ncollar: extrude -6\nplane XY\ncircle 25\nshaft: extrude 40\n"),
+    )
+    .expect("shaft");
+    let file = dir.join("top.gasm");
+    std::fs::write(&file, "part shaft shaft.gcad\npart b bearing:6205\n").expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    text
+}
+
+#[test]
+fn a_bearing_seat_without_a_shoulder_is_warned_about() {
+    let none = shoulder_check("calc_parts_no_shoulder", "25");
+    assert!(none.contains("warning: bearing b sits on `shaft` with no shoulder"), "{none}");
+    let low = shoulder_check("calc_parts_low_shoulder", "27");
+    assert!(low.contains("shoulder for bearing b on `shaft` is 27.0 mm across"), "{low}");
+    let good = shoulder_check("calc_parts_good_shoulder", "32");
+    assert!(!good.contains("warning"), "{good}");
+}
+
 #[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {

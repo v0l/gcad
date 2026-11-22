@@ -877,6 +877,9 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         Some((line, Err(_))) => bail!("stopped at line {}", line.number),
         _ => finished(&run)?,
     }
+    for warning in run.model.seat_warnings() {
+        println!("{warning}");
+    }
     let failed = gcad::report::failed_checks(&run.model);
     if failed > 0 {
         bail!("{failed} check(s) failed");
