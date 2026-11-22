@@ -3,11 +3,12 @@
 use gcad::host;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn directory() -> PathBuf {
-    static NEXT: AtomicUsize = AtomicUsize::new(0);
-    let nonce = NEXT.fetch_add(1, Ordering::SeqCst);
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join(format!("input-recording-{}-{nonce}", std::process::id()));
@@ -22,7 +23,16 @@ fn consumed_bytes_and_missing_observations_survive_later_file_changes() {
     let optional = root.join("optional.bin");
     std::fs::write(&source, b"consumed").unwrap();
     let (_, reads) = host::recording(|| {
-        assert_eq!(host::read(&source).unwrap(), b"consumed");
+        let read = host::read(&source);
+        assert_eq!(
+            read.as_deref().ok(),
+            Some(&b"consumed"[..]),
+            "read {read:?} of {} on {:?}, on disk {:?}, covered by snapshot {}",
+            source.display(),
+            std::thread::current().id(),
+            std::fs::read(&source),
+            host::covering(&source).is_some()
+        );
         assert!(host::is_file(&source));
         assert!(!host::is_file(&optional));
         assert!(host::read(&optional).is_err());
