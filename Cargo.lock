@@ -2228,8 +2228,10 @@ version = "0.8.0"
 dependencies = [
  "anyhow",
  "gcad-brep",
+ "gcad-cloud",
  "gcad-geom",
  "gcad-mesh",
+ "gcad-parse",
  "gcad-plot",
  "image 0.25.10",
  "monstertruck",

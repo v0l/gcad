@@ -1,0 +1,8 @@
+include ../robot/upper.gcad
+scan: sample main count=60000 seed=1 noise=0.04
+normals scan k=16
+cloud_offset scan by=-1.2 box=190,-60,-60,250,60,60 dir=0,0,1
+deviation scan to=main max=0.5 into=d
+check d.max < 2
+check d.within > 85
+check d.min > -2

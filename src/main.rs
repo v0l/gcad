@@ -2392,6 +2392,12 @@ fn main() -> Result<()> {
             }
             let run = load(&file, None, &vars)?;
             finished(&run)?;
+            if !run.model.clouds.is_empty()
+                && (run.model.clouds.iter().any(|(_, c)| c.deviation.is_some())
+                    || (run.model.solids().is_empty() && run.model.meshes().is_empty()))
+            {
+                return gcad::cloud_render::render_clouds(&run.model, &output);
+            }
             let parts = run.model.exploded_parts(if explode { 1.0 } else { 0.0 });
             let parts: Vec<_> = parts.iter().map(|(s, c)| (s, *c)).collect();
             let mut meshes = run.model.mesh_shading();
