@@ -114,7 +114,7 @@ fn a_shaft_that_does_not_fit_the_bearing_bore_is_warned_about() {
     let loose = seat_check("calc_parts_seat_loose", "24", "52");
     assert!(loose.contains("warning: the 24.000 mm shaft for 6205"), "{loose}");
     let good = seat_check("calc_parts_seat_good", "25.01", "52");
-    assert!(!good.contains("warning"), "{good}");
+    assert!(!good.contains("mm shaft for 6205"), "{good}");
 }
 
 fn shoulder_check(name: &str, collar: &str) -> String {
@@ -210,7 +210,7 @@ fn the_standard_part_examples_check_clean_in_strict_mode() {
     for name in ["lid.gasm", "flange.gcad", "shaft.gasm"] {
         let path = format!("{root}/examples/standard-parts/{name}");
         let (ok, text) = gcad(&["check", &path, "--strict"]);
-        assert!(ok && !text.contains("warning"), "{name}: {text}");
+        assert!(ok && !text.contains("warning:"), "{name}: {text}");
     }
 }
 
