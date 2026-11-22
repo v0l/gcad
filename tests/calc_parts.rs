@@ -189,6 +189,22 @@ fn a_hand_sized_oring_groove_is_scored_against_the_calculator() {
 }
 
 #[test]
+fn strict_turns_warnings_into_a_failure() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_strict"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("top.gasm");
+    std::fs::write(&file, "part s iso4762:M6x27\n").expect("write");
+    let path = file.to_str().expect("path");
+    let (ok, text) = gcad(&["check", path]);
+    assert!(ok && text.contains("warning:"), "{text}");
+    let (ok, text) = gcad(&["check", path, "--strict"]);
+    assert!(!ok && text.contains("1 warning(s) in strict mode"), "{text}");
+    std::fs::write(&file, "part s iso4762:M6x25\n").expect("write");
+    let (ok, text) = gcad(&["check", path, "--strict"]);
+    assert!(ok, "{text}");
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));

@@ -377,6 +377,9 @@ enum Command {
         /// Show how long each line took
         #[arg(long)]
         time: bool,
+        /// Fail when any line prints a warning
+        #[arg(long)]
+        strict: bool,
     },
     /// Report skin weight quality per rigged body: weight jumps across edges, contested and unrelated weights, rigid cores, and posed triangle quality over every clip key
     Skincheck { file: String },
@@ -828,7 +831,8 @@ fn check_drawing(file: &str, vars: &[(String, f64)]) -> Result<()> {
     Ok(())
 }
 
-fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
+fn check(file: &str, vars: &[(String, f64)], time: bool, strict: bool) -> Result<()> {
+    let mut warned = 0;
     let run = load(file, None, vars)?;
     let width = run
         .steps
@@ -842,12 +846,15 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
             _ => String::new(),
         };
         match result {
-            Ok(summary) => println!(
-                "{:>4} {:<width$}  {spent}{}  {summary}",
-                line.number,
-                line.text,
-                if summary.starts_with("FAIL:") { "fail" } else { "ok" }
-            ),
+            Ok(summary) => {
+                warned += summary.matches("warning:").count();
+                println!(
+                    "{:>4} {:<width$}  {spent}{}  {summary}",
+                    line.number,
+                    line.text,
+                    if summary.starts_with("FAIL:") { "fail" } else { "ok" }
+                )
+            }
             Err(error) => {
                 println!(
                     "{:>4} {:<width$}  {spent}ERROR  {error:#}",
@@ -878,7 +885,11 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         _ => finished(&run)?,
     }
     for warning in run.model.seat_warnings() {
+        warned += 1;
         println!("{warning}");
+    }
+    if strict && warned > 0 {
+        bail!("{warned} warning(s) in strict mode");
     }
     let failed = gcad::report::failed_checks(&run.model);
     if failed > 0 {
@@ -2114,7 +2125,7 @@ fn main() -> Result<()> {
             Ok(())
         }
         #[cfg(feature = "game-assets")]
-        Command::Check { file, time: _ } if file.to_ascii_lowercase().ends_with(".ifc") => {
+        Command::Check { file, time: _, .. } if file.to_ascii_lowercase().ends_with(".ifc") => {
             let text = std::fs::read_to_string(&file)?;
             let ifc = gcad_brep::ifc_read::Ifc::parse(&text)?;
             let problems = ifc.problems();
@@ -2128,7 +2139,7 @@ fn main() -> Result<()> {
             println!("every opening voids a host");
             Ok(())
         }
-        Command::Check { file, time } if file.to_ascii_lowercase().ends_with(".gasset") => {
+        Command::Check { file, time, .. } if file.to_ascii_lowercase().ends_with(".gasset") => {
             let start = std::time::Instant::now();
             let asset = gcad::asset::author::load(std::path::Path::new(&file), &vars)?;
             println!(
@@ -2142,12 +2153,12 @@ fn main() -> Result<()> {
             }
             Ok(())
         }
-        Command::Check { file, time: _ }
+        Command::Check { file, time: _, .. }
             if gcad::drafting::is_drawing(std::path::Path::new(&file)) =>
         {
             check_drawing(&file, &vars)
         }
-        Command::Check { file, time } => check(&file, &vars, time),
+        Command::Check { file, time, strict } => check(&file, &vars, time, strict),
         Command::Measure { file, what } => measure(&file, &what.join(" "), &vars),
         Command::Skincheck { file } => skincheck(&file, &vars),
         Command::CheckMesh { file, bound } => check_mesh(&file, &vars, bound),

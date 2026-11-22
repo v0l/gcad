@@ -19,7 +19,7 @@ a `.gasm`, so `gcad bom` lists them with a material and mass. See `gcad parts li
 
 ## Check warnings
 
-`gcad check` prints `warning:` on the line that causes it. A warning never fails the build.
+`gcad check` prints `warning:` on the line that causes it. A warning never fails the build unless you run `gcad check file --strict`, which exits 1 when any warning printed.
 
 | warning | when |
 |---|---|
