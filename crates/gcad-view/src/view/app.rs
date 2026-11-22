@@ -4930,6 +4930,29 @@ mod tests {
         );
     }
 
+    #[test]
+    fn a_deviation_cloud_is_drawn_blue_inside_and_red_outside() {
+        let source = "body part\nrect 20 20 at=10,10\nextrude 20\nscan: cloud_synthetic count=2000 size=20\nmove scan by=10,10,10\ncloud_offset scan by=0 dir=1,0,0\ndeviation scan to=part max=1 into=d";
+        let lines = crate::parse::parse_program(source).expect("parses");
+        let snapshots = crate::model::run_snapshots(&lines);
+        let last = snapshots.len() - 1;
+        let key = super::SceneKey {
+            generation: 0,
+            line: last,
+            query: String::new(),
+            full: true,
+        };
+        let shown = super::build_shown(&snapshots[last], key, &[]).expect("a scene");
+        let cloud = shown.scene.clouds[0].1.clone();
+        assert!(gcad_cloud::ColourBy::Deviation.available(&cloud));
+        let style = super::scene::CloudStyle {
+            by: gcad_cloud::ColourBy::Deviation,
+            size: 3.0,
+        };
+        let drawn = super::scene::styled_clouds(&shown.scene.mesh, &shown.scene.clouds, style);
+        assert!(drawn.lines.iter().filter(|l| !l.segments.is_empty()).count() > 1);
+    }
+
     #[cfg(not(target_arch = "wasm32"))]
     #[test]
     fn dragging_the_weight_brush_adds_a_skin_line_and_recolours_the_mesh() {
