@@ -1,6 +1,7 @@
 pub mod arch;
 pub mod args;
 mod assembly;
+mod bearing_check;
 mod blends;
 mod bodies;
 mod clearance;
@@ -36,6 +37,8 @@ mod sheet;
 mod sketch;
 mod skin;
 mod solids;
+mod seat_check;
+mod spec_check;
 mod standard;
 mod step_raw;
 pub mod stored;
@@ -145,6 +148,7 @@ pub struct Model {
     pub rounded: Vec<Rounded>,
     pub gear: Option<GearLead>,
     pub hole_notes: Vec<HoleNote>,
+    pub thread_notes: Vec<(String, String, f64)>,
     pub sheet: Option<sheet::Sheet>,
     pub members: Vec<String>,
     pub open: Option<String>,
@@ -706,6 +710,14 @@ pub const OPERATIONS: &[&str] = &[
     "downpipe",
     "parapet",
     "fur",
+    "terrain",
+    "pad",
+    "cut_fill",
+    "site_boundary",
+    "road",
+    "retaining",
+    "tree",
+    "sun",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -1007,6 +1019,14 @@ impl Model {
             "wall_sweep" => self.op_wall_sweep(line),
             "wall_cut" => self.op_wall_cut(line),
             "opening" | "door" | "window" | "garage_door" => self.op_opening(line),
+            "terrain" => self.op_terrain(line),
+            "pad" => self.op_pad(line),
+            "cut_fill" => self.op_cut_fill(line),
+            "site_boundary" => self.op_site_boundary(line),
+            "road" => self.op_road(line),
+            "retaining" => self.op_retaining(line),
+            "tree" => self.op_tree(line),
+            "sun" => self.op_sun(line),
             "slab" => self.op_slab(line),
             "slab_opening" => self.op_slab_opening(line),
             "foundation" => self.op_foundation(line),
@@ -1335,7 +1355,13 @@ pub fn load_model(
         }
         let mut start = start_for(path, vars, depth);
         start.cache = cache.clone();
-        let run = run_model(start, &read_lines(path)?, Some(path));
+        let lines = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ifc")) {
+            let file = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().to_string());
+            crate::parse::parse_program(&format!("import {file}"))?
+        } else {
+            read_lines(path)?
+        };
+        let run = run_model(start, &lines, Some(path));
         if let Some((line, Err(error))) = run.steps.last() {
             bail!("{}:{}: {error:#}", path.display(), line.number);
         }

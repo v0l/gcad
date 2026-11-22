@@ -1098,6 +1098,10 @@ impl Model {
                 .record(&self.body_name(), &label, "faces", surface)
         });
         self.solid = Some(threaded.solid);
+        if !threaded.external {
+            self.thread_notes
+                .push((self.body_name(), name.to_string(), threaded.length));
+        }
         let warning = if threaded.external {
             None
         } else {

@@ -486,6 +486,18 @@ pub fn report(input: &Input) -> Result<Report> {
 
 pub const MIN_ENGAGEMENT_DIAMETERS: f64 = 1.0;
 
+pub fn engagement_note(name: &str, length: f64, material: &str) -> Option<String> {
+    let thread = find(name).ok()?;
+    let stock = materials::find(material).ok()?;
+    let least = engagement(stock, "8.8", thread.major);
+    (length + 1.0e-9 >= MIN_ENGAGEMENT_DIAMETERS * thread.major && length + 1.0e-9 < least).then(|| {
+        format!(
+            "warning: {:.2} mm of {} thread in {} is under the {:.1} mm minimum engagement ({} x diameter); deepen the hole or run gcad calc thread {} --material {}",
+            length, thread.name, stock.name, least, stock.engagement[0], thread.name, stock.name
+        )
+    })
+}
+
 pub fn short_note(name: &str, length: f64) -> Option<String> {
     let thread = find(name).ok()?;
     let least = MIN_ENGAGEMENT_DIAMETERS * thread.major;

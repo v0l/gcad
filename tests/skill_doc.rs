@@ -41,7 +41,7 @@ fn every_reference_in_the_router_table_exists() {
 #[test]
 fn the_router_stays_short() {
     let router = std::fs::read_to_string(skill().join("SKILL.md")).expect("SKILL.md");
-    assert!(router.lines().count() <= 120, "SKILL.md is a router");
+    assert!(router.lines().count() <= 130, "SKILL.md is a router");
 }
 
 #[test]

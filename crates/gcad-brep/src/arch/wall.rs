@@ -509,6 +509,7 @@ impl Model {
             }
         }
         let thickness = wall.thickness();
+        self.check_setbacks(&wall)?;
         self.arch.walls.push(wall);
         let made = self.rebuild_walls()?;
         Ok(format!(

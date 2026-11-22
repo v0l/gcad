@@ -651,12 +651,19 @@ pub fn build_lod(
     budget: Option<usize>,
 ) -> Scene {
     let scene = build_solids(model, highlights, marked, marked_colour);
-    let meshes = model.mesh_shading();
+    let mut meshes = model.mesh_shading();
+    meshes.extend(model.underlay_shading());
     if meshes.is_empty() {
         return with_clouds(model, scene);
     }
     let mut scene = scene;
-    let tinted = model.mesh_tints();
+    let mut tinted = model.mesh_tints();
+    tinted.extend(
+        model
+            .underlay_shading()
+            .into_iter()
+            .map(|(name, mesh, colours, _)| (name, mesh, colours)),
+    );
     let current = model.current_body();
     let selection = model.scene.mesh_body.selection.as_ref();
     let solid_mesh = std::mem::take(&mut scene.mesh);

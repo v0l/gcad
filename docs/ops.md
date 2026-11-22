@@ -144,6 +144,15 @@ OCP: `GCAD_OCP_PYTHON=~/git/cadkit/.venv/bin/python cargo test --release -- --ig
 | bearing calculator and lookup | supported | `gcad calc bearing 6205 --radial 2 --rpm 3000 --formulas`: 608, 623 to 698, 6000 to 6010, 6200 to 6210, 6300 to 6310, F608 flanged, 511xx thrust, LM6UU to LM12UU | `calc_bearing::bearing_608_matches_the_catalogue`, `calc_bearing::l10_life_is_the_cube_of_the_load_ratio`, `calc_bearing::light_series_60xx_match_iso_15`, `calc_bearing::medium_series_62xx_match_iso_15`, `calc_bearing::heavy_series_63xx_match_iso_15`, `calc_bearing::shoulders_follow_the_skf_catalogue`, `calc_bearing::sizes_without_catalogue_shoulders_are_estimated_from_din_5418`, `calc_bearing::formulas_say_which_shoulders_are_estimates`, `calc_bearing::linear_thrust_and_flanged_rows`, `calc_bearing::axial_load_raises_the_equivalent_load`, `calc_bearing::every_bearing_has_a_seat_that_fits_its_rings`, `calc_bearing::unknown_bearings_list_the_known_ones`, `calc_parts::cli_bearing_report_has_life_and_seats` |
 | bearing standard parts from the catalogue | supported | `part b bearing:6305` | `calc_parts::catalogue_bearings_are_standard_parts` |
 | parts catalogue | supported | `gcad parts list`, `gcad parts show iso4762:M6x25` | `calc_parts::every_kind_has_an_example_that_resolves`, `calc_parts::cli_lists_and_shows_parts`, `calc_parts::bad_specs_are_refused_with_the_valid_choices` |
+| standard screw length warning | supported | `gcad check` prints `warning:` on a `part s iso4762:M6x27` line, since 27 is not an ISO 888 length | `calc_parts::a_screw_of_a_non_standard_length_is_warned_about` |
+| screw in a hole under its tap drill warning | supported | `gcad check` prints `warning:` on a `concentric` line that puts an ISO screw in a hole narrower than the screw's tap drill, which no screw can enter whether the hole is tapped or clearance | `calc_parts::a_screw_through_a_hole_under_its_tap_drill_is_warned_about` |
+| unknown standard, missing nut or washer size | supported | `part s iso4763:M6x25` fails with the known kinds, `part n iso4032:M14` fails with the sizes listed | `calc_parts::an_unknown_standard_or_a_missing_nut_size_is_refused_on_the_part_line` |
+| bearing seat fit warning | supported | `gcad check` prints `warning:` on a `concentric` line that puts a catalogue bearing on a shaft or in a bore outside the `gcad calc bearing` fit classes | `calc_parts::a_shaft_that_does_not_fit_the_bearing_bore_is_warned_about` |
+| bearing seat without a shoulder warning | supported | `gcad check` prints `warning:` when a catalogue bearing sits on a shaft or in a bore with no shoulder within 0.5 mm of either face, or one lower than the catalogue da min (shaft) or higher than Da max (housing) | `calc_parts::a_bearing_seat_without_a_shoulder_is_warned_about` |
+| thread engagement by material warning | supported | `gcad check` prints `warning:` when an internal `thread` is shorter than the material's engagement factor times the diameter (steel 1.25, aluminium 2, plastic 2.5 for class 8.8) and the part has a `material` | `calc_parts::a_thread_shorter_than_the_material_needs_is_warned_about` |
+| o-ring groove sized by hand | supported | `oring_groove face 40 depth=1.96 width=3.53` cuts that face groove and `gcad check` warns when the calculator says the squeeze or fill is outside range | `calc_parts::a_hand_sized_oring_groove_is_scored_against_the_calculator` |
+| `gcad check --strict` | supported | `gcad check top.gasm --strict` exits 1 when any line printed a `warning:` | `calc_parts::strict_turns_warnings_into_a_failure` |
+| standard part example designs | supported | `examples/standard-parts/` lid, flange and shaft check clean with `gcad check --strict` | `calc_parts::the_standard_part_examples_check_clean_in_strict_mode` |
 | catalogue screws, nuts and washers | supported | `part s iso4762:M6x25`, `iso4017`, `iso4014`, `iso7380`, `iso10642`, `iso4032:M6`, `iso4035`, `iso7040`, `iso7089`, `iso7093` | `calc_parts::iso4762_spec_matches_the_old_shcs_part`, `calc_parts::nut_and_washer_volumes_follow_the_tables` |
 | catalogue dowels, keys and circlips | supported | `iso2338:6x24`, `iso8734:6x24`, `din6885:8x7x32`, `din471:25`, `din472:50` | `calc_parts::dowels_keys_and_circlips_are_listed` |
 | catalogue pulleys, belts, extrusion and bought parts | supported | `gt2pulley:20x6x5`, `htd5pulley:24x15x8`, `gt2belt:6x200`, `extrusion:2020x300` (a plain bar with a centre bore: no profile numbers were readable, so no slots or weight), `spec:nema17@42x42x40` | `calc_parts::pulley_outside_diameter_uses_the_pitch_line_differential`, `calc_parts::belts_and_bought_parts_carry_an_envelope`, `calc_parts::extrusion_is_a_section_of_the_listed_size` |
@@ -646,7 +655,14 @@ Architecture stage E (gcad #352).
 | operation | status | syntax | tests |
 |---|---|---|---|
 | IFC4 export | supported | `gcad export house.gasm house.ifc`: project, site, building, storeys, walls, doors, windows, openings with voids and fills | `arch::ifc_has_the_spatial_structure` |
-| IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon` | `arch::ifc_wall_layers` |
+| IFC assembly export | supported | a `.gasm` exports the architecture of the parts it places | `arch::ifc_assembly_exports_placed_architecture` |
+| IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon`. `ThermalTransmittance` is a plain sum of layer resistances plus 0.17 until the thermal calculation (#353) supplies it | `arch::ifc_wall_layers` |
+| IFC room fire rating | supported | `room ... fire=REI60` writes `Pset_SpaceCommon.FireRating`, plus `IsExternal`, `GrossPlannedArea`, `NetPlannedArea` | `arch::ifc_room_fire_rating_and_common_fields` |
+| IFC grid and curtain wall quantities | supported | `grid` lines write `IfcGrid`, `curtainwall` writes `Qto_CurtainWallBaseQuantities` | `arch::ifc_grid_and_curtain_wall_quantities` |
+| IFC site terrain | supported | `terrain` triangles export as an `IfcTriangulatedFaceSet` on `IfcSite` | `arch::ifc_site_carries_the_terrain` |
+| IFC extruded bodies | supported | walls, slabs, columns and beams that are prisms (vertical outline, flat top and bottom) write `IfcExtrudedAreaSolid`; others stay faceted | `arch::ifc_prisms_are_extruded_and_keep_their_volume` |
+| IFC vendor part | supported | `part stool vendor.ifc` places an IFC of one furnishing (faceted brep, triangulated or polygonal face set) | `arch::vendor_ifc_is_a_part` |
+| IFC plan reference | supported | an imported IFC draws its wall, slab and space outline dashed in `plan` views (class `reference`) | `arch::imported_ifc_is_a_plan_reference` |
 | IFC element classes | supported | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
 | stable GlobalIds | supported | ids derived from element names | `arch::ifc_global_ids_are_stable` |
 | IFC syntax | supported | unique ids, balanced parentheses, every reference defined | `arch::ifc_step_syntax_is_valid` |
@@ -654,6 +670,7 @@ Architecture stage E (gcad #352).
 | IFC checks | supported | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
 | IFC volumes | supported | element volumes read by IfcOpenShell match the bodies within 0.5 percent | `arch::ifc_volumes_match_ifcopenshell` |
 | image underlays | supported | `underlay plan.png scale=1:100 dpi=100` | `arch::image_underlay` |
+| underlay in render | supported | `gcad render` draws the image flat at its scaled size | `arch::underlay_is_drawn_in_render` |
 
 ## Site and analysis
 
@@ -661,19 +678,25 @@ Architecture stage F (gcad #353).
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| terrain | missing | `t1: terrain points site.csv\|contour site.dxf\|grid 20000x20000 slope=0.1,0 depth=1000` | `arch::terrain_from_points` |
-| pads and cut and fill | missing | `pad <outline> level=1000`, `cut_fill t1 p1` | `arch::cut_and_fill_of_a_pad` |
-| site boundary | missing | `site_boundary x,y ... setback=3000` | `arch::site_boundary_area_and_setback` |
-| roads, retaining walls and trees | missing | `road x,y x,y width=3500 type=asphalt:100`, `retaining x,y x,y h=1200 t=250`, `tree x,y h=6000 spread=4000` | `arch::site_elements` |
-| U-values | missing | `check uvalue w1` (layer conductivities from the material library, Rsi 0.13, Rse 0.04) | `arch::u_value_of_a_wall` |
-| heat loss | missing | `check heatloss dt=20` | `arch::heat_loss_estimate` |
-| thermal bridges | missing | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
-| daylight | missing | `check daylight min=0.1` (glazing to floor area per room) | `arch::daylight_ratio` |
-| stair and ramp rules | missing | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
-| door widths and turning circles | missing | `check doors clear=775 turning=1500` | `arch::door_clear_width_check` |
-| egress, room and compartment checks | missing | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
-| sun position | missing | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
-| shadow study | missing | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall` |
+| terrain | supported | `t1: terrain points site.csv\|contour site.dxf\|grid 20000x20000 slope=0.1,0 depth=1000` | `arch::terrain_from_points` |
+| pads and cut and fill | supported | `pad <outline> level=1000`, `cut_fill t1 p1` | `arch::cut_and_fill_of_a_pad` |
+| site boundary | supported | `site_boundary x,y ... setback=3000` | `arch::site_boundary_area_and_setback` |
+| roads, retaining walls and trees | supported | `road x,y x,y width=3500 type=asphalt:100`, `retaining x,y x,y h=1200 t=250`, `tree x,y h=6000 spread=4000` | `arch::site_elements` |
+| U-values | supported | `check uvalue w1` (layer conductivities from the material library, Rsi 0.13, Rse 0.04) | `arch::u_value_of_a_wall` |
+| heat loss | supported | `check heatloss dt=20` | `arch::heat_loss_estimate` |
+| thermal bridges | supported | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
+| daylight | supported | `check daylight min=0.1` (glazing to floor area per room) | `arch::daylight_ratio` |
+| stair and ramp rules | supported | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
+| door widths and turning circles | supported | `check doors clear=775 turning=1500` | `arch::door_clear_width_check`, `arch::failed_check_fails_the_run_unless_warn`, `arch::setback_violation_fails_the_run` |
+| egress, room and compartment checks | supported | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
+| sun position | supported | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
+| shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall`, `arch::render_sun_shades_the_ground_behind_a_wall` |
+| hours of sun | supported | `check sunhours x,y,z min=` casts rays to the sun every 6 minutes against every body | `arch::sun_hours_open_and_behind_a_wall` |
+| solar gain | supported | `check solargain g=0.6` sums window area times clear-sky irradiance by facing | `arch::solar_gain_south_over_north` |
+| accessible route | supported | `check route x,y x,y clear=800 width=900` through the doors between two points | `arch::accessible_route_fails_on_a_narrow_door` |
+| escape windows | supported | `check escape area=0.33 w=450 h=450 sill=1100` on every room | `arch::escape_window_size` |
+| driveway slopes | supported | `check driveway max=0.1` on each `road` against the terrain | `arch::driveway_slope_is_checked` |
+| contours in plans | supported | `plan L0 contours=500` draws terrain contours on layer `A-SITE`; `terrain contour site.dxf` reads them from LWPOLYLINE group 38 or POLYLINE vertices | `arch::plan_draws_contours`, `arch::terrain_from_dxf_contours` |
 
 ## Buildings in gcad-mesh
 

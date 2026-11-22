@@ -1611,6 +1611,27 @@ fn bom_lists_building_elements() {
 }
 
 #[test]
+fn plan_draws_contours() {
+    let dir = house_files(
+        "plan_contours",
+        &[
+            (
+                "site.gcad",
+                "units mm\nlevel L0 0\nlevel L1 2700\nwall_type int block:100\nw1: wall 5000,3000 9000,3000 type=int top=L1\nt1: terrain grid 20000x10000 slope=0.1,0 at=0,0 depth=1000",
+            ),
+            (
+                "site.gdwg",
+                "part site.gcad\nsheet \"Site\" size=A3 scale=1:200\nplan L0 contours=500",
+            ),
+        ],
+    );
+    let drawing = gcad::drafting::run(&dir.join("site.gdwg"), &[]).expect("runs");
+    assert!(drawing.failed().is_none(), "{:?}", drawing.failed().map(|(l, e)| format!("{}: {e:#}", l.text)));
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    assert_eq!(svg.matches("class=\"contour\"").count(), 6, "{svg}");
+}
+
+#[test]
 fn plan_draws_the_cut() {
     let svg = plan_svg(
         "plan_draws_the_cut",
@@ -1908,6 +1929,73 @@ fn ifc_element_classes() {
 }
 
 #[test]
+fn ifc_room_fire_rating_and_common_fields() {
+    let ifc = ifc_of(
+        "ifc_room_fire_rating_and_common_fields",
+        &with("hall: room at=2000,3000 fire=REI60"),
+    );
+    for needle in ["'FireRating'", "IFCLABEL('REI60')", "'IsExternal'", "'GrossPlannedArea'", "'NetPlannedArea'"] {
+        assert!(ifc.contains(needle), "{needle}");
+    }
+}
+
+#[test]
+fn ifc_grid_and_curtain_wall_quantities() {
+    let ifc = ifc_of(
+        "ifc_grid_and_curtain_wall_quantities",
+        &with("cw1: curtainwall 0,-2000 6000,-2000 height=L1 grid=1500x900 mullion=50x100 glass=double"),
+    );
+    assert_eq!(entities(&ifc, "IFCGRID"), 1);
+    assert_eq!(entities(&ifc, "IFCGRIDAXIS"), 4);
+    assert_eq!(entities(&ifc, "IFCCURTAINWALL"), 1);
+    assert!(ifc.contains("Qto_CurtainWallBaseQuantities"));
+    assert!(ifc.contains("'GrossSideArea'"));
+}
+
+#[test]
+fn vendor_ifc_is_a_part() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    if !python.exists() {
+        return;
+    }
+    let dir = house_files("vendor_ifc_is_a_part", &[]);
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ifc_vendor_stool.py");
+    let out = std::process::Command::new(python)
+        .arg(script)
+        .arg(dir.join("stool.ifc"))
+        .output()
+        .expect("python");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    std::fs::write(dir.join("room.gasm"), "part stool stool.ifc\n").expect("gasm");
+    let run = gcad::model::run_path(&dir.join("room.gasm"), &[], None).expect("runs");
+    assert!(run.steps.iter().all(|(_, r)| r.is_ok()), "{:?}", run.steps.last());
+    near(volume(&run.model), 400.0 * 300.0 * 500.0, 1.0e-6);
+}
+
+#[test]
+fn ifc_prisms_are_extruded_and_keep_their_volume() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    if !python.exists() {
+        return;
+    }
+    let source = with("s1: slab L1 A1 B1 B2 A2 type=concrete:200\nc1: column A1 rect 300x300 top=L1\nb1: beam A1 B1 bar 200x400 z=L1");
+    let dir = house_files("ifc_prisms_are_extruded", &[("model.gcad", &source)]);
+    assert!(gcad(&dir, &["export", "model.gcad", "model.ifc"]).0);
+    let ifc = std::fs::read_to_string(dir.join("model.ifc")).expect("ifc");
+    assert!(entities(&ifc, "IFCEXTRUDEDAREASOLID") >= 2, "extruded bodies");
+    assert!(ifc.contains("'Body','SweptSolid'"));
+    let script = "import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.validate, ifcopenshell.util.shape as sh\nf = ifcopenshell.open(sys.argv[1])\nlog = ifcopenshell.validate.json_logger()\nifcopenshell.validate.validate(f, log)\nassert not log.statements, log.statements[:3]\ns = ifcopenshell.geom.settings()\nprint(sum(sh.get_volume(ifcopenshell.geom.create_shape(s, e).geometry) for e in f.by_type('IfcElement') if e.Representation))\n";
+    let out = std::process::Command::new(python)
+        .args(["-c", script, dir.join("model.ifc").to_str().expect("path")])
+        .output()
+        .expect("python");
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    let theirs: f64 = text.trim().lines().last().expect("volume").parse().expect("number");
+    near(theirs * 1.0e9, volume(&build(&source)), 5.0e-3);
+}
+
+#[test]
 fn ifc_global_ids_are_stable() {
     let a = ifc_of("ifc_global_ids_are_stable_a", &building());
     let b = ifc_of("ifc_global_ids_are_stable_b", &building());
@@ -2001,7 +2089,171 @@ fn image_underlay() {
 }
 
 #[test]
-#[ignore = "missing: terrain"]
+fn imported_ifc_is_a_plan_reference() {
+    let dir = house_files("imported_ifc_is_a_plan_reference", &[]);
+    std::fs::copy("examples/architecture/house.gcad", dir.join("house.gcad")).expect("example");
+    let (ok, text) = gcad(&dir, &["export", "house.gcad", "house.ifc"]);
+    assert!(ok, "{text}");
+    std::fs::write(dir.join("vendor.gcad"), "level L0 0 \"Ground\"\nimport house.ifc\n").expect("vendor");
+    std::fs::write(
+        dir.join("ref.gdwg"),
+        "part vendor.gcad\nsheet \"Ref\" size=A3 scale=1:100\nplan L0 cut=1200\n",
+    )
+    .expect("sheet");
+    let drawing = gcad::drafting::run(&dir.join("ref.gdwg"), &[]).expect("runs");
+    assert!(
+        drawing.failed().is_none(),
+        "{:?}",
+        drawing.failed().map(|(l, e)| format!("{}: {e:#}", l.text))
+    );
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    std::fs::write(dir.join("ref.svg"), &svg).expect("svg");
+    for kind in ["ifcwall", "ifcslab"] {
+        assert!(svg.contains(&format!("data-kind=\"{kind}\"")), "{kind}");
+    }
+    assert!(svg.contains("class=\"reference\""));
+}
+
+#[test]
+fn underlay_is_drawn_in_render() {
+    let dir = house_files("underlay_is_drawn_in_render", &[]);
+    let image = image::RgbImage::from_pixel(100, 50, image::Rgb([220, 30, 30]));
+    image.save(dir.join("plan.png")).expect("png");
+    std::fs::write(
+        dir.join("model.gcad"),
+        "underlay plan.png scale=1:100 dpi=100\n",
+    )
+    .expect("model");
+    let (ok, text) = gcad(&dir, &["render", "model.gcad", "out.png"]);
+    assert!(ok, "{text}");
+    let picture = image::open(dir.join("out.png")).expect("png").to_rgb8();
+    let red = picture
+        .pixels()
+        .filter(|p| p[0] > 120 && p[0] as i32 > p[1] as i32 + 60 && p[0] as i32 > p[2] as i32 + 60)
+        .count();
+    assert!(red > 2000, "{red} red pixels");
+}
+
+#[test]
+fn render_sun_shades_the_ground_behind_a_wall() {
+    let dir = house_files(
+        "render_sun",
+        &[(
+            "site.gcad",
+            &datums(
+                "t1: terrain grid 20000x20000 slope=0,0 at=-10000,-10000 depth=1000\nw1: wall -3000,0 3000,0 type=int top=3000\nsun lat=51.5 date=21-06 time=12:00\n",
+            ),
+        )],
+    );
+    let (ok, text) = gcad(&dir, &["render", "site.gcad", "sun.png", "--sun"]);
+    assert!(ok, "{text}");
+    let image = image::open(dir.join("sun.png")).expect("png").to_rgb8();
+    let grey = |x: u32, y: u32| image.get_pixel(x, y).0.iter().map(|&c| c as u32).sum::<u32>();
+    let shaded = grey(600 + 300, 300 - 20);
+    let lit = grey(600 + 300, 300 + 20);
+    assert!(shaded * 10 < lit * 7, "shaded {shaded} lit {lit}");
+}
+
+#[test]
+fn sun_hours_open_and_behind_a_wall() {
+    let open = summary("sun lat=53.3 date=21-06 time=12:00\ncheck sunhours 0,0,1000");
+    let day = 2.0 * (-(53.3_f64.to_radians().tan()) * 23.44_f64.to_radians().tan()).acos().to_degrees() / 15.0;
+    assert!((number_after(&open, "sunhours ") - day).abs() < 0.1, "{open} vs {day}");
+    let walled = |x: &str| {
+        summary(&datums(&format!(
+            "w1: wall -3000,0 3000,0 type=int top=3000\nsun lat=53.3 date=21-06 time=12:00\ncheck sunhours {x}"
+        )))
+    };
+    let south = number_after(&walled("0,-300,100"), "sunhours ");
+    let north = number_after(&walled("0,300,100"), "sunhours ");
+    assert!(north < south - 2.0 && south < day, "north {north} south {south} day {day}");
+}
+
+#[test]
+fn solar_gain_south_over_north() {
+    let text = summary(
+        "units mm\nbuilding \"T\" north=0 datum=0\nlevel L0 0\nlevel L1 2700\nwall_type ext brick:100 pir:100 block:100\nbox: wall 0,0 8000,0 8000,6000 0,6000 closed type=ext base=L0 top=L1 justify=outside\nws: window on=box at=4000 w=1200 h=1200 sill=900 mark=WS\nwn: window on=box at=18000 w=1200 h=1200 sill=900 mark=WN\nsun lat=53.3 date=21-06 time=12:00\ncheck solargain",
+    );
+    let south = number_after(&text, "WS south ");
+    let north = number_after(&text, "WN north ");
+    assert!(south > 2.0 * north && north > 0.0, "{text}");
+}
+
+#[test]
+fn accessible_route_fails_on_a_narrow_door() {
+    let rooms = "hall: room at=2000,3000\nliving: room at=6000,3000\n";
+    let narrow = summary(&with(&format!(
+        "{rooms}d2: door on=inner at=2000 w=700 h=2040 mark=D02\ncheck route 2000,3000 6000,3000 clear=700"
+    )));
+    assert!(narrow.starts_with("FAIL") && narrow.contains("D02 clear 560 under 700"), "{narrow}");
+    let wide = summary(&with(&format!(
+        "{rooms}d2: door on=inner at=2000 w=900 h=2040 mark=D02\ncheck route 2000,3000 6000,3000 clear=700"
+    )));
+    assert!(wide.contains("route clear"), "{wide}");
+}
+
+#[test]
+fn escape_window_size() {
+    let text = summary(&with(
+        "hall: room at=2000,3000\nliving: room at=6000,3000\ncheck escape area=0.33 w=450 h=450",
+    ));
+    assert!(text.contains("hall no escape window"), "{text}");
+    assert!(!text.contains("living no escape"), "{text}");
+}
+
+#[test]
+fn driveway_slope_is_checked() {
+    let source = |to: &str| {
+        format!(
+            "t1: terrain grid 20000x20000 slope=0.12,0 at=0,0 depth=1000\nrd: road 2000,5000 {to},5000 width=3500 type=asphalt:100\ncheck driveway max=0.1"
+        )
+    };
+    let steep = summary(&source("12000"));
+    assert!(steep.starts_with("FAIL") && steep.contains("rd slope 12.0 percent over 10.0"), "{steep}");
+    let flat = summary("t1: terrain grid 20000x20000 slope=0.05,0 at=0,0 depth=1000\nrd: road 2000,5000 12000,5000 width=3500 type=asphalt:100\ncheck driveway max=0.1");
+    assert!(flat.contains("driveways checked"), "{flat}");
+}
+
+#[test]
+fn terrain_from_dxf_contours() {
+    let dxf = "0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n8\n0\n38\n0\n90\n2\n10\n0\n20\n0\n10\n0\n20\n10000\n0\nLWPOLYLINE\n8\n0\n38\n1000\n90\n2\n10\n10000\n20\n0\n10\n10000\n20\n10000\n0\nENDSEC\n0\nEOF\n";
+    let dir = house_files(
+        "terrain_dxf",
+        &[("site.dxf", dxf), ("site.gcad", "t1: terrain contour site.dxf depth=1000")],
+    );
+    let run = gcad::model::run_path(&dir.join("site.gcad"), &[], None).expect("runs");
+    near(volume_of(&run.model, "t1"), 1.0e8 * (500.0 + 1000.0), 1.0e-4);
+}
+
+#[test]
+fn ifc_site_carries_the_terrain() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    let source = "units mm\nt1: terrain points site.csv depth=1000\n";
+    let dir = house_files(
+        "ifc_site_carries_the_terrain",
+        &[
+            ("site.csv", "0,0,0\n20000,0,2000\n20000,20000,2000\n0,20000,0\n"),
+            ("site.gcad", source),
+        ],
+    );
+    let (ok, text) = gcad(&dir, &["export", "site.gcad", "site.ifc"]);
+    assert!(ok, "{text}");
+    let ifc = std::fs::read_to_string(dir.join("site.ifc")).expect("ifc");
+    assert_eq!(entities(&ifc, "IFCTRIANGULATEDFACESET"), 1);
+    assert!(python.exists(), "the IfcOpenShell venv is needed");
+    let script = "import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.validate\nf = ifcopenshell.open(sys.argv[1])\nlog = ifcopenshell.validate.json_logger()\nifcopenshell.validate.validate(f, log)\nassert not log.statements, log.statements[:3]\ns = ifcopenshell.geom.settings()\nsite = f.by_type('IfcSite')[0]\ng = ifcopenshell.geom.create_shape(s, site).geometry\nv = g.verts\nprint(max(v[2::3]) - min(v[2::3]), (max(v[0::3]) - min(v[0::3])) * (max(v[1::3]) - min(v[1::3])))\n";
+    let out = std::process::Command::new(python)
+        .args(["-c", script, dir.join("site.ifc").to_str().expect("path")])
+        .output()
+        .expect("python");
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    let numbers: Vec<f64> = text.trim().lines().last().expect("line").split(' ').map(|n| n.parse().expect("number")).collect();
+    near(numbers[0], 2.0, 1.0e-6);
+    near(numbers[1], 400.0, 1.0e-6);
+}
+
+#[test]
 fn terrain_from_points() {
     let dir = house_files(
         "terrain_from_points",
@@ -2023,7 +2275,6 @@ fn terrain_from_points() {
 }
 
 #[test]
-#[ignore = "missing: pads and cut and fill"]
 fn cut_and_fill_of_a_pad() {
     let text = summary(
         "t1: terrain grid 20000x20000 slope=0.1,0 at=0,0 depth=1000\np1: pad 5000,5000 15000,5000 15000,15000 5000,15000 level=1000\ncut_fill t1 p1",
@@ -2034,7 +2285,6 @@ fn cut_and_fill_of_a_pad() {
 }
 
 #[test]
-#[ignore = "missing: site boundary"]
 fn site_boundary_area_and_setback() {
     let text = summary("site_boundary 0,0 30000,0 30000,20000 0,20000 setback=3000");
     assert!(text.contains("area 600.00 m²"), "{text}");
@@ -2048,7 +2298,6 @@ fn site_boundary_area_and_setback() {
 }
 
 #[test]
-#[ignore = "missing: roads, retaining walls and trees"]
 fn site_elements() {
     let model = build(
         "rd: road 0,0 20000,0 width=3500 type=asphalt:100\nrw: retaining 0,5000 20000,5000 h=1200 t=250\ntr: tree 5000,8000 h=6000 spread=4000",
@@ -2059,7 +2308,6 @@ fn site_elements() {
 }
 
 #[test]
-#[ignore = "missing: U-values"]
 fn u_value_of_a_wall() {
     let text = summary(&datums(
         "w1: wall 0,0 4000,0 type=ext top=L1\ncheck uvalue w1",
@@ -2069,7 +2317,6 @@ fn u_value_of_a_wall() {
 }
 
 #[test]
-#[ignore = "missing: heat loss"]
 fn heat_loss_estimate() {
     let text = summary(&with("check heatloss outer dt=20"));
     let r = 0.13 + 0.1 / 0.81 + 0.1 / 0.022 + 0.1 / 1.33 + 0.04;
@@ -2079,7 +2326,6 @@ fn heat_loss_estimate() {
 }
 
 #[test]
-#[ignore = "missing: thermal bridge flags"]
 fn thermal_bridge_at_a_slab_edge() {
     let text = summary(&with(
         "s1: slab L1 A1 B1 B2 A2 type=concrete:200\ncheck bridges",
@@ -2088,7 +2334,6 @@ fn thermal_bridge_at_a_slab_edge() {
 }
 
 #[test]
-#[ignore = "missing: daylight check"]
 fn daylight_ratio() {
     let text = summary(&with("living: room at=6000,3000\ncheck daylight min=0.1"));
     let ratio = 1200.0 * 1200.0 / (3650.0 * 5400.0);
@@ -2099,7 +2344,6 @@ fn daylight_ratio() {
 }
 
 #[test]
-#[ignore = "missing: stair and ramp checks"]
 fn stair_and_ramp_rules() {
     let text = summary(
         "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=0 width=800 max_rise=180\ncheck stairs min_width=900",
@@ -2107,15 +2351,54 @@ fn stair_and_ramp_rules() {
     assert!(text.contains("st1 width 800 under 900"), "{text}");
 }
 
+fn example_house(test: &str, doors: &str) -> std::path::PathBuf {
+    let source = std::fs::read_to_string(format!(
+        "{}/examples/architecture/house.gcad",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("example")
+    .replace("check doors clear=775 warn", doors);
+    let dir = std::path::PathBuf::from(scratch(test));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join("house.gcad"), source).expect("house");
+    dir
+}
+
 #[test]
-#[ignore = "missing: door width and turning circle checks"]
+fn failed_check_fails_the_run_unless_warn() {
+    let dir = example_house("failed_check_fails", "check doors clear=775");
+    let (ok, text) = gcad(&dir, &["check", "house.gcad"]);
+    assert!(!ok, "{text}");
+    assert!(text.contains("fail  FAIL: ") && text.contains("D06 clear 586 under 775"), "{text}");
+    let dir = example_house("warn_check", "check doors clear=775 warn");
+    let (ok, text) = gcad(&dir, &["check", "house.gcad"]);
+    assert!(ok, "{text}");
+    assert!(text.contains("warn: ") && text.contains("D06 clear 586 under 775"), "{text}");
+}
+
+#[test]
+fn setback_violation_fails_the_run() {
+    let dir = house_files(
+        "setback_fails_run",
+        &[(
+            "site.gcad",
+            &format!(
+                "site_boundary 0,0 30000,0 30000,20000 0,20000 setback=3000\n{}",
+                building().replace("grid A x=0", "grid A x=-1000")
+            ),
+        )],
+    );
+    let (ok, text) = gcad(&dir, &["check", "site.gcad"]);
+    assert!(!ok && text.contains("setback"), "{text}");
+}
+
+#[test]
 fn door_clear_width_check() {
     let text = summary(&with("check doors clear=775 turning=1500"));
     assert!(text.contains("D01 clear 760 under 775"), "{text}");
 }
 
 #[test]
-#[ignore = "missing: egress, room size and fire compartment checks"]
 fn egress_and_room_checks() {
     let text = summary(&with(
         "hall: room at=2000,3000\nliving: room at=6000,3000\ncheck egress max=5000\ncheck rooms min_area=20 min_height=2300\ncheck compartments max=500",
@@ -2129,7 +2412,6 @@ fn egress_and_room_checks() {
 }
 
 #[test]
-#[ignore = "missing: sun position"]
 fn sun_position() {
     let text = summary("sun lat=51.5 date=21-06 time=12:00 solar");
     let altitude = 90.0 - 51.5 + 23.44;
@@ -2144,7 +2426,6 @@ fn sun_position() {
 }
 
 #[test]
-#[ignore = "missing: shadow study"]
 fn shadow_of_a_wall() {
     let text = summary(&datums(
         "w1: wall 0,0 4000,0 type=int top=3000\nsun lat=51.5 date=21-06 time=12:00 solar\ncheck shadow w1",
@@ -2330,4 +2611,57 @@ fn mesh_door_swings_about_its_hinge_into_the_room() {
         });
     assert!(y_hi > 277.5 + 700.0, "the leaf opens into the room: {y_hi}");
     assert!(y_lo > 277.5 - 30.0, "and not out of it: {y_lo}");
+}
+
+#[test]
+fn ifc_assembly_exports_placed_architecture() {
+    let dir = std::path::PathBuf::from(scratch("ifc_assembly_exports_placed_architecture"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    for name in ["house.gcad", "house.gasm"] {
+        std::fs::copy(format!("examples/architecture/{name}"), dir.join(name)).expect("copy");
+    }
+    let read = |file: &str, out: &str| {
+        let (ok, text) = gcad(&dir, &["export", file, out]);
+        assert!(ok, "{text}");
+        std::fs::read_to_string(dir.join(out)).expect("ifc")
+    };
+    let part = read("house.gcad", "part.ifc");
+    let assembly = read("house.gasm", "assembly.ifc");
+    assert_eq!(entities(&part, "IFCWALL"), 5);
+    for class in ["IFCWALL", "IFCDOOR", "IFCWINDOW", "IFCSPACE", "IFCSLAB", "IFCBUILDINGSTOREY"] {
+        assert_eq!(entities(&assembly, class), entities(&part, class), "{class}");
+    }
+    std::fs::write(
+        dir.join("twice.gasm"),
+        "part a house.gcad\npart b house.gcad\nrotate b 90 axis=z\nmove b 20000,0,0\n",
+    )
+    .expect("twice");
+    let twice = read("twice.gasm", "twice.ifc");
+    for (class, n) in [("IFCWALL", 10), ("IFCDOOR", 12), ("IFCWINDOW", 12), ("IFCSPACE", 4)] {
+        assert_eq!(entities(&twice, class), n, "{class}");
+    }
+    std::fs::write(dir.join("plain.gcad"), building()).expect("plain");
+    std::fs::write(
+        dir.join("moved.gasm"),
+        "part a plain.gcad\npart b plain.gcad\nrotate b 90 axis=z\nmove b 20000,0,0\n",
+    )
+    .expect("moved");
+    let twice = read("moved.gasm", "moved.ifc");
+    let mut high_x = f64::MIN;
+    let mut high_y = f64::MIN;
+    for line in twice.lines().filter(|l| l.contains("=IFCCARTESIANPOINTLIST3D(")) {
+        for point in line.split("((").nth(1).unwrap_or("").split("),(") {
+            let v: Vec<f64> = point
+                .trim_matches(|c| c == '(' || c == ')' || c == ';')
+                .split(',')
+                .filter_map(|n| n.parse().ok())
+                .collect();
+            if v.len() == 3 {
+                high_x = high_x.max(v[0]);
+                high_y = high_y.max(v[1]);
+            }
+        }
+    }
+    assert!((20000.0..20500.0).contains(&high_x), "max x {high_x}");
+    assert!((8000.0..8500.0).contains(&high_y), "max y {high_y}");
 }

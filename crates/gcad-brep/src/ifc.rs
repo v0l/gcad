@@ -1,6 +1,7 @@
 use crate::Model;
 use crate::arch::{Fill, Opening};
 use crate::geometry;
+use monstertruck::modeling::*;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 
@@ -148,6 +149,141 @@ impl Writer {
         self.add(format!("IFCSTYLEDITEM(#{item},(#{assignment}),$)"));
     }
 
+    fn extruded(&mut self, solid: &crate::Solid) -> Option<usize> {
+        let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
+        let (points, triangles) = geometry::welded(&mesh);
+        if triangles.is_empty() {
+            return None;
+        }
+        let eps = 1.0e-4;
+        let z0 = points.iter().map(|p| p.z).fold(f64::INFINITY, f64::min);
+        let z1 = points.iter().map(|p| p.z).fold(f64::NEG_INFINITY, f64::max);
+        if z1 - z0 < 1.0e-3 {
+            return None;
+        }
+        let mut edges: std::collections::BTreeMap<(usize, usize), usize> = Default::default();
+        let mut top = 0;
+        for [a, b, c] in &triangles {
+            let (p, q, r) = (points[*a], points[*b], points[*c]);
+            let (u, v) = (q - p, r - p);
+            let normal = u.cross(v);
+            let length = normal.magnitude();
+            if length < 1.0e-12 {
+                continue;
+            }
+            let nz = normal.z / length;
+            if nz.abs() < 1.0e-6 {
+                continue;
+            }
+            let heights = [p.z, q.z, r.z];
+            if nz < -1.0 + 1.0e-6 && heights.iter().all(|z| (z - z0).abs() < eps) {
+                for (s, t) in [(a, b), (b, c), (c, a)] {
+                    let key = if s < t { (*s, *t) } else { (*t, *s) };
+                    *edges.entry(key).or_default() += 1;
+                }
+            } else if nz > 1.0 - 1.0e-6 && heights.iter().all(|z| (z - z1).abs() < eps) {
+                top += 1;
+            } else {
+                return None;
+            }
+        }
+        if top == 0 || edges.is_empty() {
+            return None;
+        }
+        let mut next: std::collections::BTreeMap<usize, Vec<usize>> = Default::default();
+        for ((a, b), n) in &edges {
+            if *n == 1 {
+                next.entry(*a).or_default().push(*b);
+                next.entry(*b).or_default().push(*a);
+            }
+        }
+        if next.values().any(|n| n.len() != 2) {
+            return None;
+        }
+        let mut loops: Vec<Vec<usize>> = Vec::new();
+        let mut seen: std::collections::BTreeSet<usize> = Default::default();
+        for start in next.keys().copied().collect::<Vec<_>>() {
+            if seen.contains(&start) {
+                continue;
+            }
+            let mut ring = vec![start];
+            seen.insert(start);
+            let mut previous = start;
+            let mut at = next[&start][0];
+            while at != start {
+                ring.push(at);
+                seen.insert(at);
+                let options = &next[&at];
+                let following = if options[0] == previous { options[1] } else { options[0] };
+                previous = at;
+                at = following;
+            }
+            loops.push(ring);
+        }
+        let area = |ring: &[usize]| {
+            (0..ring.len())
+                .map(|k| {
+                    let (p, q) = (points[ring[k]], points[ring[(k + 1) % ring.len()]]);
+                    p.x * q.y - q.x * p.y
+                })
+                .sum::<f64>()
+                / 2.0
+        };
+        let outer = (0..loops.len()).max_by(|a, b| area(&loops[*a]).abs().total_cmp(&area(&loops[*b]).abs()))?;
+        let inside = |ring: &[usize], point: Point3| {
+            let mut hit = false;
+            for k in 0..ring.len() {
+                let (p, q) = (points[ring[k]], points[ring[(k + 1) % ring.len()]]);
+                if (p.y > point.y) != (q.y > point.y)
+                    && point.x < (q.x - p.x) * (point.y - p.y) / (q.y - p.y) + p.x
+                {
+                    hit = !hit;
+                }
+            }
+            hit
+        };
+        for (k, ring) in loops.iter().enumerate() {
+            if k != outer && !inside(&loops[outer], points[ring[0]]) {
+                return None;
+            }
+        }
+        let mut curves = Vec::new();
+        for ring in &loops {
+            let mut ids: Vec<usize> = ring
+                .iter()
+                .map(|i| {
+                    let p = points[*i];
+                    self.add(format!("IFCCARTESIANPOINT(({},{}))", real(p.x), real(p.y)))
+                })
+                .collect();
+            ids.push(ids[0]);
+            curves.push(self.add(format!("IFCPOLYLINE({})", Writer::list(&ids))));
+        }
+        let outer_curve = curves[outer];
+        let holes: Vec<usize> = curves
+            .iter()
+            .enumerate()
+            .filter(|(k, _)| *k != outer)
+            .map(|(_, c)| *c)
+            .collect();
+        let profile = if holes.is_empty() {
+            self.add(format!("IFCARBITRARYCLOSEDPROFILEDEF(.AREA.,$,#{outer_curve})"))
+        } else {
+            let voids: Vec<usize> = holes.clone();
+            self.add(format!(
+                "IFCARBITRARYPROFILEDEFWITHVOIDS(.AREA.,$,#{outer_curve},{})",
+                Writer::list(&voids)
+            ))
+        };
+        let origin = self.point([0.0, 0.0, z0]);
+        let position = self.add(format!("IFCAXIS2PLACEMENT3D(#{origin},$,$)"));
+        let direction = self.add("IFCDIRECTION((0.,0.,1.))".into());
+        Some(self.add(format!(
+            "IFCEXTRUDEDAREASOLID(#{profile},#{position},#{direction},{})",
+            real(z1 - z0)
+        )))
+    }
+
     fn faceted(&mut self, solid: &crate::Solid) -> Option<usize> {
         let mesh = geometry::mesh(solid, geometry::mesh_tolerance(solid));
         let (points, triangles) = geometry::welded(&mesh);
@@ -235,8 +371,47 @@ pub fn write(model: &Model, project: &str) -> String {
         text(&project_name)
     ));
     let site_place = w.place(None, [0.0, 0.0, 0.0]);
+    let terrain_shape = {
+        let mut points: Vec<[f64; 3]> = Vec::new();
+        let mut index: std::collections::HashMap<[i64; 3], usize> = Default::default();
+        let mut faces: Vec<[usize; 3]> = Vec::new();
+        for terrain in &arch.terrains {
+            for t in &terrain.tris {
+                let ids = t.map(|p| {
+                    let key = p.map(|c| (c * 1000.0).round() as i64);
+                    *index.entry(key).or_insert_with(|| {
+                        points.push(p);
+                        points.len() - 1
+                    })
+                });
+                if ids[0] != ids[1] && ids[1] != ids[2] && ids[0] != ids[2] {
+                    faces.push(ids);
+                }
+            }
+        }
+        if faces.is_empty() {
+            "$".to_string()
+        } else {
+            let coordinates = points
+                .iter()
+                .map(|p| format!("({},{},{})", real(p[0]), real(p[1]), real(p[2])))
+                .collect::<Vec<_>>()
+                .join(",");
+            let list = w.add(format!("IFCCARTESIANPOINTLIST3D(({coordinates}))"));
+            let indices = faces
+                .iter()
+                .map(|[a, b, c]| format!("({},{},{})", a + 1, b + 1, c + 1))
+                .collect::<Vec<_>>()
+                .join(",");
+            let set = w.add(format!("IFCTRIANGULATEDFACESET(#{list},$,.T.,({indices}),$)"));
+            let shape = w.add(format!(
+                "IFCSHAPEREPRESENTATION(#{context},'Body','Tessellation',(#{set}))"
+            ));
+            format!("#{}", w.add(format!("IFCPRODUCTDEFINITIONSHAPE($,$,(#{shape}))")))
+        }
+    };
     let site = w.add(format!(
-        "IFCSITE('{}',$,'Site',$,$,#{site_place},$,$,.ELEMENT.,$,$,$,$,$)",
+        "IFCSITE('{}',$,'Site',$,$,#{site_place},{terrain_shape},$,.ELEMENT.,$,$,$,$,$)",
         global_id("site", "site")
     ));
     let building_place = w.place(Some(site_place), [0.0, 0.0, building.datum]);
@@ -286,11 +461,19 @@ pub fn write(model: &Model, project: &str) -> String {
 
     let mut represent = |w: &mut Writer, bodies: &[String]| -> (String, f64) {
         let mut items = Vec::new();
+        let mut swept = true;
         let mut low = f64::INFINITY;
         for name in bodies {
             if let Some((_, solid)) = body_of(name) {
                 low = low.min(geometry::bounds(solid).min().z);
-                if let Some(item) = w.faceted(solid) {
+                let item = match w.extruded(solid) {
+                    Some(item) => Some(item),
+                    None => {
+                        swept = false;
+                        w.faceted(solid)
+                    }
+                };
+                if let Some(item) = item {
                     if let Some(colour) = model.colours.get(name) {
                         w.style(item, *colour, model.opacities.get(name).copied());
                     }
@@ -301,8 +484,9 @@ pub fn write(model: &Model, project: &str) -> String {
         if items.is_empty() {
             return ("$".into(), if low.is_finite() { low } else { 0.0 });
         }
+        let kind = if swept { "SweptSolid" } else { "Tessellation" };
         let shape = w.add(format!(
-            "IFCSHAPEREPRESENTATION(#{context},'Body','Tessellation',{})",
+            "IFCSHAPEREPRESENTATION(#{context},'Body','{kind}',{})",
             Writer::list(&items)
         ));
         let definition = w.add(format!("IFCPRODUCTDEFINITIONSHAPE($,$,({}))", format!("#{shape}")));
@@ -422,6 +606,57 @@ pub fn write(model: &Model, project: &str) -> String {
                 };
                 w.pset(kind, &name, id, props);
             }
+            if class == "IFCCURTAINWALL" {
+                let mut low = [f64::INFINITY; 3];
+                let mut high = [f64::NEG_INFINITY; 3];
+                for body in &rest {
+                    if let Some((_, solid)) = body_of(body) {
+                        let b = geometry::bounds(solid);
+                        for (k, (lo, hi)) in [
+                            (b.min().x, b.max().x),
+                            (b.min().y, b.max().y),
+                            (b.min().z, b.max().z),
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        {
+                            low[k] = low[k].min(lo);
+                            high[k] = high[k].max(hi);
+                        }
+                    }
+                }
+                if low[0].is_finite() {
+                    let (dx, dy) = (high[0] - low[0], high[1] - low[1]);
+                    let height = high[2] - low[2];
+                    let length = dx.hypot(dy);
+                    let glass: f64 = rest
+                        .iter()
+                        .filter(|b| b.contains(".glass"))
+                        .filter_map(|b| body_of(b))
+                        .map(|(_, s)| geometry::bounds(s))
+                        .map(|b| (b.max().x - b.min().x).hypot(b.max().y - b.min().y) * (b.max().z - b.min().z))
+                        .sum();
+                    let mut quantity = |kind: &str, label: &str, value: f64| {
+                        w.add(format!("{kind}('{label}',$,$,{},$)", real(value)))
+                    };
+                    let quantities = [
+                        quantity("IFCQUANTITYLENGTH", "Length", length),
+                        quantity("IFCQUANTITYLENGTH", "Height", height),
+                        quantity("IFCQUANTITYAREA", "GrossSideArea", length * height),
+                        quantity("IFCQUANTITYAREA", "NetSideArea", glass),
+                    ];
+                    let set = w.add(format!(
+                        "IFCELEMENTQUANTITY('{}',$,'Qto_CurtainWallBaseQuantities',$,$,{})",
+                        global_id("quantities", &name),
+                        Writer::list(&quantities)
+                    ));
+                    w.rel(
+                        "IFCRELDEFINESBYPROPERTIES",
+                        &format!("{name}.quantities"),
+                        format!("(#{id}),#{set}"),
+                    );
+                }
+            }
             if !flights.is_empty() {
                 let mut ids = Vec::new();
                 for flight in &flights {
@@ -503,8 +738,65 @@ pub fn write(model: &Model, project: &str) -> String {
         w.pset(kind, &opening.name, filler, props);
     }
 
+    if !arch.grids.is_empty() {
+        let reach = |along_x: bool| {
+            let others: Vec<f64> = arch
+                .grids
+                .iter()
+                .filter(|g| g.along_x != along_x)
+                .map(|g| g.offset)
+                .collect();
+            let low = others.iter().copied().fold(f64::INFINITY, f64::min);
+            let high = others.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            if low.is_finite() {
+                (low - 1000.0, high + 1000.0)
+            } else {
+                (-1000.0, 1000.0)
+            }
+        };
+        let mut axes = [Vec::new(), Vec::new()];
+        for grid in &arch.grids {
+            let (from, to) = reach(grid.along_x);
+            let (a, b) = if grid.along_x {
+                ([grid.offset, from], [grid.offset, to])
+            } else {
+                ([from, grid.offset], [to, grid.offset])
+            };
+            let p = w.add(format!("IFCCARTESIANPOINT(({},{}))", real(a[0]), real(a[1])));
+            let q = w.add(format!("IFCCARTESIANPOINT(({},{}))", real(b[0]), real(b[1])));
+            let curve = w.add(format!("IFCPOLYLINE((#{p},#{q}))"));
+            let axis = w.add(format!(
+                "IFCGRIDAXIS({},#{curve},.T.)",
+                text(&grid.name)
+            ));
+            axes[usize::from(!grid.along_x)].push(axis);
+        }
+        let place = w.place(Some(building_place), [0.0, 0.0, 0.0]);
+        let id = w.add(format!(
+            "IFCGRID('{}',$,'Grid',$,$,#{place},$,{},{},$)",
+            global_id("IFCGRID", "grid"),
+            Writer::list(&axes[0]),
+            Writer::list(&axes[1])
+        ));
+        elements.push(Element {
+            id,
+            level: 0,
+            spatial: false,
+        });
+    }
+
     for room in &arch.rooms {
-        let place = w.place(Some(building_place), [room.rect[0], room.rect[1], room.level]);
+        let at = model
+            .assembly_instances
+            .iter()
+            .find(|i| i.name == room.instance)
+            .map_or([room.rect[0], room.rect[1], room.level], |i| {
+                let p = i
+                    .placement
+                    .transform_point(cgmath::Point3::new(room.rect[0], room.rect[1], room.level));
+                [p.x, p.y, p.z]
+            });
+        let place = w.place(Some(building_place), at);
         let id = w.add(format!(
             "IFCSPACE('{}',$,{},$,$,#{place},$,{},.ELEMENT.,.INTERNAL.,$)",
             global_id("IFCSPACE", &room.name),
@@ -516,10 +808,22 @@ pub fn write(model: &Model, project: &str) -> String {
             level: level_of(&levels, room.level),
             spatial: true,
         });
-        let props = vec![
+        let mut props = vec![
             w.property("Reference", &format!("IFCIDENTIFIER({})", text(&room.number))),
             w.property("Category", &format!("IFCLABEL({})", text(&room.floor))),
+            w.property("IsExternal", "IFCBOOLEAN(.F.)"),
+            w.property(
+                "GrossPlannedArea",
+                &format!("IFCAREAMEASURE({})", real(room.area())),
+            ),
+            w.property(
+                "NetPlannedArea",
+                &format!("IFCAREAMEASURE({})", real(room.area())),
+            ),
         ];
+        if !room.fire.is_empty() {
+            props.push(w.property("FireRating", &format!("IFCLABEL({})", text(&room.fire))));
+        }
         w.pset("Pset_SpaceCommon", &room.name, id, props);
         let mut quantity = |kind: &str, name: &str, value: f64| {
             w.add(format!("{kind}('{name}',$,$,{},$)", real(value)))

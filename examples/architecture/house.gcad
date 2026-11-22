@@ -38,3 +38,16 @@ chimney1: chimney 8000,5200 w=700 d=600 up_to=roof1 over=900 material=brick
 living: room at=2500,2000 name="Living" floor=oak ceiling=plaster wall=paint
 kitchen: room at=2500,6000 name="Kitchen" floor=tile ceiling=plaster wall=paint
 zone day living kitchen
+t1: terrain grid 30000x25000 slope=0.05,0 at=-10000,-8000 depth=1000
+p1: pad outer level=L0-150 offset=150
+cut_fill t1 p1
+site_boundary -10000,-8000 20000,-8000 20000,17000 -10000,17000 setback=3000
+drive: road 5000,-8000 5000,-300 width=3500 type=asphalt:100
+oak: tree -6000,2000 h=7000 spread=5000
+sun lat=53.3 date=21-06 time=15:00
+check uvalue outer
+check heatloss outer dt=20
+check stairs min_width=900
+check doors clear=775 warn
+check daylight min=0.02
+check shadow outer

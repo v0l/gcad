@@ -421,9 +421,28 @@ impl Model {
             Condition::Concentric,
             transform,
         )?;
+        let title = |name: &str| {
+            self.sources
+                .get(name)
+                .and_then(|source| source.file.to_str())
+                .map(str::to_string)
+        };
+        let warnings: Vec<String> = [
+            title(&part).and_then(|t| super::spec_check::narrow_hole(&t, own.radius, target.radius)),
+            title(&part).and_then(|t| super::bearing_check::bearing_seat(&t, own.radius, target.radius)),
+            title(&fixed).and_then(|t| super::bearing_check::bearing_seat(&t, target.radius, own.radius)),
+        ]
+        .into_iter()
+        .flatten()
+        .collect();
         Ok(format!(
-            "{said}; radius {:.3} in {:.3}",
-            own.radius, target.radius
+            "{said}; radius {:.3} in {:.3}{}",
+            own.radius,
+            target.radius,
+            warnings
+                .iter()
+                .map(|w| format!("; {w}"))
+                .collect::<String>()
         ))
     }
 

@@ -424,6 +424,11 @@ impl State {
                     }
                 }
             }
+            for r in &model.arch.references {
+                for ring in &r.rings {
+                    pts.extend(ring.iter().copied());
+                }
+            }
             pts
         };
         if pts.is_empty() {
@@ -512,6 +517,10 @@ impl State {
         marks.extend(self.opening_marks(&frame, cut_z));
         marks.extend(self.stair_marks(&frame, level_z, cut_z));
         marks.extend(self.slab_edges(&frame, level_z));
+        marks.extend(self.reference_marks(&frame, level_z));
+        if let Some(interval) = named(line, "contours").and_then(|t| t.parse::<f64>().ok()) {
+            marks.extend(self.contour_marks(&frame, interval));
+        }
         if named(line, "grids").is_none_or(|t| t != "0") {
             marks.extend(self.grid_marks(&frame));
         }
@@ -815,6 +824,31 @@ impl State {
         marks
     }
 
+    fn reference_marks(&self, frame: &Frame, level_z: f64) -> Vec<Mark> {
+        let Ok(model) = self.model() else {
+            return Vec::new();
+        };
+        let (lo, hi) = (level_z - 100.0, level_z + 4000.0);
+        model
+            .arch
+            .references
+            .iter()
+            .filter(|r| r.z >= lo && r.z < hi)
+            .map(|r| {
+                let loops = r
+                    .rings
+                    .iter()
+                    .map(|ring| ring.iter().map(|p| frame.paper(*p)).collect())
+                    .collect();
+                group(
+                    "reference",
+                    vec![("reference", r.name.clone()), ("kind", r.class.clone())],
+                    vec![stroke(loops, false, HIDDEN_WEIGHT, true)],
+                )
+            })
+            .collect()
+    }
+
     fn slab_edges(&self, frame: &Frame, level_z: f64) -> Vec<Mark> {
         let Ok(model) = self.model() else {
             return Vec::new();
@@ -840,6 +874,23 @@ impl State {
                     "slab",
                     vec![("slab", s.name.clone()), ("layer", "A-FLOR".into())],
                     vec![stroke(rings, true, HIDDEN_WEIGHT, true)],
+                )
+            })
+            .collect()
+    }
+
+    pub(super) fn contour_marks(&self, frame: &Frame, interval: f64) -> Vec<Mark> {
+        let Ok(model) = self.model() else {
+            return Vec::new();
+        };
+        model
+            .contour_segments(interval)
+            .into_iter()
+            .map(|(level, a, b)| {
+                group(
+                    "contour",
+                    vec![("level", format!("{level}")), ("layer", "A-SITE".into())],
+                    vec![stroke(vec![vec![frame.paper(a), frame.paper(b)]], false, HIDDEN_WEIGHT, false)],
                 )
             })
             .collect()

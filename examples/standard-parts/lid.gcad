@@ -1,0 +1,7 @@
+let d=40
+rect 60 60
+base: extrude 8
+material aluminium
+plane base.end
+seal: oring_groove face d depth=1.96 width=3.53
+screws: hole M4 -24,-24 24,-24 24,24 -24,24

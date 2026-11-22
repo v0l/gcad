@@ -14,6 +14,7 @@ const SILHOUETTE: [f64; 3] = [40.0, 44.0, 52.0];
 const OVERLAY: f64 = 1.0e300;
 const EDGE_WIDTH: f64 = 1.1;
 const SMOOTH_ANGLE_COS: f64 = 0.8;
+const SHADE: f64 = 0.45;
 
 struct View {
     right: Vector3,
@@ -51,8 +52,10 @@ struct Light {
 }
 
 impl Light {
-    fn new(view: &View, floor: f64) -> Light {
-        let key = (view.toward_eye * 0.6 + view.up * 0.5 - view.right * 0.35).normalize();
+    fn new(view: &View, floor: f64, sun: Option<Vector3>) -> Light {
+        let key = sun.unwrap_or_else(|| {
+            (view.toward_eye * 0.6 + view.up * 0.5 - view.right * 0.35).normalize()
+        });
         Light {
             toward_eye: view.toward_eye,
             up: view.up,
@@ -307,6 +310,22 @@ type ColouredMesh = (
     Vec<Shine>,
 );
 
+pub fn render_with_sun(
+    parts: &[(&Solid, Option<[f64; 3]>)],
+    meshes: &[ColouredMesh],
+    toward_sun: [f64; 3],
+    path: &str,
+) -> Result<()> {
+    let gathered = Gathered::new(parts, meshes);
+    let sun = Vector3::new(toward_sun[0], toward_sun[1], toward_sun[2]).normalize();
+    let corners: Vec<[usize; 3]> = gathered.triangles.iter().map(|(c, _)| *c).collect();
+    let map = crate::shadow::ShadowMap::new(&gathered.positions, &corners, sun);
+    let (mut scene, bounds) = gathered.scene();
+    scene.sun = Some((sun, &map));
+    draw_lit(&scene, bounds).save(path)?;
+    Ok(())
+}
+
 pub fn render_with_meshes(
     parts: &[(&Solid, Option<[f64; 3]>)],
     meshes: &[ColouredMesh],
@@ -496,6 +515,7 @@ impl Gathered {
             edges_on_surface: true,
             shine: &self.shine,
             outline: self.outline,
+            sun: None,
         };
         (scene, self.bounds())
     }
@@ -594,6 +614,7 @@ fn draw_smooth(
         edges_on_surface: false,
         shine: &[],
         outline: true,
+        sun: None,
     };
     draw_lit(&scene, bounds)
 }
@@ -608,6 +629,7 @@ struct Scene<'a> {
     edges_on_surface: bool,
     shine: &'a [Shine],
     outline: bool,
+    sun: Option<(Vector3, &'a crate::shadow::ShadowMap)>,
 }
 
 fn draw_view(scene: &Scene, view: &View, center: Vector3) -> Canvas {
@@ -652,7 +674,7 @@ fn draw_view_framed(scene: &Scene, view: &View, center: Vector3, parts: f64) -> 
             z,
         )
     };
-    let light = Light::new(view, scene.floor);
+    let light = Light::new(view, scene.floor, scene.sun.map(|s| s.0));
     let mut canvas = Canvas::new();
     for (k, ((corners, tints), normals)) in scene.triangles.iter().zip(scene.normals).enumerate() {
         let Some(flat) = face_normal(positions, *corners) else {
@@ -670,6 +692,22 @@ fn draw_view_framed(scene: &Scene, view: &View, center: Vector3, parts: f64) -> 
             scene.shine.get(k).copied().unwrap_or_default(),
             &light,
         );
+    }
+    if let Some((_, map)) = scene.sun {
+        for index in 0..SIDE * SIDE {
+            let z = canvas.depth[index];
+            if z == f64::NEG_INFINITY {
+                continue;
+            }
+            let (x, y) = ((index % SIDE) as f64 + 0.5, (index / SIDE) as f64 + 0.5);
+            let v = view.right * ((x - SIDE as f64 / 2.0) / scale)
+                + view.up * ((SIDE as f64 / 2.0 - y) / scale)
+                + view.toward_eye * z;
+            let world = Point3::from_vec(v + center);
+            if !map.lit(world) {
+                canvas.colour[index] = canvas.colour[index].map(|c| c * SHADE);
+            }
+        }
     }
     if scene.outline {
         canvas.silhouettes(1.0 / scale);

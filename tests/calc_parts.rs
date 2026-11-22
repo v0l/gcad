@@ -28,6 +28,193 @@ fn volume(text: &str, name: &str) -> f64 {
 }
 
 #[test]
+fn a_screw_of_a_non_standard_length_is_warned_about() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_length_warning"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("top.gasm");
+    std::fs::write(&file, "part a iso4762:M6x25\npart b iso4762:M6x27\n").expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(!lines[0].contains("warning"), "{text}");
+    assert!(
+        lines[1].contains("warning: 27 mm is not a standard length"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_screw_through_a_hole_under_its_tap_drill_is_warned_about() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_narrow_hole"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("plate.gcad"),
+        "rect 40 30\nbase: extrude 8\nplane base.end\nh: hole 4 0,0\nk: hole 6.6 10,0\n",
+    )
+    .expect("plate");
+    let file = dir.join("top.gasm");
+    std::fs::write(
+        &file,
+        "part plate plate.gcad\npart s iso4762:M6x25\nconcentric s:shank.side plate:h.side near=0,0,8\n",
+    )
+    .expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    assert!(
+        text.contains("warning: the 4.00 mm hole is narrower than the 5.00 mm tap drill of M6"),
+        "{text}"
+    );
+    std::fs::write(
+        &file,
+        "part plate plate.gcad\npart s iso4762:M6x25\nconcentric s:shank.side plate:k.side near=10,0,8\n",
+    )
+    .expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok && !text.contains("warning"), "{text}");
+}
+
+#[test]
+fn an_unknown_standard_or_a_missing_nut_size_is_refused_on_the_part_line() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_unknown"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("top.gasm");
+    for (line, needle) in [
+        ("part s iso4763:M6x25", "unknown standard part `iso4763`"),
+        ("part n iso4032:M14", "M14 is not in the table"),
+        ("part w iso7089:M7", "unknown thread `M7`"),
+    ] {
+        std::fs::write(&file, format!("{line}\n")).expect("write");
+        let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+        assert!(!ok && text.contains(needle), "{line}: {text}");
+    }
+}
+
+fn seat_check(name: &str, shaft: &str, housing: &str) -> String {
+    let dir = std::path::PathBuf::from(common::scratch(name));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join("shaft.gcad"), format!("circle {shaft}\nshaft: extrude 30\n")).expect("shaft");
+    std::fs::write(
+        dir.join("housing.gcad"),
+        format!("rect 80 80\nbase: extrude 20\nplane base.end\ncircle {housing}\nbore: cut thru\n"),
+    )
+    .expect("housing");
+    let file = dir.join("top.gasm");
+    std::fs::write(
+        &file,
+        "part shaft shaft.gcad\npart housing housing.gcad\npart b bearing:6205\nconcentric b:bore.side shaft:shaft.side\nmove b 0,0,0\n",
+    )
+    .expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    text
+}
+
+#[test]
+fn a_shaft_that_does_not_fit_the_bearing_bore_is_warned_about() {
+    let loose = seat_check("calc_parts_seat_loose", "24", "52");
+    assert!(loose.contains("warning: the 24.000 mm shaft for 6205"), "{loose}");
+    let good = seat_check("calc_parts_seat_good", "25.01", "52");
+    assert!(!good.contains("mm shaft for 6205"), "{good}");
+}
+
+fn shoulder_check(name: &str, collar: &str) -> String {
+    let dir = std::path::PathBuf::from(common::scratch(name));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("shaft.gcad"),
+        format!("circle {collar}\ncollar: extrude -6\nplane XY\ncircle 25\nshaft: extrude 40\n"),
+    )
+    .expect("shaft");
+    let file = dir.join("top.gasm");
+    std::fs::write(&file, "part shaft shaft.gcad\npart b bearing:6205\n").expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    text
+}
+
+#[test]
+fn a_bearing_seat_without_a_shoulder_is_warned_about() {
+    let none = shoulder_check("calc_parts_no_shoulder", "25");
+    assert!(none.contains("warning: bearing b sits on `shaft` with no shoulder"), "{none}");
+    let low = shoulder_check("calc_parts_low_shoulder", "27");
+    assert!(low.contains("shoulder for bearing b on `shaft` is 27.0 mm across"), "{low}");
+    let good = shoulder_check("calc_parts_good_shoulder", "32");
+    assert!(!good.contains("warning"), "{good}");
+}
+
+#[test]
+fn a_thread_shorter_than_the_material_needs_is_warned_about() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_engagement"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("block.gcad");
+    let block = |height: u32, material: &str| {
+        std::fs::write(
+            &file,
+            format!("rect 30 30\nbase: extrude {height}\nmaterial {material}\nplane base.end\nh: hole 5 0,0 thread=M6\nthread M6 on=h.side\n"),
+        )
+        .expect("write");
+        gcad(&["check", file.to_str().expect("path")])
+    };
+    let (ok, text) = block(8, "aluminium");
+    assert!(ok && text.contains("of M6 thread in aluminium is under the 12.0 mm minimum engagement"), "{text}");
+    let (ok, text) = block(8, "steel");
+    assert!(ok && !text.contains("warning"), "{text}");
+    let (ok, text) = block(8, "petg");
+    assert!(ok && text.contains("in petg is under"), "{text}");
+    let (ok, text) = block(14, "aluminium");
+    assert!(ok && !text.contains("warning"), "{text}");
+}
+
+#[test]
+fn a_hand_sized_oring_groove_is_scored_against_the_calculator() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_groove"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("lid.gcad");
+    let lid = |groove: &str| {
+        std::fs::write(
+            &file,
+            format!("circle 80\nbase: extrude 10\nplane base.end\nseal: oring_groove face 40 {groove}\n"),
+        )
+        .expect("write");
+        gcad(&["check", file.to_str().expect("path")])
+    };
+    let (ok, text) = lid("depth=1.96 width=3.53");
+    assert!(ok && !text.contains("warning"), "{text}");
+    let (ok, text) = lid("depth=2.6 width=3.53");
+    assert!(ok && text.contains("warning: ISO 3601 40x2.65 2.60 deep x 3.53 wide groove: no squeeze"), "{text}");
+    let (ok, text) = lid("depth=1.2 width=3.53");
+    assert!(ok && text.contains("squeeze") && text.contains("warning"), "{text}");
+    let (ok, text) = lid("depth=1.96 width=2.8");
+    assert!(ok && text.contains("gland fill"), "{text}");
+}
+
+#[test]
+fn strict_turns_warnings_into_a_failure() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_strict"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("top.gasm");
+    std::fs::write(&file, "part s iso4762:M6x27\n").expect("write");
+    let path = file.to_str().expect("path");
+    let (ok, text) = gcad(&["check", path]);
+    assert!(ok && text.contains("warning:"), "{text}");
+    let (ok, text) = gcad(&["check", path, "--strict"]);
+    assert!(!ok && text.contains("1 warning(s) in strict mode"), "{text}");
+    std::fs::write(&file, "part s iso4762:M6x25\n").expect("write");
+    let (ok, text) = gcad(&["check", path, "--strict"]);
+    assert!(ok, "{text}");
+}
+
+#[test]
+fn the_standard_part_examples_check_clean_in_strict_mode() {
+    let root = env!("CARGO_MANIFEST_DIR");
+    for name in ["lid.gasm", "flange.gcad", "shaft.gasm"] {
+        let path = format!("{root}/examples/standard-parts/{name}");
+        let (ok, text) = gcad(&["check", &path, "--strict"]);
+        assert!(ok && !text.contains("warning:"), "{name}: {text}");
+    }
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));

@@ -739,6 +739,20 @@ impl Model {
         let path = if super::standard::is_standard(file) {
             std::path::PathBuf::from(file)
         } else {
+            if let Some((kind, _)) = file.split_once(':')
+                && !kind.is_empty()
+                && !kind.contains(['/', '\\', '.'])
+            {
+                bail!(
+                    "unknown standard part `{kind}` in `{file}`; known: {}",
+                    crate::calc::parts::KINDS
+                        .iter()
+                        .map(|k| k.name)
+                        .chain(super::standard::KINDS.iter().map(|k| k.0))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
             self.relative(file)
         };
         let vars = line
@@ -943,6 +957,7 @@ impl Model {
             self.bodies.push((new.clone(), solid));
             added.push(new);
         }
+        self.arch.absorb(&loaded.arch, &picked, &rename, name);
         self.assembly_instances.push(AssemblyInstance {
             name: name.clone(),
             placement: Matrix4::identity(),
@@ -1021,6 +1036,11 @@ impl Model {
         };
         let boxes: usize = reasons.iter().map(|(_, n)| n).sum();
         let mut summary = format!("{listed} from {}", path.display());
+        if let Some(spec) = path.to_str().filter(|t| super::standard::is_standard(t)) {
+            for warning in super::spec_check::spec_warnings(spec) {
+                summary += &format!("; {warning}");
+            }
+        }
         if boxes > 0 {
             let why: Vec<String> = reasons.iter().map(|(r, n)| format!("{n} {r}")).collect();
             summary += &format!(

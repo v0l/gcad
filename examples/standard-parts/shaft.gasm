@@ -1,0 +1,3 @@
+part shaft shaft.gcad
+part b bearing:6205
+concentric b:bore.side shaft:shaft.side
