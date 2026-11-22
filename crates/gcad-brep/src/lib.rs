@@ -17,6 +17,7 @@ mod features;
 mod fuse;
 pub mod glb;
 mod holes;
+pub mod ifc;
 mod import;
 pub mod mate;
 pub mod materials;
@@ -853,7 +854,14 @@ impl Model {
                 self.sketch.len()
             ));
         }
-        self.apply_op(line)
+        let done = self.apply_op(line)?;
+        if let Some(label) = &line.label
+            && arch::IFC_OPS.contains(&line.op.as_str())
+        {
+            self.arch.classes.retain(|(name, _)| name != label);
+            self.arch.classes.push((label.clone(), line.op.clone()));
+        }
+        Ok(done)
     }
 
     fn apply_op(&mut self, line: &Line) -> Result<String> {
