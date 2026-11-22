@@ -2102,7 +2102,6 @@ fn mesh_wall_matches_the_kernel() {
 }
 
 #[test]
-#[ignore = "missing: mesh house for games"]
 fn mesh_house_within_budget() {
     let source = with(
         "s1: slab L1 A1 B1 B2 A2 type=concrete:200\nr1: roof outer type=hip pitch=35 overhang=300 thickness=200 base=L1\nst1: stair from=L0 to=L1 at=1000,1000 dir=0 width=900",

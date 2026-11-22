@@ -1,3 +1,5 @@
+use crate::arch::roof;
+use crate::arch::stair::{StairRule, check, flight_profile, steps};
 use crate::arch::layout::{dot, signed_area, sub};
 use crate::arch::{Chain, Justify, Layer, P2, WallLine, bands, end_cut};
 use crate::interp::Scene;
@@ -8,8 +10,11 @@ use anyhow::{Context, Result, anyhow, bail};
 use std::sync::Arc;
 
 pub const OPS: &[&str] = &[
-    "units", "building", "grid", "wall_type", "wall", "door", "window", "opening",
+    "units", "building", "grid", "wall_type", "wall", "door", "window", "opening", "slab",
+    "roof", "stair",
 ];
+
+const STAIR_WAIST: f64 = 150.0;
 
 pub fn handles(line: &Line) -> bool {
     match line.op.as_str() {
@@ -174,6 +179,9 @@ impl ArchOps {
             "wall_type" => self.wall_type(scope, line),
             "wall" => self.wall(scope, line),
             "door" | "window" | "opening" => self.opening(scope, line),
+            "slab" => self.slab(scope, line),
+            "roof" => self.roof(scope, line),
+            "stair" => self.stair(scope, line),
             other => bail!("`{other}` is not a building operation"),
         }
     }
@@ -358,6 +366,181 @@ impl ArchOps {
             bail!("`{}` reaches above the top of `{}`", o.name, wall.name);
         }
         self.openings.push(o);
+        Ok(())
+    }
+
+    fn free(&self, name: &str) -> Result<()> {
+        if self.walls.iter().any(|w| w.name == name) || self.done.iter().any(|(n, _)| n == name) {
+            bail!("there is already something called `{name}`");
+        }
+        Ok(())
+    }
+
+    fn slab(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let name = line
+            .label
+            .clone()
+            .ok_or_else(|| anyhow!("a slab needs a label, like `s1: slab L1 A1 B1 B2 A2 type=concrete:200`"))?;
+        self.free(&name)?;
+        let [level, points @ ..] = line.positional.as_slice() else {
+            bail!("write `s1: slab L1 A1 B1 B2 A2 type=concrete:200`");
+        };
+        let top = eval(level, scope).with_context(|| format!("the slab level `{level}`"))?;
+        let ring = points
+            .iter()
+            .map(|p| self.plan_point(p, scope))
+            .collect::<Result<Vec<_>>>()?;
+        if ring.len() < 3 || signed_area(&ring).abs() < 1.0e-6 {
+            bail!("an outline needs three or more points around an area");
+        }
+        let mut layers = None;
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "type" => {
+                    let words: Vec<&str> = text.split('+').collect();
+                    layers = Some(self.layers(scope, &words)?)
+                }
+                other => bail!("gcad-mesh `slab` takes type=, not `{other}=`"),
+            }
+        }
+        let layers = layers.ok_or_else(|| anyhow!("a slab needs `type=concrete:200`"))?;
+        let total: f64 = layers.iter().map(|l| l.thickness).sum();
+        let mut mesh = Mesh::default();
+        let mut at = top - total;
+        for layer in &layers {
+            let part = mesh.part_index(&layer.material);
+            column_box(&mut mesh, part, &ring, at, at + layer.thickness);
+            at += layer.thickness;
+        }
+        self.done.push((name, mesh));
+        Ok(())
+    }
+
+    fn roof(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let name = line
+            .label
+            .clone()
+            .ok_or_else(|| anyhow!("a roof needs a label"))?;
+        self.free(&name)?;
+        let outline = match line.positional.as_slice() {
+            [host] if self.walls.iter().any(|w| w.name == *host) => {
+                let wall = self.walls.iter().find(|w| w.name == *host).expect("a wall");
+                if !wall.chain.closed {
+                    bail!("`{host}` is not a closed loop of walls");
+                }
+                let (lo, hi) = wall.span();
+                let ring = |d: f64| -> Vec<P2> {
+                    wall.chain.offset(d, None, None).into_iter().map(|(p, _)| p).collect()
+                };
+                let (a, b) = (ring(lo), ring(hi));
+                if signed_area(&a).abs() > signed_area(&b).abs() { a } else { b }
+            }
+            [points @ .., last] if last == "closed" => points
+                .iter()
+                .map(|p| self.plan_point(p, scope))
+                .collect::<Result<Vec<_>>>()?,
+            _ => bail!("write `r1: roof outer type=gable pitch=45` or `r1: roof x,y x,y x,y closed ...`"),
+        };
+        let outline = roof::ccw_ring(outline);
+        let (mut kind, mut pitch, mut overhang, mut thickness, mut base) =
+            (String::new(), f64::NAN, 0.0, 200.0, f64::NAN);
+        let mut material = "clay-tile".to_string();
+        let mut ridge = None;
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "type" => kind = text.clone(),
+                "pitch" => pitch = number(text, scope, key)?,
+                "overhang" => overhang = number(text, scope, key)?,
+                "thickness" => thickness = number(text, scope, key)?,
+                "base" => base = number(text, scope, key)?,
+                "material" => material = text.clone(),
+                "ridge" => {
+                    ridge = Some(match text.as_str() {
+                        "x" => (1.0, 0.0),
+                        "y" => (0.0, 1.0),
+                        other => bail!("ridge is x or y, not `{other}`"),
+                    })
+                }
+                other => bail!("gcad-mesh `roof` takes type=, pitch=, overhang=, thickness=, base=, ridge= and material=, not `{other}=`"),
+            }
+        }
+        if !roof::ROOF_KINDS.contains(&kind.as_str()) {
+            bail!("a roof needs `type=`, one of {}", roof::ROOF_KINDS.join(", "));
+        }
+        if base.is_nan() {
+            bail!("a roof needs `base=`, the level of its eaves");
+        }
+        if kind == "flat" && pitch.is_nan() {
+            pitch = 0.0;
+        } else if !(pitch > 0.0 && pitch < 90.0) {
+            bail!("a {kind} roof needs `pitch=` above 0 and under 90");
+        }
+        if !(thickness > 0.0) || overhang < 0.0 {
+            bail!("a roof's thickness must be above zero and its overhang not below zero");
+        }
+        let ridge = ridge.unwrap_or_else(|| roof::longest_edge(&outline));
+        let planes = roof::roof_planes(&kind, &outline, base, &vec![pitch; outline.len()], ridge)
+            .map_err(|e| anyhow!(e))?;
+        let eaves = roof::offset_ring(&outline, overhang);
+        let shell = roof::holed_shell(&eaves, &planes, thickness, &[]).map_err(|e| anyhow!(e))?;
+        let mut mesh = Mesh::default();
+        let part = mesh.part_index(&material);
+        let ids: Vec<u32> = shell.points.iter().map(|&p| push(&mut mesh, part, p)).collect();
+        let first = mesh.triangles.len();
+        for face in &shell.faces {
+            for k in 1..face.len() - 1 {
+                mesh.triangles.push([ids[face[0]], ids[face[k]], ids[face[k + 1]]]);
+            }
+        }
+        orient(&mut mesh, first);
+        self.done.push((name, mesh));
+        Ok(())
+    }
+
+    fn stair(&mut self, scope: &Scope, line: &Line) -> Result<()> {
+        let name = line
+            .label
+            .clone()
+            .ok_or_else(|| anyhow!("a stair needs a label"))?;
+        self.free(&name)?;
+        let (mut from, mut to, mut at, mut dir, mut width) = (f64::NAN, f64::NAN, None, 0.0, 900.0);
+        let mut rule = StairRule::default();
+        let (mut risers, mut tread) = (None, None);
+        let mut material = "oak".to_string();
+        for (key, text) in &line.named {
+            match key.as_str() {
+                "from" => from = number(text, scope, key)?,
+                "to" => to = number(text, scope, key)?,
+                "at" => at = Some(eval_point(text, scope)?),
+                "dir" => dir = number(text, scope, key)?,
+                "width" => width = number(text, scope, key)?,
+                "max_rise" => rule.max_rise = number(text, scope, key)?,
+                "min_tread" => rule.min_tread = number(text, scope, key)?,
+                "risers" => risers = Some(number(text, scope, key)? as usize),
+                "tread" if text != "auto" => tread = Some(number(text, scope, key)?),
+                "tread" => {}
+                "material" => material = text.clone(),
+                "shape" if text == "straight" => {}
+                other => bail!("gcad-mesh `stair` takes from=, to=, at=, dir=, width=, risers=, tread=, max_rise=, min_tread= and material= for a straight flight, not `{other}=`"),
+            }
+        }
+        if from.is_nan() || to.is_nan() {
+            bail!("a stair needs `from=` and `to=`");
+        }
+        let at = at.ok_or_else(|| anyhow!("a stair needs `at=x,y`"))?;
+        if width <= 0.0 {
+            bail!("a stair width must be above zero");
+        }
+        let s = steps(to - from, &rule, risers, tread).map_err(|e| anyhow!(e))?;
+        check(&s, &rule).map_err(|e| anyhow!(e))?;
+        let profile = flight_profile(&s, s.treads(), 0.0, STAIR_WAIST);
+        let (sin, cos) = dir.to_radians().sin_cos();
+        let mut mesh = Mesh::default();
+        let part = mesh.part_index(&material);
+        extrude(&mut mesh, part, &profile, &[], (0.0, width), &|p, u| {
+            [at.0 + cos * p.0 - sin * u, at.1 + sin * p.0 + cos * u, from + p.1]
+        });
+        self.done.push((name, mesh));
         Ok(())
     }
 
