@@ -1960,7 +1960,6 @@ fn terrain_from_points() {
 }
 
 #[test]
-#[ignore = "missing: pads and cut and fill"]
 fn cut_and_fill_of_a_pad() {
     let text = summary(
         "t1: terrain grid 20000x20000 slope=0.1,0 at=0,0 depth=1000\np1: pad 5000,5000 15000,5000 15000,15000 5000,15000 level=1000\ncut_fill t1 p1",
@@ -1971,7 +1970,6 @@ fn cut_and_fill_of_a_pad() {
 }
 
 #[test]
-#[ignore = "missing: site boundary"]
 fn site_boundary_area_and_setback() {
     let text = summary("site_boundary 0,0 30000,0 30000,20000 0,20000 setback=3000");
     assert!(text.contains("area 600.00 m²"), "{text}");
@@ -1985,7 +1983,6 @@ fn site_boundary_area_and_setback() {
 }
 
 #[test]
-#[ignore = "missing: roads, retaining walls and trees"]
 fn site_elements() {
     let model = build(
         "rd: road 0,0 20000,0 width=3500 type=asphalt:100\nrw: retaining 0,5000 20000,5000 h=1200 t=250\ntr: tree 5000,8000 h=6000 spread=4000",

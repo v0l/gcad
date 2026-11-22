@@ -707,6 +707,12 @@ pub const OPERATIONS: &[&str] = &[
     "parapet",
     "fur",
     "terrain",
+    "pad",
+    "cut_fill",
+    "site_boundary",
+    "road",
+    "retaining",
+    "tree",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -1009,6 +1015,12 @@ impl Model {
             "wall_cut" => self.op_wall_cut(line),
             "opening" | "door" | "window" | "garage_door" => self.op_opening(line),
             "terrain" => self.op_terrain(line),
+            "pad" => self.op_pad(line),
+            "cut_fill" => self.op_cut_fill(line),
+            "site_boundary" => self.op_site_boundary(line),
+            "road" => self.op_road(line),
+            "retaining" => self.op_retaining(line),
+            "tree" => self.op_tree(line),
             "slab" => self.op_slab(line),
             "slab_opening" => self.op_slab_opening(line),
             "foundation" => self.op_foundation(line),

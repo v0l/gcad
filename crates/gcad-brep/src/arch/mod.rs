@@ -237,8 +237,23 @@ pub struct Terrain {
     pub depth: f64,
 }
 
+#[derive(Clone, Debug)]
+pub struct Pad {
+    pub name: String,
+    pub ring: Vec<gcad_mesh::arch::P2>,
+    pub level: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct SiteBoundary {
+    pub ring: Vec<gcad_mesh::arch::P2>,
+    pub setback: f64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Arch {
+    pub pads: Vec<Pad>,
+    pub sites: Vec<SiteBoundary>,
     pub terrains: Vec<Terrain>,
     pub units: Option<String>,
     pub building: Option<Building>,
