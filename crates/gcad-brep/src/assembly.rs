@@ -1021,6 +1021,11 @@ impl Model {
         };
         let boxes: usize = reasons.iter().map(|(_, n)| n).sum();
         let mut summary = format!("{listed} from {}", path.display());
+        if let Some(spec) = path.to_str().filter(|t| super::standard::is_standard(t)) {
+            for warning in super::spec_check::spec_warnings(spec) {
+                summary += &format!("; {warning}");
+            }
+        }
         if boxes > 0 {
             let why: Vec<String> = reasons.iter().map(|(r, n)| format!("{n} {r}")).collect();
             summary += &format!(

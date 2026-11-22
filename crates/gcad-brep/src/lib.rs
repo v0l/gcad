@@ -36,6 +36,7 @@ mod sheet;
 mod sketch;
 mod skin;
 mod solids;
+mod spec_check;
 mod standard;
 mod step_raw;
 pub mod stored;

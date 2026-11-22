@@ -28,6 +28,22 @@ fn volume(text: &str, name: &str) -> f64 {
 }
 
 #[test]
+fn a_screw_of_a_non_standard_length_is_warned_about() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_length_warning"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("top.gasm");
+    std::fs::write(&file, "part a iso4762:M6x25\npart b iso4762:M6x27\n").expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    let lines: Vec<&str> = text.lines().collect();
+    assert!(!lines[0].contains("warning"), "{text}");
+    assert!(
+        lines[1].contains("warning: 27 mm is not a standard length"),
+        "{text}"
+    );
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));
