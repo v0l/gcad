@@ -260,6 +260,59 @@ impl Arch {
             .any(|b| b.bodies.iter().any(|name| name == body))
     }
 
+    pub fn absorb(&mut self, part: &Arch, picked: &[String], rename: &dyn Fn(&str) -> String) {
+        if self.building.is_none() {
+            self.building = part.building.clone();
+        }
+        if self.units.is_none() {
+            self.units = part.units.clone();
+        }
+        for level in &part.levels {
+            if !self.levels.iter().any(|l| l.name == level.name) {
+                self.levels.push(level.clone());
+            }
+        }
+        for grid in &part.grids {
+            if !self.grids.iter().any(|g| g.name == grid.name) {
+                self.grids.push(grid.clone());
+            }
+        }
+        let kept: Vec<Built> = part
+            .built
+            .iter()
+            .filter_map(|b| {
+                let bodies: Vec<String> = b
+                    .bodies
+                    .iter()
+                    .filter(|n| picked.contains(n))
+                    .map(|n| rename(n))
+                    .collect();
+                (!bodies.is_empty() || b.bodies.is_empty()).then(|| Built {
+                    bodies,
+                    ..b.clone()
+                })
+            })
+            .collect();
+        let owners: Vec<String> = kept.iter().map(|b| b.owner.clone()).collect();
+        self.built.extend(kept);
+        for (label, op) in &part.classes {
+            if (owners.contains(label) || op == "room")
+                && !self.classes.iter().any(|(name, _)| name == label)
+            {
+                self.classes.push((label.clone(), op.clone()));
+            }
+        }
+        self.walls.extend(part.walls.iter().cloned());
+        self.openings.extend(part.openings.iter().cloned());
+        self.sweeps.extend(part.sweeps.iter().cloned());
+        self.slabs.extend(part.slabs.iter().cloned());
+        self.roofs.extend(part.roofs.iter().cloned());
+        self.rooms.extend(part.rooms.iter().cloned());
+        self.columns.extend(part.columns.iter().cloned());
+        self.stairs.extend(part.stairs.iter().cloned());
+        self.types.extend(part.types.iter().cloned());
+    }
+
     pub fn wall(&self, name: &str) -> Option<&Wall> {
         self.walls.iter().find(|w| w.name == name)
     }

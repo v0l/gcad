@@ -2204,3 +2204,23 @@ fn mesh_door_is_a_hinged_node() {
         .fold(f32::INFINITY, f32::min);
     near(min_x as f64, 2000.0 - 450.0 + 70.0, 1.0e-3);
 }
+
+#[test]
+fn ifc_assembly_exports_placed_architecture() {
+    let dir = std::path::PathBuf::from(scratch("ifc_assembly_exports_placed_architecture"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    for name in ["house.gcad", "house.gasm"] {
+        std::fs::copy(format!("examples/architecture/{name}"), dir.join(name)).expect("copy");
+    }
+    let read = |file: &str, out: &str| {
+        let (ok, text) = gcad(&dir, &["export", file, out]);
+        assert!(ok, "{text}");
+        std::fs::read_to_string(dir.join(out)).expect("ifc")
+    };
+    let part = read("house.gcad", "part.ifc");
+    let assembly = read("house.gasm", "assembly.ifc");
+    assert_eq!(entities(&part, "IFCWALL"), 5);
+    for class in ["IFCWALL", "IFCDOOR", "IFCWINDOW", "IFCSPACE", "IFCSLAB", "IFCBUILDINGSTOREY"] {
+        assert_eq!(entities(&assembly, class), entities(&part, class), "{class}");
+    }
+}

@@ -646,6 +646,7 @@ Architecture stage E (gcad #352).
 | operation | status | syntax | tests |
 |---|---|---|---|
 | IFC4 export | supported | `gcad export house.gasm house.ifc`: project, site, building, storeys, walls, doors, windows, openings with voids and fills | `arch::ifc_has_the_spatial_structure` |
+| IFC assembly export | supported | a `.gasm` exports the architecture of the parts it places | `arch::ifc_assembly_exports_placed_architecture` |
 | IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon` | `arch::ifc_wall_layers` |
 | IFC element classes | supported | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
 | stable GlobalIds | supported | ids derived from element names | `arch::ifc_global_ids_are_stable` |
