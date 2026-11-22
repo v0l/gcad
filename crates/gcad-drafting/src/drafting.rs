@@ -421,6 +421,7 @@ impl State {
             "nest" => self.op_nest(line),
             "plan" => self.op_plan(line),
             "rcp" => self.op_rcp(line),
+            "hatch" => self.op_hatch(line),
             "northarrow" => self.op_northarrow(line),
             "scalebar" => self.op_scalebar(line),
             "scansection" => self.op_scansection(line),

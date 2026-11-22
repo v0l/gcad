@@ -251,6 +251,50 @@ impl State {
         marks
     }
 
+    pub(super) fn op_hatch(&mut self, line: &Line) -> Result<String> {
+        let material = line
+            .positional
+            .first()
+            .ok_or_else(|| anyhow!("write `hatch brick pattern=brick`"))?
+            .clone();
+        let name = named(line, "pattern").unwrap_or(default_pattern(&material));
+        if pattern(name).is_none() {
+            bail!(
+                "`{name}` is not a hatch pattern; use {}",
+                super::hatch::PATTERNS
+                    .iter()
+                    .map(|p| p.name)
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            );
+        }
+        self.hatches.insert(material.clone(), name.to_string());
+        let mut replaced = 0;
+        let mut marks = std::mem::take(&mut self.sheet()?.marks);
+        for i in 0..marks.len().saturating_sub(1) {
+            let (rings, area, layer) = match &marks[i] {
+                Mark::Group { class, data, marks } if class == "poche" => {
+                    let get = |k: &str| data.iter().find(|(d, _)| d == k).map(|(_, v)| v.clone());
+                    if get("material").as_deref() != Some(material.as_str()) {
+                        continue;
+                    }
+                    let rings = match marks.first() {
+                        Some(Mark::Shape { loops, .. }) => loops.clone(),
+                        _ => continue,
+                    };
+                    (rings, get("area").unwrap_or_default(), get("layer").unwrap_or_default())
+                }
+                _ => continue,
+            };
+            if matches!(&marks[i + 1], Mark::Group { class, .. } if class.starts_with("hatch ")) {
+                marks[i + 1] = self.hatch_group(&material, &rings, &area, &layer);
+                replaced += 1;
+            }
+        }
+        self.sheet()?.marks = marks;
+        Ok(format!("{material} hatched {name}, {replaced} areas"))
+    }
+
     pub(super) fn hatch_group(
         &self,
         material: &str,

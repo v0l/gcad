@@ -1687,7 +1687,6 @@ fn section_through_two_points() {
 }
 
 #[test]
-#[ignore = "missing: material hatches"]
 fn hatch_fill_area_matches_the_layer() {
     let svg = plan_svg(
         "hatch_fill_area_matches_the_layer",
