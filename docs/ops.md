@@ -655,7 +655,14 @@ Architecture stage E (gcad #352).
 | operation | status | syntax | tests |
 |---|---|---|---|
 | IFC4 export | supported | `gcad export house.gasm house.ifc`: project, site, building, storeys, walls, doors, windows, openings with voids and fills | `arch::ifc_has_the_spatial_structure` |
-| IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon` | `arch::ifc_wall_layers` |
+| IFC assembly export | supported | a `.gasm` exports the architecture of the parts it places | `arch::ifc_assembly_exports_placed_architecture` |
+| IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon`. `ThermalTransmittance` is a plain sum of layer resistances plus 0.17 until the thermal calculation (#353) supplies it | `arch::ifc_wall_layers` |
+| IFC room fire rating | supported | `room ... fire=REI60` writes `Pset_SpaceCommon.FireRating`, plus `IsExternal`, `GrossPlannedArea`, `NetPlannedArea` | `arch::ifc_room_fire_rating_and_common_fields` |
+| IFC grid and curtain wall quantities | supported | `grid` lines write `IfcGrid`, `curtainwall` writes `Qto_CurtainWallBaseQuantities` | `arch::ifc_grid_and_curtain_wall_quantities` |
+| IFC site terrain | supported | `terrain` triangles export as an `IfcTriangulatedFaceSet` on `IfcSite` | `arch::ifc_site_carries_the_terrain` |
+| IFC extruded bodies | supported | walls, slabs, columns and beams that are prisms (vertical outline, flat top and bottom) write `IfcExtrudedAreaSolid`; others stay faceted | `arch::ifc_prisms_are_extruded_and_keep_their_volume` |
+| IFC vendor part | supported | `part stool vendor.ifc` places an IFC of one furnishing (faceted brep, triangulated or polygonal face set) | `arch::vendor_ifc_is_a_part` |
+| IFC plan reference | supported | an imported IFC draws its wall, slab and space outline dashed in `plan` views (class `reference`) | `arch::imported_ifc_is_a_plan_reference` |
 | IFC element classes | supported | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
 | stable GlobalIds | supported | ids derived from element names | `arch::ifc_global_ids_are_stable` |
 | IFC syntax | supported | unique ids, balanced parentheses, every reference defined | `arch::ifc_step_syntax_is_valid` |
@@ -663,6 +670,7 @@ Architecture stage E (gcad #352).
 | IFC checks | supported | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
 | IFC volumes | supported | element volumes read by IfcOpenShell match the bodies within 0.5 percent | `arch::ifc_volumes_match_ifcopenshell` |
 | image underlays | supported | `underlay plan.png scale=1:100 dpi=100` | `arch::image_underlay` |
+| underlay in render | supported | `gcad render` draws the image flat at its scaled size | `arch::underlay_is_drawn_in_render` |
 
 ## Site and analysis
 

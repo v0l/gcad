@@ -331,6 +331,106 @@ impl Ifc {
             .collect()
     }
 
+    fn ring(&self, curve: usize) -> Option<Vec<(f64, f64)>> {
+        let curve = self.get(curve)?;
+        let mut ring: Vec<(f64, f64)> = curve
+            .args
+            .first()?
+            .items()
+            .iter()
+            .map(|p| self.point(p.id()?).map(|p| (p[0], p[1])))
+            .collect::<Option<_>>()?;
+        if ring.len() > 1 && ring.first() == ring.last() {
+            ring.pop();
+        }
+        (ring.len() >= 3).then_some(ring)
+    }
+
+    fn extruded(&self, e: &Entity) -> Option<Vec<[[f64; 3]; 3]>> {
+        let profile = self.get(e.args.first()?.id()?)?;
+        let outer = self.ring(profile.args.get(2)?.id()?)?;
+        let mut holes = Vec::new();
+        if profile.class == "IFCARBITRARYPROFILEDEFWITHVOIDS" {
+            for hole in profile.args.get(3)?.items() {
+                holes.push(self.ring(hole.id()?)?);
+            }
+        } else if profile.class != "IFCARBITRARYCLOSEDPROFILEDEF" {
+            return None;
+        }
+        let direction = self.get(e.args.get(2)?.id()?)?;
+        let d = direction.args.first()?.items();
+        let (dx, dy, dz) = (d.first()?.num()?, d.get(1)?.num()?, d.get(2)?.num()?);
+        if dx.abs() > 1.0e-9 || dy.abs() > 1.0e-9 || dz <= 0.0 {
+            return None;
+        }
+        let depth = e.args.get(3)?.num()?;
+        let place = self.get(e.args.get(1)?.id()?)?;
+        let origin = self.point(place.args.first()?.id()?)?;
+        let area = |r: &[(f64, f64)]| {
+            (0..r.len())
+                .map(|k| r[k].0 * r[(k + 1) % r.len()].1 - r[(k + 1) % r.len()].0 * r[k].1)
+                .sum::<f64>()
+        };
+        let oriented = |mut r: Vec<(f64, f64)>, ccw: bool| {
+            if (area(&r) > 0.0) != ccw {
+                r.reverse();
+            }
+            r
+        };
+        let outer = oriented(outer, true);
+        let holes: Vec<Vec<(f64, f64)>> = holes.into_iter().map(|h| oriented(h, false)).collect();
+        let (z0, z1) = (origin[2], origin[2] + depth);
+        let at = |p: (f64, f64), z: f64| [p.0 + origin[0], p.1 + origin[1], z];
+        let mut out = Vec::new();
+        for ring in std::iter::once(&outer).chain(holes.iter()) {
+            for k in 0..ring.len() {
+                let (a, b) = (ring[k], ring[(k + 1) % ring.len()]);
+                out.push([at(a, z0), at(b, z0), at(b, z1)]);
+                out.push([at(a, z0), at(b, z1), at(a, z1)]);
+            }
+        }
+        let to_points = |r: &[(f64, f64)]| -> Vec<gcad_mesh::arch::P2> { r.to_vec() };
+        let hole_points: Vec<Vec<gcad_mesh::arch::P2>> = holes.iter().map(|h| to_points(h)).collect();
+        let (points, triangles) = gcad_mesh::solid::triangulate(&to_points(&outer), &hole_points);
+        for [a, b, c] in triangles {
+            let (p, q, r) = (points[a as usize], points[b as usize], points[c as usize]);
+            let flip = (q.0 - p.0) * (r.1 - p.1) - (q.1 - p.1) * (r.0 - p.0) < 0.0;
+            let (q, r) = if flip { (r, q) } else { (q, r) };
+            out.push([at(p, z1), at(q, z1), at(r, z1)]);
+            out.push([at(p, z0), at(r, z0), at(q, z0)]);
+        }
+        Some(out)
+    }
+
+    fn polygonal(&self, e: &Entity) -> Option<Vec<[[f64; 3]; 3]>> {
+        let list = self.get(e.args.first()?.id()?)?;
+        let points: Vec<[f64; 3]> = list
+            .args
+            .first()?
+            .items()
+            .iter()
+            .map(|p| {
+                let c = p.items();
+                Some([c.first()?.num()?, c.get(1)?.num()?, c.get(2)?.num()?])
+            })
+            .collect::<Option<_>>()?;
+        let mut out = Vec::new();
+        for face in e.args.get(2)?.items() {
+            let face = self.get(face.id()?)?;
+            let ring: Vec<[f64; 3]> = face
+                .args
+                .first()?
+                .items()
+                .iter()
+                .map(|i| points.get(i.num()? as usize - 1).copied())
+                .collect::<Option<_>>()?;
+            for k in 1..ring.len().saturating_sub(1) {
+                out.push([ring[0], ring[k], ring[k + 1]]);
+            }
+        }
+        Some(out)
+    }
+
     fn faceted(&self, e: &Entity) -> Option<Vec<[[f64; 3]; 3]>> {
         let shell = self.get(e.args.first()?.id()?)?;
         let mut out = Vec::new();
@@ -381,6 +481,8 @@ impl Ifc {
                 let triangles = match item.class.as_str() {
                     "IFCTRIANGULATEDFACESET" => self.triangulated(item),
                     "IFCFACETEDBREP" => self.faceted(item),
+                    "IFCPOLYGONALFACESET" => self.polygonal(item),
+                    "IFCEXTRUDEDAREASOLID" => self.extruded(item),
                     _ => None,
                 };
                 out.extend(triangles);
@@ -411,6 +513,11 @@ impl Ifc {
                         | "IFCCOVERING"
                         | "IFCRAMP"
                         | "IFCBUILDINGELEMENTPROXY"
+                        | "IFCFURNITURE"
+                        | "IFCFURNISHINGELEMENT"
+                        | "IFCSANITARYTERMINAL"
+                        | "IFCFLOWTERMINAL"
+                        | "IFCDISTRIBUTIONELEMENT"
                         | "IFCOPENINGELEMENT"
                 )
             })
@@ -513,6 +620,49 @@ impl Ifc {
     }
 }
 
+fn footprint(
+    name: &str,
+    class: &str,
+    triangles: &[[[f64; 3]; 3]],
+    scale: f64,
+) -> Option<crate::arch::Reference> {
+    let key = |p: [f64; 3]| ((p[0] * scale).round() as i64, (p[1] * scale).round() as i64);
+    let mut edges: std::collections::BTreeMap<((i64, i64), (i64, i64)), usize> = Default::default();
+    let mut z = f64::MAX;
+    for t in triangles {
+        for p in t {
+            z = z.min(p[2] * scale);
+        }
+        let u = [t[1][0] - t[0][0], t[1][1] - t[0][1], t[1][2] - t[0][2]];
+        let v = [t[2][0] - t[0][0], t[2][1] - t[0][1], t[2][2] - t[0][2]];
+        let nz = u[0] * v[1] - u[1] * v[0];
+        let normal =
+            (u[1] * v[2] - u[2] * v[1]).powi(2) + (u[2] * v[0] - u[0] * v[2]).powi(2) + nz * nz;
+        if normal <= 0.0 || nz <= 0.0 || nz * nz < 0.9 * normal {
+            continue;
+        }
+        for k in 0..3 {
+            let (a, b) = (key(t[k]), key(t[(k + 1) % 3]));
+            if a == b {
+                continue;
+            }
+            let ordered = if a < b { (a, b) } else { (b, a) };
+            *edges.entry(ordered).or_default() += 1;
+        }
+    }
+    let rings: Vec<Vec<(f64, f64)>> = edges
+        .into_iter()
+        .filter(|(_, n)| *n == 1)
+        .map(|((a, b), _)| vec![(a.0 as f64, a.1 as f64), (b.0 as f64, b.1 as f64)])
+        .collect();
+    (!rings.is_empty()).then(|| crate::arch::Reference {
+        name: name.to_string(),
+        class: class.to_ascii_lowercase(),
+        z,
+        rings,
+    })
+}
+
 impl crate::Model {
     pub(crate) fn import_ifc(
         &mut self,
@@ -527,7 +677,20 @@ impl crate::Model {
         let mut made = 0;
         let mut skipped = 0;
         for (id, element) in ifc.elements() {
-            if matches!(element.class.as_str(), "IFCSPACE" | "IFCOPENINGELEMENT") {
+            if element.class == "IFCOPENINGELEMENT" {
+                continue;
+            }
+            if element.class == "IFCSPACE" {
+                for (_, triangles) in ifc.items_of(element).into_iter().enumerate() {
+                    if let Some(reference) = footprint(
+                        &element.args.get(2).and_then(Arg::text).unwrap_or("space").to_string(),
+                        &element.class,
+                        &triangles,
+                        scale,
+                    ) {
+                        self.arch.references.push(reference);
+                    }
+                }
                 continue;
             }
             let name = element
@@ -537,6 +700,11 @@ impl crate::Model {
                 .filter(|n| !n.is_empty())
                 .map_or_else(|| format!("{}{id}", element.class.to_lowercase()), str::to_string);
             for (k, triangles) in ifc.items_of(element).into_iter().enumerate() {
+                if matches!(element.class.as_str(), "IFCWALL" | "IFCSLAB" | "IFCSPACE") {
+                    if let Some(reference) = footprint(&name, &element.class, &triangles, scale) {
+                        self.arch.references.push(reference);
+                    }
+                }
                 let faces: Vec<Vec<Vec<Point3>>> = triangles
                     .iter()
                     .map(|t| vec![t.iter().map(|p| point3(p.map(|c| c * scale))).collect()])

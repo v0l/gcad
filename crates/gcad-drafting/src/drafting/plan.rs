@@ -424,6 +424,11 @@ impl State {
                     }
                 }
             }
+            for r in &model.arch.references {
+                for ring in &r.rings {
+                    pts.extend(ring.iter().copied());
+                }
+            }
             pts
         };
         if pts.is_empty() {
@@ -512,6 +517,7 @@ impl State {
         marks.extend(self.opening_marks(&frame, cut_z));
         marks.extend(self.stair_marks(&frame, level_z, cut_z));
         marks.extend(self.slab_edges(&frame, level_z));
+        marks.extend(self.reference_marks(&frame, level_z));
         if let Some(interval) = named(line, "contours").and_then(|t| t.parse::<f64>().ok()) {
             marks.extend(self.contour_marks(&frame, interval));
         }
@@ -816,6 +822,31 @@ impl State {
             }
         }
         marks
+    }
+
+    fn reference_marks(&self, frame: &Frame, level_z: f64) -> Vec<Mark> {
+        let Ok(model) = self.model() else {
+            return Vec::new();
+        };
+        let (lo, hi) = (level_z - 100.0, level_z + 4000.0);
+        model
+            .arch
+            .references
+            .iter()
+            .filter(|r| r.z >= lo && r.z < hi)
+            .map(|r| {
+                let loops = r
+                    .rings
+                    .iter()
+                    .map(|ring| ring.iter().map(|p| frame.paper(*p)).collect())
+                    .collect();
+                group(
+                    "reference",
+                    vec![("reference", r.name.clone()), ("kind", r.class.clone())],
+                    vec![stroke(loops, false, HIDDEN_WEIGHT, true)],
+                )
+            })
+            .collect()
     }
 
     fn slab_edges(&self, frame: &Frame, level_z: f64) -> Vec<Mark> {

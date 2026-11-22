@@ -1355,7 +1355,13 @@ pub fn load_model(
         }
         let mut start = start_for(path, vars, depth);
         start.cache = cache.clone();
-        let run = run_model(start, &read_lines(path)?, Some(path));
+        let lines = if path.extension().is_some_and(|e| e.eq_ignore_ascii_case("ifc")) {
+            let file = path.file_name().map_or_else(String::new, |n| n.to_string_lossy().to_string());
+            crate::parse::parse_program(&format!("import {file}"))?
+        } else {
+            read_lines(path)?
+        };
+        let run = run_model(start, &lines, Some(path));
         if let Some((line, Err(error))) = run.steps.last() {
             bail!("{}:{}: {error:#}", path.display(), line.number);
         }

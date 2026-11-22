@@ -164,6 +164,8 @@ impl Model {
             level: 0.0,
             height: 0.0,
             rect: [0.0; 4],
+            instance: String::new(),
+            fire: String::new(),
         };
         for (key, text) in &line.named {
             match key.as_str() {
@@ -172,6 +174,7 @@ impl Model {
                 "floor" => room.floor = text.clone(),
                 "ceiling" => room.ceiling = text.clone(),
                 "wall" => room.wall = text.clone(),
+                "fire" => room.fire = text.clone(),
                 "at" => at = Some(eval_point(text, &self.scope)?),
                 "level" => {
                     level = eval(text, &self.scope).with_context(|| format!("`level={text}`"))?

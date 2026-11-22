@@ -178,7 +178,12 @@ fn prune(dir: &Path) {
 }
 
 fn storable(model: &Model, key: String, reads: Vec<Read>) -> Option<Stored> {
-    if model.sim.is_some() || reads.is_empty() || !model.meshes().is_empty() || !model.clouds.is_empty() {
+    if model.sim.is_some()
+        || reads.is_empty()
+        || !model.meshes().is_empty()
+        || !model.clouds.is_empty()
+        || model.arch.carries_architecture()
+    {
         return None;
     }
     Some(Stored {

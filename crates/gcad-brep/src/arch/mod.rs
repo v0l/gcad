@@ -181,6 +181,8 @@ pub struct Room {
     pub level: f64,
     pub height: f64,
     pub rect: [f64; 4],
+    pub instance: String,
+    pub fire: String,
 }
 
 impl Room {
@@ -288,6 +290,15 @@ pub struct Arch {
     pub built: Vec<Built>,
     pub classes: Vec<(String, String)>,
     pub underlays: Vec<Underlay>,
+    pub references: Vec<Reference>,
+}
+
+#[derive(Clone, Debug)]
+pub struct Reference {
+    pub name: String,
+    pub class: String,
+    pub z: f64,
+    pub rings: Vec<Vec<gcad_mesh::arch::P2>>,
 }
 
 impl Arch {
@@ -295,6 +306,108 @@ impl Arch {
         self.built
             .iter()
             .any(|b| b.bodies.iter().any(|name| name == body))
+    }
+
+    pub fn carries_architecture(&self) -> bool {
+        !self.references.is_empty()
+            || !self.terrains.is_empty()
+            || !self.classes.is_empty() || !self.levels.is_empty() || !self.built.is_empty()
+    }
+
+    pub fn absorb(
+        &mut self,
+        part: &Arch,
+        picked: &[String],
+        rename: &dyn Fn(&str) -> String,
+        instance: &str,
+    ) {
+        let tag = |name: &str| format!("{instance}.{name}");
+        if self.building.is_none() {
+            self.building = part.building.clone();
+        }
+        if self.units.is_none() {
+            self.units = part.units.clone();
+        }
+        for level in &part.levels {
+            if !self.levels.iter().any(|l| l.name == level.name) {
+                self.levels.push(level.clone());
+            }
+        }
+        for grid in &part.grids {
+            if !self.grids.iter().any(|g| g.name == grid.name) {
+                self.grids.push(grid.clone());
+            }
+        }
+        let kept: Vec<Built> = part
+            .built
+            .iter()
+            .filter_map(|b| {
+                let bodies: Vec<String> = b
+                    .bodies
+                    .iter()
+                    .filter(|n| picked.contains(n))
+                    .map(|n| rename(n))
+                    .collect();
+                (!bodies.is_empty() || b.bodies.is_empty()).then(|| Built {
+                    owner: tag(&b.owner),
+                    bodies,
+                    holes: b.holes.iter().map(|h| tag(h)).collect(),
+                    ..b.clone()
+                })
+            })
+            .collect();
+        let owners: Vec<String> = kept.iter().map(|b| b.owner.clone()).collect();
+        self.built.extend(kept);
+        for (label, op) in &part.classes {
+            let label = tag(label);
+            if (owners.contains(&label) || op == "room")
+                && !self.classes.iter().any(|(name, _)| *name == label)
+            {
+                self.classes.push((label, op.clone()));
+            }
+        }
+        self.references.extend(part.references.iter().cloned());
+        self.terrains.extend(part.terrains.iter().cloned());
+        self.walls.extend(part.walls.iter().cloned().map(|w| Wall {
+            name: tag(&w.name),
+            ..w
+        }));
+        self.openings.extend(part.openings.iter().cloned().map(|o| Opening {
+            name: tag(&o.name),
+            host: tag(&o.host),
+            ..o
+        }));
+        self.sweeps.extend(part.sweeps.iter().cloned().map(|s| Sweep {
+            name: tag(&s.name),
+            host: tag(&s.host),
+            ..s
+        }));
+        self.slabs.extend(part.slabs.iter().cloned().map(|s| Slab {
+            name: tag(&s.name),
+            ..s
+        }));
+        self.roofs.extend(part.roofs.iter().cloned().map(|r| Roof {
+            name: tag(&r.name),
+            ..r
+        }));
+        self.rooms.extend(part.rooms.iter().cloned().map(|r| Room {
+            name: tag(&r.name),
+            instance: instance.to_string(),
+            ..r
+        }));
+        self.columns.extend(part.columns.iter().cloned().map(|c| Column {
+            name: tag(&c.name),
+            ..c
+        }));
+        self.stairs.extend(part.stairs.iter().cloned().map(|s| Stair {
+            name: tag(&s.name),
+            ..s
+        }));
+        for entry in &part.types {
+            if !self.types.iter().any(|(name, _)| *name == entry.0) {
+                self.types.push(entry.clone());
+            }
+        }
     }
 
     pub fn wall(&self, name: &str) -> Option<&Wall> {

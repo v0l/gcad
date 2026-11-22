@@ -775,6 +775,7 @@ fn finished(run: &Run) -> Result<()> {
     if run.model.solids().is_empty()
         && run.model.meshes().is_empty()
         && run.model.clouds.is_empty()
+        && run.model.arch.underlays.is_empty()
     {
         bail!("the file builds no solid");
     }
@@ -2536,6 +2537,7 @@ fn main() -> Result<()> {
             let parts: Vec<_> = parts.iter().map(|(s, c)| (s, *c)).collect();
             let mut meshes = run.model.mesh_shading();
             meshes.extend(run.model.fur_shading());
+            meshes.extend(run.model.underlay_shading());
             if let Some(turns) = turns {
                 let times = if times.is_empty() { vec![0.0] } else { times };
                 let rows = render::posed_rows(&run.model, clip.as_deref(), &times)?;

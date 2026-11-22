@@ -1929,6 +1929,73 @@ fn ifc_element_classes() {
 }
 
 #[test]
+fn ifc_room_fire_rating_and_common_fields() {
+    let ifc = ifc_of(
+        "ifc_room_fire_rating_and_common_fields",
+        &with("hall: room at=2000,3000 fire=REI60"),
+    );
+    for needle in ["'FireRating'", "IFCLABEL('REI60')", "'IsExternal'", "'GrossPlannedArea'", "'NetPlannedArea'"] {
+        assert!(ifc.contains(needle), "{needle}");
+    }
+}
+
+#[test]
+fn ifc_grid_and_curtain_wall_quantities() {
+    let ifc = ifc_of(
+        "ifc_grid_and_curtain_wall_quantities",
+        &with("cw1: curtainwall 0,-2000 6000,-2000 height=L1 grid=1500x900 mullion=50x100 glass=double"),
+    );
+    assert_eq!(entities(&ifc, "IFCGRID"), 1);
+    assert_eq!(entities(&ifc, "IFCGRIDAXIS"), 4);
+    assert_eq!(entities(&ifc, "IFCCURTAINWALL"), 1);
+    assert!(ifc.contains("Qto_CurtainWallBaseQuantities"));
+    assert!(ifc.contains("'GrossSideArea'"));
+}
+
+#[test]
+fn vendor_ifc_is_a_part() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    if !python.exists() {
+        return;
+    }
+    let dir = house_files("vendor_ifc_is_a_part", &[]);
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ifc_vendor_stool.py");
+    let out = std::process::Command::new(python)
+        .arg(script)
+        .arg(dir.join("stool.ifc"))
+        .output()
+        .expect("python");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    std::fs::write(dir.join("room.gasm"), "part stool stool.ifc\n").expect("gasm");
+    let run = gcad::model::run_path(&dir.join("room.gasm"), &[], None).expect("runs");
+    assert!(run.steps.iter().all(|(_, r)| r.is_ok()), "{:?}", run.steps.last());
+    near(volume(&run.model), 400.0 * 300.0 * 500.0, 1.0e-6);
+}
+
+#[test]
+fn ifc_prisms_are_extruded_and_keep_their_volume() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    if !python.exists() {
+        return;
+    }
+    let source = with("s1: slab L1 A1 B1 B2 A2 type=concrete:200\nc1: column A1 rect 300x300 top=L1\nb1: beam A1 B1 bar 200x400 z=L1");
+    let dir = house_files("ifc_prisms_are_extruded", &[("model.gcad", &source)]);
+    assert!(gcad(&dir, &["export", "model.gcad", "model.ifc"]).0);
+    let ifc = std::fs::read_to_string(dir.join("model.ifc")).expect("ifc");
+    assert!(entities(&ifc, "IFCEXTRUDEDAREASOLID") >= 2, "extruded bodies");
+    assert!(ifc.contains("'Body','SweptSolid'"));
+    let script = "import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.validate, ifcopenshell.util.shape as sh\nf = ifcopenshell.open(sys.argv[1])\nlog = ifcopenshell.validate.json_logger()\nifcopenshell.validate.validate(f, log)\nassert not log.statements, log.statements[:3]\ns = ifcopenshell.geom.settings()\nprint(sum(sh.get_volume(ifcopenshell.geom.create_shape(s, e).geometry) for e in f.by_type('IfcElement') if e.Representation))\n";
+    let out = std::process::Command::new(python)
+        .args(["-c", script, dir.join("model.ifc").to_str().expect("path")])
+        .output()
+        .expect("python");
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    let theirs: f64 = text.trim().lines().last().expect("volume").parse().expect("number");
+    near(theirs * 1.0e9, volume(&build(&source)), 5.0e-3);
+}
+
+#[test]
 fn ifc_global_ids_are_stable() {
     let a = ifc_of("ifc_global_ids_are_stable_a", &building());
     let b = ifc_of("ifc_global_ids_are_stable_b", &building());
@@ -2022,6 +2089,52 @@ fn image_underlay() {
 }
 
 #[test]
+fn imported_ifc_is_a_plan_reference() {
+    let dir = house_files("imported_ifc_is_a_plan_reference", &[]);
+    std::fs::copy("examples/architecture/house.gcad", dir.join("house.gcad")).expect("example");
+    let (ok, text) = gcad(&dir, &["export", "house.gcad", "house.ifc"]);
+    assert!(ok, "{text}");
+    std::fs::write(dir.join("vendor.gcad"), "level L0 0 \"Ground\"\nimport house.ifc\n").expect("vendor");
+    std::fs::write(
+        dir.join("ref.gdwg"),
+        "part vendor.gcad\nsheet \"Ref\" size=A3 scale=1:100\nplan L0 cut=1200\n",
+    )
+    .expect("sheet");
+    let drawing = gcad::drafting::run(&dir.join("ref.gdwg"), &[]).expect("runs");
+    assert!(
+        drawing.failed().is_none(),
+        "{:?}",
+        drawing.failed().map(|(l, e)| format!("{}: {e:#}", l.text))
+    );
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    std::fs::write(dir.join("ref.svg"), &svg).expect("svg");
+    for kind in ["ifcwall", "ifcslab"] {
+        assert!(svg.contains(&format!("data-kind=\"{kind}\"")), "{kind}");
+    }
+    assert!(svg.contains("class=\"reference\""));
+}
+
+#[test]
+fn underlay_is_drawn_in_render() {
+    let dir = house_files("underlay_is_drawn_in_render", &[]);
+    let image = image::RgbImage::from_pixel(100, 50, image::Rgb([220, 30, 30]));
+    image.save(dir.join("plan.png")).expect("png");
+    std::fs::write(
+        dir.join("model.gcad"),
+        "underlay plan.png scale=1:100 dpi=100\n",
+    )
+    .expect("model");
+    let (ok, text) = gcad(&dir, &["render", "model.gcad", "out.png"]);
+    assert!(ok, "{text}");
+    let picture = image::open(dir.join("out.png")).expect("png").to_rgb8();
+    let red = picture
+        .pixels()
+        .filter(|p| p[0] > 120 && p[0] as i32 > p[1] as i32 + 60 && p[0] as i32 > p[2] as i32 + 60)
+        .count();
+    assert!(red > 2000, "{red} red pixels");
+}
+
+#[test]
 fn render_sun_shades_the_ground_behind_a_wall() {
     let dir = house_files(
         "render_sun",
@@ -2110,6 +2223,34 @@ fn terrain_from_dxf_contours() {
     );
     let run = gcad::model::run_path(&dir.join("site.gcad"), &[], None).expect("runs");
     near(volume_of(&run.model, "t1"), 1.0e8 * (500.0 + 1000.0), 1.0e-4);
+}
+
+#[test]
+fn ifc_site_carries_the_terrain() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    let source = "units mm\nt1: terrain points site.csv depth=1000\n";
+    let dir = house_files(
+        "ifc_site_carries_the_terrain",
+        &[
+            ("site.csv", "0,0,0\n20000,0,2000\n20000,20000,2000\n0,20000,0\n"),
+            ("site.gcad", source),
+        ],
+    );
+    let (ok, text) = gcad(&dir, &["export", "site.gcad", "site.ifc"]);
+    assert!(ok, "{text}");
+    let ifc = std::fs::read_to_string(dir.join("site.ifc")).expect("ifc");
+    assert_eq!(entities(&ifc, "IFCTRIANGULATEDFACESET"), 1);
+    assert!(python.exists(), "the IfcOpenShell venv is needed");
+    let script = "import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.validate\nf = ifcopenshell.open(sys.argv[1])\nlog = ifcopenshell.validate.json_logger()\nifcopenshell.validate.validate(f, log)\nassert not log.statements, log.statements[:3]\ns = ifcopenshell.geom.settings()\nsite = f.by_type('IfcSite')[0]\ng = ifcopenshell.geom.create_shape(s, site).geometry\nv = g.verts\nprint(max(v[2::3]) - min(v[2::3]), (max(v[0::3]) - min(v[0::3])) * (max(v[1::3]) - min(v[1::3])))\n";
+    let out = std::process::Command::new(python)
+        .args(["-c", script, dir.join("site.ifc").to_str().expect("path")])
+        .output()
+        .expect("python");
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    let numbers: Vec<f64> = text.trim().lines().last().expect("line").split(' ').map(|n| n.parse().expect("number")).collect();
+    near(numbers[0], 2.0, 1.0e-6);
+    near(numbers[1], 400.0, 1.0e-6);
 }
 
 #[test]
@@ -2343,4 +2484,57 @@ fn mesh_door_is_a_hinged_node() {
         .map(|p| p[0])
         .fold(f32::INFINITY, f32::min);
     near(min_x as f64, 2000.0 - 450.0 + 70.0, 1.0e-3);
+}
+
+#[test]
+fn ifc_assembly_exports_placed_architecture() {
+    let dir = std::path::PathBuf::from(scratch("ifc_assembly_exports_placed_architecture"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    for name in ["house.gcad", "house.gasm"] {
+        std::fs::copy(format!("examples/architecture/{name}"), dir.join(name)).expect("copy");
+    }
+    let read = |file: &str, out: &str| {
+        let (ok, text) = gcad(&dir, &["export", file, out]);
+        assert!(ok, "{text}");
+        std::fs::read_to_string(dir.join(out)).expect("ifc")
+    };
+    let part = read("house.gcad", "part.ifc");
+    let assembly = read("house.gasm", "assembly.ifc");
+    assert_eq!(entities(&part, "IFCWALL"), 5);
+    for class in ["IFCWALL", "IFCDOOR", "IFCWINDOW", "IFCSPACE", "IFCSLAB", "IFCBUILDINGSTOREY"] {
+        assert_eq!(entities(&assembly, class), entities(&part, class), "{class}");
+    }
+    std::fs::write(
+        dir.join("twice.gasm"),
+        "part a house.gcad\npart b house.gcad\nrotate b 90 axis=z\nmove b 20000,0,0\n",
+    )
+    .expect("twice");
+    let twice = read("twice.gasm", "twice.ifc");
+    for (class, n) in [("IFCWALL", 10), ("IFCDOOR", 12), ("IFCWINDOW", 12), ("IFCSPACE", 4)] {
+        assert_eq!(entities(&twice, class), n, "{class}");
+    }
+    std::fs::write(dir.join("plain.gcad"), building()).expect("plain");
+    std::fs::write(
+        dir.join("moved.gasm"),
+        "part a plain.gcad\npart b plain.gcad\nrotate b 90 axis=z\nmove b 20000,0,0\n",
+    )
+    .expect("moved");
+    let twice = read("moved.gasm", "moved.ifc");
+    let mut high_x = f64::MIN;
+    let mut high_y = f64::MIN;
+    for line in twice.lines().filter(|l| l.contains("=IFCCARTESIANPOINTLIST3D(")) {
+        for point in line.split("((").nth(1).unwrap_or("").split("),(") {
+            let v: Vec<f64> = point
+                .trim_matches(|c| c == '(' || c == ')' || c == ';')
+                .split(',')
+                .filter_map(|n| n.parse().ok())
+                .collect();
+            if v.len() == 3 {
+                high_x = high_x.max(v[0]);
+                high_y = high_y.max(v[1]);
+            }
+        }
+    }
+    assert!((20000.0..20500.0).contains(&high_x), "max x {high_x}");
+    assert!((8000.0..8500.0).contains(&high_y), "max y {high_y}");
 }
