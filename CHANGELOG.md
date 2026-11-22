@@ -7,6 +7,7 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Buildings, stage F (#353), more: `check sunhours`, `check solargain`, `check route`, `check escape`, `check driveway`, `gcad render --sun`, `terrain contour file.dxf`, `plan L0 contours=500`; a failed check now fails `gcad check` unless the line says `warn`.
 - Buildings, stage F (#353): `terrain` from points or a grid, `pad`, `cut_fill`, `site_boundary` with setbacks, `road`, `retaining`, `tree`, `sun lat= date= time=`, and `check uvalue|heatloss|bridges|daylight|stairs|ramps|doors|egress|rooms|compartments|shadow`.
 - Buildings, stage D (#351): `plan`, `rcp`, `elevation`, `section a-a x,y x,y`, `hatch`, `tag`, `dim auto`, `northarrow`, `scalebar`, `viewport`, `drawinglist` and `sheet number=` in `.gdwg`, DXF export with layers by element class, and `examples/architecture/house.gdwg`.
 - Buildings, stage E (#352): `gcad export house.gcad house.ifc` writes IFC4 (project, site, building, storeys, walls with material layer sets and `Pset_WallCommon`, slabs, roofs, stairs and flights, railings, columns, beams, doors and windows with openings that void and fill, spaces with `NetFloorArea`, `GrossFloorArea`, `Height` and `NetVolume`, colours, stable GlobalIds); `import model.ifc` reads the geometry as an underlay; `gcad check model.ifc` checks references, storeys and openings; `underlay plan.png scale=1:100 dpi=100` sizes an image reference.

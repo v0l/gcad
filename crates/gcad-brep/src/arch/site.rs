@@ -219,6 +219,58 @@ fn named<'a>(line: &'a Line, key: &str) -> Option<&'a str> {
     line.named.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
 }
 
+pub(crate) fn contour_points(text: &str) -> Result<Vec<P3>> {
+    let lines: Vec<&str> = text.lines().map(str::trim).collect();
+    let pairs: Vec<(&str, &str)> = lines.chunks(2).filter(|p| p.len() == 2).map(|p| (p[0], p[1])).collect();
+    let mut out: Vec<P3> = Vec::new();
+    let mut kind = "";
+    let mut elevation = 0.0;
+    let mut pending: Vec<(f64, f64)> = Vec::new();
+    let mut vertex: (Option<f64>, Option<f64>) = (None, None);
+    let flush = |kind: &str, elevation: f64, pending: &mut Vec<(f64, f64)>, out: &mut Vec<P3>| {
+        if kind == "LWPOLYLINE" {
+            out.extend(pending.iter().map(|p| [p.0, p.1, elevation]));
+        }
+        pending.clear();
+    };
+    for (code, value) in pairs {
+        let number = value.parse::<f64>().ok();
+        match (code, number) {
+            ("0", _) => {
+                flush(kind, elevation, &mut pending, &mut out);
+                kind = match value {
+                    "LWPOLYLINE" => "LWPOLYLINE",
+                    "VERTEX" => "VERTEX",
+                    _ => "",
+                };
+                elevation = 0.0;
+                vertex = (None, None);
+            }
+            ("38", Some(z)) if kind == "LWPOLYLINE" => elevation = z,
+            ("10", Some(x)) if kind == "LWPOLYLINE" => pending.push((x, 0.0)),
+            ("20", Some(y)) if kind == "LWPOLYLINE" => {
+                if let Some(last) = pending.last_mut() {
+                    last.1 = y;
+                }
+            }
+            ("10", Some(x)) if kind == "VERTEX" => vertex.0 = Some(x),
+            ("20", Some(y)) if kind == "VERTEX" => vertex.1 = Some(y),
+            ("30", Some(z)) if kind == "VERTEX" => {
+                if let (Some(x), Some(y)) = vertex {
+                    out.push([x, y, z]);
+                }
+            }
+            _ => {}
+        }
+    }
+    flush(kind, elevation, &mut pending, &mut out);
+    out.dedup();
+    if out.len() < 3 {
+        bail!("the DXF has no contour polylines with elevations (LWPOLYLINE with group 38, or POLYLINE vertices with z)");
+    }
+    Ok(out)
+}
+
 fn read_points(text: &str) -> Result<Vec<P3>> {
     let mut out: Vec<P3> = Vec::new();
     for line in text.lines() {
@@ -239,6 +291,31 @@ fn read_points(text: &str) -> Result<Vec<P3>> {
 }
 
 impl Model {
+    pub fn contour_segments(&self, interval: f64) -> Vec<(f64, (f64, f64), (f64, f64))> {
+        let mut out = Vec::new();
+        for terrain in &self.arch.terrains {
+            let zs: Vec<f64> = terrain.tris.iter().flatten().map(|p| p[2]).collect();
+            let (lo, hi) = zs.iter().fold((f64::INFINITY, f64::NEG_INFINITY), |a, z| (a.0.min(*z), a.1.max(*z)));
+            let mut level = (lo / interval).ceil() * interval;
+            while level <= hi + 1.0e-9 {
+                for t in &terrain.tris {
+                    let mut hits: Vec<(f64, f64)> = Vec::new();
+                    for k in 0..3 {
+                        let (a, b) = (t[k], t[(k + 1) % 3]);
+                        if (a[2] - level) * (b[2] - level) < 0.0 {
+                            let s = (level - a[2]) / (b[2] - a[2]);
+                            hits.push((a[0] + (b[0] - a[0]) * s, a[1] + (b[1] - a[1]) * s));
+                        }
+                    }
+                    if let [p, q] = hits[..] {
+                        out.push((level, p, q));
+                    }
+                }
+                level += interval;
+            }
+        }
+        out
+    }
     pub(crate) fn check_setbacks(&self, wall: &super::Wall) -> Result<()> {
         for site in &self.arch.sites {
             for p in &wall.line.points {
@@ -440,6 +517,12 @@ impl Model {
                 let text = crate::host::read_to_string(&path)
                     .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
                 read_points(&text)?
+            }
+            [kind, file] if kind == "contour" => {
+                let path = self.relative(file);
+                let text = crate::host::read_to_string(&path)
+                    .map_err(|e| anyhow!("reading {}: {e}", path.display()))?;
+                contour_points(&text)?
             }
             [kind, size] if kind == "grid" => {
                 let (w, d) = size

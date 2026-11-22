@@ -679,6 +679,7 @@ Architecture stage F (gcad #353).
 | accessible route | supported | `check route x,y x,y clear=800 width=900` through the doors between two points | `arch::accessible_route_fails_on_a_narrow_door` |
 | escape windows | supported | `check escape area=0.33 w=450 h=450 sill=1100` on every room | `arch::escape_window_size` |
 | driveway slopes | supported | `check driveway max=0.1` on each `road` against the terrain | `arch::driveway_slope_is_checked` |
+| contours in plans | supported | `plan L0 contours=500` draws terrain contours on layer `A-SITE`; `terrain contour site.dxf` reads them from LWPOLYLINE group 38 or POLYLINE vertices | `arch::plan_draws_contours`, `arch::terrain_from_dxf_contours` |
 
 ## Buildings in gcad-mesh
 

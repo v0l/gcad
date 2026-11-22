@@ -1611,6 +1611,27 @@ fn bom_lists_building_elements() {
 }
 
 #[test]
+fn plan_draws_contours() {
+    let dir = house_files(
+        "plan_contours",
+        &[
+            (
+                "site.gcad",
+                "units mm\nlevel L0 0\nlevel L1 2700\nwall_type int block:100\nw1: wall 5000,3000 9000,3000 type=int top=L1\nt1: terrain grid 20000x10000 slope=0.1,0 at=0,0 depth=1000",
+            ),
+            (
+                "site.gdwg",
+                "part site.gcad\nsheet \"Site\" size=A3 scale=1:200\nplan L0 contours=500",
+            ),
+        ],
+    );
+    let drawing = gcad::drafting::run(&dir.join("site.gdwg"), &[]).expect("runs");
+    assert!(drawing.failed().is_none(), "{:?}", drawing.failed().map(|(l, e)| format!("{}: {e:#}", l.text)));
+    let svg = gcad::drafting::svg(&drawing.sheets[0]);
+    assert_eq!(svg.matches("class=\"contour\"").count(), 6, "{svg}");
+}
+
+#[test]
 fn plan_draws_the_cut() {
     let svg = plan_svg(
         "plan_draws_the_cut",
@@ -2078,6 +2099,17 @@ fn driveway_slope_is_checked() {
     assert!(steep.starts_with("FAIL") && steep.contains("rd slope 12.0 percent over 10.0"), "{steep}");
     let flat = summary("t1: terrain grid 20000x20000 slope=0.05,0 at=0,0 depth=1000\nrd: road 2000,5000 12000,5000 width=3500 type=asphalt:100\ncheck driveway max=0.1");
     assert!(flat.contains("driveways checked"), "{flat}");
+}
+
+#[test]
+fn terrain_from_dxf_contours() {
+    let dxf = "0\nSECTION\n2\nENTITIES\n0\nLWPOLYLINE\n8\n0\n38\n0\n90\n2\n10\n0\n20\n0\n10\n0\n20\n10000\n0\nLWPOLYLINE\n8\n0\n38\n1000\n90\n2\n10\n10000\n20\n0\n10\n10000\n20\n10000\n0\nENDSEC\n0\nEOF\n";
+    let dir = house_files(
+        "terrain_dxf",
+        &[("site.dxf", dxf), ("site.gcad", "t1: terrain contour site.dxf depth=1000")],
+    );
+    let run = gcad::model::run_path(&dir.join("site.gcad"), &[], None).expect("runs");
+    near(volume_of(&run.model, "t1"), 1.0e8 * (500.0 + 1000.0), 1.0e-4);
 }
 
 #[test]
