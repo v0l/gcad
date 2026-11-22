@@ -739,6 +739,20 @@ impl Model {
         let path = if super::standard::is_standard(file) {
             std::path::PathBuf::from(file)
         } else {
+            if let Some((kind, _)) = file.split_once(':')
+                && !kind.is_empty()
+                && !kind.contains(['/', '\\', '.'])
+            {
+                bail!(
+                    "unknown standard part `{kind}` in `{file}`; known: {}",
+                    crate::calc::parts::KINDS
+                        .iter()
+                        .map(|k| k.name)
+                        .chain(super::standard::KINDS.iter().map(|k| k.0))
+                        .collect::<Vec<_>>()
+                        .join(", ")
+                );
+            }
             self.relative(file)
         };
         let vars = line

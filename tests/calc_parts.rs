@@ -74,6 +74,50 @@ fn a_screw_through_a_hole_under_its_tap_drill_is_warned_about() {
 }
 
 #[test]
+fn an_unknown_standard_or_a_missing_nut_size_is_refused_on_the_part_line() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_unknown"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("top.gasm");
+    for (line, needle) in [
+        ("part s iso4763:M6x25", "unknown standard part `iso4763`"),
+        ("part n iso4032:M14", "M14 is not in the table"),
+        ("part w iso7089:M7", "unknown thread `M7`"),
+    ] {
+        std::fs::write(&file, format!("{line}\n")).expect("write");
+        let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+        assert!(!ok && text.contains(needle), "{line}: {text}");
+    }
+}
+
+fn seat_check(name: &str, shaft: &str, housing: &str) -> String {
+    let dir = std::path::PathBuf::from(common::scratch(name));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join("shaft.gcad"), format!("circle {shaft}\nshaft: extrude 30\n")).expect("shaft");
+    std::fs::write(
+        dir.join("housing.gcad"),
+        format!("rect 80 80\nbase: extrude 20\nplane base.end\ncircle {housing}\nbore: cut thru\n"),
+    )
+    .expect("housing");
+    let file = dir.join("top.gasm");
+    std::fs::write(
+        &file,
+        "part shaft shaft.gcad\npart housing housing.gcad\npart b bearing:6205\nconcentric b:bore.side shaft:shaft.side\nmove b 0,0,0\n",
+    )
+    .expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    text
+}
+
+#[test]
+fn a_shaft_that_does_not_fit_the_bearing_bore_is_warned_about() {
+    let loose = seat_check("calc_parts_seat_loose", "24", "52");
+    assert!(loose.contains("warning: the 24.000 mm shaft for 6205"), "{loose}");
+    let good = seat_check("calc_parts_seat_good", "25.01", "52");
+    assert!(!good.contains("warning"), "{good}");
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));

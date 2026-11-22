@@ -1,6 +1,7 @@
 pub mod arch;
 pub mod args;
 mod assembly;
+mod bearing_check;
 mod blends;
 mod bodies;
 mod clearance;
