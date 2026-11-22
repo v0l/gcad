@@ -164,6 +164,7 @@ impl Model {
             level: 0.0,
             height: 0.0,
             rect: [0.0; 4],
+            instance: String::new(),
         };
         for (key, text) in &line.named {
             match key.as_str() {

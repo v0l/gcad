@@ -2243,4 +2243,30 @@ fn ifc_assembly_exports_placed_architecture() {
     for class in ["IFCWALL", "IFCDOOR", "IFCWINDOW", "IFCSPACE", "IFCSLAB", "IFCBUILDINGSTOREY"] {
         assert_eq!(entities(&assembly, class), entities(&part, class), "{class}");
     }
+    std::fs::write(
+        dir.join("twice.gasm"),
+        "part a house.gcad\npart b house.gcad\nrotate b 90 axis=z\nmove b 20000,0,0\n",
+    )
+    .expect("twice");
+    let twice = read("twice.gasm", "twice.ifc");
+    for (class, n) in [("IFCWALL", 10), ("IFCDOOR", 12), ("IFCWINDOW", 12), ("IFCSPACE", 4)] {
+        assert_eq!(entities(&twice, class), n, "{class}");
+    }
+    let mut high_x = f64::MIN;
+    let mut high_y = f64::MIN;
+    for line in twice.lines().filter(|l| l.contains("=IFCCARTESIANPOINTLIST3D(")) {
+        for point in line.split("((").nth(1).unwrap_or("").split("),(") {
+            let v: Vec<f64> = point
+                .trim_matches(|c| c == '(' || c == ')' || c == ';')
+                .split(',')
+                .filter_map(|n| n.parse().ok())
+                .collect();
+            if v.len() == 3 {
+                high_x = high_x.max(v[0]);
+                high_y = high_y.max(v[1]);
+            }
+        }
+    }
+    assert!((20000.0..20500.0).contains(&high_x), "max x {high_x}");
+    assert!((10000.0..10500.0).contains(&high_y), "max y {high_y}");
 }

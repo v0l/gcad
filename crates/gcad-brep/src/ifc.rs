@@ -1,6 +1,7 @@
 use crate::Model;
 use crate::arch::{Fill, Opening};
 use crate::geometry;
+use monstertruck::modeling::*;
 use sha2::{Digest, Sha256};
 use std::fmt::Write as _;
 
@@ -504,7 +505,17 @@ pub fn write(model: &Model, project: &str) -> String {
     }
 
     for room in &arch.rooms {
-        let place = w.place(Some(building_place), [room.rect[0], room.rect[1], room.level]);
+        let at = model
+            .assembly_instances
+            .iter()
+            .find(|i| i.name == room.instance)
+            .map_or([room.rect[0], room.rect[1], room.level], |i| {
+                let p = i
+                    .placement
+                    .transform_point(cgmath::Point3::new(room.rect[0], room.rect[1], room.level));
+                [p.x, p.y, p.z]
+            });
+        let place = w.place(Some(building_place), at);
         let id = w.add(format!(
             "IFCSPACE('{}',$,{},$,$,#{place},$,{},.ELEMENT.,.INTERNAL.,$)",
             global_id("IFCSPACE", &room.name),

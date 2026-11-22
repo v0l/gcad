@@ -943,7 +943,7 @@ impl Model {
             self.bodies.push((new.clone(), solid));
             added.push(new);
         }
-        self.arch.absorb(&loaded.arch, &picked, &rename);
+        self.arch.absorb(&loaded.arch, &picked, &rename, name);
         self.assembly_instances.push(AssemblyInstance {
             name: name.clone(),
             placement: Matrix4::identity(),
