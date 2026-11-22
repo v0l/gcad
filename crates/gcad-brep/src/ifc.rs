@@ -423,6 +423,57 @@ pub fn write(model: &Model, project: &str) -> String {
                 };
                 w.pset(kind, &name, id, props);
             }
+            if class == "IFCCURTAINWALL" {
+                let mut low = [f64::INFINITY; 3];
+                let mut high = [f64::NEG_INFINITY; 3];
+                for body in &rest {
+                    if let Some((_, solid)) = body_of(body) {
+                        let b = geometry::bounds(solid);
+                        for (k, (lo, hi)) in [
+                            (b.min().x, b.max().x),
+                            (b.min().y, b.max().y),
+                            (b.min().z, b.max().z),
+                        ]
+                        .into_iter()
+                        .enumerate()
+                        {
+                            low[k] = low[k].min(lo);
+                            high[k] = high[k].max(hi);
+                        }
+                    }
+                }
+                if low[0].is_finite() {
+                    let (dx, dy) = (high[0] - low[0], high[1] - low[1]);
+                    let height = high[2] - low[2];
+                    let length = dx.hypot(dy);
+                    let glass: f64 = rest
+                        .iter()
+                        .filter(|b| b.contains(".glass"))
+                        .filter_map(|b| body_of(b))
+                        .map(|(_, s)| geometry::bounds(s))
+                        .map(|b| (b.max().x - b.min().x).hypot(b.max().y - b.min().y) * (b.max().z - b.min().z))
+                        .sum();
+                    let mut quantity = |kind: &str, label: &str, value: f64| {
+                        w.add(format!("{kind}('{label}',$,$,{},$)", real(value)))
+                    };
+                    let quantities = [
+                        quantity("IFCQUANTITYLENGTH", "Length", length),
+                        quantity("IFCQUANTITYLENGTH", "Height", height),
+                        quantity("IFCQUANTITYAREA", "GrossSideArea", length * height),
+                        quantity("IFCQUANTITYAREA", "NetSideArea", glass),
+                    ];
+                    let set = w.add(format!(
+                        "IFCELEMENTQUANTITY('{}',$,'Qto_CurtainWallBaseQuantities',$,$,{})",
+                        global_id("quantities", &name),
+                        Writer::list(&quantities)
+                    ));
+                    w.rel(
+                        "IFCRELDEFINESBYPROPERTIES",
+                        &format!("{name}.quantities"),
+                        format!("(#{id}),#{set}"),
+                    );
+                }
+            }
             if !flights.is_empty() {
                 let mut ids = Vec::new();
                 for flight in &flights {
@@ -504,6 +555,53 @@ pub fn write(model: &Model, project: &str) -> String {
         w.pset(kind, &opening.name, filler, props);
     }
 
+    if !arch.grids.is_empty() {
+        let reach = |along_x: bool| {
+            let others: Vec<f64> = arch
+                .grids
+                .iter()
+                .filter(|g| g.along_x != along_x)
+                .map(|g| g.offset)
+                .collect();
+            let low = others.iter().copied().fold(f64::INFINITY, f64::min);
+            let high = others.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            if low.is_finite() {
+                (low - 1000.0, high + 1000.0)
+            } else {
+                (-1000.0, 1000.0)
+            }
+        };
+        let mut axes = [Vec::new(), Vec::new()];
+        for grid in &arch.grids {
+            let (from, to) = reach(grid.along_x);
+            let (a, b) = if grid.along_x {
+                ([grid.offset, from], [grid.offset, to])
+            } else {
+                ([from, grid.offset], [to, grid.offset])
+            };
+            let p = w.add(format!("IFCCARTESIANPOINT(({},{}))", real(a[0]), real(a[1])));
+            let q = w.add(format!("IFCCARTESIANPOINT(({},{}))", real(b[0]), real(b[1])));
+            let curve = w.add(format!("IFCPOLYLINE((#{p},#{q}))"));
+            let axis = w.add(format!(
+                "IFCGRIDAXIS({},#{curve},.T.)",
+                text(&grid.name)
+            ));
+            axes[usize::from(!grid.along_x)].push(axis);
+        }
+        let place = w.place(Some(building_place), [0.0, 0.0, 0.0]);
+        let id = w.add(format!(
+            "IFCGRID('{}',$,'Grid',$,$,#{place},$,{},{},$)",
+            global_id("IFCGRID", "grid"),
+            Writer::list(&axes[0]),
+            Writer::list(&axes[1])
+        ));
+        elements.push(Element {
+            id,
+            level: 0,
+            spatial: false,
+        });
+    }
+
     for room in &arch.rooms {
         let at = model
             .assembly_instances
@@ -527,10 +625,22 @@ pub fn write(model: &Model, project: &str) -> String {
             level: level_of(&levels, room.level),
             spatial: true,
         });
-        let props = vec![
+        let mut props = vec![
             w.property("Reference", &format!("IFCIDENTIFIER({})", text(&room.number))),
             w.property("Category", &format!("IFCLABEL({})", text(&room.floor))),
+            w.property("IsExternal", "IFCBOOLEAN(.F.)"),
+            w.property(
+                "GrossPlannedArea",
+                &format!("IFCAREAMEASURE({})", real(room.area())),
+            ),
+            w.property(
+                "NetPlannedArea",
+                &format!("IFCAREAMEASURE({})", real(room.area())),
+            ),
         ];
+        if !room.fire.is_empty() {
+            props.push(w.property("FireRating", &format!("IFCLABEL({})", text(&room.fire))));
+        }
         w.pset("Pset_SpaceCommon", &room.name, id, props);
         let mut quantity = |kind: &str, name: &str, value: f64| {
             w.add(format!("{kind}('{name}',$,$,{},$)", real(value)))

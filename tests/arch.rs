@@ -1908,6 +1908,30 @@ fn ifc_element_classes() {
 }
 
 #[test]
+fn ifc_room_fire_rating_and_common_fields() {
+    let ifc = ifc_of(
+        "ifc_room_fire_rating_and_common_fields",
+        &with("hall: room at=2000,3000 fire=REI60"),
+    );
+    for needle in ["'FireRating'", "IFCLABEL('REI60')", "'IsExternal'", "'GrossPlannedArea'", "'NetPlannedArea'"] {
+        assert!(ifc.contains(needle), "{needle}");
+    }
+}
+
+#[test]
+fn ifc_grid_and_curtain_wall_quantities() {
+    let ifc = ifc_of(
+        "ifc_grid_and_curtain_wall_quantities",
+        &with("cw1: curtainwall 0,-2000 6000,-2000 height=L1 grid=1500x900 mullion=50x100 glass=double"),
+    );
+    assert_eq!(entities(&ifc, "IFCGRID"), 1);
+    assert_eq!(entities(&ifc, "IFCGRIDAXIS"), 4);
+    assert_eq!(entities(&ifc, "IFCCURTAINWALL"), 1);
+    assert!(ifc.contains("Qto_CurtainWallBaseQuantities"));
+    assert!(ifc.contains("'GrossSideArea'"));
+}
+
+#[test]
 fn ifc_global_ids_are_stable() {
     let a = ifc_of("ifc_global_ids_are_stable_a", &building());
     let b = ifc_of("ifc_global_ids_are_stable_b", &building());

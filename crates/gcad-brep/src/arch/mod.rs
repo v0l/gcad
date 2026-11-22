@@ -179,6 +179,7 @@ pub struct Room {
     pub height: f64,
     pub rect: [f64; 4],
     pub instance: String,
+    pub fire: String,
 }
 
 impl Room {

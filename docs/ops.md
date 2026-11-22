@@ -647,7 +647,10 @@ Architecture stage E (gcad #352).
 |---|---|---|---|
 | IFC4 export | supported | `gcad export house.gasm house.ifc`: project, site, building, storeys, walls, doors, windows, openings with voids and fills | `arch::ifc_has_the_spatial_structure` |
 | IFC assembly export | supported | a `.gasm` exports the architecture of the parts it places | `arch::ifc_assembly_exports_placed_architecture` |
-| IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon` | `arch::ifc_wall_layers` |
+| IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon`. `ThermalTransmittance` is a plain sum of layer resistances plus 0.17 until the thermal calculation (#353) supplies it | `arch::ifc_wall_layers` |
+| IFC room fire rating | supported | `room ... fire=REI60` writes `Pset_SpaceCommon.FireRating`, plus `IsExternal`, `GrossPlannedArea`, `NetPlannedArea` | `arch::ifc_room_fire_rating_and_common_fields` |
+| IFC grid and curtain wall quantities | supported | `grid` lines write `IfcGrid`, `curtainwall` writes `Qto_CurtainWallBaseQuantities` | `arch::ifc_grid_and_curtain_wall_quantities` |
+| IFC plan reference | supported | an imported IFC draws its wall, slab and space outline dashed in `plan` views (class `reference`) | `arch::imported_ifc_is_a_plan_reference` |
 | IFC element classes | supported | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
 | stable GlobalIds | supported | ids derived from element names | `arch::ifc_global_ids_are_stable` |
 | IFC syntax | supported | unique ids, balanced parentheses, every reference defined | `arch::ifc_step_syntax_is_valid` |
