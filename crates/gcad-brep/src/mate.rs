@@ -421,9 +421,16 @@ impl Model {
             Condition::Concentric,
             transform,
         )?;
+        let narrow = self
+            .sources
+            .get(&part)
+            .and_then(|source| source.file.to_str())
+            .and_then(|title| super::spec_check::narrow_hole(title, own.radius, target.radius));
         Ok(format!(
-            "{said}; radius {:.3} in {:.3}",
-            own.radius, target.radius
+            "{said}; radius {:.3} in {:.3}{}",
+            own.radius,
+            target.radius,
+            narrow.map(|w| format!("; {w}")).unwrap_or_default()
         ))
     }
 

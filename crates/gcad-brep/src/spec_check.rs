@@ -28,3 +28,23 @@ pub fn spec_warnings(spec: &str) -> Vec<String> {
     }
     out
 }
+
+const SCREW_TITLES: [&str; 5] = ["ISO 4762", "ISO 4017", "ISO 4014", "ISO 7380", "ISO 10642"];
+
+pub fn narrow_hole(title: &str, shank_radius: f64, hole_radius: f64) -> Option<String> {
+    if !SCREW_TITLES.iter().any(|t| title.starts_with(t)) {
+        return None;
+    }
+    let size = title.split_whitespace().nth(2)?.split(['x', 'X']).next()?;
+    let metric = super::fastener::named(size).ok()?;
+    if (shank_radius * 2.0 - metric.major).abs() > 1.0e-6 {
+        return None;
+    }
+    let hole = hole_radius * 2.0;
+    (hole + 1.0e-6 < metric.tap).then(|| {
+        format!(
+            "warning: the {hole:.2} mm hole is narrower than the {:.2} mm tap drill of {}, so the screw cannot enter it",
+            metric.tap, metric.name
+        )
+    })
+}

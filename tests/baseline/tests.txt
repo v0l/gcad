@@ -27,7 +27,7 @@ tests/brush.rs brush: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered
 tests/c_abi.rs c_abi: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/cache.rs cache: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc_bearing.rs calc_bearing: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/calc_parts.rs calc_parts: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/calc_parts.rs calc_parts: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc.rs calc: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc_thread.rs calc_thread: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/clouds_inspect.rs clouds_inspect: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

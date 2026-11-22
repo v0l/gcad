@@ -44,6 +44,36 @@ fn a_screw_of_a_non_standard_length_is_warned_about() {
 }
 
 #[test]
+fn a_screw_through_a_hole_under_its_tap_drill_is_warned_about() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_narrow_hole"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(
+        dir.join("plate.gcad"),
+        "rect 40 30\nbase: extrude 8\nplane base.end\nh: hole 4 0,0\nk: hole 6.6 10,0\n",
+    )
+    .expect("plate");
+    let file = dir.join("top.gasm");
+    std::fs::write(
+        &file,
+        "part plate plate.gcad\npart s iso4762:M6x25\nconcentric s:shank.side plate:h.side near=0,0,8\n",
+    )
+    .expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok, "{text}");
+    assert!(
+        text.contains("warning: the 4.00 mm hole is narrower than the 5.00 mm tap drill of M6"),
+        "{text}"
+    );
+    std::fs::write(
+        &file,
+        "part plate plate.gcad\npart s iso4762:M6x25\nconcentric s:shank.side plate:k.side near=10,0,8\n",
+    )
+    .expect("write");
+    let (ok, text) = gcad(&["check", file.to_str().expect("path")]);
+    assert!(ok && !text.contains("warning"), "{text}");
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));
