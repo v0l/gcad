@@ -655,6 +655,7 @@ Architecture stage E (gcad #352).
 | IFC checks | supported | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
 | IFC volumes | supported | element volumes read by IfcOpenShell match the bodies within 0.5 percent | `arch::ifc_volumes_match_ifcopenshell` |
 | image underlays | supported | `underlay plan.png scale=1:100 dpi=100` | `arch::image_underlay` |
+| underlay in render | supported | `gcad render` draws the image flat at its scaled size | `arch::underlay_is_drawn_in_render` |
 
 ## Site and analysis
 

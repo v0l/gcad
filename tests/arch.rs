@@ -2001,6 +2001,26 @@ fn image_underlay() {
 }
 
 #[test]
+fn underlay_is_drawn_in_render() {
+    let dir = house_files("underlay_is_drawn_in_render", &[]);
+    let image = image::RgbImage::from_pixel(100, 50, image::Rgb([220, 30, 30]));
+    image.save(dir.join("plan.png")).expect("png");
+    std::fs::write(
+        dir.join("model.gcad"),
+        "underlay plan.png scale=1:100 dpi=100\n",
+    )
+    .expect("model");
+    let (ok, text) = gcad(&dir, &["render", "model.gcad", "out.png"]);
+    assert!(ok, "{text}");
+    let picture = image::open(dir.join("out.png")).expect("png").to_rgb8();
+    let red = picture
+        .pixels()
+        .filter(|p| p[0] > 120 && p[0] as i32 > p[1] as i32 + 60 && p[0] as i32 > p[2] as i32 + 60)
+        .count();
+    assert!(red > 2000, "{red} red pixels");
+}
+
+#[test]
 #[ignore = "missing: terrain"]
 fn terrain_from_points() {
     let dir = house_files(
