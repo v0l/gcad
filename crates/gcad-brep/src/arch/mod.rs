@@ -6,6 +6,7 @@ mod opening;
 mod railing;
 mod roof;
 mod room;
+mod schedule;
 mod slab;
 mod stair;
 mod structure;
@@ -13,6 +14,18 @@ mod wall;
 
 use crate::geometry::Profile;
 use gcad_mesh::arch::{Chain, Join, Justify, Layer};
+
+pub use schedule::{KINDS as SCHEDULES, Rates, Table, number as schedule_number};
+
+#[derive(Clone, Debug)]
+pub struct Column {
+    pub name: String,
+    pub kind: String,
+    pub size: String,
+    pub base: f64,
+    pub top: f64,
+    pub material: String,
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct Building {
@@ -220,6 +233,9 @@ pub struct Arch {
     pub roofs: Vec<Roof>,
     pub rooms: Vec<Room>,
     pub separators: Vec<(gcad_mesh::arch::P2, gcad_mesh::arch::P2)>,
+    pub zones: Vec<(String, Vec<String>)>,
+    pub area_scheme: Option<String>,
+    pub columns: Vec<Column>,
     pub stairs: Vec<Stair>,
     pub built: Vec<Built>,
 }

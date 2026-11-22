@@ -335,6 +335,14 @@ impl Model {
         )
         .with_context(|| format!("building `{name}`"))?;
         self.put_body(name.to_string(), solid, &u.material)?;
+        self.arch.columns.push(super::Column {
+            name: name.to_string(),
+            kind: u.kind.clone(),
+            size: u.size.clone(),
+            base: u.base,
+            top: u.top,
+            material: u.material.clone(),
+        });
         self.note_built(owner, name);
         Ok(())
     }

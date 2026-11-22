@@ -467,6 +467,23 @@ enum Command {
         #[arg(long)]
         csv: bool,
     },
+    /// Print a building schedule: doors, windows, rooms, areas, zones, finishes, walls, slabs, roofs, stairs, columns, materials or members
+    Schedule {
+        file: String,
+        kind: String,
+        /// Write CSV (the default)
+        #[arg(long)]
+        csv: bool,
+        /// Write JSON
+        #[arg(long)]
+        json: bool,
+        /// Write an SVG table
+        #[arg(long)]
+        svg: bool,
+        /// A rates.toml of prices per m2, m3, m or item; adds a cost column to `materials`
+        #[arg(long)]
+        rates: Option<String>,
+    },
     /// Nest the flat parts of a file onto stock sheets and print where every piece and saw cut goes
     Nest {
         file: String,
@@ -2310,6 +2327,31 @@ fn main() -> Result<()> {
                 },
             )?;
             print!("{}", layout.report());
+            Ok(())
+        }
+        Command::Schedule {
+            file,
+            kind,
+            csv: _,
+            json,
+            svg,
+            rates,
+        } => {
+            let run = load(&file, None, &vars)?;
+            finished(&run)?;
+            let rates = rates
+                .map(|path| {
+                    gcad::model::arch::Rates::parse(&std::fs::read_to_string(&path)?)
+                })
+                .transpose()?;
+            let table = run.model.schedule(&kind, rates.as_ref())?;
+            if json {
+                print!("{}", table.json());
+            } else if svg {
+                print!("{}", gcad::drafting::table_svg(&kind, &table));
+            } else {
+                print!("{}", table.csv());
+            }
             Ok(())
         }
         Command::Bom { file, csv } => {

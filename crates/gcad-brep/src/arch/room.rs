@@ -93,6 +93,35 @@ impl Model {
             .fold(f64::INFINITY, f64::min)
     }
 
+    pub(crate) fn op_zone(&mut self, line: &Line) -> Result<String> {
+        let [name, members @ ..] = line.positional.as_slice() else {
+            bail!("write `zone day hall living`");
+        };
+        if members.is_empty() || !line.named.is_empty() {
+            bail!("write `zone day hall living`, a name and the rooms in it");
+        }
+        for member in members {
+            if !self.arch.rooms.iter().any(|r| r.name == *member) {
+                bail!("zone `{name}` names no room `{member}`");
+            }
+        }
+        if self.arch.zones.iter().any(|(n, _)| n == name) {
+            bail!("there is already a zone `{name}`");
+        }
+        self.arch.zones.push((name.clone(), members.to_vec()));
+        Ok(format!("zone {name}: {}", members.join(", ")))
+    }
+
+    pub(crate) fn op_area_scheme(&mut self, line: &Line) -> Result<String> {
+        match line.positional.as_slice() {
+            [scheme] if ["gross", "net", "rentable"].contains(&scheme.as_str()) => {
+                self.arch.area_scheme = Some(scheme.clone());
+                Ok(format!("area scheme {scheme}"))
+            }
+            _ => bail!("write `area_scheme gross`, `net` or `rentable`"),
+        }
+    }
+
     pub(crate) fn op_room_separator(&mut self, line: &Line) -> Result<String> {
         let [a, b] = line.positional.as_slice() else {
             bail!("write `room_separator x,y x,y`");
