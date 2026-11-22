@@ -112,13 +112,13 @@ gcad-remote.workspace = true
 
 [dev-dependencies]
 gcad2glb = { path = "crates/gcad2glb" }
-egui_bench = { version = "0.9.5", features = ["viewer3d"] }
+egui_bench = { version = "0.10", features = ["viewer3d"] }
 image.workspace = true
 robust = "1.2"
 sha2.workspace = true
 
 [patch.crates-io]
-egui_bench = { git = "https://github.com/v0l/egui_bench", rev = "e37138d6c698c1fd6de2284acf23f669b27ab0a9" }
+egui_bench = { git = "https://github.com/v0l/egui_bench", rev = "3c6481385c163ca7c1439fce3a6ba5ef5cd83c1e" }
 monstertruck = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }
 monstertruck-core = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }
 monstertruck-traits = { git = "https://github.com/v0l/monstertruck", rev = "07cd072a872e45d75d42246933c282fc6430240d" }

@@ -1515,8 +1515,8 @@ dependencies = [
 
 [[package]]
 name = "egui_bench"
-version = "0.9.6"
-source = "git+https://github.com/v0l/egui_bench?rev=e37138d6c698c1fd6de2284acf23f669b27ab0a9#e37138d6c698c1fd6de2284acf23f669b27ab0a9"
+version = "0.10.0"
+source = "git+https://github.com/v0l/egui_bench?rev=3c6481385c163ca7c1439fce3a6ba5ef5cd83c1e#3c6481385c163ca7c1439fce3a6ba5ef5cd83c1e"
 dependencies = [
  "bytemuck",
  "egui",
