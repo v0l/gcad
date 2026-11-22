@@ -1611,7 +1611,6 @@ fn bom_lists_building_elements() {
 }
 
 #[test]
-#[ignore = "missing: floor plans"]
 fn plan_draws_the_cut() {
     let svg = plan_svg(
         "plan_draws_the_cut",
@@ -1627,7 +1626,6 @@ fn plan_draws_the_cut() {
 }
 
 #[test]
-#[ignore = "missing: plan symbols"]
 fn plan_symbols() {
     let svg = plan_svg(
         "plan_symbols",
@@ -1639,7 +1637,6 @@ fn plan_symbols() {
 }
 
 #[test]
-#[ignore = "missing: stair arrows on plans"]
 fn plan_stair_arrow() {
     let dir = house_files(
         "plan_stair_arrow",
@@ -1660,7 +1657,6 @@ fn plan_stair_arrow() {
 }
 
 #[test]
-#[ignore = "missing: reflected ceiling plans"]
 fn reflected_ceiling_plan() {
     let svg = plan_svg(
         "reflected_ceiling_plan",
@@ -1670,7 +1666,6 @@ fn reflected_ceiling_plan() {
 }
 
 #[test]
-#[ignore = "missing: elevations"]
 fn elevation_with_level_marks() {
     let svg = plan_svg(
         "elevation_with_level_marks",
@@ -1680,7 +1675,6 @@ fn elevation_with_level_marks() {
 }
 
 #[test]
-#[ignore = "missing: building sections"]
 fn section_through_two_points() {
     let svg = plan_svg(
         "section_through_two_points",
@@ -1691,7 +1685,6 @@ fn section_through_two_points() {
 }
 
 #[test]
-#[ignore = "missing: material hatches"]
 fn hatch_fill_area_matches_the_layer() {
     let svg = plan_svg(
         "hatch_fill_area_matches_the_layer",
@@ -1701,7 +1694,6 @@ fn hatch_fill_area_matches_the_layer() {
 }
 
 #[test]
-#[ignore = "missing: tags"]
 fn tags_carry_the_marks() {
     let svg = plan_svg(
         "tags_carry_the_marks",
@@ -1713,7 +1705,6 @@ fn tags_carry_the_marks() {
 }
 
 #[test]
-#[ignore = "missing: room tags"]
 fn room_tags_show_the_area() {
     let dir = house_files(
         "room_tags_show_the_area",
@@ -1732,7 +1723,6 @@ fn room_tags_show_the_area() {
 }
 
 #[test]
-#[ignore = "missing: automatic dimension chains"]
 fn auto_dims_sum_to_the_overall() {
     let svg = plan_svg(
         "auto_dims_sum_to_the_overall",
@@ -1752,17 +1742,15 @@ fn auto_dims_sum_to_the_overall() {
 }
 
 #[test]
-#[ignore = "missing: detail viewports"]
 fn viewport_detail_at_a_new_scale() {
     let svg = plan_svg(
         "viewport_detail_at_a_new_scale",
-        "part house.gcad\nsheet \"Details\" size=A3 scale=1:50\nplan L0 cut=1200\nviewport window=-500,-500,1000,1000 scale=1:5 label=\"corner\"",
+        "part house.gcad\nsheet \"Details\" size=A3 scale=1:50\nplan L0 cut=1200\nviewport window=-100,-100,300,300 scale=1:5 label=\"corner\"",
     );
     assert!(svg.contains(">corner 1:5<"));
 }
 
 #[test]
-#[ignore = "missing: sheet sets"]
 fn sheet_set_with_a_drawing_list() {
     let dir = house_files(
         "sheet_set_with_a_drawing_list",
@@ -1778,7 +1766,81 @@ fn sheet_set_with_a_drawing_list() {
 }
 
 #[test]
-#[ignore = "missing: DXF plans with layers"]
+fn elevation_draws_only_the_outside() {
+    let svg = plan_svg(
+        "elevation_draws_only_the_outside",
+        "part house.gcad\nsheet \"South\" size=A3 scale=1:50\nelevation from=-y",
+    );
+    assert!(svg.len() < 60_000, "{} bytes", svg.len());
+    assert!(svg.matches("<path").count() < 80, "{}", svg.matches("<path").count());
+    assert!(svg.contains("class=\"face\""));
+    assert!(svg.contains("data-layer=\"A-GLAZ\"") && svg.contains("data-layer=\"A-DOOR\""));
+    let outer_faces = svg.matches("data-body=\"outer.").count();
+    assert!(outer_faces <= 6, "{outer_faces} wall layer faces");
+}
+
+#[test]
+fn tags_do_not_overlap() {
+    let svg = plan_svg(
+        "tags_do_not_overlap",
+        "part house.gcad\nsheet \"Ground\" size=A3 scale=1:50\nplan L0 cut=1200\ntag door\ntag window\ntag wall\ndim auto walls side=-y",
+    );
+    let texts: Vec<(f64, f64, f64, String)> = svg
+        .lines()
+        .filter(|l| l.starts_with("<text"))
+        .filter_map(|l| {
+            let n = |key: &str| -> Option<f64> {
+                let at = l.find(key)? + key.len();
+                l[at..].split('"').next()?.parse().ok()
+            };
+            let words = l.split('>').nth(1)?.split('<').next()?.to_string();
+            Some((n(" x=\"")?, n(" y=\"")?, n("font-size=\"")?, words))
+        })
+        .filter(|t| ["D01", "W01", "ext", "int"].contains(&t.3.as_str()))
+        .collect();
+    assert!(texts.len() >= 3, "{texts:?}");
+    for (i, a) in texts.iter().enumerate() {
+        for b in &texts[i + 1..] {
+            let wa = a.3.len() as f64 * a.2 * 0.55;
+            let wb = b.3.len() as f64 * b.2 * 0.55;
+            let apart = (a.0 - b.0).abs() >= (wa + wb) / 2.0 || (a.1 - b.1).abs() >= (a.2 + b.2) / 2.0;
+            assert!(apart, "{a:?} overlaps {b:?}");
+        }
+    }
+}
+
+#[test]
+fn example_house_sheets_stay_small() {
+    let dir = std::path::PathBuf::from(scratch("example_house_sheets_stay_small"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("examples/architecture");
+    for file in ["house.gcad", "house.gdwg"] {
+        std::fs::copy(root.join(file), dir.join(file)).expect("copy");
+    }
+    let (ok, text) = gcad(&dir, &["export", "house.gdwg", "house.svg"]);
+    assert!(ok, "{text}");
+    let mut sheets = 0;
+    for entry in std::fs::read_dir(&dir).expect("dir") {
+        let path = entry.expect("entry").path();
+        if path.extension().is_some_and(|e| e == "svg") {
+            sheets += 1;
+            let size = std::fs::metadata(&path).expect("meta").len();
+            assert!(size < 300_000, "{} is {size} bytes", path.display());
+        }
+    }
+    assert_eq!(sheets, 11);
+    let (ok, text) = gcad(&dir, &["export", "house.gdwg", "house.dxf"]);
+    assert!(ok, "{text}");
+    for entry in std::fs::read_dir(&dir).expect("dir") {
+        let path = entry.expect("entry").path();
+        if path.extension().is_some_and(|e| e == "dxf") {
+            let size = std::fs::metadata(&path).expect("meta").len();
+            assert!(size < 2_000_000, "{} is {size} bytes", path.display());
+        }
+    }
+}
+
+#[test]
 fn plan_dxf_has_layers_by_class() {
     let dir = house_files(
         "plan_dxf_has_layers_by_class",

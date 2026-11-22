@@ -79,7 +79,7 @@ fn parse<T: for<'a> Deserialize<'a>>(text: &str, name: &str) -> T {
     toml::from_str(text).unwrap_or_else(|e| panic!("calc table {name}: {e}"))
 }
 
-fn all() -> &'static [Thread] {
+pub fn all() -> &'static [Thread] {
     static ALL: OnceLock<Vec<Thread>> = OnceLock::new();
     ALL.get_or_init(|| {
         let metric = parse::<Rows<(f64, f64, f64, bool)>>(METRIC, "thread_metric")

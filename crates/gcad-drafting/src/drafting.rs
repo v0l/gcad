@@ -1,4 +1,8 @@
 mod annotate;
+mod building;
+mod elevation;
+mod hatch;
+mod plan;
 mod scan;
 
 use crate::drawing::{polylines, section_of, silhouettes};
@@ -42,11 +46,28 @@ pub enum Mark {
         anchor: Anchor,
         angle: f64,
     },
+    Group {
+        class: String,
+        data: Vec<(String, String)>,
+        marks: Vec<Mark>,
+    },
+}
+
+pub fn flatten(marks: &[Mark]) -> Vec<&Mark> {
+    let mut out = Vec::new();
+    for mark in marks {
+        match mark {
+            Mark::Group { marks, .. } => out.extend(flatten(marks)),
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 #[derive(Clone, Debug)]
 pub struct Sheet {
     pub name: String,
+    pub number: String,
     pub width: f64,
     pub height: f64,
     pub scale: f64,
@@ -115,6 +136,10 @@ struct State {
     label_line: Option<Line>,
     view_geometry: Option<(usize, usize, usize)>,
     view_box: Option<(f64, f64, f64, f64)>,
+    hatches: BTreeMap<String, String>,
+    plan_level: f64,
+    last_view: Option<Line>,
+    lists: Vec<(usize, Option<(f64, f64)>)>,
 }
 
 pub(crate) const MARGIN: f64 = 10.0;
@@ -144,6 +169,10 @@ pub fn run_source(path: &Path, source: &str, vars: &[(String, f64)]) -> Result<D
         label_line: None,
         view_geometry: None,
         view_box: None,
+        hatches: BTreeMap::new(),
+        plan_level: 0.0,
+        last_view: None,
+        lists: Vec::new(),
     };
     let fixed: Scope = vars.iter().cloned().collect();
     for line in lines {
@@ -160,6 +189,7 @@ pub fn run_source(path: &Path, source: &str, vars: &[(String, f64)]) -> Result<D
         }
     }
     let count = state.drawing.sheets.len();
+    state.fill_lists();
     let title = state.drawing.title.clone();
     let file = state
         .model_file
@@ -330,7 +360,8 @@ impl State {
             .map(|(name, _)| name)
             .filter(|name| {
                 let mut wanted = patterns.iter().filter(|p| !p.starts_with('!')).peekable();
-                let keep = wanted.peek().is_none() || wanted.any(|p| crate::parse::matches(p, name));
+                let keep =
+                    wanted.peek().is_none() || wanted.any(|p| crate::parse::matches(p, name));
                 let drop = patterns
                     .iter()
                     .filter_map(|p| p.strip_prefix('!'))
@@ -387,9 +418,18 @@ impl State {
             }
             "sheet" => self.op_sheet(line),
             "view" => self.op_view(line, false),
+            "section" if Self::is_building_section(line) => {
+                let result = self.op_building_section(line);
+                result
+            }
             "section" => self.op_view(line, true),
             "dims" => self.op_dims(line),
+            "dim" if line.positional.first().is_some_and(|w| w == "auto") => self.op_dim_auto(line),
             "dim" => self.op_dim(line),
+            "tag" => self.op_tag(line),
+            "viewport" => self.op_viewport(line),
+            "elevation" => self.op_elevation(line),
+            "drawinglist" => self.op_drawinglist(line),
             "level" => self.op_level(line),
             "note" => self.op_note(line),
             "callout" => self.op_callout(line),
@@ -397,6 +437,11 @@ impl State {
             "cutlist" => self.op_cutlist(line),
             "schedule" => self.op_schedule(line),
             "nest" => self.op_nest(line),
+            "plan" => self.op_plan(line),
+            "rcp" => self.op_rcp(line),
+            "hatch" => self.op_hatch(line),
+            "northarrow" => self.op_northarrow(line),
+            "scalebar" => self.op_scalebar(line),
             "scansection" => self.op_scansection(line),
             other => bail!("`{other}` is not a drawing operation; see `gcad docs`"),
         }
@@ -427,6 +472,9 @@ impl State {
         let scale = scale_of(named(line, "scale").unwrap_or("1:1"))?;
         let mut sheet = Sheet {
             name: name.clone(),
+            number: named(line, "number")
+                .map(|t| t.trim_matches('"').to_string())
+                .unwrap_or_default(),
             width,
             height,
             scale,
@@ -2013,6 +2061,7 @@ pub fn table_svg(title: &str, table: &crate::model::arch::Table) -> String {
     let height = (table.rows.len() + 2) as f64 * row_h + 20.0;
     let sheet = Sheet {
         name: title.to_string(),
+        number: String::new(),
         width,
         height,
         scale: 1.0,
@@ -2259,65 +2308,80 @@ pub fn svg(sheet: &Sheet) -> String {
     );
     let _ = writeln!(out, "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>");
     for mark in &sheet.marks {
-        match mark {
-            Mark::Shape {
-                loops,
-                closed,
-                fill,
-                stroke,
-                width,
-                dashed,
-            } => {
-                let mut d = String::new();
-                for l in loops {
-                    for (k, (x, y)) in l.iter().enumerate() {
-                        let _ = write!(d, "{}{x:.2},{y:.2} ", if k == 0 { "M" } else { "L" });
-                    }
-                    if *closed {
-                        d.push_str("Z ");
-                    }
-                }
-                let _ = writeln!(
-                    out,
-                    "<path d=\"{}\" fill=\"{}\" fill-rule=\"evenodd\" stroke=\"{}\" stroke-width=\"{width:.2}\" stroke-linejoin=\"round\" stroke-linecap=\"round\"{}/>",
-                    d.trim_end(),
-                    fill.map_or("none".to_string(), colour_hex),
-                    stroke.map_or("none".to_string(), colour_hex),
-                    if *dashed {
-                        " stroke-dasharray=\"2 1\""
-                    } else {
-                        ""
-                    }
-                );
-            }
-            Mark::Text {
-                x,
-                y,
-                size,
-                text,
-                anchor,
-                angle,
-            } => {
-                let anchor = match anchor {
-                    Anchor::Start => "start",
-                    Anchor::Middle => "middle",
-                    Anchor::End => "end",
-                };
-                let turn = if *angle != 0.0 {
-                    format!(" transform=\"rotate({angle} {x:.2} {y:.2})\"")
-                } else {
-                    String::new()
-                };
-                let _ = writeln!(
-                    out,
-                    "<text x=\"{x:.2}\" y=\"{y:.2}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{size:.2}\" text-anchor=\"{anchor}\"{turn}>{}</text>",
-                    escape(text)
-                );
-            }
-        }
+        svg_mark(&mut out, mark);
     }
     out.push_str("</svg>\n");
     out
+}
+
+fn svg_mark(out: &mut String, mark: &Mark) {
+    match mark {
+        Mark::Group { class, data, marks } => {
+            let mut extra = String::new();
+            for (k, v) in data {
+                let _ = write!(extra, " data-{k}=\"{}\"", escape(v));
+            }
+            let _ = writeln!(out, "<g class=\"{}\"{extra}>", escape(class));
+            for inner in marks {
+                svg_mark(out, inner);
+            }
+            out.push_str("</g>\n");
+        }
+        Mark::Shape {
+            loops,
+            closed,
+            fill,
+            stroke,
+            width,
+            dashed,
+        } => {
+            let mut d = String::new();
+            for l in loops {
+                for (k, (x, y)) in l.iter().enumerate() {
+                    let _ = write!(d, "{}{x:.2},{y:.2} ", if k == 0 { "M" } else { "L" });
+                }
+                if *closed {
+                    d.push_str("Z ");
+                }
+            }
+            let _ = writeln!(
+                out,
+                "<path d=\"{}\" fill=\"{}\" fill-rule=\"evenodd\" stroke=\"{}\" stroke-width=\"{width:.2}\" stroke-linejoin=\"round\" stroke-linecap=\"round\"{}/>",
+                d.trim_end(),
+                fill.map_or("none".to_string(), colour_hex),
+                stroke.map_or("none".to_string(), colour_hex),
+                if *dashed {
+                    " stroke-dasharray=\"2 1\""
+                } else {
+                    ""
+                }
+            );
+        }
+        Mark::Text {
+            x,
+            y,
+            size,
+            text,
+            anchor,
+            angle,
+        } => {
+            let anchor = match anchor {
+                Anchor::Start => "start",
+                Anchor::Middle => "middle",
+                Anchor::End => "end",
+            };
+            let turn = if *angle != 0.0 {
+                format!(" transform=\"rotate({angle} {x:.2} {y:.2})\"")
+            } else {
+                String::new()
+            };
+            let _ = writeln!(
+                out,
+                "<text x=\"{x:.2}\" y=\"{y:.2}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{size:.2}\" text-anchor=\"{anchor}\"{turn}>{}</text>",
+                escape(text)
+            );
+        }
+    }
 }
 
 fn pdf_text(text: &str) -> Vec<u8> {
@@ -2365,8 +2429,9 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
         let h = sheet.height;
         let y = |v: f64| (h - v) * pt;
         let mut operations: Vec<Operation> = Vec::new();
-        for mark in &sheet.marks {
+        for mark in flatten(&sheet.marks) {
             match mark {
+                Mark::Group { .. } => {}
                 Mark::Shape {
                     loops,
                     closed,
@@ -2486,17 +2551,106 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
     out
 }
 
+fn dxf_marks(
+    out: &mut String,
+    marks: &[Mark],
+    layer: &str,
+    height: f64,
+    layers: &mut std::collections::BTreeSet<String>,
+) {
+    for mark in marks {
+        match mark {
+            Mark::Group { data, marks, .. } => {
+                let own = data
+                    .iter()
+                    .find(|(k, _)| k == "layer")
+                    .map_or(layer, |(_, v)| v.as_str());
+                dxf_marks(out, marks, own, height, layers);
+            }
+            Mark::Shape { loops, closed, .. } => {
+                layers.insert(layer.to_string());
+                for l in loops {
+                    let n = l.len();
+                    let count = if *closed { n } else { n.saturating_sub(1) };
+                    for i in 0..count {
+                        let (a, b) = (l[i], l[(i + 1) % n]);
+                        let _ = write!(
+                            out,
+                            "0\nLINE\n8\n{layer}\n10\n{:.4}\n20\n{:.4}\n30\n0.0\n11\n{:.4}\n21\n{:.4}\n31\n0.0\n",
+                            a.0,
+                            height - a.1,
+                            b.0,
+                            height - b.1
+                        );
+                    }
+                }
+            }
+            Mark::Text {
+                x,
+                y,
+                size,
+                text,
+                angle,
+                ..
+            } => {
+                layers.insert(layer.to_string());
+                let _ = write!(
+                    out,
+                    "0\nTEXT\n8\n{layer}\n10\n{x:.4}\n20\n{:.4}\n30\n0.0\n40\n{size:.3}\n1\n{text}\n50\n{:.2}\n",
+                    height - y,
+                    -angle
+                );
+            }
+        }
+    }
+}
+
+pub fn dxf(sheet: &Sheet) -> String {
+    let mut body = String::new();
+    let mut layers = std::collections::BTreeSet::new();
+    dxf_marks(&mut body, &sheet.marks, "A-ANNO", sheet.height, &mut layers);
+    let mut out = String::from(
+        "0\nSECTION\n2\nHEADER\n9\n$ACADVER\n1\nAC1009\n9\n$INSUNITS\n70\n4\n0\nENDSEC\n",
+    );
+    let _ = write!(
+        out,
+        "0\nSECTION\n2\nTABLES\n0\nTABLE\n2\nLAYER\n70\n{}\n",
+        layers.len()
+    );
+    for layer in &layers {
+        let _ = write!(out, "0\nLAYER\n2\n{layer}\n70\n0\n62\n7\n6\nCONTINUOUS\n");
+    }
+    out.push_str("0\nENDTAB\n0\nENDSEC\n0\nSECTION\n2\nENTITIES\n");
+    out.push_str(&body);
+    out.push_str("0\nENDSEC\n0\nEOF\n");
+    out
+}
+
 pub fn write(drawing: &Drawing, output: &str) -> Result<Vec<String>> {
     if drawing.sheets.is_empty() {
         bail!("the drawing has no sheets");
     }
     let lower = output.to_ascii_lowercase();
+    if lower.ends_with(".dxf") {
+        if drawing.sheets.len() == 1 {
+            std::fs::write(output, dxf(&drawing.sheets[0]))?;
+            return Ok(vec![output.to_string()]);
+        }
+        let stem = &output[..output.len() - 4];
+        let mut written = Vec::new();
+        for (i, sheet) in drawing.sheets.iter().enumerate() {
+            let name = format!("{stem}-{}.dxf", i + 1);
+            std::fs::write(&name, dxf(sheet))?;
+            written.push(name);
+        }
+        return Ok(written);
+    }
     if lower.ends_with(".pdf") {
         std::fs::write(output, pdf(&drawing.sheets))?;
         return Ok(vec![output.to_string()]);
     }
     if !lower.ends_with(".svg") {
-        bail!("a drawing exports as .pdf or .svg");
+        bail!("a drawing exports as .pdf, .svg or .dxf");
     }
     if drawing.sheets.len() == 1 {
         std::fs::write(output, svg(&drawing.sheets[0]))?;

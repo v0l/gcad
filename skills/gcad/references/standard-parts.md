@@ -22,7 +22,12 @@ gcad calc oring piston 50 --pressure 10 --formulas   # ring size, groove, squeez
 gcad calc thread M6 --material alu --depth 14        # drills, heads, torque, engagement
 gcad calc fit H7/g6 25                               # ISO 286 limits for a hole and shaft
 gcad calc material petg                              # properties and thread engagement
+gcad calc bearing 6205 --radial 2 --rpm 3000         # size, C, C0, seats, shoulders, L10 life
+gcad parts list                                      # the standard parts catalogue
+gcad parts show iso4762:M6x25                        # one part with its BOM line
 ```
+
+Catalogue specs work as `part s iso4762:M6x25`; bought parts are `spec:name@WxDxH`.
 
 ## Not calculators
 

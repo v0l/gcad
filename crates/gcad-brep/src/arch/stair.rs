@@ -37,7 +37,7 @@ struct Options {
 }
 
 impl Flight {
-    pub(crate) fn plan(&self, s: f64, u: f64) -> P2 {
+    pub fn plan(&self, s: f64, u: f64) -> P2 {
         add(add(self.start, scale(self.dir, s)), scale(left(self.dir), u))
     }
 

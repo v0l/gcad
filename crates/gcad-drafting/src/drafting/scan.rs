@@ -11,7 +11,10 @@ const FLAG: f64 = 0.9;
 const GAP: f64 = 14.0;
 
 fn named<'a>(line: &'a Line, key: &str) -> Option<&'a str> {
-    line.named.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+    line.named
+        .iter()
+        .find(|(k, _)| k == key)
+        .map(|(_, v)| v.as_str())
 }
 
 fn rgb(c: [u8; 3]) -> [f64; 3] {
@@ -19,7 +22,12 @@ fn rgb(c: [u8; 3]) -> [f64; 3] {
 }
 
 fn square(x: f64, y: f64, half: f64) -> Vec<(f64, f64)> {
-    vec![(x - half, y - half), (x + half, y - half), (x + half, y + half), (x - half, y + half)]
+    vec![
+        (x - half, y - half),
+        (x + half, y - half),
+        (x + half, y + half),
+        (x - half, y + half),
+    ]
 }
 
 impl State {
@@ -29,14 +37,18 @@ impl State {
             .first()
             .cloned()
             .ok_or_else(|| anyhow!("write `scansection scan to=part axis=z at=10`"))?;
-        let part = named(line, "to").ok_or_else(|| anyhow!("`scansection` needs `to=` the part to compare with"))?;
+        let part = named(line, "to")
+            .ok_or_else(|| anyhow!("`scansection` needs `to=` the part to compare with"))?;
         let axis = match named(line, "axis").unwrap_or("z") {
             "x" => 0,
             "y" => 1,
             "z" => 2,
             other => bail!("`axis` is x, y or z, not `{other}`"),
         };
-        let at = eval(named(line, "at").ok_or_else(|| anyhow!("`scansection` needs `at=`"))?, &self.scope)?;
+        let at = eval(
+            named(line, "at").ok_or_else(|| anyhow!("`scansection` needs `at=`"))?,
+            &self.scope,
+        )?;
         let thickness = match named(line, "thickness") {
             Some(t) => eval(t, &self.scope)?,
             None => 1.0,
@@ -84,15 +96,28 @@ impl State {
         let slab: Vec<usize> = (0..cloud.len())
             .filter(|&i| (cloud.positions[i][axis] - at).abs() <= thickness / 2.0)
             .collect();
-        let mut extent = (f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY);
+        let mut extent = (
+            f64::INFINITY,
+            f64::INFINITY,
+            f64::NEG_INFINITY,
+            f64::NEG_INFINITY,
+        );
         for &(u, v) in loops.iter().flatten() {
-            extent = (extent.0.min(u), extent.1.min(v), extent.2.max(u), extent.3.max(v));
+            extent = (
+                extent.0.min(u),
+                extent.1.min(v),
+                extent.2.max(u),
+                extent.3.max(v),
+            );
         }
         let (w, h) = ((extent.2 - extent.0) / scale, (extent.3 - extent.1) / scale);
         let first = self.place(w, h, None)?;
         let second = self.place(w, h, None)?;
         let place = |origin: (f64, f64), (u, v): (f64, f64)| {
-            (origin.0 + (u - extent.0) / scale, origin.1 - (v - extent.1) / scale)
+            (
+                origin.0 + (u - extent.0) / scale,
+                origin.1 - (v - extent.1) / scale,
+            )
         };
         let colour = self.model()?.colours.get(part).copied().unwrap_or(BODY);
         let outline = |origin: (f64, f64)| -> Vec<Vec<(f64, f64)>> {
@@ -154,7 +179,11 @@ impl State {
                     loops: vec![square(x, y, FLAG)],
                     closed: false,
                     fill: None,
-                    stroke: Some(if d > 0.0 { [0.85, 0.1, 0.1] } else { [0.1, 0.2, 0.85] }),
+                    stroke: Some(if d > 0.0 {
+                        [0.85, 0.1, 0.1]
+                    } else {
+                        [0.1, 0.2, 0.85]
+                    }),
                     width: 0.15,
                     dashed: false,
                 });
@@ -163,7 +192,14 @@ impl State {
         let axis_name = ["x", "y", "z"][axis];
         for (origin, text) in [
             (first, format!("CAD section {axis_name}={at}")),
-            (second, format!("scan section {axis_name}={at}, {} points, {flagged} beyond {}", slab.len(), gcad_parse::label(tolerance))),
+            (
+                second,
+                format!(
+                    "scan section {axis_name}={at}, {} points, {flagged} beyond {}",
+                    slab.len(),
+                    gcad_parse::label(tolerance)
+                ),
+            ),
         ] {
             marks.push(Mark::Text {
                 x: origin.0,
@@ -177,7 +213,8 @@ impl State {
         let _ = GAP;
         self.sheet()?.marks.extend(marks);
         if let Some(name) = line.label.as_deref() {
-            self.scope.insert(format!("{name}.points"), slab.len() as f64);
+            self.scope
+                .insert(format!("{name}.points"), slab.len() as f64);
             self.scope.insert(format!("{name}.flagged"), flagged as f64);
             self.scope.insert(format!("{name}.worst"), worst);
         }

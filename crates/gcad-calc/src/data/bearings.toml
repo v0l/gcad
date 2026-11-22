@@ -1,0 +1,117 @@
+# Bearing catalogue, mm, kN, rpm. Rows are [name, d, D, B, C, C0, limiting speed, rs min, series, flange D1, flange C1].
+# series is the DIN 5418 shoulder group: 890 for diameter series 8, 9 and 0, 123 for 1, 2 and 3.
+# radial 6000, 6200 and 6300 series: d, D, B from ISO 15; C and C0 from the SKF catalogue values at
+#   https://mechcodex.com/reference/ball-bearing-dimensions (agree with https://mechtoolshub.com/en/data/bearing-series).
+#   Open limiting speed (grease) and the corner radius r (used as rs min, the ISK catalogue rounds it up) from the
+#   ISK bearing pages, https://iskbearing.com/product-details/6205 and the same address for each number.
+# miniature 623 to 698: d, D, B and C, C0 in N from the ZEN catalogue (open), https://tflbearing.com/products/ball-bearings/miniature-deep-groove-ball-bearings-6
+#   (608 and 626 agree with Minebea Mitsumi, https://product.minebeamitsumi.com/en/product/category/bearing/miniature_small/parts/608.html,
+#   3297 and 1368 N against 3293 and 1379 N). 698 comes from the F 698 row of https://tflbearing.com/products/ball-bearings/miniature-deep-groove-ball-bearings-of-the-series-f-mf.
+#   Minebea lists rs min 0.3 for 608; the others are assumed 0.3 too. The speed is not published for these and is left at 0.
+radial = [
+  ["608", 8, 22, 7, 3.293, 1.379, 0, 0.3, 123, 0, 0],
+  ["623", 3, 10, 4, 0.631, 0.219, 0, 0.3, 123, 0, 0],
+  ["624", 4, 13, 5, 1.301, 0.488, 0, 0.3, 123, 0, 0],
+  ["625", 5, 16, 5, 1.729, 0.675, 0, 0.3, 123, 0, 0],
+  ["626", 6, 19, 6, 2.336, 0.896, 0, 0.3, 123, 0, 0],
+  ["688", 8, 16, 4, 1.252, 0.592, 0, 0.3, 890, 0, 0],
+  ["698", 8, 19, 6, 2.237, 0.917, 0, 0.3, 123, 0, 0],
+  ["6000", 10, 26, 8, 4.62, 1.96, 36000, 0.5, 890, 0, 0],
+  ["6001", 12, 28, 8, 5.07, 2.36, 32000, 0.5, 890, 0, 0],
+  ["6002", 15, 32, 9, 5.59, 2.85, 28000, 0.5, 890, 0, 0],
+  ["6003", 17, 35, 10, 6.05, 3.25, 24000, 0.5, 890, 0, 0],
+  ["6004", 20, 42, 12, 9.36, 5.0, 20000, 1.0, 890, 0, 0],
+  ["6005", 25, 47, 12, 11.2, 6.55, 18000, 1.0, 890, 0, 0],
+  ["6006", 30, 55, 13, 13.3, 8.3, 15000, 1.0, 890, 0, 0],
+  ["6007", 35, 62, 14, 15.9, 10.2, 13000, 1.5, 890, 0, 0],
+  ["6008", 40, 68, 15, 16.8, 11.6, 12000, 1.5, 890, 0, 0],
+  ["6009", 45, 75, 16, 20.8, 14.6, 11000, 1.5, 890, 0, 0],
+  ["6010", 50, 80, 16, 21.6, 16.0, 10000, 1.5, 890, 0, 0],
+  ["6200", 10, 30, 9, 5.07, 2.36, 30000, 1.0, 123, 0, 0],
+  ["6201", 12, 32, 10, 6.89, 3.1, 28000, 1.0, 123, 0, 0],
+  ["6202", 15, 35, 11, 7.8, 3.75, 24000, 1.0, 123, 0, 0],
+  ["6203", 17, 40, 12, 9.56, 4.75, 20000, 1.0, 123, 0, 0],
+  ["6204", 20, 47, 14, 12.7, 6.55, 18000, 1.5, 123, 0, 0],
+  ["6205", 25, 52, 15, 14.0, 7.8, 15000, 1.5, 123, 0, 0],
+  ["6206", 30, 62, 16, 19.5, 11.2, 13000, 1.5, 123, 0, 0],
+  ["6207", 35, 72, 17, 25.5, 15.3, 11000, 2.0, 123, 0, 0],
+  ["6208", 40, 80, 18, 30.7, 19.0, 10000, 2.0, 123, 0, 0],
+  ["6209", 45, 85, 19, 33.2, 21.6, 9000, 2.0, 123, 0, 0],
+  ["6210", 50, 90, 20, 35.1, 23.2, 8500, 2.0, 123, 0, 0],
+  ["6300", 10, 35, 11, 8.06, 3.4, 26000, 1.0, 123, 0, 0],
+  ["6301", 12, 37, 12, 9.75, 4.15, 24000, 1.5, 123, 0, 0],
+  ["6302", 15, 42, 13, 11.4, 5.4, 20000, 1.5, 123, 0, 0],
+  ["6303", 17, 47, 14, 13.5, 6.55, 19000, 1.5, 123, 0, 0],
+  ["6304", 20, 52, 15, 15.9, 7.8, 17000, 2.0, 123, 0, 0],
+  ["6305", 25, 62, 17, 22.5, 11.6, 14000, 2.0, 123, 0, 0],
+  ["6306", 30, 72, 19, 28.1, 16.0, 12000, 2.0, 123, 0, 0],
+  ["6307", 35, 80, 21, 33.2, 19.0, 10000, 2.5, 123, 0, 0],
+  ["6308", 40, 90, 23, 41.0, 24.0, 9000, 2.5, 123, 0, 0],
+  ["6309", 45, 100, 25, 52.7, 31.5, 8000, 2.5, 123, 0, 0],
+  ["6310", 50, 110, 27, 61.8, 38.0, 7500, 3.0, 123, 0, 0],
+]
+# flanged: the radial bearing of the same number with a flange. D1 and C1 from the ISK pages for the number,
+#   https://iskbearing.com/product-details/608 (NMB R and RF series). C, C0 and the speed are the plain bearing's.
+flanged = [
+  ["F623", 3, 10, 4, 0.631, 0.219, 0, 0.3, 123, 11.5, 1.0],
+  ["F624", 4, 13, 5, 1.301, 0.488, 0, 0.3, 123, 15.0, 1.0],
+  ["F625", 5, 16, 5, 1.729, 0.675, 0, 0.3, 123, 18.0, 1.0],
+  ["F626", 6, 19, 6, 2.336, 0.896, 0, 0.3, 123, 22.0, 1.5],
+  ["F608", 8, 22, 7, 3.293, 1.379, 0, 0.3, 123, 25.0, 1.5],
+  ["F688", 8, 16, 4, 1.252, 0.592, 0, 0.3, 890, 18.0, 1.0],
+]
+# thrust 511xx single direction: d, D, T and r from the ISK pages, https://iskbearing.com/product-details/51104 and
+#   the same address for each number. ISK gives kgf, converted at 9.80665 N per kgf. The speed is the grease limit.
+thrust = [
+  ["51100", 10, 24, 9, 7.80, 11.57, 6700, 0.5, 890, 0, 0],
+  ["51101", 12, 26, 9, 8.04, 12.75, 6700, 0.5, 890, 0, 0],
+  ["51102", 15, 28, 9, 8.19, 13.93, 6300, 0.5, 890, 0, 0],
+  ["51103", 17, 30, 9, 8.87, 16.18, 6300, 0.5, 890, 0, 0],
+  ["51104", 20, 35, 10, 11.67, 22.07, 5300, 0.5, 890, 0, 0],
+  ["51105", 25, 42, 11, 15.30, 30.89, 4500, 1.0, 890, 0, 0],
+  ["51106", 30, 47, 11, 16.08, 34.81, 4300, 1.0, 890, 0, 0],
+  ["51107", 35, 52, 12, 17.26, 44.13, 4000, 1.0, 890, 0, 0],
+  ["51108", 40, 60, 13, 21.18, 51.98, 3500, 1.0, 890, 0, 0],
+]
+# linear LM series: shaft diameter, outer diameter, length L; ISK page https://iskbearing.com/product-details/lm8uu.
+#   Ratings in kN from ISK kgf (LM8UU 27.94 and 39.97 kgf). LM10UU is left out (the ISK static rating, 549 kgf, is
+#   not credible and no second source was readable). Flanged bearings carry flange D1 and C1 from the ISK pages for the
+#   plain number (NMB RF series); no other flange source was readable. There is no speed limit; the row speed is 0.
+linear = [
+  ["LM6UU", 6, 12, 19, 0.206, 0.265, 0, 0.0, 890, 0, 0],
+  ["LM8UU", 8, 15, 24, 0.274, 0.392, 0, 0.0, 890, 0, 0],
+  ["LM12UU", 12, 21, 30, 0.510, 0.784, 0, 0.0, 890, 0, 0],
+]
+# abutment rows [name, da min, Da max, ra max] in mm: the SKF General Catalogue 17000/1 EN, single row deep groove ball bearings
+#   tables, "Abutment and fillet dimensions" columns, https://www.skf.com/binaries/pub12/Images/0901d196802809de-Rolling-bearings---17000_1-EN_tcm_12-121486.pdf
+#   (the 6205 row reads 30.6, 46.4, 1). Sizes missing here (6006, 688, 698 and the flanged, thrust and linear rows) use the
+#   DIN 5418 series heights below and are reported as estimated; a flanged bearing uses its plain bearing's row.
+abutment = [
+  ["608", 10.0, 20.0, 0.3], ["623", 4.2, 8.8, 0.1], ["624", 5.8, 11.2, 0.2], ["625", 7.4, 13.6, 0.3], ["626", 8.4, 16.6, 0.3],
+  ["6000", 12.0, 24.0, 0.3], ["6001", 14.0, 26.0, 0.3], ["6002", 17.0, 30.0, 0.3], ["6003", 19.0, 33.0, 0.3],
+  ["6004", 23.2, 38.8, 0.6], ["6005", 28.2, 43.8, 0.6], ["6007", 39.6, 57.0, 1.0], ["6008", 44.6, 63.0, 1.0],
+  ["6009", 51.0, 69.0, 1.0], ["6010", 55.0, 75.0, 1.0],
+  ["6200", 14.2, 25.8, 0.6], ["6201", 16.2, 27.8, 0.6], ["6202", 19.2, 30.8, 0.6], ["6203", 21.2, 35.8, 0.6],
+  ["6204", 25.6, 41.4, 1.0], ["6205", 30.6, 46.4, 1.0], ["6206", 35.6, 56.0, 1.0], ["6207", 42.0, 65.0, 1.0],
+  ["6208", 47.0, 73.0, 1.0], ["6209", 52.0, 78.0, 1.0], ["6210", 57.0, 83.0, 1.0],
+  ["6300", 14.2, 30.8, 0.6], ["6301", 17.6, 31.4, 1.0], ["6302", 20.6, 36.4, 1.0], ["6303", 22.6, 41.4, 1.0],
+  ["6304", 27.0, 45.0, 1.0], ["6305", 32.0, 55.0, 1.0], ["6306", 37.0, 65.0, 1.0], ["6307", 44.0, 71.0, 1.5],
+  ["6308", 49.0, 81.0, 1.5], ["6309", 54.0, 91.0, 1.5], ["6310", 61.0, 99.0, 2.0],
+]
+# DIN 5418 table 1: [rs min, ras max, h min for series 8 9 0, h min for series 1 2 3] in mm. Source: DIN 5418:1993,
+#   https://www.normsplash.com/Samples/DIN/148879982/DIN-5418-1993-en.pdf
+shoulders = [
+  [0.05, 0.05, 0.2, 0.2], [0.08, 0.08, 0.26, 0.26], [0.1, 0.1, 0.3, 0.6], [0.15, 0.15, 0.4, 0.7],
+  [0.2, 0.2, 0.7, 0.9], [0.3, 0.3, 1.0, 1.2], [0.6, 0.6, 1.6, 2.1], [1.0, 1.0, 2.3, 2.8],
+  [1.1, 1.0, 3.0, 3.5], [1.5, 1.5, 3.5, 4.5], [2.0, 2.0, 4.4, 5.5], [2.1, 2.1, 5.1, 6.0],
+  [3.0, 2.5, 6.2, 7.0], [4.0, 3.0, 7.3, 8.5], [5.0, 4.0, 9.0, 10.0], [6.0, 5.0, 11.5, 13.0],
+]
+# Equivalent load factors for single row deep groove ball bearings, SKF General Catalogue table (ISO 281 form):
+#   [f0 Fa / C0, e, Y]; above Fa/Fr = e, P = 0.56 Fr + Y Fa, else P = Fr. f0 is 14, mid range for these sizes.
+#   Entered from the catalogue table, not re-fetched; the SKF page was not readable by the tools used.
+f0 = 14.0
+radial_x = 0.56
+load_factors = [
+  [0.172, 0.19, 2.30], [0.345, 0.22, 1.99], [0.689, 0.26, 1.71], [1.03, 0.28, 1.55], [1.38, 0.30, 1.45],
+  [2.07, 0.34, 1.31], [3.45, 0.38, 1.15], [5.17, 0.42, 1.04], [6.89, 0.44, 1.00],
+]

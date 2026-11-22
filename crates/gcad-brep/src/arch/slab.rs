@@ -40,7 +40,7 @@ impl Slab {
         }
     }
 
-    pub(crate) fn layer_names(&self) -> Vec<(String, usize)> {
+    pub fn layer_names(&self) -> Vec<(String, usize)> {
         let mut used = Vec::new();
         let mut out = Vec::new();
         for (l, layer) in self.layers.iter().enumerate() {
