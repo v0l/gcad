@@ -1932,6 +1932,26 @@ fn ifc_grid_and_curtain_wall_quantities() {
 }
 
 #[test]
+fn vendor_ifc_is_a_part() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    if !python.exists() {
+        return;
+    }
+    let dir = house_files("vendor_ifc_is_a_part", &[]);
+    let script = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/ifc_vendor_stool.py");
+    let out = std::process::Command::new(python)
+        .arg(script)
+        .arg(dir.join("stool.ifc"))
+        .output()
+        .expect("python");
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    std::fs::write(dir.join("room.gasm"), "part stool stool.ifc\n").expect("gasm");
+    let run = gcad::model::run_path(&dir.join("room.gasm"), &[], None).expect("runs");
+    assert!(run.steps.iter().all(|(_, r)| r.is_ok()), "{:?}", run.steps.last());
+    near(volume(&run.model), 400.0 * 300.0 * 500.0, 1.0e-6);
+}
+
+#[test]
 fn ifc_global_ids_are_stable() {
     let a = ifc_of("ifc_global_ids_are_stable_a", &building());
     let b = ifc_of("ifc_global_ids_are_stable_b", &building());

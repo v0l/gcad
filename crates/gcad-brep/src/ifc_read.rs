@@ -331,6 +331,35 @@ impl Ifc {
             .collect()
     }
 
+    fn polygonal(&self, e: &Entity) -> Option<Vec<[[f64; 3]; 3]>> {
+        let list = self.get(e.args.first()?.id()?)?;
+        let points: Vec<[f64; 3]> = list
+            .args
+            .first()?
+            .items()
+            .iter()
+            .map(|p| {
+                let c = p.items();
+                Some([c.first()?.num()?, c.get(1)?.num()?, c.get(2)?.num()?])
+            })
+            .collect::<Option<_>>()?;
+        let mut out = Vec::new();
+        for face in e.args.get(2)?.items() {
+            let face = self.get(face.id()?)?;
+            let ring: Vec<[f64; 3]> = face
+                .args
+                .first()?
+                .items()
+                .iter()
+                .map(|i| points.get(i.num()? as usize - 1).copied())
+                .collect::<Option<_>>()?;
+            for k in 1..ring.len().saturating_sub(1) {
+                out.push([ring[0], ring[k], ring[k + 1]]);
+            }
+        }
+        Some(out)
+    }
+
     fn faceted(&self, e: &Entity) -> Option<Vec<[[f64; 3]; 3]>> {
         let shell = self.get(e.args.first()?.id()?)?;
         let mut out = Vec::new();
@@ -381,6 +410,7 @@ impl Ifc {
                 let triangles = match item.class.as_str() {
                     "IFCTRIANGULATEDFACESET" => self.triangulated(item),
                     "IFCFACETEDBREP" => self.faceted(item),
+                    "IFCPOLYGONALFACESET" => self.polygonal(item),
                     _ => None,
                 };
                 out.extend(triangles);
@@ -411,6 +441,11 @@ impl Ifc {
                         | "IFCCOVERING"
                         | "IFCRAMP"
                         | "IFCBUILDINGELEMENTPROXY"
+                        | "IFCFURNITURE"
+                        | "IFCFURNISHINGELEMENT"
+                        | "IFCSANITARYTERMINAL"
+                        | "IFCFLOWTERMINAL"
+                        | "IFCDISTRIBUTIONELEMENT"
                         | "IFCOPENINGELEMENT"
                 )
             })
