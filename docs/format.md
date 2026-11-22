@@ -859,6 +859,11 @@ Nuts and washers sit on z=0 and go up, inserts hang down from z=0.
 | `standoff:M3x10` | hex standoff, tapped through, standing on z=0 (brass) | `body`, `bore` |
 | `bearing:608` | deep groove ball bearing, solid with shallow seal grooves, standing on z=0: 623 to 626, 695, 688, 698, 608, 609, 6000 to 6005, 6200 to 6204, 6800 to 6804 | `ring` (outer race), `bore`, `seal` |
 | `dowel:4x16` | ISO 8734 dowel pin, chamfered, standing on z=0 | `pin` |
+| `iso4762:M6x25`, `iso4017`, `iso4014`, `iso7380`, `iso10642` | catalogue screws by standard number, M2 to M24 where the standard lists them; `gcad parts show` gives the BOM line | `head`, `shank` |
+| `iso4032:M6`, `iso4035`, `iso7040`, `iso7089`, `iso7093` | catalogue nuts and washers | `nut` or `washer`, `bore` |
+| `iso2338:6x24`, `iso8734:6x24`, `din6885:8x7x32`, `din471:25`, `din472:50` | catalogue dowels, parallel keys and circlips (the number is the shaft or bore diameter) | `pin`, `key`, `clip`, `bore` |
+| `gt2pulley:20x6x5`, `htd3pulley`, `htd5pulley` | pulley of `teeth x belt width x bore`, outside diameter from the pitch line differential | `pulley`, `bore` |
+| `gt2belt:6x200`, `htd3belt`, `htd5belt`, `extrusion:2020x300`, `spec:nema17@42x42x40` | bought, not modelled: a ring, a bar or a box that is the clearance envelope, listed in the BOM | `belt`, `profile`, `body` |
 | `oring:214`, `oring:40x2.65` | nitrile o-ring by AS568 dash number or ISO 3601 inside diameter x cross-section, a torus about z centred on z=0 | `ring` |
 
 Screws are drawn plain, without a modelled thread. The bill of materials lists them by
@@ -970,6 +975,18 @@ note "first line|second line" place=230,40
 | `section` | the `view` parameters and `at=` | cuts the parts with the plane square to `from` at that coordinate and fills each cut in the part's colour |
 | `dims` | `parts ...` `profile=` `along=h\|v` `of=centres\|edges\|ends` `ends=1` `across=1` `row=` `style=chain\|running\|ordinate` `total=1` | dimensions the last view: a chain between the centres (or edges) of the parts along the sheet's horizontal or vertical, `ends=1` adds the outer ends of the group, `across=1` keeps only parts that run across the dimension (studs, not plates), `ordinate` writes setting-out distances from the first mark, `row` moves the line further out |
 | `dim` | `x,y,z x,y,z` `offset=` `text=` | one dimension between two model points in the last view, horizontal or vertical on the sheet |
+| `plan` | `L0` `cut=1200` `scale=` `grids=0` `levels=1` `window=` `place=` `label=` | architectural floor plan: poche of cut walls and columns with layer hatches, door swings, window symbols, stair with UP or DN, arrow and break line, slab edges, grid bubbles |
+| `rcp` | `L0` `cut=2400` | reflected ceiling plan: walls cut and a ceiling outline per room |
+| `elevation` | `from=-y\|+y\|-x\|+x` `levels=0` | building elevation with material hatches and level marks |
+| `section` | `a-a x,y x,y` | building section along a cut line, layer hatches, stair and slab profiles, room names, levels |
+| `hatch` | `material` `pattern=brick\|block\|concrete\|insulation\|timber\|earth\|glass\|metal\|none` | sets the hatch pattern for a material on the sheet's plan |
+| `tag` | `door\|window\|room\|wall\|stair\|column` | marks and room name and area from the model on the last plan |
+| `dim auto` | `walls\|openings\|grid` `side=-y\|+y\|-x\|+x` | dimension chains that add up to the overall |
+| `northarrow`, `scalebar` | `place=x,y` | north arrow from `building north=`, scale bar for the sheet scale |
+| `viewport` | `window=u0,v0,u1,v1` `scale=1:5` `label=` | redraws the last plan, elevation or section for a window at a new scale |
+| `drawinglist` | `place=x,y` | table of every sheet's `number=`, name, scale and size |
+
+`sheet` takes `number=A-101`. A `.dxf` export writes one drawing per sheet with layers A-WALL, A-COLS, A-DOOR, A-GLAZ, A-GRID, A-FLOR, A-STRS, A-CLNG, A-DIMS and A-ANNO. SVG groups carry the classes `poche`, `swing`, `window`, `ceiling`, `break`, `scalebar` and `hatch <material>`.
 | `level` | `height "name"` | a level mark at that height beside the last elevation or section |
 | `callout` | `x,y,z "text"` `to=dx,dy` | a leader from a model point in the last view to text `dx`, `dy` mm away on the sheet |
 | `label` | `"text"` `target ...` `side=` | annotates the last view with no layout by hand. A target is `part:faces` (a hole or round face points at its rim and, with no text, is written `⌀12`, `4× ⌀3.4` or `M3 tapped (⌀2.5 drill)`), `part:a&b` (an edge) or `x,y,z`. Labels collect in a column beside the view, sorted to the order of their targets so leaders do not cross, clear of the geometry, dimensions, levels and the title block, and are laid out together when the next `view`, `section` or `sheet` starts. `side=left\|right\|top\|bottom` picks the column. `callout` with no `to=` is a `label` |

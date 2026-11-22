@@ -1,0 +1,48 @@
+part house.gcad
+title "Example house"
+
+sheet "Drawing list" size=A3 number=A-000
+drawinglist place=30,260
+
+sheet "Ground floor plan" size=A1 scale=1:50 number=A-101
+plan L0 cut=1200 levels=1
+tag door
+tag window
+tag wall
+tag room
+tag stair
+dim auto walls side=-y
+dim auto openings side=-y
+dim auto grid side=-y
+northarrow
+scalebar
+
+sheet "Ground floor reflected ceiling plan" size=A1 scale=1:50 number=A-111
+rcp L0
+
+sheet "South elevation" size=A1 scale=1:50 number=A-201
+elevation from=-y
+
+sheet "North elevation" size=A1 scale=1:50 number=A-202
+elevation from=+y
+
+sheet "East elevation" size=A1 scale=1:50 number=A-203
+elevation from=+x
+
+sheet "West elevation" size=A1 scale=1:50 number=A-204
+elevation from=-x
+
+sheet "Section A-A through the stair" size=A1 scale=1:50 number=A-301
+section a-a 5750,-1000 5750,9000
+
+sheet "Section B-B through the living room" size=A1 scale=1:50 number=A-302
+section b-b 2500,-1000 2500,9000
+
+sheet "Eaves detail" size=A3 scale=1:100 number=A-401
+plan L0 cut=1200 grids=0 place=20,20
+viewport window=-300,-300,300,300 scale=1:5 label="corner" place=250,120
+
+sheet "Schedules" size=A3 number=A-501
+schedule doors place=30,230
+schedule windows place=150,230
+schedule rooms place=30,120

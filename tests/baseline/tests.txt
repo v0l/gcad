@@ -17,7 +17,7 @@ doc gcad_version: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_view: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 doc gcad_web: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/arch_mesh.rs arch_mesh: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
-tests/arch.rs arch: ok. 112 passed; 0 failed; 28 ignored; 0 measured; 0 filtered out
+tests/arch.rs arch: ok. 128 passed; 0 failed; 15 ignored; 0 measured; 0 filtered out
 tests/assembly_hierarchy.rs assembly_hierarchy: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assembly.rs assembly: ok. 49 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/assets.rs assets: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
@@ -27,6 +27,8 @@ tests/bodies.rs bodies: ok. 21 passed; 0 failed; 0 ignored; 0 measured; 0 filter
 tests/brush.rs brush: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/c_abi.rs c_abi: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/cache.rs cache: ok. 13 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/calc_bearing.rs calc_bearing: ok. 12 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
+tests/calc_parts.rs calc_parts: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc.rs calc: ok. 24 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/calc_thread.rs calc_thread: ok. 32 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out
 tests/clouds_inspect.rs clouds_inspect: ok. 11 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out

@@ -84,6 +84,7 @@ pub fn text_rect(x: f64, y: f64, size: f64, text: &str, anchor: Anchor, angle: f
 
 pub fn mark_rects(mark: &Mark) -> Vec<Rect> {
     match mark {
+        Mark::Group { marks, .. } => marks.iter().flat_map(mark_rects).collect(),
         Mark::Text {
             x,
             y,

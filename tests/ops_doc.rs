@@ -1,6 +1,6 @@
 use std::collections::BTreeMap;
 
-const CATEGORIES: [&str; 27] = [
+const CATEGORIES: [&str; 29] = [
     "rig",
     "brush",
     "gcad2glb",
@@ -20,6 +20,8 @@ const CATEGORIES: [&str; 27] = [
     "inspect_view",
     "calc",
     "calc_thread",
+    "calc_bearing",
+    "calc_parts",
     "solid_props",
     "solid_silhouette",
     "arch",
