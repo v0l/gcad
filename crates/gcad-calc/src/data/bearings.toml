@@ -74,8 +74,9 @@ thrust = [
   ["51108", 40, 60, 13, 21.18, 51.98, 3500, 1.0, 890, 0, 0],
 ]
 # linear LM series: shaft diameter, outer diameter, length L; ISK page https://iskbearing.com/product-details/lm8uu.
-#   Ratings in kN from ISK kgf (LM8UU 27.94 and 39.97 kgf). The static rating of LM10UU on that site is a typo and
-#   the row is left out. There is no speed limit; the row speed is 0.
+#   Ratings in kN from ISK kgf (LM8UU 27.94 and 39.97 kgf). LM10UU is left out (the ISK static rating, 549 kgf, is
+#   not credible and no second source was readable). Flanged bearings carry flange D1 and C1 from the ISK pages for the
+#   plain number (NMB RF series); no other flange source was readable. There is no speed limit; the row speed is 0.
 linear = [
   ["LM6UU", 6, 12, 19, 0.206, 0.265, 0, 0.0, 890, 0, 0],
   ["LM8UU", 8, 15, 24, 0.274, 0.392, 0, 0.0, 890, 0, 0],
