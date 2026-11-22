@@ -1796,7 +1796,6 @@ fn plan_dxf_has_layers_by_class() {
 }
 
 #[test]
-#[ignore = "missing: IFC export"]
 fn ifc_has_the_spatial_structure() {
     let ifc = ifc_of("ifc_has_the_spatial_structure", &building());
     assert!(ifc.starts_with("ISO-10303-21;"));
@@ -1825,7 +1824,6 @@ fn ifc_wall_layers() {
 }
 
 #[test]
-#[ignore = "missing: IFC elements"]
 fn ifc_element_classes() {
     let ifc = ifc_of(
         "ifc_element_classes",
@@ -1849,7 +1847,6 @@ fn ifc_element_classes() {
 }
 
 #[test]
-#[ignore = "missing: stable IFC GlobalIds"]
 fn ifc_global_ids_are_stable() {
     let a = ifc_of("ifc_global_ids_are_stable_a", &building());
     let b = ifc_of("ifc_global_ids_are_stable_b", &building());
@@ -1864,7 +1861,6 @@ fn ifc_global_ids_are_stable() {
 }
 
 #[test]
-#[ignore = "missing: IFC syntax"]
 fn ifc_step_syntax_is_valid() {
     let ifc = ifc_of("ifc_step_syntax_is_valid", &building());
     let mut ids = std::collections::BTreeSet::new();
@@ -1878,7 +1874,8 @@ fn ifc_step_syntax_is_valid() {
         );
     }
     for line in ifc.lines().filter(|l| l.starts_with('#')) {
-        for reference in line.split(['(', ',', ')']).filter(|w| w.starts_with('#')) {
+        let body = line.split_once('=').expect("entity").1;
+        for reference in body.split(['(', ',', ')']).filter(|w| w.starts_with('#')) {
             assert!(ids.contains(reference.trim()), "{reference} is not defined");
         }
     }
