@@ -2019,7 +2019,6 @@ fn thermal_bridge_at_a_slab_edge() {
 }
 
 #[test]
-#[ignore = "missing: daylight check"]
 fn daylight_ratio() {
     let text = summary(&with("living: room at=6000,3000\ncheck daylight min=0.1"));
     let ratio = 1200.0 * 1200.0 / (3650.0 * 5400.0);
@@ -2030,7 +2029,6 @@ fn daylight_ratio() {
 }
 
 #[test]
-#[ignore = "missing: stair and ramp checks"]
 fn stair_and_ramp_rules() {
     let text = summary(
         "level L0 0\nlevel L1 3000\nst1: stair from=L0 to=L1 at=0,0 dir=0 width=800 max_rise=180\ncheck stairs min_width=900",
@@ -2039,14 +2037,12 @@ fn stair_and_ramp_rules() {
 }
 
 #[test]
-#[ignore = "missing: door width and turning circle checks"]
 fn door_clear_width_check() {
     let text = summary(&with("check doors clear=775 turning=1500"));
     assert!(text.contains("D01 clear 760 under 775"), "{text}");
 }
 
 #[test]
-#[ignore = "missing: egress, room size and fire compartment checks"]
 fn egress_and_room_checks() {
     let text = summary(&with(
         "hall: room at=2000,3000\nliving: room at=6000,3000\ncheck egress max=5000\ncheck rooms min_area=20 min_height=2300\ncheck compartments max=500",

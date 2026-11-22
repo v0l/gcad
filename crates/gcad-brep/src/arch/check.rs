@@ -1,7 +1,7 @@
-use super::{Tier, Wall};
+use super::{Fill, Opening, Tier, Wall};
 use crate::Model;
 use crate::cloud_inspect::CheckRecord;
-use crate::parse::{Line, eval};
+use crate::parse::{Line, eval, label};
 use anyhow::{Result, anyhow, bail};
 use gcad_mesh::arch::Layer;
 
@@ -92,7 +92,141 @@ impl Model {
     }
 
     fn check_more(&mut self, line: &Line, kind: &str) -> Result<String> {
-        bail!("`check {kind}` is not available yet in {}", line.text)
+        let number = |model: &Model, key: &str| -> Result<Option<f64>> {
+            named_value(line, key).map(|v| eval(&v, &model.scope)).transpose()
+        };
+        let mut problems: Vec<String> = Vec::new();
+        let ok = match kind {
+            "stairs" => {
+                let min_width = number(self, "min_width")?.unwrap_or(900.0);
+                for s in &self.arch.stairs {
+                    if s.width < min_width {
+                        problems.push(format!("{} width {} under {}", s.name, label(s.width), label(min_width)));
+                    }
+                    let sum = 2.0 * s.steps.rise + s.steps.tread;
+                    if !(550.0..=700.0).contains(&sum) {
+                        problems.push(format!("{} 2R+T {sum:.0} outside 550 to 700", s.name));
+                    }
+                }
+                format!("{} stairs checked", self.arch.stairs.len())
+            }
+            "ramps" => {
+                let max = number(self, "max")?.unwrap_or(1.0 / 12.0);
+                for (name, slope) in &self.arch.ramps {
+                    if *slope > max + 1.0e-9 {
+                        problems.push(format!("{name} slope 1:{:.1} over 1:{:.1}", 1.0 / slope, 1.0 / max));
+                    }
+                }
+                format!("{} ramps checked", self.arch.ramps.len())
+            }
+            "doors" => {
+                let clear = number(self, "clear")?.unwrap_or(775.0);
+                let turning = number(self, "turning")?;
+                for o in &self.arch.openings {
+                    if let Fill::Door { frame, .. } = &o.fill {
+                        let width = o.w - 2.0 * frame.0;
+                        if width < clear {
+                            let mark = o.mark.clone().unwrap_or_else(|| o.name.clone());
+                            problems.push(format!("{mark} clear {} under {}", label(width), label(clear)));
+                        }
+                    }
+                }
+                if let Some(circle) = turning {
+                    for r in &self.arch.rooms {
+                        let small = (r.rect[2] - r.rect[0]).min(r.rect[3] - r.rect[1]);
+                        if small < circle {
+                            problems.push(format!("{} turning circle {} under {}", r.name, label(small), label(circle)));
+                        }
+                    }
+                }
+                "doors checked".to_string()
+            }
+            "daylight" => {
+                let min = number(self, "min")?.unwrap_or(0.1);
+                for r in self.arch.rooms.clone() {
+                    let glazing: f64 = self
+                        .arch
+                        .openings
+                        .iter()
+                        .filter(|o| matches!(o.fill, Fill::Window { .. }))
+                        .filter(|o| self.opening_in(o, &r))
+                        .map(|o| o.w * o.h)
+                        .sum();
+                    let floor = (r.rect[2] - r.rect[0]) * (r.rect[3] - r.rect[1]);
+                    let ratio = glazing / floor;
+                    if ratio < min {
+                        problems.push(format!("{} {ratio:.3} under {}", r.name, label(min)));
+                    }
+                }
+                "daylight checked".to_string()
+            }
+            "egress" => {
+                let max = number(self, "max")?.unwrap_or(18000.0);
+                for r in self.arch.rooms.clone() {
+                    let centre = ((r.rect[0] + r.rect[2]) / 2.0, (r.rect[1] + r.rect[3]) / 2.0);
+                    let nearest = self
+                        .arch
+                        .openings
+                        .iter()
+                        .filter(|o| matches!(o.fill, Fill::Door { .. }))
+                        .filter(|o| self.opening_in(o, &r))
+                        .filter_map(|o| self.opening_point(o))
+                        .map(|p| (p.0 - centre.0).hypot(p.1 - centre.1))
+                        .min_by(f64::total_cmp);
+                    match nearest {
+                        None => problems.push(format!("{} egress no door", r.name)),
+                        Some(d) if d > max => problems.push(format!("{} egress {d:.0} over {}", r.name, label(max))),
+                        _ => {}
+                    }
+                }
+                "egress checked".to_string()
+            }
+            "rooms" => {
+                let min_area = number(self, "min_area")?;
+                let min_height = number(self, "min_height")?;
+                for r in &self.arch.rooms {
+                    if let Some(min) = min_area.filter(|m| r.area() < *m) {
+                        problems.push(format!("{} area {:.2} m² under {}", r.name, r.area(), label(min)));
+                    }
+                    if let Some(min) = min_height.filter(|m| r.height < *m) {
+                        problems.push(format!("{} height {} under {}", r.name, label(r.height), label(min)));
+                    }
+                }
+                "rooms checked".to_string()
+            }
+            "compartments" => {
+                let max = number(self, "max")?.unwrap_or(500.0);
+                let mut levels: Vec<(f64, f64)> = Vec::new();
+                for r in &self.arch.rooms {
+                    match levels.iter_mut().find(|l| l.0 == r.level) {
+                        Some(l) => l.1 += r.area(),
+                        None => levels.push((r.level, r.area())),
+                    }
+                }
+                for (z, area) in levels {
+                    if area > max {
+                        problems.push(format!("level {} compartment {area:.2} m² over {}", label(z), label(max)));
+                    }
+                }
+                problems.extend(
+                    self.checks.iter().filter(|c| !c.passed).map(|c| c.detail.clone()),
+                );
+                "compartments checked".to_string()
+            }
+            other => bail!("`check {other}` is not available in {}", line.text),
+        };
+        self.finish_check(line, problems, ok)
+    }
+
+    pub(crate) fn opening_point(&self, o: &Opening) -> Option<(f64, f64)> {
+        let wall = self.arch.wall(&o.host)?;
+        Some(wall.line.locate(o.at).1)
+    }
+
+    fn opening_in(&self, o: &Opening, r: &super::Room) -> bool {
+        let Some(p) = self.opening_point(o) else { return false };
+        let slack = 400.0;
+        p.0 >= r.rect[0] - slack && p.0 <= r.rect[2] + slack && p.1 >= r.rect[1] - slack && p.1 <= r.rect[3] + slack
     }
 
     fn wall_named(&self, line: &Line, at: usize) -> Result<Wall> {

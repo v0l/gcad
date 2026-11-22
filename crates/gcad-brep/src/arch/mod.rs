@@ -253,6 +253,7 @@ pub struct SiteBoundary {
 
 #[derive(Clone, Debug, Default)]
 pub struct Arch {
+    pub ramps: Vec<(String, f64)>,
     pub pads: Vec<Pad>,
     pub sites: Vec<SiteBoundary>,
     pub terrains: Vec<Terrain>,

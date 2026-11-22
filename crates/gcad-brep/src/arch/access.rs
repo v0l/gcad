@@ -93,6 +93,7 @@ impl Model {
             self.note_built(&name, &body);
         }
         let sloped = parts.iter().filter(|p| !p.landing).map(|p| p.s1 - p.s0).sum::<f64>();
+        self.arch.ramps.push((name.clone(), (to.z - from.z).abs() / sloped.max(1.0e-9)));
         Ok(format!(
             "ramp {name}: {runs} run{}, {landings} landing{}, slope 1:{:.1}, {} long",
             if runs == 1 { "" } else { "s" },
