@@ -780,6 +780,34 @@ moved by `offset`), traces the outline of the slab (concave profiles keep their 
 `extrude 20` follows; `s.area` and `s.corners` are values. `classify scan ground` stores class 2 for ground and 1 otherwise, by a
 progressive morphological filter on a grid of `cell`, with `tol` height and `slope`.
 
+### Inspection
+
+Checks a scan against its CAD.
+
+```
+body part
+rect 20 20 at=10,10
+extrude 20
+scan: cloud part.ply
+align scan to=part icp plane
+deviation scan to=part max=0.5 into=d
+fit scan plane tol=0.3 into=f all max=6
+measure scan f1 f2 into=gap
+check d.max < 0.3
+check gap.distance > 19.9
+```
+
+`deviation` sets `d.mean`, `d.std`, `d.min`, `d.max`, `d.rms`, `d.within` and `d.tolerance`, and
+colours the cloud blue to red over plus and minus `max` (positive is outside the solid). The
+surface is a tessellation of the solid at a quarter of the usual chord tolerance, or the mesh body;
+`fine=` scales that tolerance. `measure scan a b` takes fitted features or points and sets
+`m.distance` (and `m.signed` for a plane). A failing `check` line stops the file. `scansection scan
+to=part axis=y at=10 tol=0.5` in a `.gdwg` draws the CAD section and the scan slab beside it with
+deviation markers. `gcad inspect scan.gcad --report out.pdf` (or `.csv`) writes the one page
+report and records failing checks instead of stopping; it exits nonzero if any failed.
+`cloud_offset scan by=1 box=... dir=x,y,z` moves points to make a test defect.
+`examples/clouds/inspect.gcad` samples the robot arm upper link and adds a pocket and a raised strip.
+
 ## Assemblies
 
 A design with more than one part is a `.gasm` file, an assembly: it brings the parts

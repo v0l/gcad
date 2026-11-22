@@ -2693,7 +2693,18 @@ impl App {
                 });
                 ui.spacing_mut().slider_width = 110.0;
                 ui.add(egui::Slider::new(&mut style.size, 1.0..=12.0).text("point size"));
-            },
+                if style.by == gcad_cloud::ColourBy::Deviation {
+                    if let Some((_, c)) = clouds.iter().find(|(_, c)| c.deviation.is_some()) {
+                        let limit = gcad_cloud::colour::deviation_limit(c);
+                        Line::new()
+                            .legend("blue inside")
+                            .measured(format!("-{limit:.2}"))
+                            .legend("red outside")
+                            .measured(format!("+{limit:.2}"))
+                            .size(11.0)
+                            .show(ui);
+                    }
+                }            },
         );
         if style != self.cloud_style {
             crate::host::set_setting("cloud_colour", style.by.name());
