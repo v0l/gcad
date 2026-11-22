@@ -43,6 +43,7 @@ impl Model {
     }
 
     fn publish_primitive(&mut self, name: &str, found: &Found, cloud: &Cloud) {
+        self.primitives.insert(name.to_string(), found.primitive);
         match found.primitive {
             Primitive::Plane { origin, normal } => {
                 self.publish_vector(name, "origin", origin);

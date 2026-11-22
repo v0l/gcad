@@ -6,6 +6,7 @@ mod bodies;
 mod clearance;
 mod cloud_align;
 mod cloud_fit;
+mod cloud_inspect;
 mod cloud_ops;
 mod clouds;
 mod constrain;
@@ -150,6 +151,10 @@ pub struct Model {
     pub arch: arch::Arch,
     pub clouds: Vec<(String, std::sync::Arc<gcad_cloud::Cloud>)>,
     pub fits: HashMap<String, Frame>,
+    pub primitives: HashMap<String, gcad_cloud::fit::Primitive>,
+    pub inspections: Vec<cloud_inspect::Inspection>,
+    pub checks: Vec<cloud_inspect::CheckRecord>,
+    pub measures: Vec<cloud_inspect::MeasureRecord>,
 }
 
 #[derive(Clone)]
@@ -600,6 +605,9 @@ pub const OPERATIONS: &[&str] = &[
     "points",
     "sample",
     "align",
+    "deviation",
+    "cloud_offset",
+    "check",
     "if",
     "include",
     "point",
@@ -741,6 +749,9 @@ const MESH_SAFE: &[&str] = &[
     "points",
     "sample",
     "align",
+    "deviation",
+    "cloud_offset",
+    "check",
 ];
 
 impl Model {

@@ -56,6 +56,10 @@ impl Model {
             "slice" => self.cloud_slice(line),
             "classify" => self.cloud_classify(line),
             "cloud_synthetic" => self.cloud_synthetic(line),
+            "deviation" => self.cloud_deviation(line),
+            "cloud_offset" => self.cloud_offset(line),
+            "check" => self.op_check(line),
+            "measure" if first_is_cloud => self.cloud_measure(line),
             _ => return None,
         })
     }
