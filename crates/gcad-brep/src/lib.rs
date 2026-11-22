@@ -713,6 +713,7 @@ pub const OPERATIONS: &[&str] = &[
     "road",
     "retaining",
     "tree",
+    "sun",
 ];
 
 const PROFILE_OPS: &[&str] = &[
@@ -1021,6 +1022,7 @@ impl Model {
             "road" => self.op_road(line),
             "retaining" => self.op_retaining(line),
             "tree" => self.op_tree(line),
+            "sun" => self.op_sun(line),
             "slab" => self.op_slab(line),
             "slab_opening" => self.op_slab_opening(line),
             "foundation" => self.op_foundation(line),

@@ -666,8 +666,8 @@ Architecture stage F (gcad #353).
 | stair and ramp rules | supported | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
 | door widths and turning circles | supported | `check doors clear=775 turning=1500` | `arch::door_clear_width_check` |
 | egress, room and compartment checks | supported | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
-| sun position | missing | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
-| shadow study | missing | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall` |
+| sun position | supported | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
+| shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall` |
 
 ## Buildings in gcad-mesh
 

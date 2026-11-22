@@ -8,6 +8,7 @@ mod roof;
 mod room;
 mod schedule;
 mod check;
+mod sun;
 mod site;
 mod slab;
 mod stair;
@@ -251,8 +252,15 @@ pub struct SiteBoundary {
     pub setback: f64,
 }
 
+#[derive(Clone, Copy, Debug)]
+pub struct Sun {
+    pub altitude: f64,
+    pub azimuth: f64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Arch {
+    pub sun: Option<Sun>,
     pub ramps: Vec<(String, f64)>,
     pub pads: Vec<Pad>,
     pub sites: Vec<SiteBoundary>,

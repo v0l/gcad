@@ -87,6 +87,7 @@ impl Model {
             "uvalue" => self.check_uvalue(line),
             "heatloss" => self.check_heatloss(line),
             "bridges" => self.check_bridges(line),
+            "shadow" => self.check_shadow(line),
             _ => self.check_more(line, kind),
         })
     }

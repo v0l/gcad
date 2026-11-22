@@ -2056,7 +2056,6 @@ fn egress_and_room_checks() {
 }
 
 #[test]
-#[ignore = "missing: sun position"]
 fn sun_position() {
     let text = summary("sun lat=51.5 date=21-06 time=12:00 solar");
     let altitude = 90.0 - 51.5 + 23.44;
@@ -2071,7 +2070,6 @@ fn sun_position() {
 }
 
 #[test]
-#[ignore = "missing: shadow study"]
 fn shadow_of_a_wall() {
     let text = summary(&datums(
         "w1: wall 0,0 4000,0 type=int top=3000\nsun lat=51.5 date=21-06 time=12:00 solar\ncheck shadow w1",
