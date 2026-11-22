@@ -1,0 +1,4 @@
+part inspect.gcad
+title "Arm inspection"
+sheet "Scan against CAD" size=A3 scale=1:2
+scansection scan to=main axis=y at=0 thickness=2 tol=0.5

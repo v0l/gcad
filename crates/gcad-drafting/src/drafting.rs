@@ -1,4 +1,5 @@
 mod annotate;
+mod scan;
 
 use crate::drawing::{polylines, section_of, silhouettes};
 use crate::geometry;
@@ -396,6 +397,7 @@ impl State {
             "cutlist" => self.op_cutlist(line),
             "schedule" => self.op_schedule(line),
             "nest" => self.op_nest(line),
+            "scansection" => self.op_scansection(line),
             other => bail!("`{other}` is not a drawing operation; see `gcad docs`"),
         }
     }
