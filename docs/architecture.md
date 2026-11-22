@@ -200,6 +200,20 @@ Rows are sorted by name or mark and the output is byte-stable. Materials report 
 net of openings; heat loss uses outer face areas, as the U-value conventions do.
 `schedule doors` in a `.gdwg` places the same table on a sheet.
 
+## IFC mapping
+
+`gcad export house.gcad house.ifc` writes IFC4 with every body as an `IfcTriangulatedFaceSet` of its built (cut) shape, in millimetres, `TrueNorth` from `building north=`. `import model.ifc` and `gcad check model.ifc` read the same file with `ifc_read.rs`.
+
+| gcad | IFC class | psets and relations |
+|---|---|---|
+| `building` | `IfcProject`, `IfcSite`, `IfcBuilding` | `IfcRelAggregates` |
+| `level` | `IfcBuildingStorey` | `IfcRelContainedInSpatialStructure` |
+| `wall` | `IfcWall` | `IfcMaterialLayerSetUsage`, `Pset_WallCommon` with `ThermalTransmittance` from the layer conductivities |
+| `opening`, `door`, `window` | `IfcOpeningElement`, `IfcDoor`, `IfcWindow` | `IfcRelVoidsElement`, `IfcRelFillsElement`, `Pset_DoorCommon`, `Pset_WindowCommon` |
+| `slab`, `foundation`, `ceiling` | `IfcSlab`, `IfcFooting`, `IfcCovering` | `Pset_SlabCommon` |
+| `roof`, `stair`, `railing`, `column`, `beam`, `curtainwall` | `IfcRoof`, `IfcStair` with `IfcStairFlight`, `IfcRailing`, `IfcColumn`, `IfcBeam`, `IfcCurtainWall` | `IfcRelAggregates` for flights |
+| `room` | `IfcSpace` | `Qto_SpaceBaseQuantities`, `Pset_SpaceCommon` |
+
 ## The three outputs
 
 | element | 3D bodies | 2D (plan, section, elevation) | IFC |

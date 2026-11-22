@@ -645,14 +645,15 @@ Architecture stage E (gcad #352).
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| IFC4 export | missing | `gcad export house.gasm house.ifc`: project, site, building, storeys, walls, doors, windows, openings with voids and fills | `arch::ifc_has_the_spatial_structure` |
-| IFC wall layers | missing | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon` | `arch::ifc_wall_layers` |
-| IFC element classes | missing | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
-| stable GlobalIds | missing | ids derived from element names | `arch::ifc_global_ids_are_stable` |
-| IFC syntax | missing | unique ids, balanced parentheses, every reference defined | `arch::ifc_step_syntax_is_valid` |
-| IFC import | missing | `import model.ifc` as a read-only underlay | `arch::ifc_round_trip` |
-| IFC checks | missing | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
-| image underlays | missing | `underlay plan.png scale=1:100 dpi=100` | `arch::image_underlay` |
+| IFC4 export | supported | `gcad export house.gasm house.ifc`: project, site, building, storeys, walls, doors, windows, openings with voids and fills | `arch::ifc_has_the_spatial_structure` |
+| IFC wall layers | supported | `IfcMaterialLayerSet` per wall type, `Pset_WallCommon` | `arch::ifc_wall_layers` |
+| IFC element classes | supported | slabs, roofs, stairs, railings, columns, beams, spaces with quantities | `arch::ifc_element_classes` |
+| stable GlobalIds | supported | ids derived from element names | `arch::ifc_global_ids_are_stable` |
+| IFC syntax | supported | unique ids, balanced parentheses, every reference defined | `arch::ifc_step_syntax_is_valid` |
+| IFC import | supported | `import model.ifc` as a read-only underlay | `arch::ifc_round_trip` |
+| IFC checks | supported | `gcad check house.ifc` | `arch::ifc_check_finds_orphans` |
+| IFC volumes | supported | element volumes read by IfcOpenShell match the bodies within 0.5 percent | `arch::ifc_volumes_match_ifcopenshell` |
+| image underlays | supported | `underlay plan.png scale=1:100 dpi=100` | `arch::image_underlay` |
 
 ## Site and analysis
 

@@ -17,6 +17,8 @@ mod features;
 mod fuse;
 pub mod glb;
 mod holes;
+pub mod ifc;
+pub mod ifc_read;
 mod import;
 pub mod mate;
 pub mod materials;
@@ -659,6 +661,7 @@ pub const OPERATIONS: &[&str] = &[
     "building",
     "grid",
     "gridfile",
+    "underlay",
     "wall_type",
     "wall",
     "wall_join",
@@ -853,7 +856,14 @@ impl Model {
                 self.sketch.len()
             ));
         }
-        self.apply_op(line)
+        let done = self.apply_op(line)?;
+        if let Some(label) = &line.label
+            && arch::IFC_OPS.contains(&line.op.as_str())
+        {
+            self.arch.classes.retain(|(name, _)| name != label);
+            self.arch.classes.push((label.clone(), line.op.clone()));
+        }
+        Ok(done)
     }
 
     fn apply_op(&mut self, line: &Line) -> Result<String> {
@@ -990,6 +1000,7 @@ impl Model {
             "building" => self.op_building(line),
             "grid" => self.op_grid(line),
             "gridfile" => self.op_gridfile(line),
+            "underlay" => self.op_underlay(line),
             "wall_type" => self.op_wall_type(line),
             "wall" => self.op_wall(line),
             "wall_join" => self.op_wall_join(line),

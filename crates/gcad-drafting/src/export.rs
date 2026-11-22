@@ -325,6 +325,13 @@ pub fn export_model(model: &crate::model::Model, file: &std::path::Path, path: &
         }
         return export_clouds(model, path);
     }
+    if path.to_ascii_lowercase().ends_with(".ifc") {
+        let stem = file
+            .file_stem()
+            .map(|s| s.to_string_lossy().to_string())
+            .unwrap_or_default();
+        return std::fs::write(path, crate::model::ifc::write(model, &stem)).map_err(Into::into);
+    }
     if !model.assembly && path.to_ascii_lowercase().ends_with(".glb") {
         return std::fs::write(path, glb_of(model)?).map_err(Into::into);
     }

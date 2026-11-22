@@ -1796,7 +1796,6 @@ fn plan_dxf_has_layers_by_class() {
 }
 
 #[test]
-#[ignore = "missing: IFC export"]
 fn ifc_has_the_spatial_structure() {
     let ifc = ifc_of("ifc_has_the_spatial_structure", &building());
     assert!(ifc.starts_with("ISO-10303-21;"));
@@ -1815,7 +1814,6 @@ fn ifc_has_the_spatial_structure() {
 }
 
 #[test]
-#[ignore = "missing: IFC wall layers"]
 fn ifc_wall_layers() {
     let ifc = ifc_of("ifc_wall_layers", &building());
     assert_eq!(entities(&ifc, "IFCMATERIALLAYERSET"), 2);
@@ -1825,7 +1823,6 @@ fn ifc_wall_layers() {
 }
 
 #[test]
-#[ignore = "missing: IFC elements"]
 fn ifc_element_classes() {
     let ifc = ifc_of(
         "ifc_element_classes",
@@ -1849,7 +1846,6 @@ fn ifc_element_classes() {
 }
 
 #[test]
-#[ignore = "missing: stable IFC GlobalIds"]
 fn ifc_global_ids_are_stable() {
     let a = ifc_of("ifc_global_ids_are_stable_a", &building());
     let b = ifc_of("ifc_global_ids_are_stable_b", &building());
@@ -1864,7 +1860,6 @@ fn ifc_global_ids_are_stable() {
 }
 
 #[test]
-#[ignore = "missing: IFC syntax"]
 fn ifc_step_syntax_is_valid() {
     let ifc = ifc_of("ifc_step_syntax_is_valid", &building());
     let mut ids = std::collections::BTreeSet::new();
@@ -1878,14 +1873,14 @@ fn ifc_step_syntax_is_valid() {
         );
     }
     for line in ifc.lines().filter(|l| l.starts_with('#')) {
-        for reference in line.split(['(', ',', ')']).filter(|w| w.starts_with('#')) {
+        let body = line.split_once('=').expect("entity").1;
+        for reference in body.split(['(', ',', ')']).filter(|w| w.starts_with('#')) {
             assert!(ids.contains(reference.trim()), "{reference} is not defined");
         }
     }
 }
 
 #[test]
-#[ignore = "missing: IFC import"]
 fn ifc_round_trip() {
     let dir = house_files("ifc_round_trip", &[]);
     let (ok, text) = gcad(&dir, &["export", "house.gcad", "house.ifc"]);
@@ -1897,7 +1892,6 @@ fn ifc_round_trip() {
 }
 
 #[test]
-#[ignore = "missing: IFC checks"]
 fn ifc_check_finds_orphans() {
     let dir = house_files("ifc_check_finds_orphans", &[]);
     assert!(gcad(&dir, &["export", "house.gcad", "house.ifc"]).0);
@@ -1907,7 +1901,25 @@ fn ifc_check_finds_orphans() {
 }
 
 #[test]
-#[ignore = "missing: image underlays"]
+fn ifc_volumes_match_ifcopenshell() {
+    let python = std::path::Path::new("/tmp/ifcvenv/bin/python");
+    if !python.exists() {
+        return;
+    }
+    let dir = house_files("ifc_volumes_match_ifcopenshell", &[]);
+    assert!(gcad(&dir, &["export", "house.gcad", "house.ifc"]).0);
+    let script = "import sys, ifcopenshell, ifcopenshell.geom, ifcopenshell.validate, ifcopenshell.util.shape as sh\nf = ifcopenshell.open(sys.argv[1])\nlog = ifcopenshell.validate.json_logger()\nifcopenshell.validate.validate(f, log)\nassert not log.statements, log.statements[:3]\ns = ifcopenshell.geom.settings()\nprint(sum(sh.get_volume(ifcopenshell.geom.create_shape(s, e).geometry) for e in f.by_type('IfcElement') if e.Representation))\n";
+    let out = std::process::Command::new(python)
+        .args(["-c", script, dir.join("house.ifc").to_str().expect("path")])
+        .output()
+        .expect("python");
+    let text = String::from_utf8_lossy(&out.stdout).to_string() + &String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{text}");
+    let theirs: f64 = text.trim().lines().last().expect("volume").parse().expect("number");
+    near(theirs * 1.0e9, volume(&build(&building())), 5.0e-3);
+}
+
+#[test]
 fn image_underlay() {
     let dir = house_files("image_underlay", &[]);
     let image = image::RgbImage::from_pixel(100, 50, image::Rgb([255, 255, 255]));
