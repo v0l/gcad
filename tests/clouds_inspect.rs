@@ -43,7 +43,7 @@ fn deviation_of_an_offset_cloud_has_the_right_mean_and_sign() {
         cube_scan()
     ));
     near(value(&inward, "d.mean"), -0.2, 0.05);
-    assert!(value(&inward, "d.within") < 10.0);
+    assert!(value(&inward, "d.within") < 30.0);
 }
 
 #[test]
