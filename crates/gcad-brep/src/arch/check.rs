@@ -70,12 +70,14 @@ impl Model {
 
     pub(crate) fn finish_check(&mut self, line: &Line, problems: Vec<String>, ok: String) -> Result<String> {
         let passed = problems.is_empty();
+        let warn = named_value(line, "warn").is_some();
         let text = if passed { ok } else { problems.join("; ") };
-        self.record_check(line, passed, text.clone());
-        if !passed && named_value(line, "strict").is_some_and(|v| v != "0") {
-            bail!("check failed: {text}");
-        }
-        Ok(text)
+        self.record_check(line, passed || warn, text.clone());
+        Ok(match (passed, warn) {
+            (true, _) => text,
+            (false, true) => format!("warn: {text}"),
+            (false, false) => format!("FAIL: {text}"),
+        })
     }
 
     pub(crate) fn arch_check(&mut self, line: &Line) -> Option<Result<String>> {
@@ -83,6 +85,12 @@ impl Model {
         if !CHECKS.contains(&kind) {
             return None;
         }
+        let mut line = line.clone();
+        if line.positional.iter().skip(1).any(|w| w == "warn") {
+            line.positional.retain(|w| w != "warn");
+            line.named.push(("warn".to_string(), "1".to_string()));
+        }
+        let line = &line;
         Some(match kind {
             "uvalue" => self.check_uvalue(line),
             "heatloss" => self.check_heatloss(line),

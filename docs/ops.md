@@ -664,7 +664,7 @@ Architecture stage F (gcad #353).
 | thermal bridges | supported | `check bridges` | `arch::thermal_bridge_at_a_slab_edge` |
 | daylight | supported | `check daylight min=0.1` (glazing to floor area per room) | `arch::daylight_ratio` |
 | stair and ramp rules | supported | `check stairs min_width=900`, `check ramps` | `arch::stair_and_ramp_rules` |
-| door widths and turning circles | supported | `check doors clear=775 turning=1500` | `arch::door_clear_width_check` |
+| door widths and turning circles | supported | `check doors clear=775 turning=1500` | `arch::door_clear_width_check`, `arch::failed_check_fails_the_run_unless_warn`, `arch::setback_violation_fails_the_run` |
 | egress, room and compartment checks | supported | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
 | sun position | supported | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
 | shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall` |

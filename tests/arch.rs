@@ -2036,6 +2036,47 @@ fn stair_and_ramp_rules() {
     assert!(text.contains("st1 width 800 under 900"), "{text}");
 }
 
+fn example_house(test: &str, doors: &str) -> std::path::PathBuf {
+    let source = std::fs::read_to_string(format!(
+        "{}/examples/architecture/house.gcad",
+        env!("CARGO_MANIFEST_DIR")
+    ))
+    .expect("example")
+    .replace("check doors clear=775 warn", doors);
+    let dir = std::path::PathBuf::from(scratch(test));
+    std::fs::create_dir_all(&dir).expect("dir");
+    std::fs::write(dir.join("house.gcad"), source).expect("house");
+    dir
+}
+
+#[test]
+fn failed_check_fails_the_run_unless_warn() {
+    let dir = example_house("failed_check_fails", "check doors clear=775");
+    let (ok, text) = gcad(&dir, &["check", "house.gcad"]);
+    assert!(!ok, "{text}");
+    assert!(text.contains("fail  FAIL: ") && text.contains("D06 clear 586 under 775"), "{text}");
+    let dir = example_house("warn_check", "check doors clear=775 warn");
+    let (ok, text) = gcad(&dir, &["check", "house.gcad"]);
+    assert!(ok, "{text}");
+    assert!(text.contains("warn: ") && text.contains("D06 clear 586 under 775"), "{text}");
+}
+
+#[test]
+fn setback_violation_fails_the_run() {
+    let dir = house_files(
+        "setback_fails_run",
+        &[(
+            "site.gcad",
+            &format!(
+                "site_boundary 0,0 30000,0 30000,20000 0,20000 setback=3000\n{}",
+                building().replace("grid A x=0", "grid A x=-1000")
+            ),
+        )],
+    );
+    let (ok, text) = gcad(&dir, &["check", "site.gcad"]);
+    assert!(!ok && text.contains("setback"), "{text}");
+}
+
 #[test]
 fn door_clear_width_check() {
     let text = summary(&with("check doors clear=775 turning=1500"));

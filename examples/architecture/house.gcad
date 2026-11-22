@@ -48,6 +48,6 @@ sun lat=53.3 date=21-06 time=15:00
 check uvalue outer
 check heatloss outer dt=20
 check stairs min_width=900
-check doors clear=680
+check doors clear=775 warn
 check daylight min=0.02
 check shadow outer

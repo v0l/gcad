@@ -807,8 +807,10 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
         };
         match result {
             Ok(summary) => println!(
-                "{:>4} {:<width$}  {spent}ok  {summary}",
-                line.number, line.text
+                "{:>4} {:<width$}  {spent}{}  {summary}",
+                line.number,
+                line.text,
+                if summary.starts_with("FAIL:") { "fail" } else { "ok" }
             ),
             Err(error) => {
                 println!(
@@ -838,6 +840,10 @@ fn check(file: &str, vars: &[(String, f64)], time: bool) -> Result<()> {
     match run.steps.last() {
         Some((line, Err(_))) => bail!("stopped at line {}", line.number),
         _ => finished(&run)?,
+    }
+    let failed = gcad::report::failed_checks(&run.model);
+    if failed > 0 {
+        bail!("{failed} check(s) failed");
     }
     if run.model.sim.is_some() {
         let path = std::path::Path::new(file);
