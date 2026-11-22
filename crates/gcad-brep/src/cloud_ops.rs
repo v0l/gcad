@@ -47,6 +47,10 @@ impl Model {
             "info" => self.cloud_info(line),
             "cloud_add_outliers" => self.cloud_outliers(line),
             "fit" => self.cloud_fit(line),
+            "sample" if line.positional.first().is_some_and(|n| self.named_solids().iter().any(|(s, _)| s == n)) => {
+                self.cloud_sample_solid(line)
+            }
+            "align" => self.cloud_align(line),
             "cluster" => self.cloud_cluster(line),
             "grow" => self.cloud_grow(line),
             "slice" => self.cloud_slice(line),

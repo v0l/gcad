@@ -4,6 +4,7 @@ mod assembly;
 mod blends;
 mod bodies;
 mod clearance;
+mod cloud_align;
 mod cloud_fit;
 mod cloud_ops;
 mod clouds;
@@ -598,6 +599,7 @@ pub const OPERATIONS: &[&str] = &[
     "open_hole",
     "points",
     "sample",
+    "align",
     "if",
     "include",
     "point",
@@ -735,6 +737,7 @@ const MESH_SAFE: &[&str] = &[
     "open_hole",
     "points",
     "sample",
+    "align",
 ];
 
 impl Model {

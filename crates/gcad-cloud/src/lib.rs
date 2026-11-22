@@ -9,6 +9,7 @@ pub mod pivot;
 pub mod ply;
 pub mod segment;
 pub mod poisson;
+pub mod register;
 pub mod sample;
 pub mod xyz;
 

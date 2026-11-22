@@ -479,65 +479,6 @@ fn one_million_points_through_poisson() {
 }
 
 #[test]
-#[ignore = "missing: registration, gcad #446"]
-fn point_pairs_with_three_exact_pairs_give_zero_rms() {
-    let source = format!(
-        "a: cloud {0}\nb: cloud {0}\nrotate b z 30\nmove b 40,0,0\nalign b to=a pairs=40,0,0>0,0,0 49.3,5,0>10,0,0 40,0,20>0,0,20",
-        fixture("cube_binary.ply")
-    );
-    let model = build(&source);
-    near(value(&model, "b.align.rms"), 0.0, 1.0e-6);
-}
-
-#[test]
-#[ignore = "missing: registration, gcad #446"]
-fn icp_recovers_a_known_transform_for_point_and_plane() {
-    for kind in ["point", "plane"] {
-        let source = format!(
-            "a: cloud {0}\nnormals a k=20\nb: cloud {0}\nrotate b z 3\nmove b 0.5,0.2,0\nalign b to=a icp {kind} max_dist=20 iters=50",
-            fixture("cube_binary.ply")
-        );
-        let model = build(&source);
-        assert!(value(&model, "b.align.rms") < 0.1, "{kind}");
-        assert!(value(&model, "b.align.iterations") <= 50.0);
-    }
-}
-
-#[test]
-#[ignore = "missing: registration, gcad #446"]
-fn coarse_alignment_recovers_a_90_degree_500_offset() {
-    let source = format!(
-        "a: cloud {0}\nb: cloud {0}\nrotate b z 90\nmove b 500,0,0\nalign b to=a coarse voxel=2",
-        fixture("cube_binary.ply")
-    );
-    let model = build(&source);
-    assert!(value(&model, "b.align.rms") < 0.2);
-    near(value(&model, "b.centre.x"), value(&model, "a.centre.x"), 0.2);
-}
-
-#[test]
-#[ignore = "missing: registration, gcad #446"]
-fn overlapping_partial_scans_merge_into_a_clean_cloud() {
-    let source = format!(
-        "a: cloud {0}\ncrop a box=-1,-1,-1,21,21,12\nb: cloud {0}\ncrop b box=-1,-1,8,21,21,21\nalign scans a b\nmerge a b into both\nfit both plane tol=0.5 into=f all max=6",
-        fixture("cube_binary.ply")
-    );
-    let model = build(&source);
-    assert_eq!(value(&model, "f.count"), 6.0);
-}
-
-#[test]
-#[ignore = "missing: registration, gcad #446"]
-fn scan_to_cad_icp_gives_an_rms_within_the_noise() {
-    let source = format!(
-        "part: rect 20 20 at=10,10\nextrude 20\nscan: cloud {}\nmove scan 0.3,0.2,0\nalign scan to=part icp point max_dist=5",
-        fixture("cube_binary.ply")
-    );
-    let model = build(&source);
-    assert!(value(&model, "scan.align.rms") < 0.1);
-}
-
-#[test]
 fn fit_all_finds_six_planes_on_a_scanned_box() {
     let model = build(&format!(
         "{}fit scan plane tol=0.5 into=f all max=20",

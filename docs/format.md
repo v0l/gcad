@@ -682,6 +682,27 @@ poses) faces each scan's origin. `merge` keeps a scan id per point, renumbering 
 `colour by=` stores the colours the viewer would show. `info` prints count, bounds, mean spacing
 and density. The transforms are the ones solids use; normals turn with them.
 
+### Registration
+
+```
+align b to=a pairs=0,0,0>10,0,0 5,0,0>15,0,0 0,5,0>10,5,0
+align b to=a icp plane max_dist=20 iters=50
+align b to=a coarse voxel=10
+align scans s1 s2 s3
+align scan to=part icp plane
+```
+
+Each line moves the named cloud and prints iterations, matched pairs, RMS, the rotation and the
+`transform b <4x4>` line that makes the same move. Paste that line in place of the `align` once
+the fit is good and the file builds without running ICP again. `pairs` is a rigid fit from 3 or
+more `from>to` points. `icp point` minimises point distances; `icp plane` uses the target's
+normals (estimated when missing) and `trim` is the share of closest pairs kept. `coarse` matches
+FPFH features on a voxel downsample with RANSAC, then finishes with plane ICP, for scans that start
+far apart. `align scans` registers each scan to the one before it, sequentially, with no loop
+closure. When `to=` names a solid or mesh body, ICP runs against 40000 points sampled from its
+surface (`count=` changes it). `s: sample part count=N noise=0.1 box=...` makes a partial noisy
+scan of a solid.
+
 ### Reconstruction
 
 ```

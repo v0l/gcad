@@ -1,0 +1,10 @@
+body part
+poly 0,0 120,0 120,40 40,40 40,90 0,90
+extrude 30
+a: sample part count=30000 seed=1 noise=0.05 box=-1,-1,-1,70,100,40
+b: sample part count=30000 seed=2 noise=0.05 box=50,-1,-1,130,100,40
+rotate b axis=z angle=3 about=60,40,15
+move b by=2,-1,1
+align b to=a icp plane max_dist=20 iters=100
+merge a b into all
+align all to=part icp plane max_dist=10 iters=50
