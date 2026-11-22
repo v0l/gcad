@@ -89,6 +89,17 @@ an extrude that went the wrong way, a hole that missed.
 `gcad part.gcad` opens the viewer, which rebuilds on every save. Start it for a human who is
 watching; you work from `check` and `render`.
 
+## Standard parts and sizing
+
+A design with a seal, thread, fit or bearing is sized by `gcad calc`, not from memory.
+
+- Run `gcad calc oring|thread|fit|bearing|material` first and use its numbers. Never guess a groove, tap drill or fit.
+- Put standard parts in the model (`part s iso4762:M6x25`, `part r oring:40x2.65`, `part b bearing:6205`) so the BOM is real.
+- Cite the standard the calculator names (AS568, ISO 3601, ISO 273, ISO 286, ISO 4762).
+- `gcad check` warns on a screw length that is not an ISO 888 length and on a tapped hole that is too short. Fix every warning.
+
+Details and a worked example: [standard-parts](references/standard-parts.md).
+
 ## Format rules
 
 - `label: operation args name=value`. Label every line you will select from later. An unlabelled
