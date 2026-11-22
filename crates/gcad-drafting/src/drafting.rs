@@ -42,11 +42,28 @@ pub enum Mark {
         anchor: Anchor,
         angle: f64,
     },
+    Group {
+        class: String,
+        data: Vec<(String, String)>,
+        marks: Vec<Mark>,
+    },
+}
+
+pub fn flatten(marks: &[Mark]) -> Vec<&Mark> {
+    let mut out = Vec::new();
+    for mark in marks {
+        match mark {
+            Mark::Group { marks, .. } => out.extend(flatten(marks)),
+            other => out.push(other),
+        }
+    }
+    out
 }
 
 #[derive(Clone, Debug)]
 pub struct Sheet {
     pub name: String,
+    pub number: String,
     pub width: f64,
     pub height: f64,
     pub scale: f64,
@@ -330,7 +347,8 @@ impl State {
             .map(|(name, _)| name)
             .filter(|name| {
                 let mut wanted = patterns.iter().filter(|p| !p.starts_with('!')).peekable();
-                let keep = wanted.peek().is_none() || wanted.any(|p| crate::parse::matches(p, name));
+                let keep =
+                    wanted.peek().is_none() || wanted.any(|p| crate::parse::matches(p, name));
                 let drop = patterns
                     .iter()
                     .filter_map(|p| p.strip_prefix('!'))
@@ -427,6 +445,9 @@ impl State {
         let scale = scale_of(named(line, "scale").unwrap_or("1:1"))?;
         let mut sheet = Sheet {
             name: name.clone(),
+            number: named(line, "number")
+                .map(|t| t.trim_matches('"').to_string())
+                .unwrap_or_default(),
             width,
             height,
             scale,
@@ -2013,6 +2034,7 @@ pub fn table_svg(title: &str, table: &crate::model::arch::Table) -> String {
     let height = (table.rows.len() + 2) as f64 * row_h + 20.0;
     let sheet = Sheet {
         name: title.to_string(),
+        number: String::new(),
         width,
         height,
         scale: 1.0,
@@ -2259,65 +2281,80 @@ pub fn svg(sheet: &Sheet) -> String {
     );
     let _ = writeln!(out, "<rect width=\"100%\" height=\"100%\" fill=\"white\"/>");
     for mark in &sheet.marks {
-        match mark {
-            Mark::Shape {
-                loops,
-                closed,
-                fill,
-                stroke,
-                width,
-                dashed,
-            } => {
-                let mut d = String::new();
-                for l in loops {
-                    for (k, (x, y)) in l.iter().enumerate() {
-                        let _ = write!(d, "{}{x:.2},{y:.2} ", if k == 0 { "M" } else { "L" });
-                    }
-                    if *closed {
-                        d.push_str("Z ");
-                    }
-                }
-                let _ = writeln!(
-                    out,
-                    "<path d=\"{}\" fill=\"{}\" fill-rule=\"evenodd\" stroke=\"{}\" stroke-width=\"{width:.2}\" stroke-linejoin=\"round\" stroke-linecap=\"round\"{}/>",
-                    d.trim_end(),
-                    fill.map_or("none".to_string(), colour_hex),
-                    stroke.map_or("none".to_string(), colour_hex),
-                    if *dashed {
-                        " stroke-dasharray=\"2 1\""
-                    } else {
-                        ""
-                    }
-                );
-            }
-            Mark::Text {
-                x,
-                y,
-                size,
-                text,
-                anchor,
-                angle,
-            } => {
-                let anchor = match anchor {
-                    Anchor::Start => "start",
-                    Anchor::Middle => "middle",
-                    Anchor::End => "end",
-                };
-                let turn = if *angle != 0.0 {
-                    format!(" transform=\"rotate({angle} {x:.2} {y:.2})\"")
-                } else {
-                    String::new()
-                };
-                let _ = writeln!(
-                    out,
-                    "<text x=\"{x:.2}\" y=\"{y:.2}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{size:.2}\" text-anchor=\"{anchor}\"{turn}>{}</text>",
-                    escape(text)
-                );
-            }
-        }
+        svg_mark(&mut out, mark);
     }
     out.push_str("</svg>\n");
     out
+}
+
+fn svg_mark(out: &mut String, mark: &Mark) {
+    match mark {
+        Mark::Group { class, data, marks } => {
+            let mut extra = String::new();
+            for (k, v) in data {
+                let _ = write!(extra, " data-{k}=\"{}\"", escape(v));
+            }
+            let _ = writeln!(out, "<g class=\"{}\"{extra}>", escape(class));
+            for inner in marks {
+                svg_mark(out, inner);
+            }
+            out.push_str("</g>\n");
+        }
+        Mark::Shape {
+            loops,
+            closed,
+            fill,
+            stroke,
+            width,
+            dashed,
+        } => {
+            let mut d = String::new();
+            for l in loops {
+                for (k, (x, y)) in l.iter().enumerate() {
+                    let _ = write!(d, "{}{x:.2},{y:.2} ", if k == 0 { "M" } else { "L" });
+                }
+                if *closed {
+                    d.push_str("Z ");
+                }
+            }
+            let _ = writeln!(
+                out,
+                "<path d=\"{}\" fill=\"{}\" fill-rule=\"evenodd\" stroke=\"{}\" stroke-width=\"{width:.2}\" stroke-linejoin=\"round\" stroke-linecap=\"round\"{}/>",
+                d.trim_end(),
+                fill.map_or("none".to_string(), colour_hex),
+                stroke.map_or("none".to_string(), colour_hex),
+                if *dashed {
+                    " stroke-dasharray=\"2 1\""
+                } else {
+                    ""
+                }
+            );
+        }
+        Mark::Text {
+            x,
+            y,
+            size,
+            text,
+            anchor,
+            angle,
+        } => {
+            let anchor = match anchor {
+                Anchor::Start => "start",
+                Anchor::Middle => "middle",
+                Anchor::End => "end",
+            };
+            let turn = if *angle != 0.0 {
+                format!(" transform=\"rotate({angle} {x:.2} {y:.2})\"")
+            } else {
+                String::new()
+            };
+            let _ = writeln!(
+                out,
+                "<text x=\"{x:.2}\" y=\"{y:.2}\" font-family=\"Helvetica, Arial, sans-serif\" font-size=\"{size:.2}\" text-anchor=\"{anchor}\"{turn}>{}</text>",
+                escape(text)
+            );
+        }
+    }
 }
 
 fn pdf_text(text: &str) -> Vec<u8> {
@@ -2365,8 +2402,9 @@ pub fn pdf(sheets: &[Sheet]) -> Vec<u8> {
         let h = sheet.height;
         let y = |v: f64| (h - v) * pt;
         let mut operations: Vec<Operation> = Vec::new();
-        for mark in &sheet.marks {
+        for mark in flatten(&sheet.marks) {
             match mark {
+                Mark::Group { .. } => {}
                 Mark::Shape {
                     loops,
                     closed,
