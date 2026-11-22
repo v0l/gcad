@@ -939,10 +939,10 @@ impl State {
 
     pub(super) fn op_scalebar(&mut self, line: &Line) -> Result<String> {
         let frame = self.frame()?.clone();
-        let (bx0, _, _, by1) = frame.box_paper();
+        let (_, _, bx1, by1) = frame.box_paper();
         let (x, y) = match named(line, "place") {
             Some(t) => super::pair(t, &self.scope)?,
-            None => (bx0 + 6.0, by1 - 8.0),
+            None => (bx1 - 5000.0 / frame.scale - 20.0, by1 - 6.0),
         };
         let metre = 1000.0 / frame.scale;
         let ticks = match named(line, "length") {
@@ -988,8 +988,8 @@ impl State {
     }
 
     fn level_note(&self, frame: &Frame, level_z: f64, title: &str) -> Vec<Mark> {
-        let (bx0, _, _, by1) = frame.box_paper();
-        let (x, y) = (bx0 + 6.0, by1 - 4.0);
+        let (_, _, bx1, by1) = frame.box_paper();
+        let (x, y) = (bx1 - 40.0, by1 - 14.0);
         let words = format!(
             "{}{} {title}",
             if level_z >= 0.0 { "+" } else { "" },

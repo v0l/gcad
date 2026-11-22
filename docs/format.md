@@ -969,6 +969,18 @@ note "first line|second line" place=230,40
 | `section` | the `view` parameters and `at=` | cuts the parts with the plane square to `from` at that coordinate and fills each cut in the part's colour |
 | `dims` | `parts ...` `profile=` `along=h\|v` `of=centres\|edges\|ends` `ends=1` `across=1` `row=` `style=chain\|running\|ordinate` `total=1` | dimensions the last view: a chain between the centres (or edges) of the parts along the sheet's horizontal or vertical, `ends=1` adds the outer ends of the group, `across=1` keeps only parts that run across the dimension (studs, not plates), `ordinate` writes setting-out distances from the first mark, `row` moves the line further out |
 | `dim` | `x,y,z x,y,z` `offset=` `text=` | one dimension between two model points in the last view, horizontal or vertical on the sheet |
+| `plan` | `L0` `cut=1200` `scale=` `grids=0` `levels=1` `window=` `place=` `label=` | architectural floor plan: poche of cut walls and columns with layer hatches, door swings, window symbols, stair with UP or DN, arrow and break line, slab edges, grid bubbles |
+| `rcp` | `L0` `cut=2400` | reflected ceiling plan: walls cut and a ceiling outline per room |
+| `elevation` | `from=-y\|+y\|-x\|+x` `levels=0` | building elevation with material hatches and level marks |
+| `section` | `a-a x,y x,y` | building section along a cut line, layer hatches, stair and slab profiles, room names, levels |
+| `hatch` | `material` `pattern=brick\|block\|concrete\|insulation\|timber\|earth\|glass\|metal\|none` | sets the hatch pattern for a material on the sheet's plan |
+| `tag` | `door\|window\|room\|wall\|stair\|column` | marks and room name and area from the model on the last plan |
+| `dim auto` | `walls\|openings\|grid` `side=-y\|+y\|-x\|+x` | dimension chains that add up to the overall |
+| `northarrow`, `scalebar` | `place=x,y` | north arrow from `building north=`, scale bar for the sheet scale |
+| `viewport` | `window=u0,v0,u1,v1` `scale=1:5` `label=` | redraws the last plan, elevation or section for a window at a new scale |
+| `drawinglist` | `place=x,y` | table of every sheet's `number=`, name, scale and size |
+
+`sheet` takes `number=A-101`. A `.dxf` export writes one drawing per sheet with layers A-WALL, A-COLS, A-DOOR, A-GLAZ, A-GRID, A-FLOR, A-STRS, A-CLNG, A-DIMS and A-ANNO. SVG groups carry the classes `poche`, `swing`, `window`, `ceiling`, `break`, `scalebar` and `hatch <material>`.
 | `level` | `height "name"` | a level mark at that height beside the last elevation or section |
 | `callout` | `x,y,z "text"` `to=dx,dy` | a leader from a model point in the last view to text `dx`, `dy` mm away on the sheet |
 | `label` | `"text"` `target ...` `side=` | annotates the last view with no layout by hand. A target is `part:faces` (a hole or round face points at its rim and, with no text, is written `⌀12`, `4× ⌀3.4` or `M3 tapped (⌀2.5 drill)`), `part:a&b` (an edge) or `x,y,z`. Labels collect in a column beside the view, sorted to the order of their targets so leaders do not cross, clear of the geometry, dimensions, levels and the title block, and are laid out together when the next `view`, `section` or `sheet` starts. `side=left\|right\|top\|bottom` picks the column. `callout` with no `to=` is a `label` |

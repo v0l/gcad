@@ -619,19 +619,19 @@ Architecture stage D (gcad #351). Lines of a `.gdwg` file.
 
 | operation | status | syntax | tests |
 |---|---|---|---|
-| floor plans | missing | `plan L0 cut=1200 scale=1:50`: poche of cut walls and columns, door swings, window symbols | `arch::plan_draws_the_cut` |
-| plan symbols | missing | `plan ... grids=1 levels=1`, `northarrow`, `scalebar` | `arch::plan_symbols` |
-| stair arrows | missing | UP or DN text, arrow and break line on a plan | `arch::plan_stair_arrow` |
-| reflected ceiling plans | missing | `rcp L0` | `arch::reflected_ceiling_plan` |
-| elevations | missing | `elevation from=+y\|-y\|+x\|-x` with level marks | `arch::elevation_with_level_marks` |
-| building sections | missing | `section a-a x,y x,y` with layer hatches | `arch::section_through_two_points` |
-| material hatches | missing | `hatch brick pattern=brick` (ISO 128 table by material) | `arch::hatch_fill_area_matches_the_layer` |
-| tags | missing | `tag door\|window\|wall\|stair\|column` | `arch::tags_carry_the_marks` |
-| room tags | missing | `tag room`: name and area | `arch::room_tags_show_the_area` |
-| automatic dimensions | missing | `dim auto walls\|openings\|grid side=-y` | `arch::auto_dims_sum_to_the_overall` |
-| detail viewports | missing | `viewport window=u0,v0,u1,v1 scale=1:5 label=` | `arch::viewport_detail_at_a_new_scale` |
-| sheet sets | missing | `sheet ... number=A-101`, `drawinglist` | `arch::sheet_set_with_a_drawing_list` |
-| DXF plans with layers | missing | `gcad export plan.gdwg plan.dxf`, layers `A-WALL`, `A-DOOR`, `A-GLAZ`, `A-GRID` | `arch::plan_dxf_has_layers_by_class` |
+| floor plans | supported | `plan L0 cut=1200 scale=1:50`: poche of cut walls and columns, door swings, window symbols | `arch::plan_draws_the_cut` |
+| plan symbols | supported | `plan ... grids=1 levels=1`, `northarrow`, `scalebar` | `arch::plan_symbols` |
+| stair arrows | supported | UP or DN text, arrow and break line on a plan | `arch::plan_stair_arrow` |
+| reflected ceiling plans | supported | `rcp L0` | `arch::reflected_ceiling_plan` |
+| elevations | supported | `elevation from=+y\|-y\|+x\|-x` with level marks | `arch::elevation_with_level_marks` |
+| building sections | supported | `section a-a x,y x,y` with layer hatches | `arch::section_through_two_points` |
+| material hatches | supported | `hatch brick pattern=brick` (ISO 128 table by material) | `arch::hatch_fill_area_matches_the_layer` |
+| tags | supported | `tag door\|window\|wall\|stair\|column` | `arch::tags_carry_the_marks` |
+| room tags | supported | `tag room`: name and area | `arch::room_tags_show_the_area` |
+| automatic dimensions | supported | `dim auto walls\|openings\|grid side=-y` | `arch::auto_dims_sum_to_the_overall` |
+| detail viewports | supported | `viewport window=u0,v0,u1,v1 scale=1:5 label=` | `arch::viewport_detail_at_a_new_scale` |
+| sheet sets | supported | `sheet ... number=A-101`, `drawinglist` | `arch::sheet_set_with_a_drawing_list` |
+| DXF plans with layers | supported | `gcad export plan.gdwg plan.dxf`, layers `A-WALL`, `A-DOOR`, `A-GLAZ`, `A-GRID` | `arch::plan_dxf_has_layers_by_class` |
 
 ## IFC
 

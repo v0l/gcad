@@ -7,6 +7,7 @@ All notable changes to gcad are listed here. The format follows
 ## [Unreleased]
 
 ### Added
+- Buildings, stage D (#351): `plan`, `rcp`, `elevation`, `section a-a x,y x,y`, `hatch`, `tag`, `dim auto`, `northarrow`, `scalebar`, `viewport`, `drawinglist` and `sheet number=` in `.gdwg`, DXF export with layers by element class, and `examples/architecture/house.gdwg`.
 - Buildings, stage C (#350): `room` with name, number and finishes, `room_separator`, `zone`, `area_scheme`, and `gcad schedule file doors|windows|rooms|areas|zones|finishes|walls|slabs|roofs|stairs|columns|materials|members --csv|--json|--svg [--rates rates.toml]` with net wall areas after openings, quantities per material and layer, and cost columns; `schedule doors place=x,y` draws the table in a `.gdwg`.
 - Point clouds, part 2 of 6 (gcad #445): `crop`, `downsample`, `denoise`, `normals`, `move`, `rotate`, `scale`, `transform`, `merge`, `colour` and `info` on clouds, and `examples/clouds/clean.gcad`.
 - Point clouds, part 5 and 6 (gcad #448): `mesh scan poisson|pivot`, `fill`, `clean`, `smooth m taubin`, `decimate m to=|ratio=`, `points`, `sample`, PLY meshes with vertex colours, and `examples/clouds/reconstruct.gcad`.

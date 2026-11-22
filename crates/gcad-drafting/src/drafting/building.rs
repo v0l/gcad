@@ -164,9 +164,9 @@ impl State {
         let base = match named(line, "offset") {
             Some(t) => eval(t, &self.scope)?,
             None => match kind.as_str() {
-                "walls" => 10.0,
-                "openings" => 18.0,
-                _ => 26.0,
+                "walls" => 8.0,
+                "openings" => 24.0,
+                _ => 32.0,
             },
         };
         let paper = |u: f64| {
@@ -197,12 +197,12 @@ impl State {
                 length < 12.0 && k % 2 == 1,
             );
         }
-        if stops.len() > 2 {
+        if stops.len() > 2 && kind == "walls" {
             dimension(
                 &mut inner,
                 paper(lo),
                 paper(hi),
-                (push(base + 9.0).0, push(base + 9.0).1),
+                (push(base + 8.0).0, push(base + 8.0).1),
                 &format!("{:.0}", hi - lo),
                 false,
             );
@@ -232,7 +232,7 @@ impl State {
         let level = self.plan_level;
         let model = self.model()?;
         let mut marks = Vec::new();
-        let mut at_wall = |wall: &crate::model::arch::Wall, s: f64, d: f64| {
+        let at_wall = |wall: &crate::model::arch::Wall, s: f64, d: f64| {
             let (_, p, dir) = wall.line.locate(s);
             let n = left(dir);
             frame.paper((p.0 + n.0 * d, p.1 + n.1 * d))
