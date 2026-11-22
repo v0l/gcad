@@ -3,12 +3,11 @@
 use gcad::host;
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 fn directory() -> PathBuf {
-    let nonce = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_nanos();
+    static NEXT: AtomicUsize = AtomicUsize::new(0);
+    let nonce = NEXT.fetch_add(1, Ordering::SeqCst);
     let path = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("target")
         .join(format!("input-recording-{}-{nonce}", std::process::id()));
