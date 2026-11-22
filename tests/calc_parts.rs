@@ -143,6 +143,29 @@ fn a_bearing_seat_without_a_shoulder_is_warned_about() {
 }
 
 #[test]
+fn a_thread_shorter_than_the_material_needs_is_warned_about() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_engagement"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("block.gcad");
+    let block = |height: u32, material: &str| {
+        std::fs::write(
+            &file,
+            format!("rect 30 30\nbase: extrude {height}\nmaterial {material}\nplane base.end\nh: hole 5 0,0 thread=M6\nthread M6 on=h.side\n"),
+        )
+        .expect("write");
+        gcad(&["check", file.to_str().expect("path")])
+    };
+    let (ok, text) = block(8, "aluminium");
+    assert!(ok && text.contains("of M6 thread in aluminium is under the 12.0 mm minimum engagement"), "{text}");
+    let (ok, text) = block(8, "steel");
+    assert!(ok && !text.contains("warning"), "{text}");
+    let (ok, text) = block(8, "petg");
+    assert!(ok && text.contains("in petg is under"), "{text}");
+    let (ok, text) = block(14, "aluminium");
+    assert!(ok && !text.contains("warning"), "{text}");
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));

@@ -148,6 +148,7 @@ pub struct Model {
     pub rounded: Vec<Rounded>,
     pub gear: Option<GearLead>,
     pub hole_notes: Vec<HoleNote>,
+    pub thread_notes: Vec<(String, String, f64)>,
     pub sheet: Option<sheet::Sheet>,
     pub members: Vec<String>,
     pub open: Option<String>,

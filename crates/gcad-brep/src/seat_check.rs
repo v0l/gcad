@@ -50,6 +50,22 @@ impl Model {
     }
 
     pub fn seat_warnings(&self) -> Vec<String> {
+        let mut out = self.engagement_warnings();
+        out.extend(self.shoulder_warnings());
+        out
+    }
+
+    fn engagement_warnings(&self) -> Vec<String> {
+        self.thread_notes
+            .iter()
+            .filter_map(|(body, thread, length)| {
+                let material = self.materials.get(body)?;
+                crate::calc::thread::engagement_note(thread, *length, &material.name)
+            })
+            .collect()
+    }
+
+    fn shoulder_warnings(&self) -> Vec<String> {
         let seats = self.bearing_seats();
         if seats.is_empty() {
             return Vec::new();
