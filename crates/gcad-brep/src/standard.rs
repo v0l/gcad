@@ -43,12 +43,23 @@ pub const BEARINGS: &[(&str, f64, f64, f64)] = &[
 ];
 
 fn bearing(size: &str) -> Result<Standard> {
-    let &(name, bore, outer, wide) = BEARINGS.iter().find(|b| b.0 == size).ok_or_else(|| {
-        anyhow!(
-            "unknown bearing `{size}`; known: {}",
-            BEARINGS.iter().map(|b| b.0).collect::<Vec<_>>().join(", ")
-        )
-    })?;
+    let catalogued = crate::calc::bearing::find(size)
+        .ok()
+        .filter(|b| b.kind == crate::calc::bearing::Kind::Radial)
+        .map(|b| (b.name.clone(), b.bore, b.outer, b.width));
+    let (name, bore, outer, wide) = match catalogued {
+        Some(found) => found,
+        None => {
+            let &(name, bore, outer, wide) =
+                BEARINGS.iter().find(|b| b.0 == size).ok_or_else(|| {
+                    anyhow!(
+                        "unknown bearing `{size}`; known: {}",
+                        BEARINGS.iter().map(|b| b.0).collect::<Vec<_>>().join(", ")
+                    )
+                })?;
+            (name.to_string(), bore, outer, wide)
+        }
+    };
     let wall = (outer - bore) / 2.0;
     let (seal_in, seal_out) = (bore + wall * 0.7, outer - wall * 0.7);
     let source = [
