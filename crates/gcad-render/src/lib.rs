@@ -1,5 +1,6 @@
 pub mod cloud;
 pub mod inspect;
+pub mod report;
 pub mod render;
 
 use gcad_brep as model;

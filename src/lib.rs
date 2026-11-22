@@ -6,7 +6,7 @@ pub use gcad_parse as parse;
 pub use gcad_plot as plot;
 #[cfg(not(target_arch = "wasm32"))]
 pub use gcad_remote as remote;
-pub use gcad_render::{cloud as cloud_render, inspect, render};
+pub use gcad_render::{cloud as cloud_render, inspect, render, report};
 pub use gcad_sim as sim;
 pub use gcad_sim::{drafting, flow, model};
 #[cfg(not(feature = "view"))]

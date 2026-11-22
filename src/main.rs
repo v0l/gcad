@@ -537,7 +537,10 @@ enum Command {
     /// Draw one view with surface normals as colour, a labelled world grid, scale bar, part names and reference marks, and print what each pick hits, for placing detail by eye
     Inspect {
         file: String,
-        output: String,
+        output: Option<String>,
+        /// Write a one page inspection report of a scan instead: out.pdf or out.csv
+        #[arg(long)]
+        report: Option<String>,
         /// front, back, right, left, top, bottom or iso
         #[arg(long, default_value = "front")]
         view: String,
@@ -735,6 +738,35 @@ fn finished(run: &Run) -> Result<()> {
         && run.model.clouds.is_empty()
     {
         bail!("the file builds no solid");
+    }
+    Ok(())
+}
+
+fn inspect_report(file: &str, report: &str, vars: &[(String, f64)]) -> Result<()> {
+    let path = std::path::Path::new(file);
+    let mut soft = vars.to_vec();
+    soft.push(("_soft_checks".to_string(), 1.0));
+    let run = load(file, None, &soft)?;
+    finished(&run)?;
+    let title = path
+        .file_name()
+        .map(|n| n.to_string_lossy().to_string())
+        .unwrap_or_default();
+    let lower = report.to_ascii_lowercase();
+    if lower.ends_with(".csv") {
+        std::fs::write(report, gcad::report::csv(&run.model, &title))?;
+    } else if lower.ends_with(".pdf") {
+        std::fs::write(report, gcad::report::pdf(&run.model, &title)?)?;
+    } else {
+        bail!("a report is written as .pdf or .csv");
+    }
+    let failed = gcad::report::failed_checks(&run.model);
+    println!(
+        "wrote {report}: {} check(s), {failed} failed",
+        run.model.checks.len()
+    );
+    if failed > 0 {
+        bail!("{failed} check(s) failed");
     }
     Ok(())
 }
@@ -2063,6 +2095,7 @@ fn main() -> Result<()> {
         Command::Inspect {
             file,
             output,
+            report,
             view,
             part,
             at,
@@ -2075,6 +2108,10 @@ fn main() -> Result<()> {
             path,
             line,
         } => {
+            if let Some(report) = report {
+                return inspect_report(&file, &report, &vars);
+            }
+            let output = output.ok_or_else(|| anyhow!("give an output picture, or `--report out.pdf|.csv` for a scan"))?;
             let run = load(&file, line, &vars)?;
             finished(&run)?;
             let marks = mark
