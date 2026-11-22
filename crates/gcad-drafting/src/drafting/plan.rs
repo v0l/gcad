@@ -512,6 +512,9 @@ impl State {
         marks.extend(self.opening_marks(&frame, cut_z));
         marks.extend(self.stair_marks(&frame, level_z, cut_z));
         marks.extend(self.slab_edges(&frame, level_z));
+        if let Some(interval) = named(line, "contours").and_then(|t| t.parse::<f64>().ok()) {
+            marks.extend(self.contour_marks(&frame, interval));
+        }
         if named(line, "grids").is_none_or(|t| t != "0") {
             marks.extend(self.grid_marks(&frame));
         }
@@ -840,6 +843,23 @@ impl State {
                     "slab",
                     vec![("slab", s.name.clone()), ("layer", "A-FLOR".into())],
                     vec![stroke(rings, true, HIDDEN_WEIGHT, true)],
+                )
+            })
+            .collect()
+    }
+
+    pub(super) fn contour_marks(&self, frame: &Frame, interval: f64) -> Vec<Mark> {
+        let Ok(model) = self.model() else {
+            return Vec::new();
+        };
+        model
+            .contour_segments(interval)
+            .into_iter()
+            .map(|(level, a, b)| {
+                group(
+                    "contour",
+                    vec![("level", format!("{level}")), ("layer", "A-SITE".into())],
+                    vec![stroke(vec![vec![frame.paper(a), frame.paper(b)]], false, HIDDEN_WEIGHT, false)],
                 )
             })
             .collect()

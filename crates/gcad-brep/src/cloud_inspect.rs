@@ -207,6 +207,9 @@ impl Model {
     }
 
     pub(crate) fn op_check(&mut self, line: &Line) -> Result<String> {
+        if let Some(done) = self.arch_check(line) {
+            return done;
+        }
         let mut text = line.positional.join("");
         for (k, v) in &line.named {
             text.push_str(&format!("{k}={v}"));

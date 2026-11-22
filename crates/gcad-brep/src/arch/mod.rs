@@ -7,6 +7,9 @@ mod railing;
 mod roof;
 mod room;
 mod schedule;
+mod check;
+mod sun;
+mod site;
 mod slab;
 mod stair;
 mod structure;
@@ -229,8 +232,42 @@ pub struct Built {
     pub bodies: Vec<String>,
 }
 
+#[derive(Clone, Debug)]
+pub struct Terrain {
+    pub name: String,
+    pub tris: Vec<[[f64; 3]; 3]>,
+    pub depth: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct Pad {
+    pub name: String,
+    pub ring: Vec<gcad_mesh::arch::P2>,
+    pub level: f64,
+}
+
+#[derive(Clone, Debug)]
+pub struct SiteBoundary {
+    pub ring: Vec<gcad_mesh::arch::P2>,
+    pub setback: f64,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Sun {
+    pub altitude: f64,
+    pub azimuth: f64,
+    pub lat: f64,
+    pub day: f64,
+}
+
 #[derive(Clone, Debug, Default)]
 pub struct Arch {
+    pub roads: Vec<(String, gcad_mesh::arch::P2, gcad_mesh::arch::P2)>,
+    pub sun: Option<Sun>,
+    pub ramps: Vec<(String, f64)>,
+    pub pads: Vec<Pad>,
+    pub sites: Vec<SiteBoundary>,
+    pub terrains: Vec<Terrain>,
     pub units: Option<String>,
     pub building: Option<Building>,
     pub levels: Vec<Level>,
