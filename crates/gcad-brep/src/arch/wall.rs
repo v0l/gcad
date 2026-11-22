@@ -169,20 +169,20 @@ pub(crate) fn piece_of(name: &str, used: &[String]) -> String {
 }
 
 impl Wall {
-    pub(crate) fn thickness(&self) -> f64 {
+    pub fn thickness(&self) -> f64 {
         self.tiers
             .iter()
             .map(|t| t.layers.iter().map(|l| l.thickness).sum::<f64>())
             .fold(0.0, f64::max)
     }
 
-    pub(crate) fn span(&self, tier: &Tier) -> (f64, f64) {
+    pub fn span(&self, tier: &Tier) -> (f64, f64) {
         let total: f64 = tier.layers.iter().map(|l| l.thickness).sum();
         let lo = self.justify.start(total) + self.offset;
         (lo, lo + total)
     }
 
-    pub(crate) fn outer_span(&self) -> (f64, f64) {
+    pub fn outer_span(&self) -> (f64, f64) {
         let tier = self
             .tiers
             .iter()
@@ -200,7 +200,7 @@ impl Wall {
         self.top + a + (b - a) * (s / length).clamp(0.0, 1.0)
     }
 
-    pub(crate) fn layer_names(&self) -> Vec<(String, usize, usize)> {
+    pub fn layer_names(&self) -> Vec<(String, usize, usize)> {
         let mut used = Vec::new();
         let mut out = Vec::new();
         for (t, tier) in self.tiers.iter().enumerate() {

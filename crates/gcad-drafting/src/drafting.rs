@@ -1,4 +1,6 @@
 mod annotate;
+mod hatch;
+mod plan;
 mod scan;
 
 use crate::drawing::{polylines, section_of, silhouettes};
@@ -132,6 +134,7 @@ struct State {
     label_line: Option<Line>,
     view_geometry: Option<(usize, usize, usize)>,
     view_box: Option<(f64, f64, f64, f64)>,
+    hatches: BTreeMap<String, String>,
 }
 
 pub(crate) const MARGIN: f64 = 10.0;
@@ -161,6 +164,7 @@ pub fn run_source(path: &Path, source: &str, vars: &[(String, f64)]) -> Result<D
         label_line: None,
         view_geometry: None,
         view_box: None,
+        hatches: BTreeMap::new(),
     };
     let fixed: Scope = vars.iter().cloned().collect();
     for line in lines {
@@ -415,6 +419,10 @@ impl State {
             "cutlist" => self.op_cutlist(line),
             "schedule" => self.op_schedule(line),
             "nest" => self.op_nest(line),
+            "plan" => self.op_plan(line),
+            "rcp" => self.op_rcp(line),
+            "northarrow" => self.op_northarrow(line),
+            "scalebar" => self.op_scalebar(line),
             "scansection" => self.op_scansection(line),
             other => bail!("`{other}` is not a drawing operation; see `gcad docs`"),
         }

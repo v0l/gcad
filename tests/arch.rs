@@ -1611,7 +1611,6 @@ fn bom_lists_building_elements() {
 }
 
 #[test]
-#[ignore = "missing: floor plans"]
 fn plan_draws_the_cut() {
     let svg = plan_svg(
         "plan_draws_the_cut",
@@ -1627,7 +1626,6 @@ fn plan_draws_the_cut() {
 }
 
 #[test]
-#[ignore = "missing: plan symbols"]
 fn plan_symbols() {
     let svg = plan_svg(
         "plan_symbols",
@@ -1639,7 +1637,6 @@ fn plan_symbols() {
 }
 
 #[test]
-#[ignore = "missing: stair arrows on plans"]
 fn plan_stair_arrow() {
     let dir = house_files(
         "plan_stair_arrow",
@@ -1660,7 +1657,6 @@ fn plan_stair_arrow() {
 }
 
 #[test]
-#[ignore = "missing: reflected ceiling plans"]
 fn reflected_ceiling_plan() {
     let svg = plan_svg(
         "reflected_ceiling_plan",
