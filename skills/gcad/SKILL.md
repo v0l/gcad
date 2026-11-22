@@ -67,6 +67,8 @@ on an op name.
 
 ## The loop
 
+Plan first. Before any detail, write `plan.md`: a part list with a size and position for every part and the key proportions. Block the parts out as simple shapes, check proportions, then add detail.
+
 For an assembly, run the loop on each part file alone, then on the `.gasm`.
 
 1. Add or change a few lines.

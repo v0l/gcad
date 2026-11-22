@@ -130,3 +130,16 @@ Findings:
 - With thinking on, a single request ran past the 240 s harness timeout on the first smoke attempt, so thinking is off for the whole run.
 - Typical failure: three.js habits (`box w h d`, property assignment, parenting) in a format where every line is an operation. The finetune is trained on Three.js scenes and does not transfer to gcad from the skill text alone.
 - The 27b is also weak on this reduced set today (5 of 16 build, judge 3.0 against 5.4 for the earlier `new-render` run under judge v1). Its failures are chamfer edge selectors, `combine` without `from`, `cut` with no boundary shell and the time budget, and the shared GPU made its runs slow (695 s per run).
+
+## Matrix finish (#460)
+
+1 seed per task, new skill, medium unless noted, judge as configured at run time. Heldout was run only to confirm.
+
+| config | runs | judge | rubric | hard | tokens/run |
+| --- | --- | --- | --- | --- | --- |
+| plan, 8 tuning tasks | 8 | 4.71 | 0.76 | 5.4 | 831k |
+| high tier, fox knight chest tractor | 4 | 5.25 | 0.80 | 6.6 | 317k |
+| plan, 10 heldout tasks | 10 | 4.89 | 0.87 | 5.4 | 506k |
+| render only, 10 heldout tasks | 10 | 4.30 | 0.85 | 6.1 | 267k |
+
+Heldout pairwise, plan against render only: 8-1. Plan first holds, so the plan step is now in `skills/gcad/SKILL.md`. High tier is not clearly better than medium plan on its 4 tasks. Low tier was not rerun (4.0 on fox earlier). The `gcad compare` silhouette tool stays unbuilt: the reference image lost 1-5.
