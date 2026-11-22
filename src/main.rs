@@ -521,6 +521,9 @@ enum Command {
         /// For a flow simulation, draw the air speed on slices through the parts
         #[arg(long)]
         flow: bool,
+        /// Light the model from the position of its `sun` line and draw the shadows
+        #[arg(long)]
+        sun: bool,
         /// For a flow simulation, draw the mean streamlines round the parts in 3D, coloured by speed
         #[arg(long)]
         lines: bool,
@@ -2486,6 +2489,7 @@ fn main() -> Result<()> {
             output,
             explode,
             flow,
+            sun,
             lines,
             turns,
             clip,
@@ -2522,6 +2526,13 @@ fn main() -> Result<()> {
                 let times = if times.is_empty() { vec![0.0] } else { times };
                 let rows = render::posed_rows(&run.model, clip.as_deref(), &times)?;
                 return render::render_sheet(&parts, &rows, turns, &output);
+            }
+            if sun {
+                let direction = run
+                    .model
+                    .sun_direction()
+                    .ok_or_else(|| anyhow!("`--sun` needs a `sun lat= date= time=` line in the file"))?;
+                return render::render_with_sun(&parts, &meshes, direction, &output);
             }
             render::render_with_meshes(&parts, &meshes, &output)
         }

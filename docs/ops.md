@@ -673,7 +673,7 @@ Architecture stage F (gcad #353).
 | door widths and turning circles | supported | `check doors clear=775 turning=1500` | `arch::door_clear_width_check`, `arch::failed_check_fails_the_run_unless_warn`, `arch::setback_violation_fails_the_run` |
 | egress, room and compartment checks | supported | `check egress max=`, `check rooms min_area= min_height=`, `check compartments max=` | `arch::egress_and_room_checks` |
 | sun position | supported | `sun lat=51.5 date=21-06 time=12:00 solar` | `arch::sun_position` |
-| shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall` |
+| shadow study | supported | `check shadow w1`, `gcad render --sun` | `arch::shadow_of_a_wall`, `arch::render_sun_shades_the_ground_behind_a_wall` |
 
 ## Buildings in gcad-mesh
 

@@ -2001,6 +2001,26 @@ fn image_underlay() {
 }
 
 #[test]
+fn render_sun_shades_the_ground_behind_a_wall() {
+    let dir = house_files(
+        "render_sun",
+        &[(
+            "site.gcad",
+            &datums(
+                "t1: terrain grid 20000x20000 slope=0,0 at=-10000,-10000 depth=1000\nw1: wall -3000,0 3000,0 type=int top=3000\nsun lat=51.5 date=21-06 time=12:00\n",
+            ),
+        )],
+    );
+    let (ok, text) = gcad(&dir, &["render", "site.gcad", "sun.png", "--sun"]);
+    assert!(ok, "{text}");
+    let image = image::open(dir.join("sun.png")).expect("png").to_rgb8();
+    let grey = |x: u32, y: u32| image.get_pixel(x, y).0.iter().map(|&c| c as u32).sum::<u32>();
+    let shaded = grey(600 + 300, 300 - 20);
+    let lit = grey(600 + 300, 300 + 20);
+    assert!(shaded * 10 < lit * 7, "shaded {shaded} lit {lit}");
+}
+
+#[test]
 fn terrain_from_points() {
     let dir = house_files(
         "terrain_from_points",

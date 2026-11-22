@@ -37,6 +37,18 @@ pub(crate) fn position(lat: f64, day: f64, time: f64) -> (f64, f64) {
 }
 
 impl Model {
+    pub fn sun_direction(&self) -> Option<[f64; 3]> {
+        let sun = self.arch.sun?;
+        let north = self.arch.building.as_ref().map_or(0.0, |b| b.north).to_radians();
+        let (n, e) = ((-north.sin(), north.cos()), (north.cos(), north.sin()));
+        let (alt, az) = (sun.altitude.to_radians(), sun.azimuth.to_radians());
+        let flat = alt.cos();
+        Some([
+            flat * (n.0 * az.cos() + e.0 * az.sin()),
+            flat * (n.1 * az.cos() + e.1 * az.sin()),
+            alt.sin(),
+        ])
+    }
     pub(crate) fn op_sun(&mut self, line: &Line) -> Result<String> {
         let (mut lat, mut day, mut time) = (None, None, 12.0);
         for (key, text) in &line.named {
