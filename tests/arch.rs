@@ -2098,7 +2098,11 @@ fn mesh_wall_matches_the_kernel() {
         "w1: wall 0,0 4000,0 4000,3000 0,3000 closed type=int top=L1 justify=outside\nd1: door on=w1 at=2000 w=900 h=2100",
     );
     let (mesh, _) = mesh_volume(&source);
-    near(mesh, volume_of(&build(&source), "w1"), 1.0e-2);
+    near(
+        mesh,
+        volume_of(&build(&source), "w1") + volume_of(&build(&source), "d1"),
+        1.0e-2,
+    );
 }
 
 #[test]
@@ -2118,7 +2122,6 @@ fn mesh_house_within_budget() {
 }
 
 #[test]
-#[ignore = "missing: mesh door nodes for games"]
 fn mesh_door_is_a_hinged_node() {
     let model = gcad_mesh::build_with(
         &building(),
