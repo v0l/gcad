@@ -166,6 +166,29 @@ fn a_thread_shorter_than_the_material_needs_is_warned_about() {
 }
 
 #[test]
+fn a_hand_sized_oring_groove_is_scored_against_the_calculator() {
+    let dir = std::path::PathBuf::from(common::scratch("calc_parts_groove"));
+    std::fs::create_dir_all(&dir).expect("dir");
+    let file = dir.join("lid.gcad");
+    let lid = |groove: &str| {
+        std::fs::write(
+            &file,
+            format!("circle 80\nbase: extrude 10\nplane base.end\nseal: oring_groove face 40 {groove}\n"),
+        )
+        .expect("write");
+        gcad(&["check", file.to_str().expect("path")])
+    };
+    let (ok, text) = lid("depth=1.96 width=3.53");
+    assert!(ok && !text.contains("warning"), "{text}");
+    let (ok, text) = lid("depth=2.6 width=3.53");
+    assert!(ok && text.contains("warning: ISO 3601 40x2.65 2.60 deep x 3.53 wide groove: no squeeze"), "{text}");
+    let (ok, text) = lid("depth=1.2 width=3.53");
+    assert!(ok && text.contains("squeeze") && text.contains("warning"), "{text}");
+    let (ok, text) = lid("depth=1.96 width=2.8");
+    assert!(ok && text.contains("gland fill"), "{text}");
+}
+
+#[test]
 fn every_kind_has_an_example_that_resolves() {
     for k in parts::KINDS {
         parts::resolve(k.example).unwrap_or_else(|e| panic!("{}: {e:#}", k.example));

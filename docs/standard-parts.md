@@ -26,6 +26,7 @@ a `.gasm`, so `gcad bom` lists them with a material and mass. See `gcad parts li
 | not a standard length | a screw spec such as `iso4762:M6x27` whose length is not an ISO 888 length |
 | minimum engagement | a `thread` on a hole shorter than one diameter |
 | engagement in this material | an internal `thread` shorter than the `material` needs (steel 1.25, aluminium 2, plastic 2.5 diameters, class 8.8) |
+| o-ring squeeze or fill | `oring_groove face d depth= width=` cuts a hand-sized face groove whose squeeze or fill is outside the calculator's range |
 | narrower than the tap drill | `concentric` puts an ISO screw in a hole narrower than its tap drill |
 | unknown standard, no such nut or washer size | `part` line fails (an error, not a warning) and lists the valid kinds or sizes |
 | bearing seat | `concentric` puts a catalogue bearing on a shaft or in a bore outside the fit classes of `gcad calc bearing` |
