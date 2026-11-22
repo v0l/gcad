@@ -608,6 +608,7 @@ fn the_ballsort_tube_builds_the_same_through_both() {
             .expect("glass");
         gcad_mesh::Model {
             bodies: vec![body.clone()],
+            ..Default::default()
         }
     };
     assert!(close(
