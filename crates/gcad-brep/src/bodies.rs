@@ -737,6 +737,12 @@ impl Model {
             }
             None => {}
         }
+        if path
+            .extension()
+            .is_some_and(|e| e.eq_ignore_ascii_case("ifc"))
+        {
+            return self.import_ifc(line, &path);
+        }
         let stl = path
             .extension()
             .is_some_and(|e| e.eq_ignore_ascii_case("stl"));

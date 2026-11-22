@@ -10,12 +10,23 @@ mod schedule;
 mod slab;
 mod stair;
 mod structure;
+mod underlay;
 mod wall;
+
+pub use underlay::Underlay;
 
 use crate::geometry::Profile;
 use gcad_mesh::arch::{Chain, Join, Justify, Layer};
 
 pub use schedule::{KINDS as SCHEDULES, Rates, Table, number as schedule_number};
+
+pub const IFC_OPS: &[&str] = &[
+    "wall", "wall_sweep", "door", "window", "garage_door", "opening", "slab", "ground_slab",
+    "foundation", "ceiling", "floor_finish", "roof", "stair", "ramp", "ladder", "railing",
+    "handrail", "column", "column_grid", "beam", "joist", "truss", "curtainwall", "louvre",
+    "shading_fin", "balcony", "dormer", "skylight", "chimney", "gutter", "downpipe", "parapet",
+    "room",
+];
 
 #[derive(Clone, Debug)]
 pub struct Column {
@@ -238,6 +249,8 @@ pub struct Arch {
     pub columns: Vec<Column>,
     pub stairs: Vec<Stair>,
     pub built: Vec<Built>,
+    pub classes: Vec<(String, String)>,
+    pub underlays: Vec<Underlay>,
 }
 
 impl Arch {

@@ -43,12 +43,23 @@ pub const BEARINGS: &[(&str, f64, f64, f64)] = &[
 ];
 
 fn bearing(size: &str) -> Result<Standard> {
-    let &(name, bore, outer, wide) = BEARINGS.iter().find(|b| b.0 == size).ok_or_else(|| {
-        anyhow!(
-            "unknown bearing `{size}`; known: {}",
-            BEARINGS.iter().map(|b| b.0).collect::<Vec<_>>().join(", ")
-        )
-    })?;
+    let catalogued = crate::calc::bearing::find(size)
+        .ok()
+        .filter(|b| b.kind == crate::calc::bearing::Kind::Radial)
+        .map(|b| (b.name.clone(), b.bore, b.outer, b.width));
+    let (name, bore, outer, wide) = match catalogued {
+        Some(found) => found,
+        None => {
+            let &(name, bore, outer, wide) =
+                BEARINGS.iter().find(|b| b.0 == size).ok_or_else(|| {
+                    anyhow!(
+                        "unknown bearing `{size}`; known: {}",
+                        BEARINGS.iter().map(|b| b.0).collect::<Vec<_>>().join(", ")
+                    )
+                })?;
+            (name.to_string(), bore, outer, wide)
+        }
+    };
     let wall = (outer - bore) / 2.0;
     let (seal_in, seal_out) = (bore + wall * 0.7, outer - wall * 0.7);
     let source = [
@@ -120,8 +131,10 @@ pub struct Standard {
 }
 
 pub fn is_standard(spec: &str) -> bool {
-    spec.split_once(':')
-        .is_some_and(|(kind, _)| KINDS.iter().any(|(k, _)| *k == kind))
+    crate::calc::parts::knows(spec)
+        || spec
+            .split_once(':')
+            .is_some_and(|(kind, _)| KINDS.iter().any(|(k, _)| *k == kind))
 }
 
 fn sized(size: &str, kind: &str) -> Result<(&'static Metric, Option<f64>)> {
@@ -144,6 +157,20 @@ fn hex_corners(across_flats: f64) -> f64 {
 }
 
 pub fn standard(spec: &str) -> Result<Standard> {
+    if crate::calc::parts::knows(spec) {
+        let part = crate::calc::parts::resolve(spec)?;
+        if let Some(alias) = &part.alias {
+            let inner = standard(alias)?;
+            return Ok(Standard {
+                title: part.title,
+                source: inner.source,
+            });
+        }
+        return Ok(Standard {
+            title: part.title,
+            source: part.source,
+        });
+    }
     let (kind, size) = spec
         .split_once(':')
         .ok_or_else(|| anyhow!("a standard part is written kind:size, like shcs:M3x10"))?;

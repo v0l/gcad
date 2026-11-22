@@ -28,7 +28,7 @@ Paths are relative to the config file.
 | `contacts` | `[bone, "head"\|"tail"\|"mid", pad]` points that may touch the ground, `pad` in rig units |
 | `loop_bones` | bones compared when finding a loop, all of them unless given |
 | `fps` | key rate, 30 unless given |
-| `clips` | clip name to its take, below |
+| `reduce` | optional `{"angle", "lift", "places"}`: keep only the keys needed to stay within `angle` degrees (rotation) and `lift` rig units (root height) of the full take, and write rotations as euler `rotate=x,y,z` rounded to `places` (1 unless given). Off unless given || `clips` | clip name to its take, below |
 
 A clip has `file` (the BVH), and optionally `trim` `[first, last)` frames, `loop` (find the closest
 matching pair of frames inside `search` `[from, to]` fractions of the take, `span` `[min, max]`
@@ -36,5 +36,5 @@ frames apart, and close the loop there), `amp` (bone to a factor that scales its
 (`ground` keeps the take's own height, `plant` puts the lowest contact on the floor every frame,
 anything else leaves it), `upright: false` and `arm_clear`.
 
-`hero.json` is the config of the kids-free-games runner hero (`art/3d/hero`): it reproduces that
-repo's `motion.gcad` byte for byte. `python3 tools/bvh-retarget/test_retarget.py` runs the tests.
+`hero.json` is the config of the kids-free-games runner hero (`art/3d/hero`) with the key reduction the game ships: it reproduces that
+repo's `motion.gcad` (126538 bytes) byte for byte; without `reduce` it writes the older 271780 byte file. Run it with `hero.gcad` and `../motion/bvh` beside the config, as in kids-free-games `art/3d/hero` (the game's `hero.gcad` lives in `assets/models`). `python3 tools/bvh-retarget/test_retarget.py` runs the tests.

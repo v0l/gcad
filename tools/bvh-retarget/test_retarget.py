@@ -1,4 +1,5 @@
 import json
+import math
 import subprocess
 import sys
 import tempfile
@@ -45,10 +46,10 @@ bone leg parent=hips head=2,0,10 tail=2,0,0
 """
 
 
-def run(config):
+def run(config, bvh=BVH):
     with tempfile.TemporaryDirectory() as tmp:
         tmp = Path(tmp)
-        (tmp / "take.bvh").write_text(BVH)
+        (tmp / "take.bvh").write_text(bvh)
         (tmp / "rig.gcad").write_text(RIG)
         (tmp / "config.json").write_text(json.dumps(config))
         result = subprocess.run(
@@ -89,6 +90,52 @@ def test_a_rig_bone_with_no_source_joint_is_refused():
     result, _ = run(config)
     assert result.returncode != 0
     assert "leg" in result.stderr
+
+
+def long_bvh(frames):
+    head, _ = BVH.split("Frames:")
+    rows = []
+    for f in range(frames):
+        swing = 40 * math.sin(f / 6) + (0.2 if f % 2 else 0.0)
+        rows.append(f"0 10 0 0 0 0 0 0 0 0 0 {swing:.4f} 0 0 0")
+    return head + f"Frames: {frames}\nFrame Time: 0.0333333\n" + "\n".join(rows) + "\n"
+
+
+def signed_angle(key):
+    value = float(key[3].split("=")[1].split(",")[0])
+    if len(key) > 4:
+        return value * (1 if float(key[4].split("=")[1].split(",")[0]) >= 0 else -1)
+    return value
+
+
+def leg_angles(out):
+    keys = [line.split() for line in out.splitlines() if "bone=leg" in line]
+    times = [float(k[1][2:]) for k in keys]
+    angles = [signed_angle(k) for k in keys]
+    return times, angles
+
+
+def test_reduced_keys_stay_within_the_angle_tolerance_of_the_full_ones():
+    bvh = long_bvh(60)
+    full = run(CONFIG, bvh)[1]
+    tolerance = 0.5
+    reduced_config = dict(CONFIG, reduce={"angle": tolerance, "lift": 0.3, "places": 1})
+    reduced = run(reduced_config, bvh)[1]
+    full_t, full_a = leg_angles(full)
+    red_t, red_a = leg_angles(reduced)
+    assert len(full_t) == 60
+    assert 2 <= len(red_t) < 30, len(red_t)
+    for t, a in zip(full_t, full_a):
+        hi = max(i for i, x in enumerate(red_t) if x <= t + 1e-9)
+        lo = min(hi, len(red_t) - 2)
+        span = red_t[lo + 1] - red_t[lo]
+        at = red_a[lo] + (red_a[lo + 1] - red_a[lo]) * (t - red_t[lo]) / span
+        assert abs(at - a) <= tolerance + 0.1, (t, at, a)
+
+
+def test_a_config_without_reduce_writes_every_frame():
+    out = run(CONFIG, long_bvh(20))[1]
+    assert len(leg_angles(out)[0]) == 20
 
 
 if __name__ == "__main__":
