@@ -38,6 +38,11 @@ impl Model {
             crate::parse::label(building.north),
             crate::parse::label(building.datum)
         );
+        let existing = self.body_names();
+        self.arch.building_marks.retain(|(n, _)| *n != building.name);
+        self.arch
+            .building_marks
+            .push((building.name.clone(), existing));
         self.arch.building = Some(building);
         Ok(text)
     }

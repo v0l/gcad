@@ -6,7 +6,7 @@ use anyhow::{Result, anyhow, bail};
 use monstertruck::modeling::*;
 
 impl Model {
-    fn copy_part(&mut self, part: &str, name: &str, transform: Matrix4) -> Result<()> {
+    pub(crate) fn copy_part(&mut self, part: &str, name: &str, transform: Matrix4) -> Result<()> {
         if self.body_names().iter().any(|n| n == name) {
             bail!("there is already a part called `{name}`");
         }

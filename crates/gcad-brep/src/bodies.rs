@@ -256,6 +256,9 @@ impl Model {
     pub(crate) fn op_repeat(&mut self, line: &Line) -> Result<String> {
         let args = Args::new(line, &["of"], &["count", "step", "angle", "along"], false)?;
         let of = args.text("of")?;
+        if !self.tools.contains_key(of) && self.arch.building_marks.iter().any(|(n, _)| n == of) {
+            return self.repeat_building(&args, of);
+        }
         let tools = self.tools.get(of).cloned().ok_or_else(|| {
             let mut known: Vec<&String> = self.tools.keys().collect();
             known.sort();
@@ -349,6 +352,40 @@ impl Model {
             self.merge_all(&label, copies, Combine::Add)?;
         }
         self.describe_solid()
+    }
+
+    fn repeat_building(&mut self, args: &Args, of: &str) -> Result<String> {
+        let count = args.number("count", &self.scope)?;
+        if count < 2.0 || count.fract() != 0.0 {
+            bail!("count must be a whole number of at least 2, got {count}");
+        }
+        let (x, y) = args
+            .optional_point("step", &self.scope)?
+            .ok_or_else(|| anyhow!("a building `repeat` needs `step=x,y`"))?;
+        let before = self
+            .arch
+            .building_marks
+            .iter()
+            .find(|(n, _)| n == of)
+            .map(|(_, bodies)| bodies.clone())
+            .unwrap_or_default();
+        let members: Vec<String> = self
+            .body_names()
+            .into_iter()
+            .filter(|name| !before.contains(name))
+            .collect();
+        if members.is_empty() {
+            bail!("building `{of}` has nothing built to repeat");
+        }
+        let frame = self.sketch_frame();
+        let step = frame.x * x + frame.y * y;
+        for k in 1..count as usize {
+            let transform = Matrix4::from_translation(step * k as f64);
+            for member in &members {
+                self.copy_part(member, &format!("{member}@{k}"), transform)?;
+            }
+        }
+        Ok(format!("repeated building `{of}` {count} times"))
     }
 
     fn place_or_copy(&mut self, line: &Line, transform: Matrix4, copy: bool) -> Result<String> {

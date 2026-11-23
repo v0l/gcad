@@ -272,6 +272,7 @@ pub struct Arch {
     pub terrains: Vec<Terrain>,
     pub units: Option<String>,
     pub building: Option<Building>,
+    pub building_marks: Vec<(String, Vec<String>)>,
     pub levels: Vec<Level>,
     pub grids: Vec<Grid>,
     pub types: Vec<(String, Vec<Layer>)>,

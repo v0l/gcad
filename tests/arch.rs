@@ -2665,3 +2665,20 @@ fn ifc_assembly_exports_placed_architecture() {
     assert!((20000.0..20500.0).contains(&high_x), "max x {high_x}");
     assert!((8000.0..8500.0).contains(&high_y), "max y {high_y}");
 }
+
+#[test]
+fn repeat_of_a_building_copies_its_walls_and_fills() {
+    let source = "units mm\nlevel L0 0 \"Ground\"\nlevel L1 2700 \"First\"\ngrid A x=0\ngrid B x=8000\ngrid 1 y=0\ngrid 2 y=6000\nwall_type ext brick:100 block:100\nbuilding \"house\"\nouter: wall A1 B1 B2 A2 closed type=ext base=L0 top=L1 justify=outside\nd1: door on=outer at=2000 w=900 h=2100\nrepeat of=house count=3 step=10000,0\n";
+    let model = build(source);
+    let names: Vec<String> = model.named_solids().iter().map(|(n, _)| n.clone()).collect();
+    for k in 1..3 {
+        let tail = format!("@{k}");
+        assert!(names.iter().any(|n| n.starts_with("outer") && n.ends_with(&tail)), "{names:?}");
+        assert!(names.iter().any(|n| n.starts_with("d1") && n.ends_with(&tail)), "{names:?}");
+    }
+    let copy = names.iter().find(|n| n.starts_with("outer") && n.ends_with("@2")).unwrap();
+    let original = names.iter().find(|n| n.starts_with("outer") && !n.contains('@')).unwrap();
+    let (moved, _) = body_bounds(&model, copy);
+    let (base, _) = body_bounds(&model, original);
+    assert!((moved[0] - base[0] - 20000.0).abs() < 1.0, "{moved:?} {base:?}");
+}
