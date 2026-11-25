@@ -10,7 +10,7 @@ repository.workspace = true
 members = [".", "web", "sims-proto", "crates/gcad-calc", "crates/gcad-parse", "crates/gcad-geom", "crates/gcad-host", "crates/gcad-plot", "crates/gcad-version", "crates/gcad-brep", "crates/gcad-render", "crates/gcad-drafting", "crates/gcad-sim", "crates/gcad-remote", "crates/gcad-view", "crates/gcad2glb", "crates/gcad-mesh", "crates/gcad-mesh-viewer", "crates/gcad-cloud"]
 
 [workspace.package]
-version = "0.8.0"
+version = "0.9.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/v0l/gcad"

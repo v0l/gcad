@@ -6,6 +6,14 @@ All notable changes to gcad are listed here. The format follows
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-11-25
+
+### Added
+- Standard parts and bearings: a parts catalogue with sources, `gcad bearing` calculator, bearing parts with SKF shoulders, o-ring groove scoring, and `gcad check --strict`. New checks warn about a bearing seat without a shoulder, thread engagement by material, a screw in a hole under its tap drill, non-standard screw lengths, and unknown standards or nut sizes.
+- IFC: `gcad export house.gcad house.ifc` writes IFC4 with fire ratings, grids and curtain wall quantities, prism bodies as extruded solids, and assemblies with part transforms. A vendor IFC imports as a part and its outlines and underlays draw in views.
+- Drawings: `.gdwg` sheets with plans, elevations, sections, hatches, tags, auto dimensions, viewports and a drawing list, exported to DXF with layers, and contours in plans.
+- Meshes: mesh-only architecture (walls with openings, doors, windows, slabs, roofs, stairs, railings and columns) without the B-rep kernel.
+- `repeat of=<building>` places building instances.
 ### Added
 - Buildings, stage F (#353), more: `check sunhours`, `check solargain`, `check route`, `check escape`, `check driveway`, `gcad render --sun`, `terrain contour file.dxf`, `plan L0 contours=500`; a failed check now fails `gcad check` unless the line says `warn`.
 - Buildings, stage F (#353): `terrain` from points or a grid, `pad`, `cut_fill`, `site_boundary` with setbacks, `road`, `retaining`, `tree`, `sun lat= date= time=`, and `check uvalue|heatloss|bridges|daylight|stairs|ramps|doors|egress|rooms|compartments|shadow`.
